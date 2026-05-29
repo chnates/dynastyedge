@@ -57,9 +57,12 @@ export function useLeague() {
         }
       }).filter(Boolean)
 
-      const ownedPicks = picksByRoster[roster.roster_id] ?? []
+      const ownedPicks = (picksByRoster[roster.roster_id] ?? []).map(pk => ({
+        ...pk,
+        value: findPickValue(pk, pickEntries),
+      }))
       const playerValue = allPlayers.reduce((s, p) => s + p.value, 0)
-      const pickValue = ownedPicks.reduce((s, pk) => s + findPickValue(pk, pickEntries), 0)
+      const pickValue = ownedPicks.reduce((s, pk) => s + pk.value, 0)
       const pickCapitalScore = computePickCapitalScore(ownedPicks, pickEntries)
 
       const startersWithAge = allPlayers.filter(p => p.isStarter && !p.isIR && !p.isTaxi && p.age != null)
