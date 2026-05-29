@@ -70,6 +70,8 @@ export function useLeague() {
         ? startersWithAge.reduce((s, p) => s + p.age, 0) / startersWithAge.length
         : null
 
+      const starterOrder = (roster.starters ?? []).map(id => String(id))
+
       return {
         rosterId: roster.roster_id,
         owner: userMap[roster.roster_id],
@@ -81,6 +83,7 @@ export function useLeague() {
           (roster.settings?.waiver_budget_used ?? 0),
         pickCapitalScore,
         avgStarterAge,
+        starterOrder,
       }
     }
 
