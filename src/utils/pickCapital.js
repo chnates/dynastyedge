@@ -62,3 +62,12 @@ export function findPickValue(pick, pickEntries) {
   matches.sort((a, b) => a.value - b.value)
   return matches[Math.floor(matches.length / 2)]?.value ?? 0
 }
+
+const PICK_YEAR_WEIGHTS = { '2026': 3, '2027': 2, '2028': 1 }
+
+export function computePickCapitalScore(picks, pickEntries) {
+  return picks.reduce((total, pick) => {
+    const weight = PICK_YEAR_WEIGHTS[pick.season] ?? 0
+    return total + weight * findPickValue(pick, pickEntries)
+  }, 0)
+}

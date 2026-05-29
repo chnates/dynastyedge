@@ -3,6 +3,7 @@ import BottomNav from './components/shared/BottomNav'
 import ThemeToggle from './components/shared/ThemeToggle'
 import RosterView from './components/roster/RosterView'
 import TradePartnerFinder from './components/trade/TradePartnerFinder'
+import TradeAnalyzer from './components/trade/TradeAnalyzer'
 import LineupOptimizer from './components/lineup/LineupOptimizer'
 import LeagueOverview from './components/league/LeagueOverview'
 
@@ -25,6 +26,7 @@ export default function App() {
             <Route path="/" element={<Navigate to="/roster" replace />} />
             <Route path="/roster" element={<RosterView />} />
             <Route path="/trade" element={<TradePartnerFinder />} />
+            <Route path="/trade/analyze" element={<TradeAnalyzer />} />
             <Route path="/lineup" element={<LineupOptimizer />} />
             <Route path="/league" element={<LeagueOverview />} />
           </Routes>

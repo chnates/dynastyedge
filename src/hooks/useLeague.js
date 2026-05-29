@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useSleeper } from './useSleeper'
 import { useFantasyCalc } from './useFantasyCalc'
-import { resolvePickOwnership, findPickValue } from '../utils/pickCapital'
+import { resolvePickOwnership, findPickValue, computePickCapitalScore } from '../utils/pickCapital'
 import { MY_ROSTER_ID, PICK_YEARS } from '../constants'
 
 export function useLeague() {
@@ -60,6 +60,12 @@ export function useLeague() {
       const ownedPicks = picksByRoster[roster.roster_id] ?? []
       const playerValue = allPlayers.reduce((s, p) => s + p.value, 0)
       const pickValue = ownedPicks.reduce((s, pk) => s + findPickValue(pk, pickEntries), 0)
+      const pickCapitalScore = computePickCapitalScore(ownedPicks, pickEntries)
+
+      const startersWithAge = allPlayers.filter(p => p.isStarter && !p.isIR && !p.isTaxi && p.age != null)
+      const avgStarterAge = startersWithAge.length > 0
+        ? startersWithAge.reduce((s, p) => s + p.age, 0) / startersWithAge.length
+        : null
 
       return {
         rosterId: roster.roster_id,
@@ -70,6 +76,8 @@ export function useLeague() {
         faabRemaining:
           (roster.settings?.waiver_budget ?? 100) -
           (roster.settings?.waiver_budget_used ?? 0),
+        pickCapitalScore,
+        avgStarterAge,
       }
     }
 
