@@ -156,7 +156,10 @@ export default function LeagueOverview() {
           {SORT_OPTIONS.map(opt => (
             <button
               key={opt.id}
-              onClick={() => setSortMode(opt.id)}
+              onClick={() => {
+                setSortMode(opt.id)
+                if (opt.id !== 'value') setPosFilter('ALL')
+              }}
               className={`px-2.5 py-1 rounded-full font-body text-xs font-medium transition-colors ${
                 sortMode === opt.id
                   ? 'bg-accent text-white'
@@ -169,24 +172,26 @@ export default function LeagueOverview() {
         </div>
       </div>
 
-      {/* ── Position Filter ── */}
-      <div className="pb-3">
-        <div className="flex gap-1.5">
-          {['ALL', ...POSITIONS].map(pos => (
-            <button
-              key={pos}
-              onClick={() => setPosFilter(pos)}
-              className={`px-2.5 py-1 rounded-full font-body text-xs font-medium transition-colors ${
-                posFilter === pos
-                  ? 'bg-accent text-white'
-                  : 'bg-bg-secondary dark:bg-bg-secondary text-text-secondary dark:text-text-secondary border border-border-default dark:border-border-default'
-              }`}
-            >
-              {pos}
-            </button>
-          ))}
+      {/* ── Position Filter (Overall Value only) ── */}
+      {sortMode === 'value' && (
+        <div className="pb-3">
+          <div className="flex gap-1.5">
+            {['ALL', ...POSITIONS].map(pos => (
+              <button
+                key={pos}
+                onClick={() => setPosFilter(pos)}
+                className={`px-2.5 py-1 rounded-full font-body text-xs font-medium transition-colors ${
+                  posFilter === pos
+                    ? 'bg-accent text-white'
+                    : 'bg-bg-secondary dark:bg-bg-secondary text-text-secondary dark:text-text-secondary border border-border-default dark:border-border-default'
+                }`}
+              >
+                {pos}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Team List OR Position Swipe Ranking ── */}
       {posFilter === 'ALL' ? (
