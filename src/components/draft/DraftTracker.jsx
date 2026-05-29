@@ -29,7 +29,8 @@ function slotLabel(round, pick) {
 function getMySlots(myRoster) {
   if (!myRoster?.picks) return []
   const mine = myRoster.picks.filter(p => p.season === '2026')
-  return mine.map(p => slotLabel(p.round, MY_ROSTER_ID))
+  // Slot is determined by the original team's draft position (their roster_id)
+  return mine.map(p => slotLabel(p.round, p.originalOwner ?? MY_ROSTER_ID))
 }
 
 function compareSlots(a, b) {
@@ -231,10 +232,16 @@ export default function DraftTracker() {
 
   const rookies = useMemo(() => {
     if (!values?.playerMap) return []
+    const rostered = new Set()
+    league?.allRosters?.forEach(r => r.players.forEach(p => rostered.add(p.sleeperId)))
     return Object.values(values.playerMap)
-      .filter(p => ['QB','RB','WR','TE'].includes(p.position) && p.experience === 0)
+      .filter(p => {
+        if (!['QB','RB','WR','TE'].includes(p.position)) return false
+        if (p.experience === 0) return true
+        return p.experience == null && !rostered.has(p.sleeperId) && p.age != null && p.age <= 23.5
+      })
       .sort((a, b) => (a.adp ?? a.overallRank ?? 999) - (b.adp ?? b.overallRank ?? 999))
-  }, [values])
+  }, [values, league])
 
   const mySlots = useMemo(() => {
     if (!league?.myRoster) return []

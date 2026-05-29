@@ -31,6 +31,18 @@ function FillsNeedBadge() {
   )
 }
 
+function RookieBadge() {
+  return (
+    <span className="font-body text-[9px] font-bold uppercase tracking-wider text-warning bg-warning/15 border border-warning/30 rounded px-1.5 py-0.5 flex-shrink-0">
+      Rookie
+    </span>
+  )
+}
+
+function isRookie(player) {
+  return player.experience === 0 || (player.experience == null && player.age != null && player.age <= 23.5)
+}
+
 export default function FreeAgentsView() {
   const { league, loading, error, retry, values } = useLeagueContext()
 
@@ -151,6 +163,7 @@ export default function FreeAgentsView() {
           <div className="rounded-xl bg-bg-card border border-border-default px-3">
             {filtered.map((player, i) => {
               const fillsNeed = needPositions.includes(player.position)
+              const rookie = isRookie(player)
               return (
                 <button
                   key={player.sleeperId}
@@ -163,6 +176,7 @@ export default function FreeAgentsView() {
                     <span className="font-body text-sm font-medium text-text-primary flex-1 truncate leading-tight">
                       {player.name}
                     </span>
+                    {rookie && <RookieBadge />}
                     {fillsNeed && <FillsNeedBadge />}
                     <span className="font-mono text-sm font-medium text-accent tabular-nums flex-shrink-0">
                       {(player.value ?? 0).toLocaleString()}

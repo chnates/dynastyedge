@@ -172,15 +172,19 @@ export default function DraftBoard() {
     return getMyPickSlot(league.myRoster)
   }, [league])
 
-  // Rookie prospects from FantasyCalc (experience === 0 or null with low rank)
+  // Rookie prospects: explicitly marked by FantasyCalc (experience=0) OR
+  // not yet on any fantasy roster and young enough to be the 2026 draft class
   const rookies = useMemo(() => {
     if (!values?.playerMap) return []
+    const rostered = new Set()
+    league?.allRosters?.forEach(r => r.players.forEach(p => rostered.add(p.sleeperId)))
     return Object.values(values.playerMap).filter(p => {
       if (!['QB', 'RB', 'WR', 'TE'].includes(p.position)) return false
-      // experience === 0 = rookie; null with high rank is likely established player
-      return p.experience === 0
+      if (p.experience === 0) return true
+      // Fallback: not on any dynasty roster + 2026 draft class age window
+      return p.experience == null && !rostered.has(p.sleeperId) && p.age != null && p.age <= 23.5
     })
-  }, [values])
+  }, [values, league])
 
   function handleSort(col) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
