@@ -58,8 +58,8 @@ export default function App() {
           </header>
 
           <main
-            className="pt-12 overflow-y-auto"
-            style={{ paddingBottom: 'calc(64px + env(safe-area-inset-bottom))' }}
+            className="fixed top-12 left-0 right-0 overflow-y-auto"
+            style={{ bottom: 'calc(64px + env(safe-area-inset-bottom))' }}
           >
             <Routes>
               <Route path="/" element={<Navigate to="/roster" replace />} />

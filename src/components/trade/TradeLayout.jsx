@@ -9,7 +9,7 @@ const SUB_TABS = [
 export default function TradeLayout() {
   return (
     <>
-      <div className="sticky top-12 z-[5] flex bg-bg-secondary dark:bg-bg-secondary border-b border-border-default dark:border-border-default">
+      <div className="sticky top-0 z-[5] flex bg-bg-secondary dark:bg-bg-secondary border-b border-border-default dark:border-border-default">
         {SUB_TABS.map(({ label, to, end }) => (
           <NavLink
             key={to}
