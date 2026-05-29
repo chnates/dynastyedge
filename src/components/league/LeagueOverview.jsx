@@ -44,8 +44,7 @@ function PositionRankCard({ roster, posFilter, tier, posStrength, posRank, onTap
   return (
     <button
       onClick={() => onTap(roster.rosterId)}
-      style={{ minWidth: 220, scrollSnapAlign: 'start' }}
-      className="flex-shrink-0 rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-3 text-left active:opacity-70 transition-opacity"
+      className="w-full rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-3 text-left active:opacity-70 transition-opacity"
     >
       <div className="flex items-center gap-2 mb-2">
         <span className="font-mono text-lg font-bold text-text-tertiary dark:text-text-tertiary tabular-nums w-6 shrink-0">
@@ -205,12 +204,9 @@ export default function LeagueOverview() {
       ) : (
         <div>
           <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary pb-2">
-            {posFilter} Ranking — swipe to browse
+            {posFilter} Ranking
           </p>
-          <div
-            className="flex gap-3 overflow-x-auto pb-2"
-            style={{ scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}
-          >
+          <div className="flex flex-col gap-2">
             {positionRanked.map(({ roster, posStrength, posRank, tier }) => (
               <PositionRankCard
                 key={roster.rosterId}
