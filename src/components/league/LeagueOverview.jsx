@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { AlertTriangle } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { assignWinWindowTiers, computeLeagueAverages, getPositionalStrength } from '../../utils/rosterAnalysis'
 import { getTeamName } from '../../hooks/useLeague'
@@ -26,7 +27,7 @@ function SectionHeader({ label }) {
 function ErrorState({ message, onRetry }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
-      <span className="text-2xl">⚠️</span>
+      <AlertTriangle size={24} className="text-warning" strokeWidth={1.75} />
       <p className="text-text-secondary dark:text-text-secondary font-body text-sm">{message}</p>
       <button
         onClick={onRetry}

@@ -4,14 +4,19 @@ const MATCHUP_CONFIG = {
   Tough:   { label: 'Tough',  className: 'text-danger bg-danger/10' },
 }
 
-const FLAG_CONFIG = {
-  red:    { emoji: '🔴', cardClass: 'bg-danger/5' },
-  yellow: { emoji: '🟡', cardClass: 'bg-warning/5' },
-  green:  { emoji: '🟢', cardClass: '' },
+const FLAG_DOT = {
+  red:    <span className="inline-block w-2 h-2 rounded-full bg-danger" />,
+  yellow: <span className="inline-block w-2 h-2 rounded-full bg-warning" />,
+  green:  <span className="inline-block w-2 h-2 rounded-full bg-success" />,
+}
+
+const FLAG_BG = {
+  red:    'bg-danger/5',
+  yellow: 'bg-warning/5',
+  green:  '',
 }
 
 export default function StarterSlot({ slotLabel, player, flag, projPts, matchupQuality, bestBenchPts, onClick }) {
-  const flagCfg  = FLAG_CONFIG[flag] ?? FLAG_CONFIG.green
   const mqCfg    = MATCHUP_CONFIG[matchupQuality] ?? MATCHUP_CONFIG.Neutral
   const tappable = flag === 'red' || flag === 'yellow'
   const gap      = bestBenchPts > projPts ? (bestBenchPts - projPts).toFixed(1) : null
@@ -24,7 +29,7 @@ export default function StarterSlot({ slotLabel, player, flag, projPts, matchupQ
       onKeyDown={tappable ? e => e.key === 'Enter' && onClick?.() : undefined}
       className={[
         'py-2.5 border-b border-border-default dark:border-border-default last:border-0',
-        flagCfg.cardClass,
+        FLAG_BG[flag] ?? '',
         tappable ? 'cursor-pointer active:opacity-70' : '',
       ].join(' ')}
     >
@@ -55,8 +60,10 @@ export default function StarterSlot({ slotLabel, player, flag, projPts, matchupQ
           {mqCfg.label}
         </span>
 
-        {/* Flag */}
-        <span className="shrink-0 text-sm leading-none">{flagCfg.emoji}</span>
+        {/* Flag dot */}
+        <span className="shrink-0 flex items-center justify-center w-4">
+          {FLAG_DOT[flag] ?? FLAG_DOT.green}
+        </span>
       </div>
 
       {/* Bench upgrade hint */}

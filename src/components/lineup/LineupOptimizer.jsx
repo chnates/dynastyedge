@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { AlertTriangle, LayoutList } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useFantasyCalc } from '../../hooks/useFantasyCalc'
 import { useLineupData } from '../../hooks/useLineupData'
@@ -38,7 +39,7 @@ function SectionHeader({ label, count }) {
 function ErrorState({ message, onRetry }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
-      <span className="text-2xl">⚠️</span>
+      <AlertTriangle size={24} className="text-warning" strokeWidth={1.75} />
       <p className="text-text-secondary dark:text-text-secondary font-body text-sm">{message}</p>
       <button
         onClick={onRetry}
@@ -72,7 +73,7 @@ function OffseasonPlaceholder({ league }) {
   return (
     <div className="px-4 pb-4">
       <div className="pt-4 pb-3 border-b border-border-default dark:border-border-default flex flex-col items-center text-center gap-2">
-        <span className="text-4xl">📋</span>
+        <LayoutList size={40} strokeWidth={1.5} className="text-accent" />
         <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-text-primary dark:text-text-primary">
           Lineup Optimizer
         </h2>
@@ -134,7 +135,11 @@ function OffseasonPlaceholder({ league }) {
   )
 }
 
-const MATCHUP_LABEL = { Easy: '🟢', Neutral: '⚪', Tough: '🔴' }
+const MATCHUP_DOT = {
+  Easy:    <span className="inline-block w-2 h-2 rounded-full bg-success" />,
+  Neutral: <span className="inline-block w-2 h-2 rounded-full bg-text-tertiary" />,
+  Tough:   <span className="inline-block w-2 h-2 rounded-full bg-danger" />,
+}
 
 export default function LineupOptimizer() {
   const { league, loading: leagueLoading, error: leagueError, retry: leagueRetry } = useLeagueContext()
@@ -256,8 +261,8 @@ export default function LineupOptimizer() {
                   <span className="font-mono text-sm font-semibold text-text-primary dark:text-text-primary shrink-0 w-10 text-right tabular-nums">
                     {projPts > 0 ? projPts.toFixed(1) : '—'}
                   </span>
-                  <span className="shrink-0 text-sm leading-none" title={matchupQuality}>
-                    {MATCHUP_LABEL[matchupQuality] ?? '⚪'}
+                  <span className="shrink-0 flex items-center justify-center w-4" title={matchupQuality}>
+                    {MATCHUP_DOT[matchupQuality] ?? MATCHUP_DOT.Neutral}
                   </span>
                 </div>
               </div>

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import { AlertTriangle } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getTeamName } from '../../hooks/useLeague'
 import { analyzeTrade, getTradeVerdict, suggestFairPackage, getCounterSuggestion } from '../../utils/tradeAnalysis'
@@ -10,7 +11,7 @@ import LoadingSpinner from '../shared/LoadingSpinner'
 function ErrorState({ message, onRetry }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
-      <span className="text-2xl">⚠️</span>
+      <AlertTriangle size={24} className="text-warning" strokeWidth={1.75} />
       <p className="text-text-secondary dark:text-text-secondary font-body text-sm">{message}</p>
       <button
         onClick={onRetry}

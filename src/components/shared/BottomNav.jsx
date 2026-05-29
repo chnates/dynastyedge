@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom'
+import { Users, ArrowLeftRight, LayoutList, Trophy } from 'lucide-react'
 
 const TABS = [
-  { to: '/roster', label: 'Roster', icon: '🏈' },
-  { to: '/trade',  label: 'Trade',  icon: '🔄' },
-  { to: '/lineup', label: 'Lineup', icon: '📋' },
-  { to: '/league', label: 'League', icon: '🏆' },
+  { to: '/roster', label: 'Roster', Icon: Users },
+  { to: '/trade',  label: 'Trade',  Icon: ArrowLeftRight },
+  { to: '/lineup', label: 'Lineup', Icon: LayoutList },
+  { to: '/league', label: 'League', Icon: Trophy },
 ]
 
 export default function BottomNav() {
@@ -14,7 +15,7 @@ export default function BottomNav() {
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       <div className="flex h-16">
-        {TABS.map(({ to, label, icon }) => (
+        {TABS.map(({ to, label, Icon }) => (
           <NavLink
             key={to}
             to={to}
@@ -25,7 +26,7 @@ export default function BottomNav() {
                 : 'text-text-secondary dark:text-text-secondary')
             }
           >
-            <span className="text-xl leading-none">{icon}</span>
+            <Icon size={20} strokeWidth={1.75} />
             <span className="text-[10px] font-body font-medium uppercase tracking-wider leading-none">
               {label}
             </span>

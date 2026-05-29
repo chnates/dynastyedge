@@ -1,9 +1,10 @@
+import { CheckCircle2, XCircle, RefreshCw, CheckCircle, XCircle as XCircleSmall, Circle } from 'lucide-react'
 import WinWindowBadge from '../shared/WinWindowBadge'
 
 const VERDICT_STYLES = {
-  Accept:  { icon: '✅', color: 'text-success',  bg: 'bg-success/10 border-success/30' },
-  Decline: { icon: '❌', color: 'text-danger',   bg: 'bg-danger/10 border-danger/30' },
-  Counter: { icon: '🔄', color: 'text-warning',  bg: 'bg-warning/10 border-warning/30' },
+  Accept:  { Icon: CheckCircle2, color: 'text-success',  bg: 'bg-success/10 border-success/30' },
+  Decline: { Icon: XCircle,      color: 'text-danger',   bg: 'bg-danger/10 border-danger/30' },
+  Counter: { Icon: RefreshCw,    color: 'text-warning',  bg: 'bg-warning/10 border-warning/30' },
 }
 
 function ValueSummary({ giveTotal, getTotal }) {
@@ -96,25 +97,28 @@ export default function TradeVerdict({ analysis, verdict, counterSuggestion, fai
             Roster Fit
           </p>
           {filledNeeds.length === 0 && hurtStrengths.length === 0 ? (
-            <p className="font-body text-xs text-text-secondary dark:text-text-secondary">
-              ⚪ Neutral positional impact
+            <p className="font-body text-xs text-text-secondary dark:text-text-secondary flex items-center gap-1.5">
+              <Circle size={10} strokeWidth={2} className="text-text-tertiary" />
+              Neutral positional impact
             </p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {filledNeeds.map(pos => (
                 <span
                   key={`need-${pos}`}
-                  className="font-body text-xs text-success bg-success/10 rounded-md px-2 py-0.5"
+                  className="inline-flex items-center gap-1 font-body text-xs text-success bg-success/10 rounded-md px-2 py-0.5"
                 >
-                  ✅ Fills {pos} need
+                  <CheckCircle2 size={10} strokeWidth={2.5} />
+                  Fills {pos} need
                 </span>
               ))}
               {hurtStrengths.map(pos => (
                 <span
                   key={`hurt-${pos}`}
-                  className="font-body text-xs text-danger bg-danger/10 rounded-md px-2 py-0.5"
+                  className="inline-flex items-center gap-1 font-body text-xs text-danger bg-danger/10 rounded-md px-2 py-0.5"
                 >
-                  ❌ Weakens {pos} depth
+                  <XCircleSmall size={10} strokeWidth={2.5} />
+                  Weakens {pos} depth
                 </span>
               ))}
             </div>
@@ -129,12 +133,14 @@ export default function TradeVerdict({ analysis, verdict, counterSuggestion, fai
             </p>
             <WinWindowBadge tier={myTier} />
           </div>
-          <p className={`font-body text-xs leading-relaxed ${
+          <p className={`font-body text-xs leading-relaxed flex items-center gap-1.5 ${
             windowScore > 0 ? 'text-success'
               : windowScore < 0 ? 'text-warning'
               : 'text-text-secondary dark:text-text-secondary'
           }`}>
-            {windowScore > 0 ? '🟢 ' : windowScore < 0 ? '🟡 ' : '⚪ '}
+            <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${
+              windowScore > 0 ? 'bg-success' : windowScore < 0 ? 'bg-warning' : 'bg-text-tertiary'
+            }`} />
             {windowNote}
           </p>
         </div>
@@ -143,7 +149,7 @@ export default function TradeVerdict({ analysis, verdict, counterSuggestion, fai
         {verdict && vs && (
           <div className={`px-4 py-3 ${vs.bg}`}>
             <div className="flex items-center gap-2 mb-1.5">
-              <span className="text-base leading-none">{vs.icon}</span>
+              <vs.Icon size={16} strokeWidth={2} className={vs.color} />
               <span className={`font-display text-base font-bold uppercase tracking-wide ${vs.color}`}>
                 {verdict.verdict}
               </span>

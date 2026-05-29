@@ -1,4 +1,5 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { RefreshCw } from 'lucide-react'
 import { useLeague } from './hooks/useLeague'
 import { LeagueContext } from './context/LeagueContext'
 import BottomNav from './components/shared/BottomNav'
@@ -11,12 +12,15 @@ import WhatsFair from './components/trade/WhatsFair'
 import LineupOptimizer from './components/lineup/LineupOptimizer'
 import LeagueOverview from './components/league/LeagueOverview'
 
-function formatAge(ts) {
+function formatTimestamp(ts) {
   if (!ts) return null
-  const mins = Math.floor((Date.now() - ts) / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  return `${Math.floor(mins / 60)}h ago`
+  const now = Date.now()
+  const time = new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  if (now - ts > 3600000) {
+    const date = new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' })
+    return `Updated ${time} · ${date}`
+  }
+  return `Updated ${time}`
 }
 
 export default function App() {
@@ -36,13 +40,18 @@ export default function App() {
               DynastyEdge
             </span>
             <div className="flex items-center gap-1">
+              {lastUpdated && (
+                <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary mr-1">
+                  {formatTimestamp(lastUpdated)}
+                </span>
+              )}
               <button
                 onClick={retry}
                 disabled={loading}
                 aria-label="Refresh data"
-                className="text-text-tertiary dark:text-text-tertiary disabled:opacity-40 transition-opacity p-2 text-base leading-none"
+                className="w-11 h-11 flex items-center justify-center rounded-lg text-text-tertiary dark:text-text-tertiary hover:bg-gray-200 dark:hover:bg-white/5 disabled:opacity-40 transition-colors"
               >
-                ↻
+                <RefreshCw size={17} strokeWidth={1.75} className={loading ? 'animate-spin' : ''} />
               </button>
               <ThemeToggle />
             </div>
@@ -52,14 +61,6 @@ export default function App() {
             className="pt-12 overflow-y-auto"
             style={{ paddingBottom: 'calc(64px + env(safe-area-inset-bottom))' }}
           >
-            {lastUpdated && (
-              <div className="px-4 pt-1.5 pb-0 flex justify-end">
-                <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
-                  Updated {formatAge(lastUpdated)}
-                </span>
-              </div>
-            )}
-
             <Routes>
               <Route path="/" element={<Navigate to="/roster" replace />} />
               <Route path="/roster" element={<RosterView />} />

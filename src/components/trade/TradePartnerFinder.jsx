@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Target, CheckCircle2, Circle, AlertTriangle } from 'lucide-react'
 import { getTeamName } from '../../hooks/useLeague'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { rankTradePartners } from '../../utils/rosterAnalysis'
@@ -9,9 +10,9 @@ import LoadingSpinner from '../shared/LoadingSpinner'
 const FILTER_TABS = ['All', 'QB', 'RB', 'WR', 'TE', 'Picks']
 
 const FIT_BADGE = {
-  'Priority': { icon: '🎯', textClass: 'text-accent' },
-  'Good Fit': { icon: '✅', textClass: 'text-success' },
-  'Poor Fit': { icon: '⚪', textClass: 'text-text-tertiary dark:text-text-tertiary' },
+  'Priority': { Icon: Target,       textClass: 'text-accent' },
+  'Good Fit': { Icon: CheckCircle2, textClass: 'text-success' },
+  'Poor Fit': { Icon: Circle,       textClass: 'text-text-tertiary dark:text-text-tertiary' },
 }
 
 const PICK_CAP_STYLES = {
@@ -23,7 +24,7 @@ const PICK_CAP_STYLES = {
 function ErrorState({ message, onRetry }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
-      <span className="text-2xl">⚠️</span>
+      <AlertTriangle size={24} className="text-warning" strokeWidth={1.75} />
       <p className="text-text-secondary dark:text-text-secondary font-body text-sm">{message}</p>
       <button
         onClick={onRetry}
@@ -53,7 +54,7 @@ function TradePartnerCard({ partner, onClick }) {
       {/* Row 1: fit icon + team name + win window badge */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <span className={`shrink-0 text-sm ${badge.textClass}`}>{badge.icon}</span>
+          <badge.Icon size={14} strokeWidth={2} className={`shrink-0 ${badge.textClass}`} />
           <span className="font-display text-base font-bold uppercase tracking-wide text-text-primary dark:text-text-primary truncate">
             {getTeamName(owner)}
           </span>
@@ -96,7 +97,7 @@ function TradePartnerCard({ partner, onClick }) {
       {/* Row 5: win window mismatch warning */}
       {mismatchWarning && (
         <div className="flex items-start gap-1.5">
-          <span className="text-warning text-xs shrink-0 leading-tight">⚠️</span>
+          <AlertTriangle size={12} strokeWidth={2} className="text-warning shrink-0 mt-0.5" />
           <span className="font-body text-[11px] text-warning leading-tight">{mismatchWarning}</span>
         </div>
       )}
