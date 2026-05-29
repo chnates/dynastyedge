@@ -194,6 +194,7 @@ export function suggestFairPackage(targetPlayer, myRoster) {
   const targetValue = targetPlayer.value || 0
   if (targetValue === 0) return null
 
+  // Ascending sort — cheapest first, so we can find minimum-cost packages
   const available = [
     ...myRoster.players
       .filter(p => !p.isIR)
@@ -202,28 +203,70 @@ export function suggestFairPackage(targetPlayer, myRoster) {
       .map(p => ({ type: 'pick', name: pickLabel(p), value: p.value ?? 0 })),
   ]
     .filter(a => a.value > 0)
-    .sort((a, b) => b.value - a.value)
+    .sort((a, b) => a.value - b.value)
 
   if (!available.length) return null
 
-  // Single asset within 10%
-  const single = available.find(
-    a => Math.abs(a.value - targetValue) / targetValue <= 0.10
-  )
-  if (single) {
-    const gapPct = Math.round(Math.abs(single.value - targetValue) / targetValue * 100)
-    return { assets: [single], totalValue: single.value, gapPct, over: single.value >= targetValue }
+  const FLOOR = targetValue * 0.9  // allow up to 10% undershoot
+  const CAP   = targetValue * 1.5  // avoid massive overpay
+
+  // Cheapest single asset that reaches FLOOR
+  const cheapestSingle = available.find(a => a.value >= FLOOR)
+
+  // Minimum-sum two-asset pair within [FLOOR, CAP]
+  // For each i, the first j > i where sum >= FLOOR is the min sum for that i (ascending order)
+  let bestTwo = null, bestTwoSum = Infinity
+  for (let i = 0; i < available.length - 1; i++) {
+    for (let j = i + 1; j < available.length; j++) {
+      const s = available[i].value + available[j].value
+      if (s > CAP) break
+      if (s >= FLOOR && s < bestTwoSum) {
+        bestTwo    = [available[i], available[j]]
+        bestTwoSum = s
+        break  // further j only increases sum for this i
+      }
+    }
   }
 
-  // Greedy combination
-  const selected = []
-  let total = 0
-  for (const asset of available) {
-    if (total >= targetValue) break
-    selected.push(asset)
-    total += asset.value
+  // Three-asset minimum — only if neither single nor pair found
+  let bestThree = null, bestThreeSum = Infinity
+  if (!cheapestSingle && !bestTwo) {
+    outer: for (let i = 0; i < available.length - 2; i++) {
+      for (let j = i + 1; j < available.length - 1; j++) {
+        for (let k = j + 1; k < available.length; k++) {
+          const s = available[i].value + available[j].value + available[k].value
+          if (s > CAP) break
+          if (s >= FLOOR && s < bestThreeSum) {
+            bestThree    = [available[i], available[j], available[k]]
+            bestThreeSum = s
+            break outer
+          }
+        }
+      }
+    }
   }
 
-  const gapPct = Math.round(Math.abs(total - targetValue) / targetValue * 100)
-  return { assets: selected, totalValue: total, gapPct, over: total >= targetValue }
+  // Collect valid candidates, pick the one with minimum total value
+  const options = []
+  if (cheapestSingle && cheapestSingle.value <= CAP)
+    options.push({ assets: [cheapestSingle], totalValue: cheapestSingle.value })
+  if (bestTwo)
+    options.push({ assets: bestTwo, totalValue: bestTwoSum })
+  if (bestThree)
+    options.push({ assets: bestThree, totalValue: bestThreeSum })
+
+  if (options.length > 0) {
+    options.sort((a, b) => a.totalValue - b.totalValue)
+    const best = options[0]
+    const gapPct = Math.round(Math.abs(best.totalValue - targetValue) / targetValue * 100)
+    return { assets: best.assets, totalValue: best.totalValue, gapPct, over: best.totalValue >= targetValue }
+  }
+
+  // Fallback: closest single asset regardless of CAP
+  const fallback = [...available].sort(
+    (a, b) => Math.abs(a.value - targetValue) - Math.abs(b.value - targetValue)
+  )[0]
+  if (!fallback) return null
+  const gapPct = Math.round(Math.abs(fallback.value - targetValue) / targetValue * 100)
+  return { assets: [fallback], totalValue: fallback.value, gapPct, over: fallback.value >= targetValue }
 }

@@ -4,8 +4,10 @@ import { LeagueContext } from './context/LeagueContext'
 import BottomNav from './components/shared/BottomNav'
 import ThemeToggle from './components/shared/ThemeToggle'
 import RosterView from './components/roster/RosterView'
+import TradeLayout from './components/trade/TradeLayout'
 import TradePartnerFinder from './components/trade/TradePartnerFinder'
 import TradeAnalyzer from './components/trade/TradeAnalyzer'
+import WhatsFair from './components/trade/WhatsFair'
 import LineupOptimizer from './components/lineup/LineupOptimizer'
 import LeagueOverview from './components/league/LeagueOverview'
 
@@ -61,8 +63,11 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Navigate to="/roster" replace />} />
               <Route path="/roster" element={<RosterView />} />
-              <Route path="/trade" element={<TradePartnerFinder />} />
-              <Route path="/trade/analyze" element={<TradeAnalyzer />} />
+              <Route path="/trade" element={<TradeLayout />}>
+                <Route index element={<TradePartnerFinder />} />
+                <Route path="analyze" element={<TradeAnalyzer />} />
+                <Route path="whats-fair" element={<WhatsFair />} />
+              </Route>
               <Route path="/lineup" element={<LineupOptimizer />} />
               <Route path="/league" element={<LeagueOverview />} />
             </Routes>

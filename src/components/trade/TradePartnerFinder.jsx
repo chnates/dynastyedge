@@ -133,20 +133,14 @@ export default function TradePartnerFinder() {
   return (
     <div className="px-4 pb-4">
       {/* Header */}
-      <div className="pt-4 pb-3 border-b border-border-default dark:border-border-default">
-        <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-0.5">
-          Trade Partner Finder
-        </p>
-        <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-text-primary dark:text-text-primary leading-tight">
-          Trade
-        </h1>
-        {analysis && (
-          <div className="flex items-center gap-2 mt-2">
-            <span className="font-body text-[11px] text-text-secondary dark:text-text-secondary">{myTeamName}</span>
+      {analysis && (
+        <div className="pt-4 pb-3 border-b border-border-default dark:border-border-default">
+          <div className="flex items-center gap-2">
+            <span className="font-body text-sm text-text-secondary dark:text-text-secondary">{myTeamName}</span>
             <WinWindowBadge tier={analysis.myTier} />
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Position filter bar */}
       <div className="flex gap-1.5 overflow-x-auto scrollbar-none py-3 -mx-4 px-4">

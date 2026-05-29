@@ -144,3 +144,35 @@ export function rankTradePartners(myRoster, allRosters) {
 export function getWinWindowTier(rosterId, allRosters) {
   return assignWinWindowTiers(allRosters)[rosterId] ?? 'Middle'
 }
+
+export function getTopTradeTargets(myRoster, allRosters, limit = 20) {
+  if (!myRoster || !allRosters?.length) return []
+
+  const leagueAverages = computeLeagueAverages(allRosters)
+  const myDeltas = getPositionalDeltas(myRoster, leagueAverages)
+
+  const targets = []
+
+  allRosters
+    .filter(r => r.rosterId !== myRoster.rosterId)
+    .forEach(r => {
+      r.players
+        .filter(p => !p.isIR && (p.value ?? 0) >= 1000)
+        .forEach(p => {
+          const need = Math.max(0, -(myDeltas[p.position] ?? 0))
+          if (need === 0) return  // skip positions where I'm not below average
+          targets.push({
+            ...p,
+            ownerRosterId: r.rosterId,
+            owner:         r.owner,
+            needScore:     need * p.value,
+            positionDelta: myDeltas[p.position] ?? 0,
+            leagueAvgAtPos: leagueAverages[p.position] ?? 1,
+          })
+        })
+    })
+
+  return targets
+    .sort((a, b) => b.needScore - a.needScore)
+    .slice(0, limit)
+}

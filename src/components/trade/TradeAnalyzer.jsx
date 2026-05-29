@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getTeamName } from '../../hooks/useLeague'
 import { analyzeTrade, getTradeVerdict, suggestFairPackage, getCounterSuggestion } from '../../utils/tradeAnalysis'
@@ -36,16 +36,19 @@ function makeAsset(item, type) {
 export default function TradeAnalyzer() {
   const { league, loading, error, retry } = useLeagueContext()
   const location = useLocation()
-  const navigate  = useNavigate()
 
-  const initId = location.state?.opponentRosterId
+  const initId     = location.state?.opponentRosterId
+  const initTarget = location.state?.whatsFairTarget
+
   const [selectedOpponentId, setSelectedOpponentId] = useState(
     initId !== undefined && initId !== null ? Number(initId) : null
   )
   const [giveAssets, setGiveAssets]       = useState([])
   const [getAssets,  setGetAssets]        = useState([])
-  const [whatsFairMode, setWhatsFairMode] = useState(false)
-  const [whatsFairTarget, setWhatsFairTarget] = useState(null)
+  const [whatsFairMode, setWhatsFairMode] = useState(!!initTarget)
+  const [whatsFairTarget, setWhatsFairTarget] = useState(
+    initTarget ? { ...initTarget, type: 'player', id: String(initTarget.sleeperId) } : null
+  )
 
   const opponentRoster = useMemo(
     () => league?.allRosters?.find(r => r.rosterId === selectedOpponentId) ?? null,
@@ -120,13 +123,7 @@ export default function TradeAnalyzer() {
     <div className="px-4 pb-4">
       {/* Header */}
       <div className="pt-4 pb-3 flex items-center gap-2">
-        <button
-          onClick={() => navigate('/trade')}
-          className="font-body text-sm text-accent font-medium shrink-0"
-        >
-          ← Back
-        </button>
-        <p className="flex-1 text-center font-display text-base font-bold uppercase tracking-wide text-text-primary dark:text-text-primary">
+        <p className="flex-1 font-display text-base font-bold uppercase tracking-wide text-text-primary dark:text-text-primary">
           Trade Analyzer
         </p>
         <button
