@@ -1,0 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
