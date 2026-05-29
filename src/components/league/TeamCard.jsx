@@ -18,6 +18,11 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
 
   const totalPicks = roster.picks.length
 
+  const pickCountByYear = {}
+  PICK_YEARS.forEach(yr => {
+    pickCountByYear[yr] = roster.picks.filter(p => p.season === yr).length
+  })
+
   // Grid: pickGrid[round][year] = count
   const pickGrid = {}
   ;[1, 2, 3, 4].forEach(r => {
