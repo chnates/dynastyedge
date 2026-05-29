@@ -12,6 +12,7 @@ export function useSleeper() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [fetchedAt, setFetchedAt] = useState(null)
 
   const fetchData = useCallback(() => {
     setLoading(true)
@@ -24,6 +25,7 @@ export function useSleeper() {
     ])
       .then(([rosters, users, tradedPicks]) => {
         setData({ rosters, users, tradedPicks })
+        setFetchedAt(Date.now())
         setLoading(false)
       })
       .catch(err => {
@@ -36,5 +38,5 @@ export function useSleeper() {
     fetchData()
   }, [fetchData])
 
-  return { data, loading, error, retry: fetchData }
+  return { data, loading, error, retry: fetchData, fetchedAt }
 }

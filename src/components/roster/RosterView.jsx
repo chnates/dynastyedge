@@ -1,5 +1,13 @@
 import { useMemo } from 'react'
 import { useLeague, getTeamName } from '../../hooks/useLeague'
+
+function formatAge(ts) {
+  if (!ts) return null
+  const mins = Math.floor((Date.now() - ts) / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  return `${Math.floor(mins / 60)}h ago`
+}
 import LoadingSpinner from '../shared/LoadingSpinner'
 import PlayerCard from './PlayerCard'
 import PickBadge from './PickBadge'
@@ -37,7 +45,7 @@ function ErrorState({ message, onRetry }) {
 }
 
 export default function RosterView() {
-  const { league, loading, error, retry } = useLeague()
+  const { league, loading, error, retry, sleeperFetchedAt, fcFetchedAt } = useLeague()
 
   const isDark = document.documentElement.classList.contains('dark')
 
@@ -94,6 +102,21 @@ export default function RosterView() {
           <span className="font-body text-xs text-text-secondary dark:text-text-secondary">
             dynasty pts
           </span>
+        </div>
+
+        {/* Timestamps + refresh */}
+        <div className="flex items-center justify-between mt-2">
+          <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
+            Sleeper {formatAge(sleeperFetchedAt) ?? '—'} · FC {formatAge(fcFetchedAt) ?? '—'}
+          </span>
+          <button
+            onClick={retry}
+            disabled={loading}
+            aria-label="Refresh data"
+            className="text-text-tertiary dark:text-text-tertiary disabled:opacity-40 transition-opacity p-1 -mr-1 text-base leading-none"
+          >
+            ↻
+          </button>
         </div>
       </div>
 

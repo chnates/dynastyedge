@@ -5,8 +5,8 @@ import { resolvePickOwnership, findPickValue } from '../utils/pickCapital'
 import { MY_ROSTER_ID, PICK_YEARS } from '../constants'
 
 export function useLeague() {
-  const { data: sleeperData, loading: sleeperLoading, error: sleeperError, retry: sleeperRetry } = useSleeper()
-  const { values: fcValues, loading: fcLoading, error: fcError, retry: fcRetry } = useFantasyCalc()
+  const { data: sleeperData, loading: sleeperLoading, error: sleeperError, retry: sleeperRetry, fetchedAt: sleeperFetchedAt } = useSleeper()
+  const { values: fcValues, loading: fcLoading, error: fcError, retry: fcRetry, fetchedAt: fcFetchedAt } = useFantasyCalc()
 
   const loading = sleeperLoading || fcLoading
   const error = sleeperError || fcError
@@ -84,7 +84,7 @@ export function useLeague() {
     fcRetry()
   }
 
-  return { league, loading, error, retry }
+  return { league, loading, error, retry, sleeperFetchedAt, fcFetchedAt }
 }
 
 export function getTeamName(user) {

@@ -3,15 +3,19 @@ import { FANTASYCALC_BASE, FANTASYCALC_PARAMS } from '../constants'
 
 let moduleCache = null
 let fetchPromise = null
+let moduleFetchedAt = null
 
 export function useFantasyCalc() {
   const [values, setValues] = useState(moduleCache)
   const [loading, setLoading] = useState(!moduleCache)
   const [error, setError] = useState(null)
+  const [fetchedAt, setFetchedAt] = useState(moduleFetchedAt)
+  const [retryCount, setRetryCount] = useState(0)
 
   useEffect(() => {
     if (moduleCache) {
       setValues(moduleCache)
+      setFetchedAt(moduleFetchedAt)
       setLoading(false)
       return
     }
@@ -50,6 +54,7 @@ export function useFantasyCalc() {
             }
           })
 
+          moduleFetchedAt = Date.now()
           moduleCache = { playerMap, pickEntries }
           return moduleCache
         })
@@ -58,6 +63,7 @@ export function useFantasyCalc() {
     fetchPromise
       .then(cache => {
         setValues(cache)
+        setFetchedAt(moduleFetchedAt)
         setLoading(false)
       })
       .catch(err => {
@@ -65,15 +71,18 @@ export function useFantasyCalc() {
         setError(err.message)
         setLoading(false)
       })
-  }, [])
+  }, [retryCount])
 
   function retry() {
     fetchPromise = null
     moduleCache = null
+    moduleFetchedAt = null
     setError(null)
     setLoading(true)
     setValues(null)
+    setFetchedAt(null)
+    setRetryCount(c => c + 1)
   }
 
-  return { values, loading, error, retry }
+  return { values, loading, error, retry, fetchedAt }
 }
