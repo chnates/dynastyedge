@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useLeague, getTeamName } from '../../hooks/useLeague'
+import { getTeamName } from '../../hooks/useLeague'
+import { useLeagueContext } from '../../context/LeagueContext'
 import { rankTradePartners } from '../../utils/rosterAnalysis'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import LoadingSpinner from '../shared/LoadingSpinner'
@@ -104,7 +105,7 @@ function TradePartnerCard({ partner, onClick }) {
 }
 
 export default function TradePartnerFinder() {
-  const { league, loading, error, retry } = useLeague()
+  const { league, loading, error, retry } = useLeagueContext()
   const [activeFilter, setActiveFilter] = useState('All')
   const navigate = useNavigate()
 
