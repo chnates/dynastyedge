@@ -16,17 +16,17 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
   const username = roster.owner?.username ?? ''
   const tier = winWindowTiers?.[roster.rosterId] ?? 'Middle'
 
-  const pickCountByYear = {}
-  PICK_YEARS.forEach(yr => {
-    pickCountByYear[yr] = roster.picks.filter(p => p.season === yr).length
-  })
-
-  const pickCountByRound = {}
-  ;[1, 2, 3, 4].forEach(r => {
-    const count = roster.picks.filter(p => p.round === r).length
-    if (count > 0) pickCountByRound[r] = count
-  })
   const totalPicks = roster.picks.length
+
+  // Grid: pickGrid[round][year] = count
+  const pickGrid = {}
+  ;[1, 2, 3, 4].forEach(r => {
+    pickGrid[r] = {}
+    PICK_YEARS.forEach(yr => {
+      pickGrid[r][yr] = roster.picks.filter(p => p.round === r && p.season === yr).length
+    })
+  })
+  const activeRounds = [1, 2, 3, 4].filter(r => PICK_YEARS.some(yr => pickGrid[r][yr] > 0))
 
   return (
     <button
@@ -49,45 +49,53 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
       </div>
 
       {sortMode === 'picks' ? (
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-2">
           {/* Total */}
           <div className="flex items-baseline gap-1.5">
             <span className="font-mono text-xl font-semibold text-accent tabular-nums">{totalPicks}</span>
             <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">picks total</span>
           </div>
-          {/* By year */}
-          <div className="flex gap-4">
-            {PICK_YEARS.map(yr => (
-              <div key={yr} className="flex items-baseline gap-1">
-                <span className="font-mono text-sm font-semibold text-text-primary dark:text-text-primary tabular-nums">
-                  {pickCountByYear[yr]}
-                </span>
-                <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">
-                  '{yr.slice(2)}
-                </span>
-              </div>
-            ))}
-          </div>
-          {/* By round */}
-          {Object.keys(pickCountByRound).length > 0 && (
-            <div className="flex gap-1.5">
-              {[1, 2, 3, 4].map(r => {
-                const count = pickCountByRound[r]
-                if (!count) return null
-                const { bg, text } = ROUND_COLORS[r]
-                return (
-                  <div
-                    key={r}
-                    className="flex items-center gap-1 rounded-md px-2 py-0.5"
-                    style={{ backgroundColor: bg }}
-                  >
-                    <span className="font-mono text-xs font-bold tabular-nums" style={{ color: text }}>{count}</span>
-                    <span className="font-body text-[10px] font-medium" style={{ color: text }}>{ROUND_LABELS[r]}</span>
-                  </div>
-                )
-              })}
+          {/* Round × Year grid */}
+          <div className="flex flex-col gap-1">
+            {/* Year header row */}
+            <div className="flex items-center">
+              <div className="w-10 shrink-0" />
+              {PICK_YEARS.map(yr => (
+                <div key={yr} className="flex-1 text-center">
+                  <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">'{yr.slice(2)}</span>
+                </div>
+              ))}
             </div>
-          )}
+            {/* One row per active round */}
+            {activeRounds.map(r => {
+              const { bg, text } = ROUND_COLORS[r]
+              return (
+                <div key={r} className="flex items-center">
+                  <div className="w-10 shrink-0">
+                    <span
+                      className="font-body text-[10px] font-bold rounded px-1.5 py-0.5"
+                      style={{ backgroundColor: bg, color: text }}
+                    >
+                      {ROUND_LABELS[r]}
+                    </span>
+                  </div>
+                  {PICK_YEARS.map(yr => {
+                    const count = pickGrid[r][yr]
+                    return (
+                      <div key={yr} className="flex-1 text-center">
+                        <span
+                          className="font-mono text-sm font-semibold tabular-nums"
+                          style={{ color: count > 0 ? text : '#3A3A42' }}
+                        >
+                          {count > 0 ? count : '—'}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </div>
         </div>
       ) : sortMode === 'faab' ? (
         <div className="flex items-baseline gap-1.5">
