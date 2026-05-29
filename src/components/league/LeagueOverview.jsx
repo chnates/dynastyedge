@@ -202,6 +202,7 @@ export default function LeagueOverview() {
               roster={roster}
               leagueAverages={leagueAverages}
               winWindowTiers={winWindowTiers}
+              sortMode={sortMode}
               onTap={handleTeamTap}
             />
           ))}
