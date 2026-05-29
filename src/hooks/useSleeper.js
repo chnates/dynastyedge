@@ -14,24 +14,31 @@ export function useSleeper() {
   const [error, setError] = useState(null)
   const [fetchedAt, setFetchedAt] = useState(null)
 
-  const fetchData = useCallback(() => {
+  const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
+    try {
+      const [rosters, users, tradedPicks, nflState] = await Promise.all([
+        fetchJSON(`${SLEEPER_BASE}/league/${LEAGUE_ID}/rosters`),
+        fetchJSON(`${SLEEPER_BASE}/league/${LEAGUE_ID}/users`),
+        fetchJSON(`${SLEEPER_BASE}/league/${LEAGUE_ID}/traded_picks`),
+        fetchJSON(`${SLEEPER_BASE}/state/nfl`),
+      ])
 
-    Promise.all([
-      fetchJSON(`${SLEEPER_BASE}/league/${LEAGUE_ID}/rosters`),
-      fetchJSON(`${SLEEPER_BASE}/league/${LEAGUE_ID}/users`),
-      fetchJSON(`${SLEEPER_BASE}/league/${LEAGUE_ID}/traded_picks`),
-    ])
-      .then(([rosters, users, tradedPicks]) => {
-        setData({ rosters, users, tradedPicks })
-        setFetchedAt(Date.now())
-        setLoading(false)
-      })
-      .catch(err => {
-        setError(err.message)
-        setLoading(false)
-      })
+      let matchups = null
+      if (nflState?.season_type === 'regular' && nflState?.week) {
+        matchups = await fetchJSON(
+          `${SLEEPER_BASE}/league/${LEAGUE_ID}/matchups/${nflState.week}`
+        )
+      }
+
+      setData({ rosters, users, tradedPicks, nflState, matchups })
+      setFetchedAt(Date.now())
+      setLoading(false)
+    } catch (err) {
+      setError(err.message)
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {

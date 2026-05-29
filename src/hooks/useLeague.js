@@ -93,12 +93,36 @@ export function useLeague() {
     return { allRosters, myRoster, userMap }
   }, [sleeperData, fcValues])
 
+  const nflState = sleeperData?.nflState ?? null
+  const isOffseason = nflState?.season_type !== 'regular'
+
+  const matchups = useMemo(() => {
+    if (!sleeperData?.matchups || !league?.userMap) return null
+
+    const groups = {}
+    sleeperData.matchups.forEach(m => {
+      if (!groups[m.matchup_id]) groups[m.matchup_id] = []
+      groups[m.matchup_id].push(m)
+    })
+
+    return Object.values(groups)
+      .filter(pair => pair.length === 2)
+      .map(pair =>
+        pair.map(side => ({
+          rosterId: side.roster_id,
+          points: side.points ?? 0,
+          teamName: getTeamName(league.userMap[side.roster_id]),
+          username: league.userMap[side.roster_id]?.username ?? '',
+        }))
+      )
+  }, [sleeperData, league])
+
   function retry() {
     sleeperRetry()
     fcRetry()
   }
 
-  return { league, loading, error, retry, sleeperFetchedAt, fcFetchedAt }
+  return { league, nflState, matchups, isOffseason, loading, error, retry, sleeperFetchedAt, fcFetchedAt }
 }
 
 export function getTeamName(user) {

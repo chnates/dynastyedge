@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { getTeamName } from '../../hooks/useLeague'
 import { useLeagueContext } from '../../context/LeagueContext'
 import LoadingSpinner from '../shared/LoadingSpinner'
@@ -39,12 +40,23 @@ function ErrorState({ message, onRetry }) {
 
 export default function RosterView() {
   const { league, loading, error, retry } = useLeagueContext()
+  const location = useLocation()
+  const navigate = useNavigate()
 
   const isDark = document.documentElement.classList.contains('dark')
+  const selectedRosterId = location.state?.selectedRosterId
+
+  const displayRoster = useMemo(() => {
+    if (!league) return null
+    if (selectedRosterId) {
+      return league.allRosters?.find(r => r.rosterId === selectedRosterId) ?? league.myRoster
+    }
+    return league.myRoster
+  }, [league, selectedRosterId])
 
   const grouped = useMemo(() => {
-    if (!league?.myRoster) return null
-    const { players, picks } = league.myRoster
+    if (!displayRoster) return null
+    const { players, picks } = displayRoster
 
     const active = players.filter(p => !p.isTaxi && !p.isIR)
     const taxi = players.filter(p => p.isTaxi)
@@ -68,10 +80,10 @@ export default function RosterView() {
 
   if (loading) return <LoadingSpinner message="Loading roster data…" />
   if (error) return <ErrorState message={error} onRetry={retry} />
-  if (!league?.myRoster) return <ErrorState message="Could not load roster." onRetry={retry} />
+  if (!displayRoster) return <ErrorState message="Could not load roster." onRetry={retry} />
 
-  const { myRoster, userMap } = league
-  const teamName = getTeamName(myRoster.owner)
+  const { userMap } = league
+  const teamName = getTeamName(displayRoster.owner)
   const { byPosition, taxi, ir, picksByYear } = grouped
 
   function getOriginalTeamName(rosterId) {
@@ -80,8 +92,18 @@ export default function RosterView() {
 
   return (
     <div className="px-4 pb-4">
+      {/* ── Back button (when drilling down from League tab) ── */}
+      {selectedRosterId && (
+        <button
+          onClick={() => navigate('/league')}
+          className="flex items-center gap-1 pt-4 pb-1 text-accent font-body text-sm"
+        >
+          ← League
+        </button>
+      )}
+
       {/* ── Header ── */}
-      <div className="pt-4 pb-3 border-b border-border-default dark:border-border-default">
+      <div className={`${selectedRosterId ? 'pt-1' : 'pt-4'} pb-3 border-b border-border-default dark:border-border-default`}>
         <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-0.5">
           Dynasty Roster
         </p>
@@ -90,7 +112,7 @@ export default function RosterView() {
         </h1>
         <div className="flex items-baseline gap-2 mt-1.5">
           <span className="font-mono text-3xl font-medium text-accent tabular-nums">
-            {myRoster.totalValue.toLocaleString()}
+            {displayRoster.totalValue.toLocaleString()}
           </span>
           <span className="font-body text-xs text-text-secondary dark:text-text-secondary">
             dynasty pts
