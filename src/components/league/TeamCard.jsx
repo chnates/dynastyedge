@@ -3,6 +3,14 @@ import { getPositionalStrength } from '../../utils/rosterAnalysis'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import { POSITIONS, PICK_YEARS } from '../../constants'
 
+const ROUND_COLORS = {
+  1: { bg: '#3D2E00', text: '#F59E0B' },
+  2: { bg: '#0C2A4A', text: '#60A5FA' },
+  3: { bg: '#2A1A4A', text: '#A78BFA' },
+  4: { bg: '#1F1F25', text: '#9CA3AF' },
+}
+const ROUND_LABELS = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th' }
+
 export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortMode = 'value', onTap }) {
   const teamName = getTeamName(roster.owner)
   const username = roster.owner?.username ?? ''
@@ -12,6 +20,13 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
   PICK_YEARS.forEach(yr => {
     pickCountByYear[yr] = roster.picks.filter(p => p.season === yr).length
   })
+
+  const pickCountByRound = {}
+  ;[1, 2, 3, 4].forEach(r => {
+    const count = roster.picks.filter(p => p.round === r).length
+    if (count > 0) pickCountByRound[r] = count
+  })
+  const totalPicks = roster.picks.length
 
   return (
     <button
@@ -34,17 +49,45 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
       </div>
 
       {sortMode === 'picks' ? (
-        <div className="flex gap-4">
-          {PICK_YEARS.map(yr => (
-            <div key={yr} className="flex flex-col items-center gap-0.5">
-              <span className="font-mono text-xl font-semibold text-accent tabular-nums">
-                {pickCountByYear[yr]}
-              </span>
-              <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">
-                '{yr.slice(2)}
-              </span>
+        <div className="flex flex-col gap-2.5">
+          {/* Total */}
+          <div className="flex items-baseline gap-1.5">
+            <span className="font-mono text-xl font-semibold text-accent tabular-nums">{totalPicks}</span>
+            <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">picks total</span>
+          </div>
+          {/* By year */}
+          <div className="flex gap-4">
+            {PICK_YEARS.map(yr => (
+              <div key={yr} className="flex items-baseline gap-1">
+                <span className="font-mono text-sm font-semibold text-text-primary dark:text-text-primary tabular-nums">
+                  {pickCountByYear[yr]}
+                </span>
+                <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">
+                  '{yr.slice(2)}
+                </span>
+              </div>
+            ))}
+          </div>
+          {/* By round */}
+          {Object.keys(pickCountByRound).length > 0 && (
+            <div className="flex gap-1.5">
+              {[1, 2, 3, 4].map(r => {
+                const count = pickCountByRound[r]
+                if (!count) return null
+                const { bg, text } = ROUND_COLORS[r]
+                return (
+                  <div
+                    key={r}
+                    className="flex items-center gap-1 rounded-md px-2 py-0.5"
+                    style={{ backgroundColor: bg }}
+                  >
+                    <span className="font-mono text-xs font-bold tabular-nums" style={{ color: text }}>{count}</span>
+                    <span className="font-body text-[10px] font-medium" style={{ color: text }}>{ROUND_LABELS[r]}</span>
+                  </div>
+                )
+              })}
             </div>
-          ))}
+          )}
         </div>
       ) : sortMode === 'faab' ? (
         <div className="flex items-baseline gap-1.5">
