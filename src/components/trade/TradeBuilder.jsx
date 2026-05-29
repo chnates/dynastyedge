@@ -124,7 +124,6 @@ function PlayerRow({ player, isSelected, isWhatsFairTarget, onTap }) {
 }
 
 function PickRow({ pick, isSelected, onTap }) {
-  const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
   return (
     <button
       onClick={onTap}
@@ -134,7 +133,7 @@ function PickRow({ pick, isSelected, onTap }) {
       <span className="w-3.5 shrink-0 flex justify-center text-[10px]">
         {isSelected && <span className="text-success">✓</span>}
       </span>
-      <PickBadge pick={pick} isDark={isDark} />
+      <PickBadge pick={pick} />
       <span className="flex-1 font-body text-sm text-text-primary dark:text-text-primary">
         {pickLabel(pick)}
       </span>

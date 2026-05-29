@@ -44,7 +44,6 @@ export default function RosterView() {
   const location = useLocation()
   const navigate = useNavigate()
 
-  const isDark = document.documentElement.classList.contains('dark')
   const selectedRosterId = location.state?.selectedRosterId
 
   const displayRoster = useMemo(() => {
@@ -198,7 +197,6 @@ export default function RosterView() {
                             ? getOriginalTeamName(pk.originalOwner)
                             : null
                         }
-                        isDark={isDark}
                       />
                     ))}
                   </div>

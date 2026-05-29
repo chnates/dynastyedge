@@ -3,11 +3,11 @@ import { getPositionalStrength } from '../../utils/rosterAnalysis'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import { POSITIONS, PICK_YEARS } from '../../constants'
 
-const ROUND_COLORS = {
-  1: { bg: '#3D2E00', text: '#F59E0B' },
-  2: { bg: '#0C2A4A', text: '#60A5FA' },
-  3: { bg: '#2A1A4A', text: '#A78BFA' },
-  4: { bg: '#1F1F25', text: '#9CA3AF' },
+const ROUND_CLASSES = {
+  1: { badge: 'bg-amber-100  dark:bg-[#3D2E00] text-amber-800  dark:text-amber-500', text: 'text-amber-800  dark:text-amber-500' },
+  2: { badge: 'bg-blue-100   dark:bg-[#0C2A4A] text-blue-800   dark:text-blue-400',  text: 'text-blue-800   dark:text-blue-400'  },
+  3: { badge: 'bg-violet-100 dark:bg-[#2A1A4A] text-violet-800 dark:text-violet-400', text: 'text-violet-800 dark:text-violet-400' },
+  4: { badge: 'bg-gray-100   dark:bg-[#1F1F25] text-gray-700   dark:text-gray-400',  text: 'text-gray-700   dark:text-gray-400'  },
 }
 const ROUND_LABELS = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th' }
 
@@ -73,14 +73,11 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
             </div>
             {/* One row per active round */}
             {activeRounds.map(r => {
-              const { bg, text } = ROUND_COLORS[r]
+              const { badge, text } = ROUND_CLASSES[r] ?? ROUND_CLASSES[4]
               return (
                 <div key={r} className="flex items-center">
                   <div className="w-10 shrink-0">
-                    <span
-                      className="font-body text-[10px] font-bold rounded px-1.5 py-0.5"
-                      style={{ backgroundColor: bg, color: text }}
-                    >
+                    <span className={`font-body text-[10px] font-bold rounded px-1.5 py-0.5 ${badge}`}>
                       {ROUND_LABELS[r]}
                     </span>
                   </div>
@@ -88,10 +85,7 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
                     const count = pickGrid[r][yr]
                     return (
                       <div key={yr} className="flex-1 text-center">
-                        <span
-                          className="font-mono text-sm font-semibold tabular-nums"
-                          style={{ color: count > 0 ? text : '#3A3A42' }}
-                        >
+                        <span className={`font-mono text-sm font-semibold tabular-nums ${count > 0 ? text : 'text-text-tertiary'}`}>
                           {count > 0 ? count : '—'}
                         </span>
                       </div>

@@ -2,6 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme tokens ─────────────────────────────────────────────── */
+/* Values are space-separated RGB channels so Tailwind opacity     */
+/* modifiers (e.g. bg-accent/10) continue to work.                 */
+
+:root {
+  --bg-primary:    255 255 255;   /* #FFFFFF */
+  --bg-secondary:  244 244 248;   /* #F4F4F8 */
+  --bg-card:       250 250 250;   /* #FAFAFA */
+  --border-default:228 228 232;   /* #E4E4E8 */
+  --text-primary:  13 13 15;      /* #0D0D0F */
+  --text-secondary:85 85 95;      /* #55555F */
+  --text-tertiary: 85 85 95;      /* #55555F */
+  --accent:        59 111 239;    /* #3B6FEF */
+  --success:       34 197 94;     /* #22C55E */
+  --warning:       245 158 11;    /* #F59E0B */
+  --danger:        239 68 68;     /* #EF4444 */
+}
+
+.dark {
+  --bg-primary:    13 13 15;      /* #0D0D0F */
+  --bg-secondary:  22 22 26;      /* #16161A */
+  --bg-card:       28 28 33;      /* #1C1C21 */
+  --border-default:42 42 48;      /* #2A2A30 */
+  --text-primary:  240 240 245;   /* #F0F0F5 */
+  --text-secondary:138 138 149;   /* #8A8A95 */
+  --text-tertiary: 85 85 95;      /* #55555F */
+  --accent:        79 127 255;    /* #4F7FFF */
+  --success:       34 197 94;     /* #22C55E */
+  --warning:       245 158 11;    /* #F59E0B */
+  --danger:        239 68 68;     /* #EF4444 */
+}
+
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }

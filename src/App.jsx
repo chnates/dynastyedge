@@ -34,8 +34,8 @@ export default function App() {
   return (
     <LeagueContext.Provider value={leagueData}>
       <HashRouter>
-        <div className="min-h-screen bg-white dark:bg-bg-primary text-gray-900 dark:text-text-primary font-body">
-          <header className="fixed top-0 left-0 right-0 z-10 flex items-center justify-between px-4 h-12 bg-gray-100 dark:bg-bg-secondary border-b border-gray-200 dark:border-border-default">
+        <div className="min-h-screen bg-bg-primary text-text-primary font-body">
+          <header className="fixed top-0 left-0 right-0 z-10 flex items-center justify-between px-4 h-12 bg-bg-secondary border-b border-border-default">
             <span className="font-display text-xl font-bold uppercase tracking-wide text-accent">
               DynastyEdge
             </span>
@@ -49,7 +49,7 @@ export default function App() {
                 onClick={retry}
                 disabled={loading}
                 aria-label="Refresh data"
-                className="w-11 h-11 flex items-center justify-center rounded-lg text-text-tertiary dark:text-text-tertiary hover:bg-gray-200 dark:hover:bg-white/5 disabled:opacity-40 transition-colors"
+                className="w-11 h-11 flex items-center justify-center rounded-lg text-text-tertiary hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-40 transition-colors"
               >
                 <RefreshCw size={17} strokeWidth={1.75} className={loading ? 'animate-spin' : ''} />
               </button>
