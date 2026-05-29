@@ -159,6 +159,7 @@ export default function TradeBuilder({
   const [activeTab, setActiveTab]   = useState('opponent')
   const [searchQuery, setSearchQuery] = useState('')
   const [posFilter, setPosFilter]   = useState('All')
+  const [browserOpen, setBrowserOpen] = useState(false)
 
   const giveIds = useMemo(() => new Set(giveAssets.map(a => a.id)), [giveAssets])
   const getIds  = useMemo(() => new Set(getAssets.map(a => a.id)),  [getAssets])
@@ -234,8 +235,17 @@ export default function TradeBuilder({
         />
       </div>
 
+      {/* Roster browser toggle */}
+      <button
+        onClick={() => setBrowserOpen(o => !o)}
+        className="w-full flex items-center justify-between py-2.5 px-3 rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default font-body text-sm text-text-secondary dark:text-text-secondary active:opacity-70 transition-opacity"
+      >
+        <span>{activeTab === 'mine' ? 'Browse My Roster' : 'Browse Their Roster'}</span>
+        <span className="text-text-tertiary dark:text-text-tertiary text-xs">{browserOpen ? '↑' : '↓'}</span>
+      </button>
+
       {/* Roster browser */}
-      <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default overflow-hidden">
+      {browserOpen && <div className="mt-2 rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default overflow-hidden">
         {/* Tabs */}
         <div className="flex border-b border-border-default dark:border-border-default">
           {[
@@ -321,7 +331,7 @@ export default function TradeBuilder({
             </>
           )}
         </div>
-      </div>
+      </div>}
     </div>
   )
 }

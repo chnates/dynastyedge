@@ -17,21 +17,6 @@ const POS_TAGS = {
 
 const POSITION_FILTERS = ['All', 'QB', 'RB', 'WR', 'TE']
 
-function FitTag({ positionDelta, leagueAvgAtPos }) {
-  const pct = positionDelta / (leagueAvgAtPos || 1)
-  if (pct < -0.15) {
-    return (
-      <span className="shrink-0 font-body text-[10px] font-bold uppercase tracking-wider text-danger bg-danger/10 rounded px-1.5 py-0.5">
-        High Need
-      </span>
-    )
-  }
-  return (
-    <span className="shrink-0 font-body text-[10px] font-bold uppercase tracking-wider text-warning bg-warning/10 rounded px-1.5 py-0.5">
-      Need
-    </span>
-  )
-}
 
 function ErrorState({ message, onRetry }) {
   return (
@@ -80,7 +65,9 @@ function TargetCard({ target, fairPackage, onTap }) {
         <span className="font-body text-[11px] text-text-secondary dark:text-text-secondary truncate min-w-0">
           {getTeamName(target.owner)}
         </span>
-        <FitTag positionDelta={target.positionDelta} leagueAvgAtPos={target.leagueAvgAtPos} />
+        <span className={`shrink-0 font-body text-[10px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 ${POS_TAGS[target.position] ?? 'bg-bg-secondary text-text-secondary'}`}>
+          {target.position}
+        </span>
       </div>
 
       {/* Row 3: estimated package cost */}

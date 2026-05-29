@@ -103,13 +103,29 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
           </div>
         </div>
       ) : sortMode === 'faab' ? (
-        <div className="flex items-baseline gap-1.5">
-          <span className="font-mono text-xl font-semibold text-accent tabular-nums">
-            ${roster.faabRemaining}
-          </span>
-          <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
-            FAAB remaining
-          </span>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-baseline gap-1.5">
+            <span className="font-mono text-xl font-semibold text-accent tabular-nums">
+              ${roster.faabRemaining}
+            </span>
+            <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
+              FAAB remaining
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-baseline gap-1">
+              <span className="font-mono text-sm font-medium text-text-secondary dark:text-text-secondary tabular-nums">
+                {roster.totalValue.toLocaleString()}
+              </span>
+              <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">dynasty pts</span>
+            </div>
+            <div className="flex items-baseline gap-1">
+              <span className="font-mono text-sm font-medium text-text-secondary dark:text-text-secondary tabular-nums">
+                {roster.picks.length}
+              </span>
+              <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">picks</span>
+            </div>
+          </div>
         </div>
       ) : (
         <>
@@ -126,10 +142,17 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
           <div className="flex gap-1.5 mb-2.5">
             {POSITIONS.map(pos => {
               const strength = getPositionalStrength(roster)
-              const above = leagueAverages ? strength[pos] >= leagueAverages[pos] : false
+              const avg = leagueAverages?.[pos] ?? 1
+              const fillPct = Math.min(100, Math.round((strength[pos] / (avg * 2)) * 100))
+              const above = strength[pos] >= avg
               return (
                 <div key={pos} className="flex flex-col items-center gap-0.5">
-                  <div className={`h-1.5 w-8 rounded-full ${above ? 'bg-accent' : 'bg-border-default dark:bg-border-default'}`} />
+                  <div className="h-1.5 w-8 rounded-full bg-border-default dark:bg-border-default overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${above ? 'bg-accent' : 'bg-text-tertiary dark:bg-text-tertiary'}`}
+                      style={{ width: `${fillPct}%` }}
+                    />
+                  </div>
                   <span className={`font-body text-[9px] font-semibold uppercase tracking-wide ${above ? 'text-accent' : 'text-text-tertiary dark:text-text-tertiary'}`}>
                     {pos}
                   </span>

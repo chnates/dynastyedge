@@ -129,13 +129,13 @@ export default function TradeAnalyzer() {
         <button
           onClick={handleWhatsFairToggle}
           disabled={!opponentRoster}
-          className={`font-body text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors shrink-0 disabled:opacity-40
+          className={`font-body text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors shrink-0 disabled:opacity-40
             ${whatsFairMode
-              ? 'bg-accent text-white border-accent'
-              : 'border-border-default dark:border-border-default text-text-secondary dark:text-text-secondary'
+              ? 'bg-accent/15 border-accent text-accent'
+              : 'bg-bg-secondary dark:bg-bg-secondary border-border-default dark:border-border-default text-text-tertiary dark:text-text-tertiary'
             }`}
         >
-          What's Fair?
+          {whatsFairMode ? '● What\'s Fair?' : 'What\'s Fair?'}
         </button>
       </div>
 
@@ -145,7 +145,7 @@ export default function TradeAnalyzer() {
           <span className="font-body text-xs text-accent leading-tight">
             {whatsFairTarget
               ? `Target: ${whatsFairTarget.name} — fair package shown below`
-              : 'Tap any player from their roster'}
+              : 'What\'s Fair? mode active — tap a player from their roster to see a fair package'}
           </span>
           {whatsFairTarget && (
             <button

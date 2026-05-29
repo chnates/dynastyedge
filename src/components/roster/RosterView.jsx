@@ -118,6 +118,12 @@ export default function RosterView() {
             dynasty pts
           </span>
         </div>
+        <div className="flex items-center gap-1 mt-1.5">
+          <span className="block w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
+          <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">
+            = starting lineup
+          </span>
+        </div>
 
       </div>
 

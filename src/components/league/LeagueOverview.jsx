@@ -89,12 +89,7 @@ export default function LeagueOverview() {
     Object.values(winWindowTiers).forEach(t => { tierCounts[t] = (tierCounts[t] ?? 0) + 1 })
 
     const sortedRosters = [...allRosters].sort((a, b) => {
-      if (sortMode === 'picks') {
-        const YEAR_W  = { '2026': 3, '2027': 2, '2028': 1 }
-        const ROUND_W = { 1: 8, 2: 4, 3: 2, 4: 1 }
-        const score = r => r.picks.reduce((s, p) => s + (YEAR_W[p.season] ?? 0) * (ROUND_W[p.round] ?? 0), 0)
-        return score(b) - score(a)
-      }
+      if (sortMode === 'picks') return (b.pickCapitalScore ?? 0) - (a.pickCapitalScore ?? 0)
       if (sortMode === 'faab')  return b.faabRemaining - a.faabRemaining
       return b.totalValue - a.totalValue
     })

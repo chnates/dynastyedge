@@ -9,8 +9,14 @@ import {
   getPlayerFlag,
   getBestBench,
 } from '../../utils/projections'
-import { ROSTER_SLOTS } from '../../constants'
+import {
+  computeLeagueAverages,
+  getPositionalDeltas,
+  assignWinWindowTiers,
+} from '../../utils/rosterAnalysis'
+import { ROSTER_SLOTS, POSITIONS, PICK_YEARS } from '../../constants'
 import LoadingSpinner from '../shared/LoadingSpinner'
+import WinWindowBadge from '../shared/WinWindowBadge'
 import StarterSlot from './StarterSlot'
 import FreeAgentDrawer from './FreeAgentDrawer'
 
@@ -44,16 +50,86 @@ function ErrorState({ message, onRetry }) {
   )
 }
 
-function OffseasonPlaceholder() {
+function OffseasonPlaceholder({ league }) {
+  const myRoster = league?.myRoster
+  const allRosters = league?.allRosters
+
+  const leagueAvgs = allRosters ? computeLeagueAverages(allRosters) : null
+  const deltas = myRoster && leagueAvgs ? getPositionalDeltas(myRoster, leagueAvgs) : null
+  const topNeed = deltas
+    ? POSITIONS.reduce((worst, pos) => (deltas[pos] < (deltas[worst] ?? 0) ? pos : worst), POSITIONS[0])
+    : null
+
+  const picksByYear = {}
+  ;(myRoster?.picks ?? []).forEach(pk => {
+    picksByYear[pk.season] = (picksByYear[pk.season] ?? 0) + 1
+  })
+
+  const tier = allRosters && myRoster
+    ? assignWinWindowTiers(allRosters)[myRoster.rosterId] ?? 'Middle'
+    : 'Middle'
+
   return (
-    <div className="flex flex-col items-center justify-center py-20 gap-3 px-4 text-center">
-      <span className="text-5xl">📋</span>
-      <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-text-primary dark:text-text-primary">
-        Lineup Optimizer
-      </h2>
-      <p className="font-body text-sm text-text-secondary dark:text-text-secondary max-w-xs">
-        Available during the regular season. Check back in September.
-      </p>
+    <div className="px-4 pb-4">
+      <div className="pt-4 pb-3 border-b border-border-default dark:border-border-default flex flex-col items-center text-center gap-2">
+        <span className="text-4xl">📋</span>
+        <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-text-primary dark:text-text-primary">
+          Lineup Optimizer
+        </h2>
+        <p className="font-body text-sm text-text-secondary dark:text-text-secondary">
+          Available during the regular season.
+        </p>
+      </div>
+
+      {myRoster && (
+        <div className="flex flex-col gap-3 pt-4">
+          {topNeed && (
+            <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-4 py-3">
+              <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-1.5">
+                Heading Into The Season
+              </p>
+              <p className="font-body text-sm text-text-primary dark:text-text-primary leading-relaxed">
+                Your biggest roster need is{' '}
+                <span className="font-bold text-warning">{topNeed}</span>
+                {' '}— currently below league average heading into the draft.
+              </p>
+            </div>
+          )}
+
+          <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-4 py-3">
+            <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-2">
+              Rookie Draft Capital
+            </p>
+            <div className="flex gap-4">
+              {PICK_YEARS.map(yr => (
+                <div key={yr} className="flex items-baseline gap-1">
+                  <span className="font-mono text-xl font-semibold text-accent tabular-nums">
+                    {picksByYear[yr] ?? 0}
+                  </span>
+                  <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">
+                    '{yr.slice(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-4 py-3">
+            <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-2">
+              Win Window
+            </p>
+            <div className="flex items-center gap-2">
+              <WinWindowBadge tier={tier} />
+              <span className="font-mono text-base font-semibold text-accent tabular-nums">
+                {myRoster.totalValue.toLocaleString()}
+              </span>
+              <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">
+                dynasty pts
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -113,7 +189,7 @@ export default function LineupOptimizer() {
 
   if (loading) return <LoadingSpinner message="Loading lineup data…" />
   if (error) return <ErrorState message={error} onRetry={() => { leagueRetry(); lineupData.retry() }} />
-  if (lineupData.isOffseason) return <OffseasonPlaceholder />
+  if (lineupData.isOffseason) return <OffseasonPlaceholder league={league} />
   if (!lineupView) return <ErrorState message="Could not build lineup view." onRetry={() => { leagueRetry(); lineupData.retry() }} />
 
   const { starterSlots, benchWithProj, flagCounts, currentWeek } = lineupView

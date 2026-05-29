@@ -37,11 +37,14 @@ export function useLeague() {
       const reserveSet = new Set(roster.reserve ?? [])
       const taxiSet = new Set(roster.taxi ?? [])
 
-      const allPlayers = (roster.players ?? []).map(pid => {
+      const seenIds = new Set()
+      const allPlayers = (roster.players ?? []).flatMap(pid => {
         const id = String(pid)
+        if (seenIds.has(id)) return []
+        seenIds.add(id)
         const fc = playerMap[id]
-        if (!fc) return null // DEF, unresolved — skip
-        return {
+        if (!fc) return [] // DEF, unresolved — skip
+        return [{
           sleeperId: id,
           name: fc.name,
           position: fc.position,
@@ -54,8 +57,8 @@ export function useLeague() {
           isStarter: starterSet.has(pid) || starterSet.has(id),
           isTaxi: taxiSet.has(pid) || taxiSet.has(id),
           isIR: reserveSet.has(pid) || reserveSet.has(id),
-        }
-      }).filter(Boolean)
+        }]
+      })
 
       const ownedPicks = (picksByRoster[roster.roster_id] ?? []).map(pk => ({
         ...pk,
@@ -125,6 +128,11 @@ export function useLeague() {
   return { league, nflState, matchups, isOffseason, loading, error, retry, sleeperFetchedAt, fcFetchedAt }
 }
 
+function toTitleCase(str) {
+  return str.replace(/\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+}
+
 export function getTeamName(user) {
-  return user?.metadata?.team_name || user?.display_name || user?.username || 'Unknown Team'
+  const raw = user?.metadata?.team_name || user?.display_name || user?.username || 'Unknown Team'
+  return toTitleCase(raw)
 }
