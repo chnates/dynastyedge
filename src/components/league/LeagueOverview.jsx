@@ -118,7 +118,7 @@ export default function LeagueOverview() {
   const { winWindowTiers, leagueAverages, tierCounts, sortedRosters, positionRanked } = derived
 
   function handleTeamTap(rosterId) {
-    navigate('/roster', { state: { selectedRosterId: rosterId } })
+    navigate('/roster/my-team', { state: { selectedRosterId: rosterId } })
   }
 
   const currentWeek = nflState?.week

@@ -45,6 +45,9 @@ export function useFantasyCalc() {
                 overallRank: entry.overallRank ?? null,
                 positionRank: entry.positionRank ?? null,
                 trend30Day: entry.trend30Day ?? 0,
+                experience: entry.player.experience ?? null,
+                adp: entry.adp ?? entry.overallRank ?? null,
+                sleeperId: String(sid),
               }
             } else if (entry.player?.name) {
               pickEntries.push({

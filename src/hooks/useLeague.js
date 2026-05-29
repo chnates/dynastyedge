@@ -125,7 +125,7 @@ export function useLeague() {
     fcRetry()
   }
 
-  return { league, nflState, matchups, isOffseason, loading, error, retry, sleeperFetchedAt, fcFetchedAt }
+  return { league, nflState, matchups, isOffseason, loading, error, retry, sleeperFetchedAt, fcFetchedAt, values: fcValues }
 }
 
 function toTitleCase(str) {

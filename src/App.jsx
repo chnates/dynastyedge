@@ -4,14 +4,18 @@ import { Menu } from 'lucide-react'
 import { useLeague } from './hooks/useLeague'
 import { LeagueContext } from './context/LeagueContext'
 import SideDrawer from './components/shared/SideDrawer'
+import RosterLayout from './components/roster/RosterLayout'
 import RosterView from './components/roster/RosterView'
+import FreeAgentsView from './components/roster/FreeAgentsView'
 import TradeLayout from './components/trade/TradeLayout'
 import TradePartnerFinder from './components/trade/TradePartnerFinder'
 import TradeAnalyzer from './components/trade/TradeAnalyzer'
 import WhatsFair from './components/trade/WhatsFair'
 import LineupOptimizer from './components/lineup/LineupOptimizer'
 import LeagueOverview from './components/league/LeagueOverview'
-import DraftPlaceholder from './components/draft/DraftPlaceholder'
+import DraftLayout from './components/draft/DraftLayout'
+import DraftBoard from './components/draft/DraftBoard'
+import DraftTracker from './components/draft/DraftTracker'
 
 const SECTION_NAMES = {
   '/roster': 'Roster',
@@ -114,8 +118,12 @@ function AppShell({ leagueData }) {
         style={{ bottom: 'env(safe-area-inset-bottom)' }}
       >
         <Routes>
-          <Route path="/" element={<Navigate to="/roster" replace />} />
-          <Route path="/roster" element={<RosterView />} />
+          <Route path="/" element={<Navigate to="/roster/my-team" replace />} />
+          <Route path="/roster" element={<RosterLayout />}>
+            <Route index element={<Navigate to="my-team" replace />} />
+            <Route path="my-team" element={<RosterView />} />
+            <Route path="free-agents" element={<FreeAgentsView />} />
+          </Route>
           <Route path="/trade" element={<TradeLayout />}>
             <Route index element={<TradePartnerFinder />} />
             <Route path="analyze" element={<TradeAnalyzer />} />
@@ -123,7 +131,11 @@ function AppShell({ leagueData }) {
           </Route>
           <Route path="/lineup" element={<LineupOptimizer />} />
           <Route path="/league" element={<LeagueOverview />} />
-          <Route path="/draft" element={<DraftPlaceholder />} />
+          <Route path="/draft" element={<DraftLayout />}>
+            <Route index element={<Navigate to="board" replace />} />
+            <Route path="board" element={<DraftBoard />} />
+            <Route path="tracker" element={<DraftTracker />} />
+          </Route>
         </Routes>
       </main>
     </div>
