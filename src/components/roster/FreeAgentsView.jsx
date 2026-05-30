@@ -40,7 +40,7 @@ function RookieBadge() {
 }
 
 function isRookie(player) {
-  return player.experience === 0 || (player.experience == null && player.age != null && player.age <= 23.5)
+  return player.experience === 0 || (player.experience == null && player.age != null && player.age <= 25)
 }
 
 export default function FreeAgentsView() {
