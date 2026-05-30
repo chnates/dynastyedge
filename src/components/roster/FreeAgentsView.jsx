@@ -217,6 +217,8 @@ export default function FreeAgentsView() {
             {filtered.map((player, i) => {
               const fillsNeed = needPositions.includes(player.position)
               const rookie = !!sleeperRookieMap?.[player.sleeperId]
+                || player.experience === 0
+                || (player.experience == null && player.age != null && player.age <= 25)
               return (
                 <button
                   key={player.sleeperId}

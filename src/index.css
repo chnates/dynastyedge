@@ -34,6 +34,10 @@
   --danger:        239 68 68;     /* #EF4444 */
 }
 
+body {
+  background-color: rgb(var(--bg-primary));
+}
+
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }
