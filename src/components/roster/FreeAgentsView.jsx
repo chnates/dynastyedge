@@ -46,10 +46,11 @@ function isRookie(player) {
 export default function FreeAgentsView() {
   const { league, loading, error, retry, values } = useLeagueContext()
 
-  const [posFilter, setPosFilter] = useState('ALL')
-  const [sortMode, setSortMode]   = useState('value')
-  const [search, setSearch]       = useState('')
-  const [selected, setSelected]   = useState(null)
+  const [posFilter, setPosFilter]     = useState('ALL')
+  const [sortMode, setSortMode]       = useState('value')
+  const [search, setSearch]           = useState('')
+  const [upgradesOnly, setUpgradesOnly] = useState(false)
+  const [selected, setSelected]       = useState(null)
 
   const myNeeds = useMemo(() => {
     if (!league) return {}
@@ -62,6 +63,32 @@ export default function FreeAgentsView() {
       .filter(([, delta]) => delta < 0)
       .map(([pos]) => pos),
   [myNeeds])
+
+  // Lowest dynasty value per position on my roster (for Upgrades Only filter)
+  const myWorstByPosition = useMemo(() => {
+    if (!league?.myRoster) return {}
+    const worst = {}
+    league.myRoster.players.forEach(p => {
+      if (!['QB', 'RB', 'WR', 'TE'].includes(p.position)) return
+      if (worst[p.position] == null || (p.value ?? 0) < worst[p.position]) {
+        worst[p.position] = p.value ?? 0
+      }
+    })
+    return worst
+  }, [league])
+
+  // My rostered players grouped by position, sorted by value desc (for drawer comparison)
+  const myPlayersByPosition = useMemo(() => {
+    if (!league?.myRoster) return {}
+    const byPos = {}
+    league.myRoster.players.forEach(p => {
+      if (!['QB', 'RB', 'WR', 'TE'].includes(p.position)) return
+      if (!byPos[p.position]) byPos[p.position] = []
+      byPos[p.position].push(p)
+    })
+    Object.values(byPos).forEach(arr => arr.sort((a, b) => (b.value ?? 0) - (a.value ?? 0)))
+    return byPos
+  }, [league])
 
   const freeAgents = useMemo(() => {
     if (!league || !values?.playerMap) return []
@@ -84,6 +111,10 @@ export default function FreeAgentsView() {
 
     if (posFilter !== 'ALL') list = list.filter(p => p.position === posFilter)
 
+    if (upgradesOnly) {
+      list = list.filter(p => (p.value ?? 0) > (myWorstByPosition[p.position] ?? 0))
+    }
+
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       list = list.filter(p => p.name?.toLowerCase().includes(q))
@@ -93,7 +124,7 @@ export default function FreeAgentsView() {
     else list = [...list].sort((a, b) => (a.age ?? 99) - (b.age ?? 99))
 
     return list
-  }, [freeAgents, posFilter, search, sortMode])
+  }, [freeAgents, posFilter, upgradesOnly, search, sortMode, myWorstByPosition])
 
   if (loading) return <LoadingSpinner message="Loading league data…" />
   if (error)   return <ErrorState message={error} onRetry={retry} />
@@ -132,6 +163,25 @@ export default function FreeAgentsView() {
           ))}
         </div>
 
+        {/* Upgrades Only toggle */}
+        <div className="flex items-center gap-2 mb-3">
+          <button
+            onClick={() => setUpgradesOnly(o => !o)}
+            className={`px-3 py-1.5 rounded-lg font-body text-xs font-semibold uppercase tracking-wide transition-colors ${
+              upgradesOnly
+                ? 'bg-success/20 text-success border border-success/30'
+                : 'bg-bg-card border border-border-default text-text-secondary'
+            }`}
+          >
+            Upgrades Only
+          </button>
+          {upgradesOnly && (
+            <span className="font-body text-[10px] text-text-tertiary leading-tight">
+              Better than my worst {posFilter === 'ALL' ? 'at each position' : posFilter}
+            </span>
+          )}
+        </div>
+
         {/* Sort + count row */}
         <div className="flex items-center justify-between mb-3">
           <span className="font-body text-[11px] text-text-tertiary">
@@ -157,7 +207,12 @@ export default function FreeAgentsView() {
         {/* Player list */}
         {filtered.length === 0 ? (
           <p className="text-center text-text-tertiary font-body text-sm py-10">
-            {search ? 'No players match your search.' : 'No free agents at this position.'}
+            {search
+              ? 'No players match your search.'
+              : upgradesOnly
+                ? 'No free agents upgrade your roster at this position.'
+                : 'No free agents at this position.'
+            }
           </p>
         ) : (
           <div className="rounded-xl bg-bg-card border border-border-default px-3">
@@ -213,6 +268,7 @@ export default function FreeAgentsView() {
         <PlayerProfileDrawer
           player={selected}
           playerMap={values?.playerMap ?? {}}
+          rosterComparison={myPlayersByPosition[selected.position] ?? []}
           onClose={() => setSelected(null)}
         />
       )}

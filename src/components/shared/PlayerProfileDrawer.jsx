@@ -99,7 +99,7 @@ function getComparables(player, playerMap) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function PlayerProfileDrawer({ player, onClose, playerMap = {}, csvColumns = [] }) {
+export default function PlayerProfileDrawer({ player, onClose, playerMap = {}, csvColumns = [], rosterComparison = null }) {
   const overlayRef = useRef(null)
 
   useEffect(() => {
@@ -203,6 +203,43 @@ export default function PlayerProfileDrawer({ player, onClose, playerMap = {}, c
               )}
             </div>
           </div>
+
+          {/* Roster comparison — shown only in free agent context */}
+          {rosterComparison != null && rosterComparison.length > 0 && (
+            <div className="rounded-xl bg-bg-card border border-border-default px-3 py-3">
+              <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
+                Your Roster — {player.position}
+              </p>
+              <div className="flex flex-col gap-0">
+                {rosterComparison.map((rp, i) => {
+                  const delta = (player.value ?? 0) - (rp.value ?? 0)
+                  return (
+                    <div
+                      key={rp.sleeperId}
+                      className={`flex items-center justify-between py-2 ${i < rosterComparison.length - 1 ? 'border-b border-border-default' : ''}`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-body text-sm text-text-primary truncate">{rp.name}</p>
+                        <p className="font-body text-[10px] text-text-tertiary truncate">
+                          {rp.team || 'FA'} · #{rp.positionRank ?? '—'} {rp.position}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                        <span className="font-mono text-sm text-text-secondary tabular-nums">
+                          {(rp.value ?? 0).toLocaleString()}
+                        </span>
+                        <span className={`font-mono text-xs font-semibold tabular-nums w-14 text-right ${
+                          delta > 0 ? 'text-success' : delta < 0 ? 'text-danger' : 'text-text-tertiary'
+                        }`}>
+                          {delta > 0 ? '+' : ''}{delta.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Role / opportunity */}
           {role && (
