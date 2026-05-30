@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { AlertTriangle } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getTeamName } from '../../hooks/useLeague'
-import { analyzeTrade, getTradeVerdict, suggestFairPackage, getCounterSuggestion } from '../../utils/tradeAnalysis'
+import { analyzeTrade, getTradeVerdict, suggestFairPackage, getCounterSuggestion, adjustVerdictForInjuries } from '../../utils/tradeAnalysis'
+import { fetchPlayerIntelligence } from '../../utils/playerIntelligence'
 import TradeBuilder from './TradeBuilder'
 import TradeVerdict from './TradeVerdict'
 import LoadingSpinner from '../shared/LoadingSpinner'
@@ -51,6 +52,9 @@ export default function TradeAnalyzer() {
     initTarget ? { ...initTarget, type: 'player', id: String(initTarget.sleeperId) } : null
   )
 
+  const [liveIntelligence, setLiveIntelligence]     = useState(null)
+  const [intelligenceLoading, setIntelligenceLoading] = useState(false)
+
   const opponentRoster = useMemo(
     () => league?.allRosters?.find(r => r.rosterId === selectedOpponentId) ?? null,
     [league, selectedOpponentId]
@@ -63,15 +67,55 @@ export default function TradeAnalyzer() {
 
   const verdict = useMemo(() => getTradeVerdict(analysis), [analysis])
 
+  // adjustedVerdict must be declared before counterSuggestion since counterSuggestion depends on it
+  const adjustedVerdict = useMemo(
+    () => adjustVerdictForInjuries(verdict, liveIntelligence, giveAssets, getAssets),
+    [verdict, liveIntelligence, giveAssets, getAssets]
+  )
+
   const counterSuggestion = useMemo(() => {
-    if (verdict?.verdict !== 'Counter') return null
+    if (adjustedVerdict?.verdict !== 'Counter') return null
     return getCounterSuggestion(analysis, league?.myRoster, opponentRoster)
-  }, [verdict, analysis, league, opponentRoster])
+  }, [adjustedVerdict, analysis, league, opponentRoster])
 
   const fairPackage = useMemo(
     () => whatsFairTarget ? suggestFairPackage(whatsFairTarget, league?.myRoster) : null,
     [whatsFairTarget, league]
   )
+
+  // Fire parallel Anthropic agent calls when ≥1 non-pick player is on each side
+  useEffect(() => {
+    const givePlayers = giveAssets.filter(a => a.type === 'player').slice(0, 3)
+    const getPlayers  = getAssets.filter(a => a.type === 'player').slice(0, 3)
+
+    if (!givePlayers.length || !getPlayers.length) {
+      setLiveIntelligence(null)
+      setIntelligenceLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setLiveIntelligence(null)
+    setIntelligenceLoading(true)
+
+    const playersWithSide = [
+      ...givePlayers.map(p => ({ ...p, side: 'give' })),
+      ...getPlayers.map(p =>  ({ ...p, side: 'get'  })),
+    ]
+
+    fetchPlayerIntelligence(playersWithSide)
+      .then(results => {
+        if (!cancelled) {
+          setLiveIntelligence(results)
+          setIntelligenceLoading(false)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setIntelligenceLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [giveAssets, getAssets])
 
   function handleOpponentChange(rawValue) {
     const id = rawValue ? Number(rawValue) : null
@@ -80,6 +124,8 @@ export default function TradeAnalyzer() {
     setGetAssets([])
     setWhatsFairMode(false)
     setWhatsFairTarget(null)
+    setLiveIntelligence(null)
+    setIntelligenceLoading(false)
   }
 
   function toggleGive(item, type) {
@@ -198,10 +244,12 @@ export default function TradeAnalyzer() {
           />
           <TradeVerdict
             analysis={analysis}
-            verdict={verdict}
+            verdict={adjustedVerdict}
             counterSuggestion={counterSuggestion}
             fairPackage={fairPackage}
             whatsFairTarget={whatsFairTarget}
+            liveIntelligence={liveIntelligence}
+            intelligenceLoading={intelligenceLoading}
           />
         </>
       ) : (

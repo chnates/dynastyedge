@@ -189,6 +189,47 @@ export function getCounterSuggestion(analysis, myRoster, opponentRoster) {
     : `Offer to add ${b.name} (${b.value.toLocaleString()}) to even it out`
 }
 
+const VERDICT_UPGRADE   = { Decline: 'Counter', Counter: 'Accept', Accept: 'Accept' }
+const VERDICT_DOWNGRADE = { Accept: 'Counter',  Counter: 'Decline', Decline: 'Decline' }
+
+export function adjustVerdictForInjuries(baseVerdict, liveIntelligence, giveAssets, getAssets) {
+  if (!baseVerdict || !liveIntelligence?.length) return baseVerdict
+
+  const getNames  = new Set(getAssets.filter(a => a.type === 'player').map(a => a.name))
+  const giveNames = new Set(giveAssets.filter(a => a.type === 'player').map(a => a.name))
+
+  const getOut  = liveIntelligence.filter(i => !i.error && i.injuryStatus === 'Out' && getNames.has(i.playerName))
+  const giveOut = liveIntelligence.filter(i => !i.error && i.injuryStatus === 'Out' && giveNames.has(i.playerName))
+
+  if (!getOut.length && !giveOut.length) return baseVerdict
+
+  let { verdict, reasoning } = baseVerdict
+  const notes = []
+
+  // Getting an injured player → downgrade Accept → Counter
+  if (getOut.length > 0 && verdict === 'Accept') {
+    verdict = VERDICT_DOWNGRADE[verdict]
+    const names = getOut.map(i => i.playerName).join(' and ')
+    notes.push(`${names} ${getOut.length > 1 ? 'are' : 'is'} currently out — verify status before accepting`)
+  }
+
+  // Giving an injured player → upgrade (selling high on injured asset)
+  if (giveOut.length > 0 && verdict !== 'Accept') {
+    const prev = verdict
+    verdict = VERDICT_UPGRADE[verdict]
+    if (verdict !== prev) {
+      const names = giveOut.map(i => i.playerName).join(' and ')
+      notes.push(`you may be selling high on ${names} who ${giveOut.length > 1 ? 'are' : 'is'} currently out`)
+    }
+  }
+
+  const updatedReasoning = notes.length > 0
+    ? `${reasoning} Note: ${notes.join('; ')}.`
+    : reasoning
+
+  return { verdict, reasoning: updatedReasoning, adjustedByIntelligence: notes.length > 0 }
+}
+
 export function suggestFairPackage(targetPlayer, myRoster) {
   if (!targetPlayer || !myRoster) return null
   const targetValue = targetPlayer.value || 0

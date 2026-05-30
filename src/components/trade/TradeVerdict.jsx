@@ -1,10 +1,22 @@
-import { CheckCircle2, XCircle, RefreshCw, CheckCircle, XCircle as XCircleSmall, Circle } from 'lucide-react'
+import { CheckCircle2, XCircle, RefreshCw, CheckCircle, XCircle as XCircleSmall, Circle, AlertTriangle } from 'lucide-react'
 import WinWindowBadge from '../shared/WinWindowBadge'
 
 const VERDICT_STYLES = {
   Accept:  { Icon: CheckCircle2, color: 'text-success',  bg: 'bg-success/10 border-success/30' },
   Decline: { Icon: XCircle,      color: 'text-danger',   bg: 'bg-danger/10 border-danger/30' },
   Counter: { Icon: RefreshCw,    color: 'text-warning',  bg: 'bg-warning/10 border-warning/30' },
+}
+
+const INJURY_STATUS_STYLE = {
+  Healthy:      { dot: 'bg-success',  text: 'text-success',  label: 'Healthy' },
+  Questionable: { dot: 'bg-warning',  text: 'text-warning',  label: 'Questionable' },
+  Out:          { dot: 'bg-danger',   text: 'text-danger',   label: 'Out' },
+}
+
+const USAGE_ICON = {
+  increasing: { symbol: '↑', color: 'text-success' },
+  stable:     { symbol: '→', color: 'text-text-secondary' },
+  declining:  { symbol: '↓', color: 'text-danger' },
 }
 
 function ValueSummary({ giveTotal, getTotal }) {
@@ -37,7 +49,68 @@ function ValueSummary({ giveTotal, getTotal }) {
   )
 }
 
-export default function TradeVerdict({ analysis, verdict, counterSuggestion, fairPackage, whatsFairTarget }) {
+function PlayerIntelCard({ intel }) {
+  if (intel.error) {
+    return (
+      <div className="px-4 py-3 border-b border-border-default dark:border-border-default last:border-b-0">
+        <p className="font-body text-xs font-semibold text-text-primary dark:text-text-primary mb-0.5">
+          {intel.playerName}
+          <span className="ml-1.5 font-normal text-[10px] uppercase tracking-wide text-text-tertiary dark:text-text-tertiary">
+            {intel.side === 'give' ? 'giving' : 'getting'}
+          </span>
+        </p>
+        <p className="font-body text-xs text-text-tertiary dark:text-text-tertiary">
+          Live data unavailable for {intel.playerName}
+        </p>
+      </div>
+    )
+  }
+
+  const injuryStyle = INJURY_STATUS_STYLE[intel.injuryStatus] ?? INJURY_STATUS_STYLE.Healthy
+  const usageStyle  = USAGE_ICON[intel.usageTrend] ?? USAGE_ICON.stable
+
+  return (
+    <div className="px-4 py-3 border-b border-border-default dark:border-border-default last:border-b-0">
+      <div className="flex items-center justify-between mb-1">
+        <p className="font-body text-xs font-semibold text-text-primary dark:text-text-primary">
+          {intel.playerName}
+          <span className="ml-1.5 font-normal text-[10px] uppercase tracking-wide text-text-tertiary dark:text-text-tertiary">
+            {intel.side === 'give' ? 'giving' : 'getting'}
+          </span>
+        </p>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className={`font-mono text-sm font-bold ${usageStyle.color}`} title={`Usage: ${intel.usageTrend}`}>
+            {usageStyle.symbol}
+          </span>
+          <span className={`flex items-center gap-1 font-body text-[11px] ${injuryStyle.text}`}>
+            <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${injuryStyle.dot}`} />
+            {injuryStyle.label}
+          </span>
+        </div>
+      </div>
+      {intel.depthChartNote && (
+        <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary mb-0.5">
+          {intel.depthChartNote}
+        </p>
+      )}
+      {intel.newsAlert && (
+        <p className="font-body text-[11px] text-warning mt-1 leading-relaxed">
+          ⚠️ {intel.newsAlert}
+        </p>
+      )}
+    </div>
+  )
+}
+
+export default function TradeVerdict({
+  analysis,
+  verdict,
+  counterSuggestion,
+  fairPackage,
+  whatsFairTarget,
+  liveIntelligence,
+  intelligenceLoading,
+}) {
   if (!analysis || (analysis.giveTotal === 0 && analysis.getTotal === 0)) {
     return (
       <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-4 py-8 text-center mb-4">
@@ -50,6 +123,10 @@ export default function TradeVerdict({ analysis, verdict, counterSuggestion, fai
 
   const { giveTotal, getTotal, filledNeeds, hurtStrengths, windowScore, windowNote, myTier } = analysis
   const vs = verdict ? VERDICT_STYLES[verdict.verdict] : null
+
+  const injuredWarnings = liveIntelligence
+    ? liveIntelligence.filter(i => !i.error && i.injuryStatus === 'Out')
+    : []
 
   return (
     <div>
@@ -145,6 +222,20 @@ export default function TradeVerdict({ analysis, verdict, counterSuggestion, fai
           </p>
         </div>
 
+        {/* Injury warning banners — surface above verdict when any player is Out */}
+        {injuredWarnings.length > 0 && (
+          <div className="px-4 py-3 border-b border-border-default dark:border-border-default bg-danger/5">
+            {injuredWarnings.map(p => (
+              <div key={p.playerName} className="flex items-start gap-2 mb-1 last:mb-0">
+                <AlertTriangle size={13} className="text-danger shrink-0 mt-0.5" strokeWidth={2} />
+                <p className="font-body text-xs text-danger leading-relaxed">
+                  {p.playerName} is currently {p.injuryStatus} — this may affect trade value
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Verdict */}
         {verdict && vs && (
           <div className={`px-4 py-3 ${vs.bg}`}>
@@ -165,6 +256,31 @@ export default function TradeVerdict({ analysis, verdict, counterSuggestion, fai
           </div>
         )}
       </div>
+
+      {/* Live Intelligence loading state — shown while agents run, non-blocking */}
+      {intelligenceLoading && (
+        <div className="flex items-center justify-center gap-2 py-3 mb-4 rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default">
+          <div className="h-3.5 w-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+          <span className="font-body text-xs text-text-secondary dark:text-text-secondary">
+            Researching players…
+          </span>
+        </div>
+      )}
+
+      {/* Live Intelligence section */}
+      {liveIntelligence && liveIntelligence.length > 0 && (
+        <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default overflow-hidden mb-4">
+          <div className="px-4 py-2.5 border-b border-border-default dark:border-border-default flex items-center gap-2">
+            <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary">
+              Live Intelligence
+            </p>
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+          </div>
+          {liveIntelligence.map(intel => (
+            <PlayerIntelCard key={intel.playerName} intel={intel} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
