@@ -197,10 +197,20 @@ export default function DraftTracker() {
   // All hooks before early returns (React rules)
   const rookies = useMemo(() => {
     if (!rookieMap) return []
+
+    const nameToFCEntry = {}
+    if (values?.playerMap) {
+      Object.values(values.playerMap).forEach(e => {
+        if (e.name) nameToFCEntry[e.name.toLowerCase()] = e
+      })
+    }
+
     return Object.values(rookieMap)
       .map(rookieEntry => {
         const mainEntry = values?.playerMap?.[rookieEntry.sleeperId]
-        if (mainEntry) return { ...mainEntry, adp: rookieEntry.adp ?? mainEntry.adp }
+        if (mainEntry) return { ...mainEntry }
+        const nameMatch = nameToFCEntry[rookieEntry.name?.toLowerCase()]
+        if (nameMatch) return { ...nameMatch, sleeperId: rookieEntry.sleeperId }
         return { ...rookieEntry, adpOnly: true }
       })
       .sort((a, b) => (a.adp ?? a.overallRank ?? 999) - (b.adp ?? b.overallRank ?? 999))

@@ -182,19 +182,29 @@ export default function DraftBoard() {
     return getMyPickSlot(league.myRoster)
   }, [league])
 
-  // Rookie prospects: authoritative list from FantasyCalc's rookiesOnly endpoint.
-  // Dynasty value is merged from the main endpoint when available; otherwise
-  // the rookie endpoint's own value is used and the player is flagged adpOnly.
+  // Name→FantasyCalc entry lookup for fallback matching when sleeperId isn't in playerMap
+  const nameToFCEntry = useMemo(() => {
+    if (!values?.playerMap) return {}
+    const map = {}
+    Object.values(values.playerMap).forEach(e => {
+      if (e.name) map[e.name.toLowerCase()] = e
+    })
+    return map
+  }, [values?.playerMap])
+
+  // Rookie prospects: Sleeper years_exp===0 is the authoritative list.
+  // Dynasty value and ADP are enriched from FantasyCalc main endpoint by sleeperId,
+  // with a case-insensitive name match as fallback.
   const rookies = useMemo(() => {
     if (!rookieMap) return []
     return Object.values(rookieMap).map(rookieEntry => {
       const mainEntry = values?.playerMap?.[rookieEntry.sleeperId]
-      if (mainEntry) {
-        return { ...mainEntry, adp: rookieEntry.adp ?? mainEntry.adp }
-      }
+      if (mainEntry) return { ...mainEntry }
+      const nameMatch = nameToFCEntry[rookieEntry.name?.toLowerCase()]
+      if (nameMatch) return { ...nameMatch, sleeperId: rookieEntry.sleeperId }
       return { ...rookieEntry, adpOnly: true }
     })
-  }, [rookieMap, values])
+  }, [rookieMap, values, nameToFCEntry])
 
   function handleSort(col) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
