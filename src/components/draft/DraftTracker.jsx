@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import { RotateCcw, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
+import { useRookieADP } from '../../hooks/useRookieADP'
 import { getTeamName } from '../../hooks/useLeague'
 import { MY_ROSTER_ID } from '../../constants'
 import LoadingSpinner from '../shared/LoadingSpinner'
@@ -178,6 +179,7 @@ function EditPickModal({ pick, player, userMap, onDelete, onClose }) {
 
 export default function DraftTracker() {
   const { league, loading, error, retry, values } = useLeagueContext()
+  const { rookieMap, loading: rookieLoading, error: rookieError, retry: rookieRetry } = useRookieADP()
 
   const [drafted, setDrafted]         = useState(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') }
@@ -194,17 +196,15 @@ export default function DraftTracker() {
 
   // All hooks before early returns (React rules)
   const rookies = useMemo(() => {
-    if (!values?.playerMap) return []
-    const rostered = new Set()
-    league?.allRosters?.forEach(r => r.players.forEach(p => rostered.add(p.sleeperId)))
-    return Object.values(values.playerMap)
-      .filter(p => {
-        if (!['QB','RB','WR','TE'].includes(p.position)) return false
-        if (p.experience === 0) return true
-        return p.experience == null && !rostered.has(p.sleeperId) && p.age != null && p.age <= 23.5
+    if (!rookieMap) return []
+    return Object.values(rookieMap)
+      .map(rookieEntry => {
+        const mainEntry = values?.playerMap?.[rookieEntry.sleeperId]
+        if (mainEntry) return { ...mainEntry, adp: rookieEntry.adp ?? mainEntry.adp }
+        return { ...rookieEntry, adpOnly: true }
       })
       .sort((a, b) => (a.adp ?? a.overallRank ?? 999) - (b.adp ?? b.overallRank ?? 999))
-  }, [values, league])
+  }, [rookieMap, values])
 
   const draftOrder    = useMemo(() => buildDraftOrder(league?.allRosters ?? []), [league])
   const myPicks       = useMemo(() => draftOrder.filter(p => p.currentOwner === MY_ROSTER_ID), [draftOrder])
@@ -241,12 +241,12 @@ export default function DraftTracker() {
     setShowReset(false)
   }
 
-  if (loading) return <LoadingSpinner message="Loading draft data…" />
-  if (error) return (
+  if (loading || rookieLoading) return <LoadingSpinner message="Loading draft data…" />
+  if (error || rookieError) return (
     <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
       <AlertTriangle size={24} className="text-warning" strokeWidth={1.75} />
-      <p className="text-text-secondary font-body text-sm">{error}</p>
-      <button onClick={retry} className="px-4 py-2 rounded-lg bg-accent text-white font-body font-medium text-sm">Retry</button>
+      <p className="text-text-secondary font-body text-sm">{error || rookieError}</p>
+      <button onClick={error ? retry : rookieRetry} className="px-4 py-2 rounded-lg bg-accent text-white font-body font-medium text-sm">Retry</button>
     </div>
   )
 

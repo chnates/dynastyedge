@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import { Upload, Save, ChevronUp, ChevronDown, AlertTriangle } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
+import { useRookieADP } from '../../hooks/useRookieADP'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import TrendArrow from '../shared/TrendArrow'
@@ -101,6 +102,14 @@ function AvailableBadge() {
   )
 }
 
+function AdpOnlyBadge() {
+  return (
+    <span className="font-body text-[9px] font-bold uppercase tracking-wider text-text-tertiary bg-bg-secondary border border-border-default rounded px-1.5 py-0.5 flex-shrink-0 ml-1">
+      ADP Only
+    </span>
+  )
+}
+
 function CsvNamingOverlay({ file, onConfirm, onCancel }) {
   const [name, setName] = useState(() => file.name.replace(/\.[^.]+$/, ''))
   return (
@@ -139,6 +148,7 @@ function CsvNamingOverlay({ file, onConfirm, onCancel }) {
 
 export default function DraftBoard() {
   const { league, loading, error, retry, values } = useLeagueContext()
+  const { rookieMap, loading: rookieLoading, error: rookieError, retry: rookieRetry } = useRookieADP()
 
   const [posFilter, setPosFilter]   = useState('ALL')
   const [sortCol, setSortCol]       = useState('adp')
@@ -172,19 +182,19 @@ export default function DraftBoard() {
     return getMyPickSlot(league.myRoster)
   }, [league])
 
-  // Rookie prospects: explicitly marked by FantasyCalc (experience=0) OR
-  // not yet on any fantasy roster and young enough to be the 2026 draft class
+  // Rookie prospects: authoritative list from FantasyCalc's rookiesOnly endpoint.
+  // Dynasty value is merged from the main endpoint when available; otherwise
+  // the rookie endpoint's own value is used and the player is flagged adpOnly.
   const rookies = useMemo(() => {
-    if (!values?.playerMap) return []
-    const rostered = new Set()
-    league?.allRosters?.forEach(r => r.players.forEach(p => rostered.add(p.sleeperId)))
-    return Object.values(values.playerMap).filter(p => {
-      if (!['QB', 'RB', 'WR', 'TE'].includes(p.position)) return false
-      if (p.experience === 0) return true
-      // Fallback: not on any dynasty roster + 2026 draft class age window
-      return p.experience == null && !rostered.has(p.sleeperId) && p.age != null && p.age <= 23.5
+    if (!rookieMap) return []
+    return Object.values(rookieMap).map(rookieEntry => {
+      const mainEntry = values?.playerMap?.[rookieEntry.sleeperId]
+      if (mainEntry) {
+        return { ...mainEntry, adp: rookieEntry.adp ?? mainEntry.adp }
+      }
+      return { ...rookieEntry, adpOnly: true }
     })
-  }, [values, league])
+  }, [rookieMap, values])
 
   function handleSort(col) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -257,12 +267,12 @@ export default function DraftBoard() {
     return rank ?? null
   }
 
-  if (loading) return <LoadingSpinner message="Loading draft data…" />
-  if (error) return (
+  if (loading || rookieLoading) return <LoadingSpinner message="Loading draft data…" />
+  if (error || rookieError) return (
     <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
       <AlertTriangle size={24} className="text-warning" strokeWidth={1.75} />
-      <p className="text-text-secondary font-body text-sm">{error}</p>
-      <button onClick={retry} className="px-4 py-2 rounded-lg bg-accent text-white font-body font-medium text-sm">Retry</button>
+      <p className="text-text-secondary font-body text-sm">{error || rookieError}</p>
+      <button onClick={error ? retry : rookieRetry} className="px-4 py-2 rounded-lg bg-accent text-white font-body font-medium text-sm">Retry</button>
     </div>
   )
 
@@ -383,6 +393,7 @@ export default function DraftBoard() {
                             </span>
                             {fillsNeed && <FillsNeedBadge />}
                             {avail && <AvailableBadge />}
+                            {player.adpOnly && <AdpOnlyBadge />}
                           </div>
                           <div className="flex items-center gap-1 mt-0.5">
                             <span className="font-body text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">
@@ -434,11 +445,9 @@ export default function DraftBoard() {
           })}
         </div>
 
-        {/* Rookie detection note */}
-        {rookies.length === 0 && !loading && (
+        {rookies.length === 0 && !loading && !rookieLoading && (
           <p className="px-4 pt-6 text-center font-body text-xs text-text-tertiary">
-            Rookie prospects appear here when FantasyCalc marks players as experience 0.
-            This updates when the 2026 draft class is finalized.
+            No 2026 rookie prospects found. FantasyCalc's rookie endpoint will populate once the draft class is available.
           </p>
         )}
       </div>

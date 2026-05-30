@@ -13,6 +13,14 @@ export const FANTASYCALC_PARAMS = {
   ppr: 0.5,
 }
 
+export const FANTASYCALC_ROOKIE_PARAMS = {
+  isDynasty: true,
+  numQbs: 2,
+  numTeams: 10,
+  ppr: 0.5,
+  rookiesOnly: true,
+}
+
 export const PICK_YEARS = ['2026', '2027', '2028']
 export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 
