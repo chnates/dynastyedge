@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
+import { useSleeperRookies } from '../../hooks/useSleeperRookies'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import TrendArrow from '../shared/TrendArrow'
@@ -39,12 +40,9 @@ function RookieBadge() {
   )
 }
 
-function isRookie(player) {
-  return player.experience === 0 || (player.experience == null && player.age != null && player.age <= 25)
-}
-
 export default function FreeAgentsView() {
   const { league, loading, error, retry, values } = useLeagueContext()
+  const { sleeperRookieMap } = useSleeperRookies()
 
   const [posFilter, setPosFilter]     = useState('ALL')
   const [sortMode, setSortMode]       = useState('value')
@@ -218,7 +216,7 @@ export default function FreeAgentsView() {
           <div className="rounded-xl bg-bg-card border border-border-default px-3">
             {filtered.map((player, i) => {
               const fillsNeed = needPositions.includes(player.position)
-              const rookie = isRookie(player)
+              const rookie = !!sleeperRookieMap?.[player.sleeperId]
               return (
                 <button
                   key={player.sleeperId}
