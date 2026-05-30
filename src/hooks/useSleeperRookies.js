@@ -27,10 +27,13 @@ export function useSleeperRookies() {
         })
         .then(data => {
           // data is { player_id: { ...fields } } — large ~5MB object
-          // Extract only years_exp===0 skill positions; discard the full response
+          // Extract only rookie skill positions; discard the full response.
+          // years_exp===0 is definitive; years_exp==null with age<=25 catches
+          // freshly drafted players whose Sleeper data hasn't updated post-draft yet.
           const map = {}
           Object.entries(data).forEach(([player_id, p]) => {
-            if (p.years_exp !== 0) return
+            const isRookie = p.years_exp === 0 || (p.years_exp == null && p.age != null && p.age <= 25)
+            if (!isRookie) return
             if (!VALID_POSITIONS.has(p.position)) return
             const name = [p.first_name, p.last_name].filter(Boolean).join(' ')
             if (!name) return
