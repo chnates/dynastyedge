@@ -5,6 +5,8 @@ import {
   RefreshCw, Sun, Moon,
 } from 'lucide-react'
 import DynastyEdgeLogo from './DynastyEdgeLogo'
+import { useLeagueContext } from '../../context/LeagueContext'
+import { getTeamName } from '../../hooks/useLeague'
 
 const NAV_ITEMS = [
   { to: '/roster', label: 'Roster', Icon: Users },
@@ -23,6 +25,9 @@ export default function SideDrawer({
   isDark,
   onToggleTheme,
 }) {
+  const { league } = useLeagueContext()
+  const myTeamName = league?.myRoster?.owner ? getTeamName(league.myRoster.owner) : null
+
   const touchStartX = useRef(null)
 
   // Close on Escape
@@ -73,6 +78,11 @@ export default function SideDrawer({
         {/* Branding */}
         <div className="px-5 pt-5 pb-6">
           <DynastyEdgeLogo theme={isDark ? 'dark' : 'light'} size={88} />
+          {myTeamName && (
+            <p className="font-body text-[11px] text-text-tertiary mt-2 select-none">
+              {myTeamName}
+            </p>
+          )}
         </div>
 
         {/* Nav items */}
