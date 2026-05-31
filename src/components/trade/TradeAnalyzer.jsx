@@ -83,7 +83,7 @@ export default function TradeAnalyzer() {
     [whatsFairTarget, league]
   )
 
-  // Fire parallel Anthropic agent calls when ≥1 non-pick player is on each side
+  // Fetch Sleeper news when ≥1 non-pick player is on each side
   useEffect(() => {
     const givePlayers = giveAssets.filter(a => a.type === 'player').slice(0, 3)
     const getPlayers  = getAssets.filter(a => a.type === 'player').slice(0, 3)

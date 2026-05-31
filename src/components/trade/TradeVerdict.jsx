@@ -1,4 +1,4 @@
-import { CheckCircle2, XCircle, RefreshCw, CheckCircle, XCircle as XCircleSmall, Circle, AlertTriangle } from 'lucide-react'
+import { CheckCircle2, XCircle, RefreshCw, XCircle as XCircleSmall, Circle, AlertTriangle } from 'lucide-react'
 import WinWindowBadge from '../shared/WinWindowBadge'
 
 const VERDICT_STYLES = {
@@ -11,12 +11,6 @@ const INJURY_STATUS_STYLE = {
   Healthy:      { dot: 'bg-success',  text: 'text-success',  label: 'Healthy' },
   Questionable: { dot: 'bg-warning',  text: 'text-warning',  label: 'Questionable' },
   Out:          { dot: 'bg-danger',   text: 'text-danger',   label: 'Out' },
-}
-
-const USAGE_ICON = {
-  increasing: { symbol: '↑', color: 'text-success' },
-  stable:     { symbol: '→', color: 'text-text-secondary' },
-  declining:  { symbol: '↓', color: 'text-danger' },
 }
 
 function ValueSummary({ giveTotal, getTotal }) {
@@ -50,52 +44,40 @@ function ValueSummary({ giveTotal, getTotal }) {
 }
 
 function PlayerIntelCard({ intel }) {
-  if (intel.error) {
-    return (
-      <div className="px-4 py-3 border-b border-border-default dark:border-border-default last:border-b-0">
-        <p className="font-body text-xs font-semibold text-text-primary dark:text-text-primary mb-0.5">
-          {intel.playerName}
-          <span className="ml-1.5 font-normal text-[10px] uppercase tracking-wide text-text-tertiary dark:text-text-tertiary">
-            {intel.side === 'give' ? 'giving' : 'getting'}
-          </span>
-        </p>
-        <p className="font-body text-xs text-text-tertiary dark:text-text-tertiary">
-          Live data unavailable for {intel.playerName}
-        </p>
-      </div>
-    )
-  }
-
   const injuryStyle = INJURY_STATUS_STYLE[intel.injuryStatus] ?? INJURY_STATUS_STYLE.Healthy
-  const usageStyle  = USAGE_ICON[intel.usageTrend] ?? USAGE_ICON.stable
 
   return (
     <div className="px-4 py-3 border-b border-border-default dark:border-border-default last:border-b-0">
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex items-center justify-between mb-1.5">
         <p className="font-body text-xs font-semibold text-text-primary dark:text-text-primary">
           {intel.playerName}
           <span className="ml-1.5 font-normal text-[10px] uppercase tracking-wide text-text-tertiary dark:text-text-tertiary">
             {intel.side === 'give' ? 'giving' : 'getting'}
           </span>
         </p>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className={`font-mono text-sm font-bold ${usageStyle.color}`} title={`Usage: ${intel.usageTrend}`}>
-            {usageStyle.symbol}
-          </span>
-          <span className={`flex items-center gap-1 font-body text-[11px] ${injuryStyle.text}`}>
-            <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${injuryStyle.dot}`} />
-            {injuryStyle.label}
-          </span>
-        </div>
+        <span className={`flex items-center gap-1 font-body text-[11px] shrink-0 ${injuryStyle.text}`}>
+          <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${injuryStyle.dot}`} />
+          {injuryStyle.label}
+        </span>
       </div>
-      {intel.depthChartNote && (
-        <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary mb-0.5">
-          {intel.depthChartNote}
-        </p>
-      )}
-      {intel.newsAlert && (
-        <p className="font-body text-[11px] text-warning mt-1 leading-relaxed">
-          ⚠️ {intel.newsAlert}
+      {intel.newsItems && intel.newsItems.length > 0 ? (
+        <div className="flex flex-col gap-1.5">
+          {intel.newsItems.map((item, i) => (
+            <div key={i}>
+              <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-relaxed">
+                {item.headline}
+              </p>
+              {item.date && (
+                <p className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary mt-0.5">
+                  {item.date}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
+          No recent news
         </p>
       )}
     </div>
@@ -262,7 +244,7 @@ export default function TradeVerdict({
         <div className="flex items-center justify-center gap-2 py-3 mb-4 rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default">
           <div className="h-3.5 w-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin" />
           <span className="font-body text-xs text-text-secondary dark:text-text-secondary">
-            Researching players…
+            Fetching player news…
           </span>
         </div>
       )}

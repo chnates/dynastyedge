@@ -1,76 +1,66 @@
-const TIMEOUT_MS = 10_000
+const SLEEPER_BASE = 'https://api.sleeper.app/v1'
+const TIMEOUT_MS = 8_000
 
-function buildPrompt(player) {
-  return `You are a dynasty fantasy football analyst. Research the current status of ${player.name} (${player.position}${player.team ? `, ${player.team}` : ''}) who has a dynasty trade value of ${player.value || 0}.
+const RED_KEYWORDS = [
+  'out', ' ir ', 'placed on ir', 'torn', 'surgery', 'fracture', 'fractures',
+  'doubtful', 'ruled out', 'season-ending', 'season ending', 'won\'t return',
+  'will not return', 'lost for the season', 'placed on the ir',
+]
+const YELLOW_KEYWORDS = [
+  'questionable', 'limited', 'managing', 'day-to-day', 'dnp',
+  'did not practice', 'probable', 'nursing', 'sore', 'dealing with',
+  'expected to be limited',
+]
 
-Use web search to find: current injury status and official designation, recent usage trends (snap %, target share, or rush touches over the last 3 games), depth chart situation, and any news from the last 2 weeks that materially affects dynasty fantasy value.
-
-Respond with ONLY valid JSON — no other text before or after:
-{"injuryStatus":"Healthy","usageTrend":"stable","depthChartNote":"","newsAlert":null,"buyLowSellHigh":"hold","confidence":"high"}
-
-Rules:
-- injuryStatus must be exactly one of: "Healthy", "Questionable", "Out"
-- usageTrend must be exactly one of: "increasing", "stable", "declining"
-- buyLowSellHigh must be exactly one of: "buy", "sell", "hold"
-- confidence must be exactly one of: "high", "medium", "low"
-- newsAlert: brief string if there is significant news, null if nothing material`
+function classifyStatus(text) {
+  const lower = (text ?? '').toLowerCase()
+  if (RED_KEYWORDS.some(k => lower.includes(k))) return 'Out'
+  if (YELLOW_KEYWORDS.some(k => lower.includes(k))) return 'Questionable'
+  return 'Healthy'
 }
 
-function extractJSON(text) {
-  const match = text.match(/\{[\s\S]*\}/)
-  if (!match) throw new Error('No JSON object found in response')
-  return JSON.parse(match[0])
+function formatDate(timestamp) {
+  if (!timestamp) return ''
+  // Sleeper timestamps may be seconds or milliseconds
+  const ms = timestamp > 1e10 ? timestamp : timestamp * 1000
+  const d = new Date(ms)
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-async function callAgentForPlayer(player) {
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
-  if (!apiKey) throw new Error('VITE_ANTHROPIC_API_KEY not configured')
+async function fetchSleeperNews(player) {
+  if (!player.sleeperId) {
+    return { newsItems: [], injuryStatus: 'Healthy' }
+  }
 
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'web-search-2025-03-05',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 500,
-        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-        messages: [{ role: 'user', content: buildPrompt(player) }],
-      }),
-    })
+    const res = await fetch(
+      `${SLEEPER_BASE}/players/nfl/${player.sleeperId}/news`,
+      { signal: controller.signal }
+    )
 
-    if (!res.ok) {
-      const body = await res.text()
-      throw new Error(`API ${res.status}: ${body.slice(0, 120)}`)
-    }
+    if (!res.ok) return { newsItems: [], injuryStatus: 'Healthy' }
 
     const data = await res.json()
-
-    // The model may emit tool_use blocks before the final text block
-    const textBlocks = (data.content || []).filter(b => b.type === 'text')
-    const lastText = textBlocks[textBlocks.length - 1]
-    if (!lastText?.text) throw new Error('No text block in response')
-
-    const parsed = extractJSON(lastText.text)
-    return {
-      playerName: player.name,
-      side: player.side ?? null,
-      injuryStatus: parsed.injuryStatus ?? 'Healthy',
-      usageTrend: parsed.usageTrend ?? 'stable',
-      depthChartNote: parsed.depthChartNote ?? '',
-      newsAlert: parsed.newsAlert ?? null,
-      buyLowSellHigh: parsed.buyLowSellHigh ?? 'hold',
-      confidence: parsed.confidence ?? 'medium',
-      error: null,
+    if (!Array.isArray(data) || data.length === 0) {
+      return { newsItems: [], injuryStatus: 'Healthy' }
     }
+
+    const recent = data.slice(0, 2)
+    const newsItems = recent.map(item => ({
+      headline: item.title ?? item.headline ?? item.metadata?.title ?? '',
+      date: formatDate(item.published ?? item.date ?? item.created ?? item.metadata?.published),
+    })).filter(n => n.headline)
+
+    // Derive status from most recent item's headline + body
+    const combinedText = recent.map(item =>
+      [item.title, item.headline, item.body, item.metadata?.description].join(' ')
+    ).join(' ')
+    const injuryStatus = classifyStatus(combinedText)
+
+    return { newsItems, injuryStatus }
   } finally {
     clearTimeout(timer)
   }
@@ -78,25 +68,27 @@ async function callAgentForPlayer(player) {
 
 export async function fetchPlayerIntelligence(players) {
   if (!players?.length) return []
-  if (!import.meta.env.VITE_ANTHROPIC_API_KEY) return []
 
   const limited = players.slice(0, 6)
 
   return Promise.all(
     limited.map(async (player) => {
       try {
-        return await callAgentForPlayer(player)
-      } catch (err) {
+        const { newsItems, injuryStatus } = await fetchSleeperNews(player)
         return {
           playerName: player.name,
           side: player.side ?? null,
-          injuryStatus: null,
-          usageTrend: null,
-          depthChartNote: null,
-          newsAlert: null,
-          buyLowSellHigh: null,
-          confidence: null,
-          error: err.name === 'AbortError' ? 'Request timed out' : 'Live data unavailable',
+          injuryStatus,
+          newsItems,
+          error: null,
+        }
+      } catch {
+        return {
+          playerName: player.name,
+          side: player.side ?? null,
+          injuryStatus: 'Healthy',
+          newsItems: [],
+          error: null,
         }
       }
     })
