@@ -1,0 +1,10 @@
+<svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="DynastyEdge">
+  <!-- Card background -->
+  <rect width="100" height="100" rx="8" fill="#0B1120"/>
+  <!-- Card border -->
+  <rect x="1.5" y="1.5" width="97" height="97" rx="7" stroke="#1E3A5F" stroke-width="1.5" fill="none"/>
+  <!-- "01" — top left -->
+  <text x="9" y="17" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="300" fill="#C8D8EA">01</text>
+  <!-- "De" — dominant center element -->
+  <text x="50" y="64" font-family="system-ui, -apple-system, sans-serif" font-size="46" font-weight="200" fill="#4A90D9" text-anchor="middle">De</text>
+</svg>

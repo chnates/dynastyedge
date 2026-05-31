@@ -4,6 +4,7 @@ import {
   Users, ArrowLeftRight, LayoutList, Trophy, FileText,
   RefreshCw, Sun, Moon,
 } from 'lucide-react'
+import DynastyEdgeLogo from './DynastyEdgeLogo'
 
 const NAV_ITEMS = [
   { to: '/roster', label: 'Roster', Icon: Users },
@@ -71,9 +72,7 @@ export default function SideDrawer({
       >
         {/* Branding */}
         <div className="px-5 pt-5 pb-6">
-          <span className="font-display text-2xl font-bold uppercase tracking-wide text-accent select-none">
-            DynastyEdge
-          </span>
+          <DynastyEdgeLogo theme={isDark ? 'dark' : 'light'} size={88} />
         </div>
 
         {/* Nav items */}
