@@ -1,10 +1,20 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
-import { Upload, Save, ChevronUp, ChevronDown, AlertTriangle } from 'lucide-react'
+import {
+  Upload, Save, ChevronUp, ChevronDown, AlertTriangle,
+  FileText, GripVertical, RotateCcw,
+} from 'lucide-react'
+import {
+  DndContext, PointerSensor, TouchSensor, KeyboardSensor,
+  useSensor, useSensors, closestCenter,
+} from '@dnd-kit/core'
+import {
+  SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useRookieADP } from '../../hooks/useRookieADP'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import LoadingSpinner from '../shared/LoadingSpinner'
-import TrendArrow from '../shared/TrendArrow'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -12,10 +22,17 @@ import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 const POS_FILTERS = ['ALL', 'QB', 'RB', 'WR', 'TE']
 
 const TIERS = [
-  { id: 1, label: 'Tier 1 — Elite',     min: 7001, max: Infinity },
-  { id: 2, label: 'Tier 2 — Strong',    min: 4001, max: 7000 },
-  { id: 3, label: 'Tier 3 — Upside',    min: 2001, max: 4000 },
-  { id: 4, label: 'Tier 4 — Deep Stash', min: 0,   max: 2000 },
+  { id: 1, label: 'Tier 1 — Elite',      min: 7001, max: Infinity },
+  { id: 2, label: 'Tier 2 — Strong',     min: 4001, max: 7000 },
+  { id: 3, label: 'Tier 3 — Upside',     min: 2001, max: 4000 },
+  { id: 4, label: 'Tier 4 — Deep Stash', min: 0,    max: 2000 },
+]
+
+const MY_BOARD_TIERS = [
+  { id: 1, label: 'Tier 1 — Elite',      minRank: 1,  maxRank: 10 },
+  { id: 2, label: 'Tier 2 — Strong',     minRank: 11, maxRank: 25 },
+  { id: 3, label: 'Tier 3 — Upside',     minRank: 26, maxRank: 50 },
+  { id: 4, label: 'Tier 4 — Deep Stash', minRank: 51, maxRank: Infinity },
 ]
 
 const TIER_COLORS = {
@@ -28,20 +45,21 @@ const TIER_COLORS = {
 const SORT_COLS = ['value', 'adp', 'age', 'positionRank']
 const COL_LABELS = { value: 'Value', adp: 'ADP', age: 'Age', positionRank: 'Pos Rk' }
 
+const BOARD_ORDER_KEY = 'dynastyedge_board_order'
+const NOTES_KEY       = 'dynastyedge_prospect_notes'
+const CSV_KEY         = 'dynastyedge_csv_rankings'
+
 // ── CSV parsing ──────────────────────────────────────────────────────────────
 
 function parseCSV(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim())
   if (lines.length < 2) return {}
   const result = {}
-  // Skip header row, assume col 0 = name, col 1 = rank
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split(',')
     const name = cols[0]?.replace(/^"|"$/g, '').trim()
     const rank = parseInt(cols[1]?.replace(/^"|"$/g, '').trim(), 10)
-    if (name && !Number.isNaN(rank)) {
-      result[name.toLowerCase()] = rank
-    }
+    if (name && !Number.isNaN(rank)) result[name.toLowerCase()] = rank
   }
   return result
 }
@@ -51,7 +69,6 @@ function parseCSV(text) {
 function getMyPickSlot(myRoster) {
   const pick2026R1 = myRoster?.picks?.find(p => p.season === '2026' && p.round === 1)
   if (pick2026R1) {
-    // Derive slot from rosterId — standard dynasty draft order (roster 6 = slot 6)
     const slot = myRoster.rosterId
     return { slot, label: `1.0${slot}` }
   }
@@ -125,10 +142,7 @@ function CsvNamingOverlay({ file, onConfirm, onCancel }) {
           autoFocus
         />
         <div className="flex gap-2">
-          <button
-            onClick={onCancel}
-            className="flex-1 py-2.5 rounded-lg border border-border-default font-body text-sm text-text-secondary"
-          >
+          <button onClick={onCancel} className="flex-1 py-2.5 rounded-lg border border-border-default font-body text-sm text-text-secondary">
             Cancel
           </button>
           <button
@@ -144,29 +158,149 @@ function CsvNamingOverlay({ file, onConfirm, onCancel }) {
   )
 }
 
+function ResetBoardConfirm({ onConfirm, onCancel }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+      <div className="w-full max-w-xs bg-bg-secondary rounded-2xl border border-border-default p-5 text-center">
+        <h3 className="font-display text-lg font-bold uppercase text-text-primary mb-2">Reset My Board?</h3>
+        <p className="font-body text-sm text-text-secondary mb-5">
+          This restores the default FantasyCalc order and cannot be undone.
+        </p>
+        <div className="flex gap-2">
+          <button onClick={onCancel} className="flex-1 py-2.5 rounded-lg border border-border-default font-body text-sm text-text-secondary">
+            Cancel
+          </button>
+          <button onClick={onConfirm} className="flex-1 py-2.5 rounded-lg bg-danger text-white font-body text-sm font-medium">
+            Reset
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SortablePlayerRow({
+  player, isDraggable, myRank, fcRank,
+  fillsNeed, avail, csvColumns, getLookupRank, hasNote, onSelect,
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: player.sleeperId, disabled: !isDraggable })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    position: 'relative',
+    zIndex: isDragging ? 1 : 'auto',
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center border-b border-border-default last:border-0">
+      {isDraggable && (
+        <div
+          {...attributes}
+          {...listeners}
+          className="pr-2 py-2.5 text-text-tertiary touch-none cursor-grab active:cursor-grabbing flex-shrink-0"
+          aria-label="Drag to reorder"
+        >
+          <GripVertical size={14} strokeWidth={1.75} />
+        </div>
+      )}
+
+      {myRank != null && (
+        <div className="flex flex-col items-end w-9 flex-shrink-0 mr-1">
+          <span className="font-mono text-sm font-bold text-text-primary tabular-nums leading-none">#{myRank}</span>
+          {fcRank != null && (
+            <span className="font-mono text-[9px] text-text-tertiary tabular-nums leading-none mt-0.5">FC #{fcRank}</span>
+          )}
+        </div>
+      )}
+
+      <button
+        onClick={onSelect}
+        className="flex-1 text-left py-2.5 flex items-center gap-2 active:opacity-60 transition-opacity min-w-0"
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center flex-wrap gap-x-1">
+            <span className="font-body text-sm font-medium text-text-primary leading-tight truncate">{player.name}</span>
+            {hasNote && <FileText size={11} className="text-accent flex-shrink-0" strokeWidth={1.75} />}
+            {fillsNeed && <FillsNeedBadge />}
+            {avail && <AvailableBadge />}
+            {player.adpOnly && <AdpOnlyBadge />}
+          </div>
+          <div className="flex items-center gap-1 mt-0.5">
+            <span className="font-body text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">{player.position}</span>
+            <span className="text-text-tertiary text-[10px]">·</span>
+            <span className="font-body text-[10px] text-text-tertiary">{player.team || 'TBD'}</span>
+            {player.age != null && (
+              <>
+                <span className="text-text-tertiary text-[10px]">·</span>
+                <span className="font-body text-[10px] text-text-tertiary">Age {Math.floor(player.age)}</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {csvColumns.map(col => {
+          const rank = getLookupRank(player, col)
+          return (
+            <span key={col.name} className="font-mono text-xs text-text-secondary tabular-nums w-12 text-right flex-shrink-0">
+              {rank != null ? `#${rank}` : '—'}
+            </span>
+          )
+        })}
+
+        <span className="font-mono text-xs text-text-secondary tabular-nums w-10 text-right flex-shrink-0">
+          {player.adp != null ? Number(player.adp).toFixed(0) : '—'}
+        </span>
+
+        <div className="flex items-center gap-1 w-12 justify-end flex-shrink-0">
+          <span className="font-mono text-xs font-medium text-accent tabular-nums">
+            {(player.value ?? 0).toLocaleString()}
+          </span>
+        </div>
+
+        <span className="font-mono text-xs text-text-tertiary tabular-nums w-8 text-right flex-shrink-0">
+          {player.age != null ? Math.floor(player.age) : '—'}
+        </span>
+      </button>
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function DraftBoard() {
   const { league, loading, error, retry, values } = useLeagueContext()
   const { rookieMap, loading: rookieLoading, error: rookieError, retry: rookieRetry } = useRookieADP()
 
-  const [posFilter, setPosFilter]   = useState('ALL')
-  const [sortCol, setSortCol]       = useState('adp')
-  const [sortDir, setSortDir]       = useState('asc')
-  const [csvColumns, setCsvColumns] = useState([])    // [{ name, data: { lowerName: rank } }]
-  const [selected, setSelected]     = useState(null)
-  const [pendingFile, setPendingFile] = useState(null) // { file, parsedData }
+  const [posFilter, setPosFilter]     = useState('ALL')
+  const [sortCol, setSortCol]         = useState('adp')
+  const [sortDir, setSortDir]         = useState('asc')
+  const [csvColumns, setCsvColumns]   = useState([])
+  const [selected, setSelected]       = useState(null)
+  const [pendingFile, setPendingFile] = useState(null)
   const fileInputRef = useRef(null)
 
-  // Load saved rankings.json on mount
-  useEffect(() => {
-    fetch(`${import.meta.env.BASE_URL}rankings.json`)
-      .then(r => r.ok ? r.json() : null)
-      .then(json => {
-        if (json?.columns?.length) setCsvColumns(json.columns)
-      })
-      .catch(() => {})
-  }, [])
+  const [boardMode, setBoardMode]       = useState('FantasyCalc')
+  const [myBoardOrder, setMyBoardOrder] = useState(() => {
+    try {
+      const raw = localStorage.getItem(BOARD_ORDER_KEY)
+      return raw ? JSON.parse(raw) : []
+    } catch { return [] }
+  })
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+
+  const [prospectNotes, setProspectNotes] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(NOTES_KEY) ?? '{}') }
+    catch { return {} }
+  })
+
+  const sensors = useSensors(
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor),
+  )
 
   // My positional needs
   const needPositions = useMemo(() => {
@@ -176,13 +310,13 @@ export default function DraftBoard() {
     return Object.entries(deltas).filter(([, d]) => d < 0).map(([p]) => p)
   }, [league])
 
-  // My 2026 round-1 pick slot for "available at your pick" callout
+  // My 2026 round-1 pick slot
   const myPickSlot = useMemo(() => {
     if (!league?.myRoster) return null
     return getMyPickSlot(league.myRoster)
   }, [league])
 
-  // Name→FantasyCalc entry lookup for fallback matching when sleeperId isn't in playerMap
+  // Name→FC entry for fallback matching
   const nameToFCEntry = useMemo(() => {
     if (!values?.playerMap) return {}
     const map = {}
@@ -192,9 +326,7 @@ export default function DraftBoard() {
     return map
   }, [values?.playerMap])
 
-  // Rookie prospects: Sleeper years_exp===0 is the authoritative list.
-  // Dynasty value and ADP are enriched from FantasyCalc main endpoint by sleeperId,
-  // with a case-insensitive name match as fallback.
+  // Rookie prospects enriched from FantasyCalc
   const rookies = useMemo(() => {
     if (!rookieMap) return []
     return Object.values(rookieMap).map(rookieEntry => {
@@ -206,57 +338,170 @@ export default function DraftBoard() {
     })
   }, [rookieMap, values, nameToFCEntry])
 
+  // My Board rank map: sleeperId → 1-based rank position
+  const rankMap = useMemo(() => {
+    const map = {}
+    myBoardOrder.forEach((id, idx) => { map[id] = idx + 1 })
+    return map
+  }, [myBoardOrder])
+
+  // Filter + sort
+  const sorted = useMemo(() => {
+    const list = posFilter === 'ALL' ? rookies : rookies.filter(p => p.position === posFilter)
+
+    if (boardMode === 'My Board' && sortCol === 'myOrder') {
+      return [...list].sort((a, b) =>
+        (rankMap[a.sleeperId] ?? 9999) - (rankMap[b.sleeperId] ?? 9999)
+      )
+    }
+
+    return [...list].sort((a, b) => {
+      const av = a[sortCol] ?? (sortDir === 'asc' ? Infinity : -Infinity)
+      const bv = b[sortCol] ?? (sortDir === 'asc' ? Infinity : -Infinity)
+      return sortDir === 'asc' ? av - bv : bv - av
+    })
+  }, [rookies, posFilter, sortCol, sortDir, boardMode, rankMap])
+
+  // Group by tier
+  const byTier = useMemo(() => {
+    const useMyTiers = boardMode === 'My Board' && sortCol === 'myOrder'
+    const activeTiers = useMyTiers ? MY_BOARD_TIERS : TIERS
+    const groups = {}
+    activeTiers.forEach(t => { groups[t.id] = [] })
+    sorted.forEach(p => {
+      if (useMyTiers) {
+        const rank = rankMap[p.sleeperId] ?? 9999
+        const tier = MY_BOARD_TIERS.find(t => rank >= t.minRank && rank <= t.maxRank)
+        if (tier) groups[tier.id].push(p)
+      } else {
+        const tier = TIERS.find(t => p.value >= t.min && p.value <= t.max)
+        if (tier) groups[tier.id].push(p)
+      }
+    })
+    return groups
+  }, [sorted, boardMode, sortCol, rankMap])
+
+  // ── Feature 3: CSV two-phase load ─────────────────────────────────────────
+  useEffect(() => {
+    let localData = null
+    try {
+      const raw = localStorage.getItem(CSV_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (parsed?.columns?.length) {
+          localData = parsed
+          setCsvColumns(parsed.columns)
+        }
+      }
+    } catch {}
+
+    fetch(`${import.meta.env.BASE_URL}rankings.json`)
+      .then(r => r.ok ? r.json() : null)
+      .then(remote => {
+        if (!remote?.columns?.length) return
+        const localTime = localData?.savedAt ?? 0
+        const remoteTime = remote.savedAt ?? 0
+        if (remoteTime > localTime) {
+          setCsvColumns(remote.columns)
+          localStorage.setItem(CSV_KEY, JSON.stringify({
+            version: 1,
+            savedAt: remoteTime,
+            columns: remote.columns,
+          }))
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  // ── Feature 2: Notes persistence ──────────────────────────────────────────
+  useEffect(() => {
+    localStorage.setItem(NOTES_KEY, JSON.stringify(prospectNotes))
+  }, [prospectNotes])
+
+  // ── Feature 1: My Board init + new player merge ────────────────────────────
+  useEffect(() => {
+    if (rookies.length === 0) return
+    setMyBoardOrder(prev => {
+      if (prev.length === 0) {
+        return [...rookies]
+          .sort((a, b) => (a.adp ?? a.overallRank ?? 999) - (b.adp ?? b.overallRank ?? 999))
+          .map(p => p.sleeperId)
+      }
+      const boardSet = new Set(prev)
+      const newPlayers = rookies
+        .filter(p => !boardSet.has(p.sleeperId))
+        .sort((a, b) => (a.adp ?? a.overallRank ?? 999) - (b.adp ?? b.overallRank ?? 999))
+      if (newPlayers.length === 0) return prev
+      return [...prev, ...newPlayers.map(p => p.sleeperId)]
+    })
+  }, [rookies])
+
+  // ── Feature 1: My Board persistence ───────────────────────────────────────
+  useEffect(() => {
+    if (myBoardOrder.length === 0) return
+    localStorage.setItem(BOARD_ORDER_KEY, JSON.stringify(myBoardOrder))
+  }, [myBoardOrder])
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
   function handleSort(col) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortCol(col); setSortDir(col === 'value' ? 'desc' : 'asc') }
   }
 
-  // Filter + sort
-  const sorted = useMemo(() => {
-    let list = posFilter === 'ALL' ? rookies : rookies.filter(p => p.position === posFilter)
-    return [...list].sort((a, b) => {
-      let av = a[sortCol] ?? (sortDir === 'asc' ? Infinity : -Infinity)
-      let bv = b[sortCol] ?? (sortDir === 'asc' ? Infinity : -Infinity)
-      return sortDir === 'asc' ? av - bv : bv - av
-    })
-  }, [rookies, posFilter, sortCol, sortDir])
+  function handleBoardModeToggle(mode) {
+    setBoardMode(mode)
+    if (mode === 'My Board') { setSortCol('myOrder'); setSortDir('asc') }
+    else { setSortCol('adp'); setSortDir('asc') }
+  }
 
-  // Group by tier
-  const byTier = useMemo(() => {
-    const groups = {}
-    TIERS.forEach(t => { groups[t.id] = [] })
-    sorted.forEach(p => {
-      const tier = TIERS.find(t => p.value >= t.min && p.value <= t.max)
-      if (tier) groups[tier.id].push(p)
+  function handleDragEnd({ active, over }) {
+    if (!over || active.id === over.id) return
+    setMyBoardOrder(prev => {
+      const oldIndex = prev.indexOf(active.id)
+      const newIndex = prev.indexOf(over.id)
+      if (oldIndex === -1 || newIndex === -1) return prev
+      return arrayMove(prev, oldIndex, newIndex)
     })
-    return groups
-  }, [sorted])
+  }
 
-  // CSV upload handler
+  function resetMyBoard() {
+    const initialOrder = [...rookies]
+      .sort((a, b) => (a.adp ?? a.overallRank ?? 999) - (b.adp ?? b.overallRank ?? 999))
+      .map(p => p.sleeperId)
+    setMyBoardOrder(initialOrder)
+    setShowResetConfirm(false)
+  }
+
   const handleFileChange = useCallback(e => {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
     const reader = new FileReader()
-    reader.onload = ev => {
-      const text = ev.target.result
-      const data = parseCSV(text)
-      setPendingFile({ file, data })
-    }
+    reader.onload = ev => setPendingFile({ file, data: parseCSV(ev.target.result) })
     reader.readAsText(file)
   }, [])
 
   function confirmCsvName(name) {
     if (!pendingFile) return
-    setCsvColumns(prev => {
-      const filtered = prev.filter(c => c.name !== name)
-      return [...filtered, { name, data: pendingFile.data }]
-    })
+    const next = [...csvColumns.filter(c => c.name !== name), { name, data: pendingFile.data }]
+    setCsvColumns(next)
+    localStorage.setItem(CSV_KEY, JSON.stringify({ version: 1, savedAt: Date.now(), columns: next }))
     setPendingFile(null)
   }
 
+  function removeColumn(name) {
+    const next = csvColumns.filter(c => c.name !== name)
+    setCsvColumns(next)
+    if (next.length > 0) {
+      localStorage.setItem(CSV_KEY, JSON.stringify({ version: 1, savedAt: Date.now(), columns: next }))
+    } else {
+      localStorage.removeItem(CSV_KEY)
+    }
+  }
+
   function saveRankings() {
-    const json = JSON.stringify({ version: 1, columns: csvColumns }, null, 2)
+    const json = JSON.stringify({ version: 1, savedAt: Date.now(), columns: csvColumns }, null, 2)
     const blob = new Blob([json], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -268,13 +513,55 @@ export default function DraftBoard() {
 
   function isLikelyAvailable(player) {
     if (!myPickSlot) return false
-    const adp = player.adp ?? player.overallRank ?? 999
-    return adp > myPickSlot.slot
+    return (player.adp ?? player.overallRank ?? 999) > myPickSlot.slot
   }
 
   function getLookupRank(player, col) {
-    const rank = col.data?.[player.name?.toLowerCase()]
-    return rank ?? null
+    return col.data?.[player.name?.toLowerCase()] ?? null
+  }
+
+  const updateNote = useCallback((sleeperId, text) => {
+    setProspectNotes(prev => {
+      const trimmed = text.trim()
+      if (!trimmed) {
+        const next = { ...prev }
+        delete next[sleeperId]
+        return next
+      }
+      return { ...prev, [sleeperId]: trimmed }
+    })
+  }, [])
+
+  const isDragEnabled = boardMode === 'My Board' && posFilter === 'ALL' && sortCol === 'myOrder'
+  const activeTiers   = (boardMode === 'My Board' && sortCol === 'myOrder') ? MY_BOARD_TIERS : TIERS
+
+  function renderTierGroups() {
+    return activeTiers.map(tier => {
+      const players = byTier[tier.id]
+      if (!players?.length) return null
+      return (
+        <div key={tier.id}>
+          <TierHeader tier={tier} />
+          <div className="rounded-xl bg-bg-card border border-border-default px-3">
+            {players.map(player => (
+              <SortablePlayerRow
+                key={player.sleeperId}
+                player={player}
+                isDraggable={isDragEnabled}
+                myRank={boardMode === 'My Board' ? (rankMap[player.sleeperId] ?? null) : null}
+                fcRank={boardMode === 'My Board' ? (player.overallRank ?? null) : null}
+                fillsNeed={needPositions.includes(player.position)}
+                avail={isLikelyAvailable(player)}
+                csvColumns={csvColumns}
+                getLookupRank={getLookupRank}
+                hasNote={!!prospectNotes[player.sleeperId]}
+                onSelect={() => setSelected(player)}
+              />
+            ))}
+          </div>
+        </div>
+      )
+    })
   }
 
   if (loading || rookieLoading) return <LoadingSpinner message="Loading draft data…" />
@@ -289,8 +576,35 @@ export default function DraftBoard() {
   return (
     <>
       <div className="pb-4">
+
+        {/* ── Board mode toggle ── */}
+        <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+          <div className="flex rounded-lg border border-border-default overflow-hidden">
+            {['FantasyCalc', 'My Board'].map(mode => (
+              <button
+                key={mode}
+                onClick={() => handleBoardModeToggle(mode)}
+                className={`px-3 py-1.5 font-body text-xs font-semibold transition-colors ${
+                  boardMode === mode ? 'bg-accent text-white' : 'bg-bg-card text-text-secondary'
+                }`}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+          {boardMode === 'My Board' && (
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              className="flex items-center gap-1 text-text-tertiary hover:text-danger transition-colors"
+            >
+              <RotateCcw size={13} strokeWidth={1.75} />
+              <span className="font-body text-[11px]">Reset to FC</span>
+            </button>
+          )}
+        </div>
+
         {/* ── Position filter + actions ── */}
-        <div className="px-4 pt-4 pb-3 flex items-center gap-2">
+        <div className="px-4 pb-3 flex items-center gap-2">
           <div className="flex gap-1.5 flex-1 overflow-x-auto">
             {POS_FILTERS.map(pos => (
               <button
@@ -346,7 +660,7 @@ export default function DraftBoard() {
               <div key={col.name} className="flex items-center gap-1 px-2 py-0.5 rounded bg-bg-card border border-border-default">
                 <span className="font-body text-[10px] text-text-secondary">{col.name}</span>
                 <button
-                  onClick={() => setCsvColumns(prev => prev.filter(c => c.name !== col.name))}
+                  onClick={() => removeColumn(col.name)}
                   className="text-text-tertiary hover:text-danger transition-colors ml-0.5 leading-none text-xs"
                   aria-label={`Remove ${col.name}`}
                 >
@@ -360,100 +674,47 @@ export default function DraftBoard() {
         {/* ── Sort header row ── */}
         <div className="px-4 mb-1 flex items-center gap-3">
           <span className="flex-1 font-body text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">Player</span>
+          {boardMode === 'My Board' && (
+            <button
+              onClick={() => { setSortCol('myOrder'); setSortDir('asc') }}
+              className={`flex items-center gap-0.5 font-body text-[10px] font-semibold uppercase tracking-wider select-none w-10 justify-end ${
+                sortCol === 'myOrder' ? 'text-accent' : 'text-text-tertiary'
+              }`}
+            >
+              Rank
+              {sortCol === 'myOrder' && <ChevronUp size={10} />}
+            </button>
+          )}
           {csvColumns.map(col => (
             <span key={col.name} className="font-body text-[10px] font-semibold uppercase tracking-wider text-text-tertiary w-12 text-right truncate">
               {col.name}
             </span>
           ))}
-          <SortHeader col="adp" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} extra="w-10 justify-end" />
+          <SortHeader col="adp"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort} extra="w-10 justify-end" />
           <SortHeader col="value" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} extra="w-12 justify-end" />
-          <SortHeader col="age" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} extra="w-8 justify-end" />
+          <SortHeader col="age"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort} extra="w-8 justify-end" />
         </div>
 
         {/* ── Tier groups ── */}
-        <div className="px-4">
-          {sorted.length === 0 && (
-            <p className="text-center text-text-tertiary font-body text-sm py-10">
-              No rookie prospects loaded yet.
-            </p>
-          )}
-          {TIERS.map(tier => {
-            const players = byTier[tier.id]
-            if (!players?.length) return null
-            return (
-              <div key={tier.id}>
-                <TierHeader tier={tier} />
-                <div className="rounded-xl bg-bg-card border border-border-default px-3">
-                  {players.map((player, i) => {
-                    const fillsNeed = needPositions.includes(player.position)
-                    const avail = isLikelyAvailable(player)
-                    return (
-                      <button
-                        key={player.sleeperId}
-                        onClick={() => setSelected(player)}
-                        className={`w-full text-left py-2.5 flex items-center gap-2 active:opacity-60 transition-opacity ${
-                          i < players.length - 1 ? 'border-b border-border-default' : ''
-                        }`}
-                      >
-                        {/* Name + tags */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center flex-wrap gap-x-1">
-                            <span className="font-body text-sm font-medium text-text-primary leading-tight truncate">
-                              {player.name}
-                            </span>
-                            {fillsNeed && <FillsNeedBadge />}
-                            {avail && <AvailableBadge />}
-                            {player.adpOnly && <AdpOnlyBadge />}
-                          </div>
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <span className="font-body text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">
-                              {player.position}
-                            </span>
-                            <span className="text-text-tertiary text-[10px]">·</span>
-                            <span className="font-body text-[10px] text-text-tertiary">{player.team || 'TBD'}</span>
-                            {player.age != null && (
-                              <>
-                                <span className="text-text-tertiary text-[10px]">·</span>
-                                <span className="font-body text-[10px] text-text-tertiary">Age {Math.floor(player.age)}</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* CSV rank columns */}
-                        {csvColumns.map(col => {
-                          const rank = getLookupRank(player, col)
-                          return (
-                            <span key={col.name} className="font-mono text-xs text-text-secondary tabular-nums w-12 text-right flex-shrink-0">
-                              {rank != null ? `#${rank}` : '—'}
-                            </span>
-                          )
-                        })}
-
-                        {/* ADP */}
-                        <span className="font-mono text-xs text-text-secondary tabular-nums w-10 text-right flex-shrink-0">
-                          {player.adp != null ? Number(player.adp).toFixed(0) : '—'}
-                        </span>
-
-                        {/* Value */}
-                        <div className="flex items-center gap-1 w-12 justify-end flex-shrink-0">
-                          <span className="font-mono text-xs font-medium text-accent tabular-nums">
-                            {(player.value ?? 0).toLocaleString()}
-                          </span>
-                        </div>
-
-                        {/* Age */}
-                        <span className="font-mono text-xs text-text-tertiary tabular-nums w-8 text-right flex-shrink-0">
-                          {player.age != null ? Math.floor(player.age) : '—'}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
-        </div>
+        {sorted.length === 0 && (
+          <p className="px-4 text-center text-text-tertiary font-body text-sm py-10">
+            No rookie prospects loaded yet.
+          </p>
+        )}
+        <DndContext
+          sensors={isDragEnabled ? sensors : []}
+          collisionDetection={closestCenter}
+          onDragEnd={isDragEnabled ? handleDragEnd : undefined}
+        >
+          <SortableContext
+            items={isDragEnabled ? sorted.map(p => p.sleeperId) : []}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="px-4">
+              {renderTierGroups()}
+            </div>
+          </SortableContext>
+        </DndContext>
 
         {rookies.length === 0 && !loading && !rookieLoading && (
           <p className="px-4 pt-6 text-center font-body text-xs text-text-tertiary">
@@ -471,6 +732,14 @@ export default function DraftBoard() {
         />
       )}
 
+      {/* ── Reset board confirm ── */}
+      {showResetConfirm && (
+        <ResetBoardConfirm
+          onConfirm={resetMyBoard}
+          onCancel={() => setShowResetConfirm(false)}
+        />
+      )}
+
       {/* ── Profile drawer ── */}
       {selected && (
         <PlayerProfileDrawer
@@ -478,6 +747,9 @@ export default function DraftBoard() {
           playerMap={values?.playerMap ?? {}}
           csvColumns={csvColumns}
           onClose={() => setSelected(null)}
+          isDraftContext
+          note={prospectNotes[selected.sleeperId]}
+          onNoteChange={updateNote}
         />
       )}
     </>
