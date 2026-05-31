@@ -40,6 +40,9 @@ const TIER_COLORS = {
   2: 'text-accent',
   3: 'text-success',
   4: 'text-text-tertiary',
+  5: 'text-text-tertiary',
+  6: 'text-text-tertiary',
+  99: 'text-text-tertiary',
 }
 
 const SORT_COLS = ['value', 'adp', 'age', 'positionRank']
@@ -93,13 +96,14 @@ function parseFantasyProsCsv(text) {
     if (!lines[i].trim()) continue
     const cols = parseCsvLine(lines[i])
     const rank = parseInt(cols[0], 10)
+    const tier = parseInt(cols[1], 10)
     const fpName = cols[2]?.trim()
     const team = cols[3]?.trim()
     const pos = cols[4]?.trim().replace(/\d+$/, '') // "RB1" → "RB"
     const age = cols[5]?.trim()
     const notes = cols[6]?.trim() ?? ''
     if (!fpName || isNaN(rank)) continue
-    entries.push({ rank, fpName, team, pos, age, notes })
+    entries.push({ rank, tier: isNaN(tier) ? 99 : tier, fpName, team, pos, age, notes })
   }
   return entries
 }
@@ -420,15 +424,20 @@ export default function DraftBoard() {
   const { fpColumn, fpNotesMap, fpOnlyPlayers } = useMemo(() => {
     if (!fpRawEntries.length) return { fpColumn: null, fpNotesMap: {}, fpOnlyPlayers: [] }
     const columnData = {}
+    const tierData = {}
     const notesMap = {}
     const onlyPlayers = []
     fpRawEntries.forEach((entry, idx) => {
       const match = rookies.find(r => fuzzyMatchFPName(entry.fpName, r.name))
       if (match) {
-        columnData[match.name.toLowerCase()] = entry.rank
+        const key = match.name.toLowerCase()
+        columnData[key] = entry.rank
+        tierData[key] = entry.tier
         notesMap[match.sleeperId] = splitFPNotes(entry.notes)
       } else {
-        columnData[entry.fpName.toLowerCase()] = entry.rank
+        const key = entry.fpName.toLowerCase()
+        columnData[key] = entry.rank
+        tierData[key] = entry.tier
         const syntheticId = `fp_${idx}`
         notesMap[syntheticId] = splitFPNotes(entry.notes)
         onlyPlayers.push({
@@ -444,7 +453,7 @@ export default function DraftBoard() {
       }
     })
     return {
-      fpColumn: { name: 'FantasyPros', data: columnData, isPreloaded: true },
+      fpColumn: { name: 'FantasyPros', shortName: 'FP', sortKey: 'fp', data: columnData, tierData, isPreloaded: true },
       fpNotesMap: notesMap,
       fpOnlyPlayers: onlyPlayers,
     }
@@ -476,15 +485,34 @@ export default function DraftBoard() {
       )
     }
 
+    if (sortCol === 'fp' && fpColumn) {
+      return [...list].sort((a, b) => {
+        const av = fpColumn.data?.[a.name?.toLowerCase()] ?? Infinity
+        const bv = fpColumn.data?.[b.name?.toLowerCase()] ?? Infinity
+        return sortDir === 'asc' ? av - bv : bv - av
+      })
+    }
+
     return [...list].sort((a, b) => {
       const av = a[sortCol] ?? (sortDir === 'asc' ? Infinity : -Infinity)
       const bv = b[sortCol] ?? (sortDir === 'asc' ? Infinity : -Infinity)
       return sortDir === 'asc' ? av - bv : bv - av
     })
-  }, [allProspects, posFilter, sortCol, sortDir, boardMode, rankMap])
+  }, [allProspects, posFilter, sortCol, sortDir, boardMode, rankMap, fpColumn])
 
   // Group by tier
   const byTier = useMemo(() => {
+    // FP sort: group by FantasyPros TIERS field
+    if (sortCol === 'fp' && fpColumn?.tierData) {
+      const groups = {}
+      sorted.forEach(p => {
+        const t = fpColumn.tierData[p.name?.toLowerCase()] ?? 99
+        if (!groups[t]) groups[t] = []
+        groups[t].push(p)
+      })
+      return groups
+    }
+
     const useMyTiers = boardMode === 'My Board' && sortCol === 'myOrder'
     const activeTiers = useMyTiers ? MY_BOARD_TIERS : TIERS
     const groups = {}
@@ -500,7 +528,7 @@ export default function DraftBoard() {
       }
     })
     return groups
-  }, [sorted, boardMode, sortCol, rankMap])
+  }, [sorted, boardMode, sortCol, rankMap, fpColumn])
 
   // ── Feature 3: CSV two-phase load ─────────────────────────────────────────
   useEffect(() => {
@@ -662,7 +690,14 @@ export default function DraftBoard() {
   }, [])
 
   const isDragEnabled = boardMode === 'My Board' && posFilter === 'ALL' && sortCol === 'myOrder'
-  const activeTiers   = (boardMode === 'My Board' && sortCol === 'myOrder') ? MY_BOARD_TIERS : TIERS
+  const activeTiers = (() => {
+    if (sortCol === 'fp' && fpColumn?.tierData) {
+      const tierNums = [...new Set(Object.values(fpColumn.tierData))].sort((a, b) => a - b)
+      return tierNums.map(t => ({ id: t, label: `FP Tier ${t}` }))
+    }
+    if (boardMode === 'My Board' && sortCol === 'myOrder') return MY_BOARD_TIERS
+    return TIERS
+  })()
 
   function renderTierGroups() {
     return activeTiers.map(tier => {
@@ -782,21 +817,19 @@ export default function DraftBoard() {
           </div>
         )}
 
-        {/* ── CSV column chips ── */}
-        {allColumns.length > 0 && (
+        {/* ── CSV column chips (user-uploaded only; pre-loaded FP shown via column header) ── */}
+        {csvColumns.length > 0 && (
           <div className="px-4 mb-3 flex flex-wrap gap-1.5">
-            {allColumns.map(col => (
+            {csvColumns.map(col => (
               <div key={col.name} className="flex items-center gap-1 px-2 py-0.5 rounded bg-bg-card border border-border-default">
                 <span className="font-body text-[10px] text-text-secondary">{col.name}</span>
-                {!col.isPreloaded && (
-                  <button
-                    onClick={() => removeColumn(col.name)}
-                    className="text-text-tertiary hover:text-danger transition-colors ml-0.5 leading-none text-xs"
-                    aria-label={`Remove ${col.name}`}
-                  >
-                    ×
-                  </button>
-                )}
+                <button
+                  onClick={() => removeColumn(col.name)}
+                  className="text-text-tertiary hover:text-danger transition-colors ml-0.5 leading-none text-xs"
+                  aria-label={`Remove ${col.name}`}
+                >
+                  ×
+                </button>
               </div>
             ))}
           </div>
@@ -816,11 +849,25 @@ export default function DraftBoard() {
               {sortCol === 'myOrder' && <ChevronUp size={10} />}
             </button>
           )}
-          {allColumns.map(col => (
-            <span key={col.name} className="font-body text-[10px] font-semibold uppercase tracking-wider text-text-tertiary w-12 text-right truncate">
-              {col.name}
-            </span>
-          ))}
+          {allColumns.map(col =>
+            col.sortKey ? (
+              <button
+                key={col.name}
+                onClick={() => handleSort(col.sortKey)}
+                title={col.name}
+                className={`flex items-center gap-0.5 font-body text-[10px] font-semibold uppercase tracking-wider select-none w-12 justify-end ${
+                  sortCol === col.sortKey ? 'text-accent' : 'text-text-tertiary'
+                }`}
+              >
+                {col.shortName ?? col.name}
+                {sortCol === col.sortKey && (sortDir === 'asc' ? <ChevronUp size={10} /> : <ChevronDown size={10} />)}
+              </button>
+            ) : (
+              <span key={col.name} title={col.name} className="font-body text-[10px] font-semibold uppercase tracking-wider text-text-tertiary w-12 text-right truncate">
+                {col.shortName ?? col.name}
+              </span>
+            )
+          )}
           <SortHeader col="adp"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort} extra="w-10 justify-end" />
           <SortHeader col="value" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} extra="w-12 justify-end" />
           <SortHeader col="age"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort} extra="w-8 justify-end" />
