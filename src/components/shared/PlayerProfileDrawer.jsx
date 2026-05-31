@@ -110,22 +110,6 @@ function getComparables(player, playerMap) {
     .slice(0, 4)
 }
 
-// ── Relative date ────────────────────────────────────────────────────────────
-
-function relativeDate(published) {
-  if (!published) return ''
-  const ts = published > 1e12 ? published : published * 1000
-  const diff = Date.now() - ts
-  if (diff < 0) return 'just now'
-  const mins = Math.floor(diff / 60000)
-  if (mins < 2) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  return `${days}d ago`
-}
-
 // ── Slot label ───────────────────────────────────────────────────────────────
 
 function slotLabel(rosterPlayer) {
@@ -147,7 +131,7 @@ export default function PlayerProfileDrawer({ player, onClose, playerMap = {}, c
   const league = ctx?.league
   const values = ctx?.values
 
-  const { headlines, injuryFlag, loading: newsLoading } = usePlayerNews(player.sleeperId)
+  const { injuryFlag, injuryStatus, injuryDetail, injuryNotes, loading: newsLoading } = usePlayerNews(player.sleeperId)
 
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
@@ -350,33 +334,30 @@ export default function PlayerProfileDrawer({ player, onClose, playerMap = {}, c
 
         <div className="px-4 pb-6 pt-3 flex flex-col gap-4">
 
-          {/* Live News */}
+          {/* Player Status */}
           <div className="rounded-xl bg-bg-card border border-border-default px-3 py-3">
-            <div className="flex items-center gap-2 mb-2">
-              <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">
-                Live News
-              </p>
-              {!newsLoading && <span className="inline-block w-1.5 h-1.5 rounded-full bg-success" />}
-            </div>
+            <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
+              Player Status
+            </p>
             {newsLoading ? (
               <div className="flex items-center gap-2 py-1">
                 <div className="h-3 w-3 rounded-full border-2 border-accent border-t-transparent animate-spin" />
                 <span className="font-body text-xs text-text-tertiary">Loading…</span>
               </div>
-            ) : headlines.length === 0 ? (
-              <p className="font-body text-xs text-text-tertiary italic">No recent news</p>
             ) : (
-              <div className="flex flex-col gap-2.5">
-                {headlines.map((item, i) => (
-                  <div key={i} className={i < headlines.length - 1 ? 'border-b border-border-default pb-2.5' : ''}>
-                    <p className="font-body text-xs text-text-primary leading-snug">{item.title}</p>
-                    {item.published && (
-                      <p className="font-body text-[10px] text-text-tertiary mt-0.5">
-                        {relativeDate(item.published)}
-                      </p>
-                    )}
-                  </div>
-                ))}
+              <div className="flex items-start gap-3">
+                <span className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 mt-1 ${flagStyle.dot}`} />
+                <div>
+                  <p className={`font-body text-sm font-semibold ${flagStyle.text}`}>
+                    {injuryStatus ?? 'Active'}
+                    {injuryDetail ? ` — ${injuryDetail}` : ''}
+                  </p>
+                  {injuryNotes && (
+                    <p className="font-body text-xs text-text-secondary mt-0.5 leading-snug">
+                      {injuryNotes}
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>

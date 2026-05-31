@@ -11,19 +11,6 @@ const FLAG_DOT = { red: 'bg-danger', yellow: 'bg-warning', green: 'bg-success' }
 const FLAG_LABEL = { red: 'Injured', yellow: 'Questionable', green: 'Active' }
 const FLAG_TEXT  = { red: 'text-danger', yellow: 'text-warning', green: 'text-success' }
 
-function relativeDate(published) {
-  if (!published) return ''
-  const ts = published > 1e12 ? published : published * 1000
-  const diff = Date.now() - ts
-  if (diff < 0) return 'just now'
-  const mins = Math.floor(diff / 60000)
-  if (mins < 2) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  return `${days}d ago`
-}
 
 function ValueSummary({ giveTotal, getTotal }) {
   const diff    = getTotal - giveTotal
@@ -56,12 +43,14 @@ function ValueSummary({ giveTotal, getTotal }) {
 }
 
 function PlayerNewsCard({ intel }) {
-  const flag  = intel.injuryFlag ?? 'green'
-  const headlines = intel.headlines ?? []
+  const flag = intel.injuryFlag ?? 'green'
+  const statusLabel = intel.injuryStatus
+    ? intel.injuryDetail ? `${intel.injuryStatus} — ${intel.injuryDetail}` : intel.injuryStatus
+    : 'Active'
 
   return (
     <div className="px-4 py-3 border-b border-border-default dark:border-border-default last:border-b-0">
-      <div className="flex items-center justify-between mb-1.5">
+      <div className="flex items-center justify-between mb-1">
         <p className="font-body text-xs font-semibold text-text-primary dark:text-text-primary">
           {intel.playerName}
           <span className="ml-1.5 font-normal text-[10px] uppercase tracking-wide text-text-tertiary dark:text-text-tertiary">
@@ -73,23 +62,13 @@ function PlayerNewsCard({ intel }) {
           {FLAG_LABEL[flag]}
         </span>
       </div>
-      {headlines.length === 0 ? (
-        <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary italic">No recent news</p>
-      ) : (
-        <div className="flex flex-col gap-1.5">
-          {headlines.slice(0, 2).map((item, i) => (
-            <div key={i} className="flex items-baseline justify-between gap-2">
-              <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-snug flex-1 min-w-0 truncate">
-                {item.title}
-              </p>
-              {item.published && (
-                <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary shrink-0">
-                  {relativeDate(item.published)}
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
+      <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary">
+        {statusLabel}
+      </p>
+      {intel.injuryNotes && (
+        <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary mt-0.5 leading-snug">
+          {intel.injuryNotes}
+        </p>
       )}
     </div>
   )
