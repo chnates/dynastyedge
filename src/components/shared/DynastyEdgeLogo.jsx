@@ -44,13 +44,12 @@ export default function DynastyEdgeLogo({ theme = 'dark', size = 88 }) {
       >01</text>
 
       {/* Football icon — top right */}
-      {/* Pointed-oval body + horizontal center seam + vertical stitches */}
       <g stroke={c.secondary} strokeWidth="0.9" fill="none" strokeLinecap="round">
-        <path d="M 78,13 C 80,8.5 90,8.5 92,13 C 90,17.5 80,17.5 78,13 Z" />
-        <line x1="79" y1="13" x2="91" y2="13" />
-        <line x1="83" y1="11.2" x2="83" y2="14.8" />
-        <line x1="85" y1="10.5" x2="85" y2="15.5" />
-        <line x1="87" y1="11.2" x2="87" y2="14.8" />
+        <ellipse cx="84" cy="13" rx="8" ry="4" />
+        <line x1="84" y1="9" x2="84" y2="17" />
+        <line x1="82" y1="11" x2="86" y2="11" />
+        <line x1="82" y1="13" x2="86" y2="13" />
+        <line x1="82" y1="15" x2="86" y2="15" />
       </g>
 
       {/* "De" — dominant center element */}

@@ -86,7 +86,7 @@ export default function SideDrawer({
         </div>
 
         {/* Nav items */}
-        <nav className="flex-1 px-3 overflow-y-auto">
+        <nav className="px-3">
           {NAV_ITEMS.map(({ to, label, Icon }) => (
             <NavLink
               key={to}
@@ -113,7 +113,7 @@ export default function SideDrawer({
         </nav>
 
         {/* Utility controls */}
-        <div className="px-3 pb-2">
+        <div className="px-3 mt-6 pb-2">
           <div className="h-px bg-border-default mx-2 mb-3" />
 
           {lastUpdated && (
