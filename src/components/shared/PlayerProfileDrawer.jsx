@@ -125,6 +125,7 @@ function slotLabel(rosterPlayer) {
 export default function PlayerProfileDrawer({
   player, onClose, playerMap = {}, csvColumns = [],
   isDraftContext = false, note = '', onNoteChange = null,
+  fpNotesMap = {},
 }) {
   const overlayRef = useRef(null)
   const sheetRef   = useRef(null)
@@ -272,6 +273,8 @@ export default function PlayerProfileDrawer({
     .map(col => ({ name: col.name, rank: col.data?.[player.name?.toLowerCase()] ?? null }))
     .filter(r => r.rank != null)
 
+  const fpNotes = fpNotesMap[player.sleeperId] ?? null
+
   function handleOverlayClick(e) {
     if (e.target === overlayRef.current) onClose()
   }
@@ -398,8 +401,8 @@ export default function PlayerProfileDrawer({
             </div>
           </div>
 
-          {/* Role / opportunity */}
-          {role && (
+          {/* Role / opportunity — hidden when FP dynasty outlook is available */}
+          {role && !(isDraftContext && fpNotes?.dynastyOutlook) && (
             <div className="rounded-xl bg-bg-card border border-border-default px-3 py-3">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-1.5">
                 Dynasty Outlook
@@ -430,6 +433,26 @@ export default function PlayerProfileDrawer({
                   </span>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Scouting Report (FantasyPros) */}
+          {isDraftContext && fpNotes?.scoutingReport && (
+            <div className="rounded-xl bg-bg-card border border-border-default px-3 py-3">
+              <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
+                Scouting Report
+              </p>
+              <p className="font-body text-sm text-text-primary leading-relaxed">{fpNotes.scoutingReport}</p>
+            </div>
+          )}
+
+          {/* Dynasty Outlook (FantasyPros) */}
+          {isDraftContext && fpNotes?.dynastyOutlook && (
+            <div className="rounded-xl bg-bg-card border border-border-default px-3 py-3">
+              <p className="font-body text-sm font-bold uppercase tracking-wide text-accent mb-2">
+                Dynasty Outlook
+              </p>
+              <p className="font-body text-sm text-text-primary leading-relaxed">{fpNotes.dynastyOutlook}</p>
             </div>
           )}
 

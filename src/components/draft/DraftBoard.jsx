@@ -64,6 +64,73 @@ function parseCSV(text) {
   return result
 }
 
+// ── FantasyPros CSV parsing ───────────────────────────────────────────────────
+
+function parseCsvLine(line) {
+  const result = []
+  let current = ''
+  let inQuotes = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') { current += '"'; i++ }
+      else inQuotes = !inQuotes
+    } else if (ch === ',' && !inQuotes) {
+      result.push(current); current = ''
+    } else {
+      current += ch
+    }
+  }
+  result.push(current)
+  return result
+}
+
+function parseFantasyProsCsv(text) {
+  const lines = text.split(/\r?\n/)
+  if (lines.length < 2) return []
+  const entries = []
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue
+    const cols = parseCsvLine(lines[i])
+    const rank = parseInt(cols[0], 10)
+    const fpName = cols[2]?.trim()
+    const team = cols[3]?.trim()
+    const pos = cols[4]?.trim().replace(/\d+$/, '') // "RB1" → "RB"
+    const age = cols[5]?.trim()
+    const notes = cols[6]?.trim() ?? ''
+    if (!fpName || isNaN(rank)) continue
+    entries.push({ rank, fpName, team, pos, age, notes })
+  }
+  return entries
+}
+
+function fuzzyMatchFPName(fpName, sleeperName) {
+  const fp = fpName.toLowerCase().trim()
+  const sl = sleeperName.toLowerCase().trim()
+  if (fp === sl) return true
+  // Handle "j. love" → "jeremiyah love"
+  const abbrev = fp.match(/^([a-z])\.\s+(.+)$/)
+  if (abbrev) {
+    const [, initial, lastName] = abbrev
+    const parts = sl.split(' ')
+    if (parts.length >= 2) {
+      const sleeperLast = parts.slice(1).join(' ')
+      if (parts[0][0] === initial && sleeperLast === lastName) return true
+    }
+  }
+  return false
+}
+
+function splitFPNotes(notes) {
+  if (!notes) return { scoutingReport: '', dynastyOutlook: '' }
+  const idx = notes.indexOf('Dynasty Outlook:')
+  if (idx === -1) return { scoutingReport: notes, dynastyOutlook: '' }
+  return {
+    scoutingReport: notes.slice(0, idx).trim(),
+    dynastyOutlook: notes.slice(idx + 'Dynasty Outlook:'.length).trim(),
+  }
+}
+
 // ── Pick slot display ─────────────────────────────────────────────────────────
 
 function getMyPickSlot(myRoster) {
@@ -123,6 +190,14 @@ function AdpOnlyBadge() {
   return (
     <span className="font-body text-[9px] font-bold uppercase tracking-wider text-text-tertiary bg-bg-secondary border border-border-default rounded px-1.5 py-0.5 flex-shrink-0 ml-1">
       ADP Only
+    </span>
+  )
+}
+
+function FpOnlyBadge() {
+  return (
+    <span className="font-body text-[9px] font-bold uppercase tracking-wider text-accent bg-accent/15 border border-accent/30 rounded px-1.5 py-0.5 flex-shrink-0 ml-1">
+      FP Only
     </span>
   )
 }
@@ -226,7 +301,8 @@ function SortablePlayerRow({
             {hasNote && <FileText size={11} className="text-accent flex-shrink-0" strokeWidth={1.75} />}
             {fillsNeed && <FillsNeedBadge />}
             {avail && <AvailableBadge />}
-            {player.adpOnly && <AdpOnlyBadge />}
+            {player.fpOnly && <FpOnlyBadge />}
+            {!player.fpOnly && player.adpOnly && <AdpOnlyBadge />}
           </div>
           <div className="flex items-center gap-1 mt-0.5">
             <span className="font-body text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">{player.position}</span>
@@ -296,6 +372,8 @@ export default function DraftBoard() {
     catch { return {} }
   })
 
+  const [fpRawEntries, setFpRawEntries] = useState([])
+
   const sensors = useSensors(
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -338,6 +416,49 @@ export default function DraftBoard() {
     })
   }, [rookieMap, values, nameToFCEntry])
 
+  // FantasyPros column, notes map, and FP-only players (matched against Sleeper rookies)
+  const { fpColumn, fpNotesMap, fpOnlyPlayers } = useMemo(() => {
+    if (!fpRawEntries.length) return { fpColumn: null, fpNotesMap: {}, fpOnlyPlayers: [] }
+    const columnData = {}
+    const notesMap = {}
+    const onlyPlayers = []
+    fpRawEntries.forEach((entry, idx) => {
+      const match = rookies.find(r => fuzzyMatchFPName(entry.fpName, r.name))
+      if (match) {
+        columnData[match.name.toLowerCase()] = entry.rank
+        notesMap[match.sleeperId] = splitFPNotes(entry.notes)
+      } else {
+        columnData[entry.fpName.toLowerCase()] = entry.rank
+        const syntheticId = `fp_${idx}`
+        notesMap[syntheticId] = splitFPNotes(entry.notes)
+        onlyPlayers.push({
+          sleeperId: syntheticId,
+          name: entry.fpName,
+          position: entry.pos,
+          team: entry.team || null,
+          age: parseFloat(entry.age) || null,
+          fpOnly: true,
+          adpOnly: true,
+          value: undefined, adp: undefined, overallRank: undefined, positionRank: undefined,
+        })
+      }
+    })
+    return {
+      fpColumn: { name: 'FantasyPros', data: columnData, isPreloaded: true },
+      fpNotesMap: notesMap,
+      fpOnlyPlayers: onlyPlayers,
+    }
+  }, [fpRawEntries, rookies])
+
+  // All prospects: Sleeper rookies + FP-only players not in Sleeper
+  const allProspects = useMemo(() => [...rookies, ...fpOnlyPlayers], [rookies, fpOnlyPlayers])
+
+  // All display columns: pre-loaded FP column first, then user-uploaded CSV columns
+  const allColumns = useMemo(
+    () => fpColumn ? [fpColumn, ...csvColumns] : csvColumns,
+    [fpColumn, csvColumns]
+  )
+
   // My Board rank map: sleeperId → 1-based rank position
   const rankMap = useMemo(() => {
     const map = {}
@@ -347,7 +468,7 @@ export default function DraftBoard() {
 
   // Filter + sort
   const sorted = useMemo(() => {
-    const list = posFilter === 'ALL' ? rookies : rookies.filter(p => p.position === posFilter)
+    const list = posFilter === 'ALL' ? allProspects : allProspects.filter(p => p.position === posFilter)
 
     if (boardMode === 'My Board' && sortCol === 'myOrder') {
       return [...list].sort((a, b) =>
@@ -360,7 +481,7 @@ export default function DraftBoard() {
       const bv = b[sortCol] ?? (sortDir === 'asc' ? Infinity : -Infinity)
       return sortDir === 'asc' ? av - bv : bv - av
     })
-  }, [rookies, posFilter, sortCol, sortDir, boardMode, rankMap])
+  }, [allProspects, posFilter, sortCol, sortDir, boardMode, rankMap])
 
   // Group by tier
   const byTier = useMemo(() => {
@@ -374,8 +495,8 @@ export default function DraftBoard() {
         const tier = MY_BOARD_TIERS.find(t => rank >= t.minRank && rank <= t.maxRank)
         if (tier) groups[tier.id].push(p)
       } else {
-        const tier = TIERS.find(t => p.value >= t.min && p.value <= t.max)
-        if (tier) groups[tier.id].push(p)
+        const tier = TIERS.find(t => p.value >= t.min && p.value <= t.max) ?? TIERS[TIERS.length - 1]
+        groups[tier.id].push(p)
       }
     })
     return groups
@@ -413,6 +534,14 @@ export default function DraftBoard() {
       .catch(() => {})
   }, [])
 
+  // ── FantasyPros CSV auto-load ──────────────────────────────────────────────
+  useEffect(() => {
+    fetch(`${import.meta.env.BASE_URL}FantasyPros_2026_Rookies_OP_Rankings.csv`)
+      .then(r => r.ok ? r.text() : null)
+      .then(text => { if (text) setFpRawEntries(parseFantasyProsCsv(text)) })
+      .catch(() => {})
+  }, [])
+
   // ── Feature 2: Notes persistence ──────────────────────────────────────────
   useEffect(() => {
     localStorage.setItem(NOTES_KEY, JSON.stringify(prospectNotes))
@@ -420,21 +549,21 @@ export default function DraftBoard() {
 
   // ── Feature 1: My Board init + new player merge ────────────────────────────
   useEffect(() => {
-    if (rookies.length === 0) return
+    if (allProspects.length === 0) return
     setMyBoardOrder(prev => {
       if (prev.length === 0) {
-        return [...rookies]
+        return [...allProspects]
           .sort((a, b) => (a.adp ?? a.overallRank ?? 999) - (b.adp ?? b.overallRank ?? 999))
           .map(p => p.sleeperId)
       }
       const boardSet = new Set(prev)
-      const newPlayers = rookies
+      const newPlayers = allProspects
         .filter(p => !boardSet.has(p.sleeperId))
         .sort((a, b) => (a.adp ?? a.overallRank ?? 999) - (b.adp ?? b.overallRank ?? 999))
       if (newPlayers.length === 0) return prev
       return [...prev, ...newPlayers.map(p => p.sleeperId)]
     })
-  }, [rookies])
+  }, [allProspects])
 
   // ── Feature 1: My Board persistence ───────────────────────────────────────
   useEffect(() => {
@@ -466,7 +595,7 @@ export default function DraftBoard() {
   }
 
   function resetMyBoard() {
-    const initialOrder = [...rookies]
+    const initialOrder = [...allProspects]
       .sort((a, b) => (a.adp ?? a.overallRank ?? 999) - (b.adp ?? b.overallRank ?? 999))
       .map(p => p.sleeperId)
     setMyBoardOrder(initialOrder)
@@ -552,7 +681,7 @@ export default function DraftBoard() {
                 fcRank={boardMode === 'My Board' ? (player.overallRank ?? null) : null}
                 fillsNeed={needPositions.includes(player.position)}
                 avail={isLikelyAvailable(player)}
-                csvColumns={csvColumns}
+                csvColumns={allColumns}
                 getLookupRank={getLookupRank}
                 hasNote={!!prospectNotes[player.sleeperId]}
                 onSelect={() => setSelected(player)}
@@ -654,18 +783,20 @@ export default function DraftBoard() {
         )}
 
         {/* ── CSV column chips ── */}
-        {csvColumns.length > 0 && (
+        {allColumns.length > 0 && (
           <div className="px-4 mb-3 flex flex-wrap gap-1.5">
-            {csvColumns.map(col => (
+            {allColumns.map(col => (
               <div key={col.name} className="flex items-center gap-1 px-2 py-0.5 rounded bg-bg-card border border-border-default">
                 <span className="font-body text-[10px] text-text-secondary">{col.name}</span>
-                <button
-                  onClick={() => removeColumn(col.name)}
-                  className="text-text-tertiary hover:text-danger transition-colors ml-0.5 leading-none text-xs"
-                  aria-label={`Remove ${col.name}`}
-                >
-                  ×
-                </button>
+                {!col.isPreloaded && (
+                  <button
+                    onClick={() => removeColumn(col.name)}
+                    className="text-text-tertiary hover:text-danger transition-colors ml-0.5 leading-none text-xs"
+                    aria-label={`Remove ${col.name}`}
+                  >
+                    ×
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -685,7 +816,7 @@ export default function DraftBoard() {
               {sortCol === 'myOrder' && <ChevronUp size={10} />}
             </button>
           )}
-          {csvColumns.map(col => (
+          {allColumns.map(col => (
             <span key={col.name} className="font-body text-[10px] font-semibold uppercase tracking-wider text-text-tertiary w-12 text-right truncate">
               {col.name}
             </span>
@@ -716,7 +847,7 @@ export default function DraftBoard() {
           </SortableContext>
         </DndContext>
 
-        {rookies.length === 0 && !loading && !rookieLoading && (
+        {allProspects.length === 0 && !loading && !rookieLoading && (
           <p className="px-4 pt-6 text-center font-body text-xs text-text-tertiary">
             No 2026 rookie prospects found. FantasyCalc's rookie endpoint will populate once the draft class is available.
           </p>
@@ -745,11 +876,12 @@ export default function DraftBoard() {
         <PlayerProfileDrawer
           player={selected}
           playerMap={values?.playerMap ?? {}}
-          csvColumns={csvColumns}
+          csvColumns={allColumns}
           onClose={() => setSelected(null)}
           isDraftContext
           note={prospectNotes[selected.sleeperId]}
           onNoteChange={updateNote}
+          fpNotesMap={fpNotesMap}
         />
       )}
     </>
