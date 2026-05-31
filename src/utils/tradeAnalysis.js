@@ -198,8 +198,8 @@ export function adjustVerdictForInjuries(baseVerdict, liveIntelligence, giveAsse
   const getNames  = new Set(getAssets.filter(a => a.type === 'player').map(a => a.name))
   const giveNames = new Set(giveAssets.filter(a => a.type === 'player').map(a => a.name))
 
-  const getOut  = liveIntelligence.filter(i => !i.error && i.injuryStatus === 'Out' && getNames.has(i.playerName))
-  const giveOut = liveIntelligence.filter(i => !i.error && i.injuryStatus === 'Out' && giveNames.has(i.playerName))
+  const getOut  = liveIntelligence.filter(i => i.injuryFlag === 'red' && getNames.has(i.playerName))
+  const giveOut = liveIntelligence.filter(i => i.injuryFlag === 'red' && giveNames.has(i.playerName))
 
   if (!getOut.length && !giveOut.length) return baseVerdict
 

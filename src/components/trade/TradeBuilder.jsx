@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
+import { Info } from 'lucide-react'
 import TrendArrow from '../shared/TrendArrow'
 import PickBadge from '../roster/PickBadge'
+import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 
 const POS_TAGS = {
   QB: 'bg-accent/20 text-accent',
@@ -77,49 +79,61 @@ function TradeColumn({ label, assets, total, onRemove, emptyHint }) {
   )
 }
 
-function PlayerRow({ player, isSelected, isWhatsFairTarget, onTap }) {
+function PlayerRow({ player, isSelected, isWhatsFairTarget, onTap, onInfo }) {
   const posTag = POS_TAGS[player.position] ?? 'bg-bg-secondary text-text-secondary'
   return (
-    <button
-      onClick={onTap}
-      className={`w-full flex items-center gap-1.5 py-2.5 border-b border-border-default dark:border-border-default last:border-0 transition-opacity active:opacity-60 text-left
-        ${isSelected ? 'bg-accent/5' : ''}
-        ${isWhatsFairTarget ? 'bg-warning/8' : ''}`}
+    <div className={`flex items-center border-b border-border-default dark:border-border-default last:border-0
+      ${isSelected ? 'bg-accent/5' : ''}
+      ${isWhatsFairTarget ? 'bg-warning/8' : ''}`}
     >
-      {/* State indicator */}
-      <span className="w-3.5 shrink-0 flex justify-center text-[10px]">
-        {isWhatsFairTarget ? (
-          <span className="text-warning">◎</span>
-        ) : isSelected ? (
-          <span className="text-success">✓</span>
-        ) : null}
-      </span>
+      <button
+        onClick={onTap}
+        className="flex-1 flex items-center gap-1.5 py-2.5 transition-opacity active:opacity-60 text-left min-w-0"
+      >
+        {/* State indicator */}
+        <span className="w-3.5 shrink-0 flex justify-center text-[10px]">
+          {isWhatsFairTarget ? (
+            <span className="text-warning">◎</span>
+          ) : isSelected ? (
+            <span className="text-success">✓</span>
+          ) : null}
+        </span>
 
-      {/* Position badge */}
-      <span className={`shrink-0 text-[9px] font-bold font-body px-1.5 py-0.5 rounded leading-none ${posTag}`}>
-        {player.position}
-      </span>
+        {/* Position badge */}
+        <span className={`shrink-0 text-[9px] font-bold font-body px-1.5 py-0.5 rounded leading-none ${posTag}`}>
+          {player.position}
+        </span>
 
-      {/* Name */}
-      <span className="flex-1 font-body text-sm text-text-primary dark:text-text-primary truncate min-w-0">
-        {player.name}
-      </span>
+        {/* Name */}
+        <span className="flex-1 font-body text-sm text-text-primary dark:text-text-primary truncate min-w-0">
+          {player.name}
+        </span>
 
-      {/* Team */}
-      <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary shrink-0 w-6 text-right uppercase tracking-wide">
-        {player.team}
-      </span>
+        {/* Team */}
+        <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary shrink-0 w-6 text-right uppercase tracking-wide">
+          {player.team}
+        </span>
 
-      {/* Value */}
-      <span className="font-mono text-sm text-text-primary dark:text-text-primary shrink-0 w-12 text-right tabular-nums">
-        {player.value > 0 ? player.value.toLocaleString() : '—'}
-      </span>
+        {/* Value */}
+        <span className="font-mono text-sm text-text-primary dark:text-text-primary shrink-0 w-12 text-right tabular-nums">
+          {player.value > 0 ? player.value.toLocaleString() : '—'}
+        </span>
 
-      {/* Trend */}
-      <span className="shrink-0 w-4 text-center">
-        <TrendArrow trend={player.trend30Day} />
-      </span>
-    </button>
+        {/* Trend */}
+        <span className="shrink-0 w-4 text-center">
+          <TrendArrow trend={player.trend30Day} />
+        </span>
+      </button>
+
+      {/* Info icon — opens PlayerSheet without toggling selection */}
+      <button
+        onClick={e => { e.stopPropagation(); onInfo() }}
+        className="shrink-0 px-2 py-2.5 text-text-tertiary dark:text-text-tertiary active:text-text-secondary transition-colors"
+        aria-label={`View ${player.name} profile`}
+      >
+        <Info size={14} strokeWidth={1.75} />
+      </button>
+    </div>
   )
 }
 
@@ -159,6 +173,7 @@ export default function TradeBuilder({
   const [searchQuery, setSearchQuery] = useState('')
   const [posFilter, setPosFilter]   = useState('All')
   const [browserOpen, setBrowserOpen] = useState(false)
+  const [sheetPlayer, setSheetPlayer] = useState(null)
 
   const giveIds = useMemo(() => new Set(giveAssets.map(a => a.id)), [giveAssets])
   const getIds  = useMemo(() => new Set(getAssets.map(a => a.id)),  [getAssets])
@@ -312,6 +327,7 @@ export default function TradeBuilder({
                     isSelected={selected}
                     isWhatsFairTarget={isTarget}
                     onTap={() => handlePlayerTap(player)}
+                    onInfo={() => setSheetPlayer(player)}
                   />
                 )
               })}
@@ -331,6 +347,13 @@ export default function TradeBuilder({
           )}
         </div>
       </div>}
+
+      {sheetPlayer && (
+        <PlayerProfileDrawer
+          player={sheetPlayer}
+          onClose={() => setSheetPlayer(null)}
+        />
+      )}
     </div>
   )
 }

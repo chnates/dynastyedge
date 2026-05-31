@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AlertTriangle } from 'lucide-react'
 import { getTeamName } from '../../hooks/useLeague'
@@ -6,6 +6,7 @@ import { useLeagueContext } from '../../context/LeagueContext'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import PlayerCard from './PlayerCard'
 import PickBadge from './PickBadge'
+import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 
 const POSITION_ORDER = ['QB', 'RB', 'WR', 'TE']
 
@@ -43,6 +44,7 @@ export default function RosterView() {
   const { league, loading, error, retry } = useLeagueContext()
   const location = useLocation()
   const navigate = useNavigate()
+  const [selectedPlayer, setSelectedPlayer] = useState(null)
 
   const selectedRosterId = location.state?.selectedRosterId
 
@@ -136,7 +138,7 @@ export default function RosterView() {
             <SectionHeader label={pos} count={group.length} />
             <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
               {group.map(player => (
-                <PlayerCard key={player.sleeperId} player={player} />
+                <PlayerCard key={player.sleeperId} player={player} onClick={() => setSelectedPlayer(player)} />
               ))}
             </div>
           </section>
@@ -151,7 +153,7 @@ export default function RosterView() {
             {taxi
               .sort((a, b) => b.value - a.value)
               .map(player => (
-                <PlayerCard key={player.sleeperId} player={player} />
+                <PlayerCard key={player.sleeperId} player={player} onClick={() => setSelectedPlayer(player)} />
               ))}
           </div>
         </section>
@@ -165,7 +167,7 @@ export default function RosterView() {
             {ir
               .sort((a, b) => b.value - a.value)
               .map(player => (
-                <PlayerCard key={player.sleeperId} player={player} />
+                <PlayerCard key={player.sleeperId} player={player} onClick={() => setSelectedPlayer(player)} />
               ))}
           </div>
         </section>
@@ -205,6 +207,13 @@ export default function RosterView() {
           </div>
         )}
       </section>
+
+      {selectedPlayer && (
+        <PlayerProfileDrawer
+          player={selectedPlayer}
+          onClose={() => setSelectedPlayer(null)}
+        />
+      )}
     </div>
   )
 }

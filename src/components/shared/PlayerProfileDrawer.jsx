@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { X } from 'lucide-react'
+import { X, ArrowRight } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import TrendArrow from './TrendArrow'
+import { usePlayerNews } from '../../hooks/usePlayerNews'
+import { useLeagueContext } from '../../context/LeagueContext'
+import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
+import { getTeamName } from '../../hooks/useLeague'
 
 // ── Opportunity grade ────────────────────────────────────────────────────────
 
@@ -40,6 +45,14 @@ const GRADE_STYLES = {
 }
 
 const GRADE_LABELS = { A: 'Elite', B: 'Strong', C: 'Upside', D: 'Deep Stash' }
+
+// ── Injury flag styles ───────────────────────────────────────────────────────
+
+const FLAG_STYLES = {
+  red:    { dot: 'bg-danger',   text: 'text-danger',   label: 'Injured' },
+  yellow: { dot: 'bg-warning',  text: 'text-warning',  label: 'Questionable' },
+  green:  { dot: 'bg-success',  text: 'text-success',  label: 'Active' },
+}
 
 // ── Role description per position ────────────────────────────────────────────
 
@@ -97,16 +110,98 @@ function getComparables(player, playerMap) {
     .slice(0, 4)
 }
 
+// ── Relative date ────────────────────────────────────────────────────────────
+
+function relativeDate(published) {
+  if (!published) return ''
+  const ts = published > 1e12 ? published : published * 1000
+  const diff = Date.now() - ts
+  if (diff < 0) return 'just now'
+  const mins = Math.floor(diff / 60000)
+  if (mins < 2) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
+
+// ── Slot label ───────────────────────────────────────────────────────────────
+
+function slotLabel(rosterPlayer) {
+  if (!rosterPlayer) return 'Bench'
+  if (rosterPlayer.isIR) return 'Injured Reserve'
+  if (rosterPlayer.isTaxi) return 'Taxi Squad'
+  if (rosterPlayer.isStarter) return 'Starting Lineup'
+  return 'Bench'
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function PlayerProfileDrawer({ player, onClose, playerMap = {}, csvColumns = [], rosterComparison = null }) {
+export default function PlayerProfileDrawer({ player, onClose, playerMap = {}, csvColumns = [] }) {
   const overlayRef = useRef(null)
+  const navigate = useNavigate()
+  const ctx = useLeagueContext()
+  const league = ctx?.league
+  const values = ctx?.values
+
+  const { headlines, injuryFlag, loading: newsLoading } = usePlayerNews(player.sleeperId)
 
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  // Determine player ownership
+  const { playerContext, ownerRoster } = useMemo(() => {
+    if (!league) return { playerContext: 'loading', ownerRoster: null }
+    const myRoster = league.myRoster
+    if (myRoster?.players.some(p => p.sleeperId === player.sleeperId)) {
+      return { playerContext: 'mine', ownerRoster: myRoster }
+    }
+    const found = (league.allRosters ?? []).find(
+      r => r.rosterId !== myRoster?.rosterId && r.players.some(p => p.sleeperId === player.sleeperId)
+    )
+    if (found) return { playerContext: 'opponent', ownerRoster: found }
+    return { playerContext: 'fa', ownerRoster: null }
+  }, [league, player.sleeperId])
+
+  // My roster's version of this player (for slot + competitors)
+  const myRosterPlayer = useMemo(() => {
+    if (!league?.myRoster || playerContext !== 'mine') return null
+    return league.myRoster.players.find(p => p.sleeperId === player.sleeperId) ?? null
+  }, [league, player.sleeperId, playerContext])
+
+  // Competitors at same position on my roster
+  const competitors = useMemo(() => {
+    if (!league?.myRoster || !player.position || playerContext !== 'mine') return []
+    return league.myRoster.players
+      .filter(p => p.position === player.position && p.sleeperId !== player.sleeperId)
+      .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
+  }, [league, player.position, player.sleeperId, playerContext])
+
+  // My roster players at same position (for FA context)
+  const myPositionPlayers = useMemo(() => {
+    if (!league?.myRoster || !player.position || playerContext !== 'fa') return []
+    return league.myRoster.players
+      .filter(p => p.position === player.position)
+      .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
+  }, [league, player.position, playerContext])
+
+  // "Fills Need" for FA context
+  const fillsNeed = useMemo(() => {
+    if (!league || playerContext !== 'fa') return false
+    const avgs = computeLeagueAverages(league.allRosters)
+    const deltas = getPositionalDeltas(league.myRoster, avgs)
+    return (deltas[player.position] ?? 0) < 0
+  }, [league, playerContext, player.position])
+
+  // Use context playerMap as fallback for comparables
+  const resolvedPlayerMap = useMemo(() => {
+    if (playerMap && Object.keys(playerMap).length > 0) return playerMap
+    return values?.playerMap ?? {}
+  }, [playerMap, values])
 
   const grade = useMemo(() =>
     getOpportunityGrade(player.position, player.positionRank ?? 99, player.value ?? 0),
@@ -117,8 +212,8 @@ export default function PlayerProfileDrawer({ player, onClose, playerMap = {}, c
   [player])
 
   const comparables = useMemo(() =>
-    getComparables(player, playerMap),
-  [player, playerMap])
+    getComparables(player, resolvedPlayerMap),
+  [player, resolvedPlayerMap])
 
   const myRankings = csvColumns
     .map(col => ({ name: col.name, rank: col.data?.[player.name?.toLowerCase()] ?? null }))
@@ -127,6 +222,17 @@ export default function PlayerProfileDrawer({ player, onClose, playerMap = {}, c
   function handleOverlayClick(e) {
     if (e.target === overlayRef.current) onClose()
   }
+
+  function handleAnalyzeTrade() {
+    if (playerContext === 'opponent' && ownerRoster) {
+      navigate('/trade/analyze', { state: { opponentRosterId: ownerRoster.rosterId, whatsFairTarget: player } })
+    } else {
+      navigate('/trade/analyze')
+    }
+    onClose()
+  }
+
+  const flagStyle = FLAG_STYLES[injuryFlag] ?? FLAG_STYLES.green
 
   return (
     <div
@@ -153,6 +259,12 @@ export default function PlayerProfileDrawer({ player, onClose, playerMap = {}, c
                   {player.position}
                 </span>
               )}
+              {!newsLoading && (
+                <span className={`flex items-center gap-1 font-body text-[10px] ${flagStyle.text}`}>
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${flagStyle.dot}`} />
+                  {flagStyle.label}
+                </span>
+              )}
             </div>
             <h2 className="font-display text-xl font-bold uppercase tracking-wide text-text-primary mt-1 leading-tight">
               {player.name}
@@ -170,6 +282,37 @@ export default function PlayerProfileDrawer({ player, onClose, playerMap = {}, c
         </div>
 
         <div className="px-4 pb-6 pt-3 flex flex-col gap-4">
+
+          {/* Live News */}
+          <div className="rounded-xl bg-bg-card border border-border-default px-3 py-3">
+            <div className="flex items-center gap-2 mb-2">
+              <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">
+                Live News
+              </p>
+              {!newsLoading && <span className="inline-block w-1.5 h-1.5 rounded-full bg-success" />}
+            </div>
+            {newsLoading ? (
+              <div className="flex items-center gap-2 py-1">
+                <div className="h-3 w-3 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+                <span className="font-body text-xs text-text-tertiary">Loading…</span>
+              </div>
+            ) : headlines.length === 0 ? (
+              <p className="font-body text-xs text-text-tertiary italic">No recent news</p>
+            ) : (
+              <div className="flex flex-col gap-2.5">
+                {headlines.map((item, i) => (
+                  <div key={i} className={i < headlines.length - 1 ? 'border-b border-border-default pb-2.5' : ''}>
+                    <p className="font-body text-xs text-text-primary leading-snug">{item.title}</p>
+                    {item.published && (
+                      <p className="font-body text-[10px] text-text-tertiary mt-0.5">
+                        {relativeDate(item.published)}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Dynasty value */}
           <div className="rounded-xl bg-bg-card border border-border-default px-3 py-3">
@@ -203,43 +346,6 @@ export default function PlayerProfileDrawer({ player, onClose, playerMap = {}, c
               )}
             </div>
           </div>
-
-          {/* Roster comparison — shown only in free agent context */}
-          {rosterComparison != null && rosterComparison.length > 0 && (
-            <div className="rounded-xl bg-bg-card border border-border-default px-3 py-3">
-              <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
-                Your Roster — {player.position}
-              </p>
-              <div className="flex flex-col gap-0">
-                {rosterComparison.map((rp, i) => {
-                  const delta = (player.value ?? 0) - (rp.value ?? 0)
-                  return (
-                    <div
-                      key={rp.sleeperId}
-                      className={`flex items-center justify-between py-2 ${i < rosterComparison.length - 1 ? 'border-b border-border-default' : ''}`}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="font-body text-sm text-text-primary truncate">{rp.name}</p>
-                        <p className="font-body text-[10px] text-text-tertiary truncate">
-                          {rp.team || 'FA'} · #{rp.positionRank ?? '—'} {rp.position}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                        <span className="font-mono text-sm text-text-secondary tabular-nums">
-                          {(rp.value ?? 0).toLocaleString()}
-                        </span>
-                        <span className={`font-mono text-xs font-semibold tabular-nums w-14 text-right ${
-                          delta > 0 ? 'text-success' : delta < 0 ? 'text-danger' : 'text-text-tertiary'
-                        }`}>
-                          {delta > 0 ? '+' : ''}{delta.toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
 
           {/* Role / opportunity */}
           {role && (
@@ -318,6 +424,110 @@ export default function PlayerProfileDrawer({ player, onClose, playerMap = {}, c
               </div>
             </div>
           )}
+
+          {/* Roster Context */}
+          {league && playerContext !== 'loading' && (
+            <div className="rounded-xl bg-bg-card border border-border-default px-3 py-3">
+              <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
+                {playerContext === 'mine' ? 'Your Roster' : playerContext === 'opponent' ? 'Roster' : `Your ${player.position ?? 'Position'}`}
+              </p>
+
+              {playerContext === 'mine' && (
+                <>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="font-body text-xs text-text-secondary">Slot:</span>
+                    <span className="font-body text-xs font-semibold text-text-primary">
+                      {slotLabel(myRosterPlayer)}
+                    </span>
+                  </div>
+                  {competitors.length > 0 && (
+                    <>
+                      <p className="font-body text-[10px] text-text-tertiary mb-1.5">Position group</p>
+                      <div className="flex flex-col gap-0">
+                        {competitors.map((comp, i) => (
+                          <div
+                            key={comp.sleeperId}
+                            className={`flex items-center justify-between py-1.5 ${i < competitors.length - 1 ? 'border-b border-border-default' : ''}`}
+                          >
+                            <p className="font-body text-xs text-text-primary truncate flex-1 min-w-0">{comp.name}</p>
+                            <span className="font-mono text-xs text-text-secondary tabular-nums ml-2 flex-shrink-0">
+                              {(comp.value ?? 0).toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+
+              {playerContext === 'opponent' && ownerRoster && (
+                <div>
+                  <p className="font-body text-sm text-text-primary font-medium">
+                    {getTeamName(ownerRoster.owner)}
+                  </p>
+                  {ownerRoster.owner?.username && (
+                    <p className="font-body text-[11px] text-text-tertiary mt-0.5">
+                      @{ownerRoster.owner.username}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {playerContext === 'fa' && (
+                <>
+                  {fillsNeed && (
+                    <div className="mb-2">
+                      <span className="font-body text-[9px] font-bold uppercase tracking-wider text-success bg-success/15 border border-success/30 rounded px-1.5 py-0.5">
+                        Fills Need
+                      </span>
+                    </div>
+                  )}
+                  {myPositionPlayers.length > 0 ? (
+                    <div className="flex flex-col gap-0">
+                      {myPositionPlayers.map((rp, i) => {
+                        const delta = (player.value ?? 0) - (rp.value ?? 0)
+                        return (
+                          <div
+                            key={rp.sleeperId}
+                            className={`flex items-center justify-between py-2 ${i < myPositionPlayers.length - 1 ? 'border-b border-border-default' : ''}`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="font-body text-sm text-text-primary truncate">{rp.name}</p>
+                              <p className="font-body text-[10px] text-text-tertiary truncate">
+                                {rp.team || 'FA'} · #{rp.positionRank ?? '—'} {rp.position}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                              <span className="font-mono text-sm text-text-secondary tabular-nums">
+                                {(rp.value ?? 0).toLocaleString()}
+                              </span>
+                              <span className={`font-mono text-xs font-semibold tabular-nums w-14 text-right ${
+                                delta > 0 ? 'text-success' : delta < 0 ? 'text-danger' : 'text-text-tertiary'
+                              }`}>
+                                {delta > 0 ? '+' : ''}{delta.toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <p className="font-body text-xs text-text-tertiary italic">No {player.position} on your roster</p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Analyze Trade button */}
+          <button
+            onClick={handleAnalyzeTrade}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-accent text-white font-body font-semibold text-sm active:opacity-80 transition-opacity"
+          >
+            Analyze Trade
+            <ArrowRight size={16} strokeWidth={2} />
+          </button>
 
         </div>
       </div>

@@ -4,7 +4,7 @@ import { AlertTriangle } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getTeamName } from '../../hooks/useLeague'
 import { analyzeTrade, getTradeVerdict, suggestFairPackage, getCounterSuggestion, adjustVerdictForInjuries } from '../../utils/tradeAnalysis'
-import { fetchPlayerIntelligence } from '../../utils/playerIntelligence'
+import { fetchPlayerNews } from '../../hooks/usePlayerNews'
 import TradeBuilder from './TradeBuilder'
 import TradeVerdict from './TradeVerdict'
 import LoadingSpinner from '../shared/LoadingSpinner'
@@ -83,12 +83,14 @@ export default function TradeAnalyzer() {
     [whatsFairTarget, league]
   )
 
-  // Fire parallel Anthropic agent calls when ≥1 non-pick player is on each side
+  // Fetch Sleeper news for all non-pick players in the trade
   useEffect(() => {
-    const givePlayers = giveAssets.filter(a => a.type === 'player').slice(0, 3)
-    const getPlayers  = getAssets.filter(a => a.type === 'player').slice(0, 3)
+    const allPlayers = [
+      ...giveAssets.filter(a => a.type === 'player').slice(0, 3).map(p => ({ ...p, side: 'give' })),
+      ...getAssets.filter(a => a.type === 'player').slice(0, 3).map(p => ({ ...p, side: 'get' })),
+    ]
 
-    if (!givePlayers.length || !getPlayers.length) {
+    if (!allPlayers.length) {
       setLiveIntelligence(null)
       setIntelligenceLoading(false)
       return
@@ -98,12 +100,11 @@ export default function TradeAnalyzer() {
     setLiveIntelligence(null)
     setIntelligenceLoading(true)
 
-    const playersWithSide = [
-      ...givePlayers.map(p => ({ ...p, side: 'give' })),
-      ...getPlayers.map(p =>  ({ ...p, side: 'get'  })),
-    ]
-
-    fetchPlayerIntelligence(playersWithSide)
+    Promise.all(
+      allPlayers.map(p =>
+        fetchPlayerNews(p.sleeperId).then(r => ({ ...r, playerName: p.name, side: p.side }))
+      )
+    )
       .then(results => {
         if (!cancelled) {
           setLiveIntelligence(results)

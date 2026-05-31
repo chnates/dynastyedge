@@ -7,16 +7,22 @@ const VERDICT_STYLES = {
   Counter: { Icon: RefreshCw,    color: 'text-warning',  bg: 'bg-warning/10 border-warning/30' },
 }
 
-const INJURY_STATUS_STYLE = {
-  Healthy:      { dot: 'bg-success',  text: 'text-success',  label: 'Healthy' },
-  Questionable: { dot: 'bg-warning',  text: 'text-warning',  label: 'Questionable' },
-  Out:          { dot: 'bg-danger',   text: 'text-danger',   label: 'Out' },
-}
+const FLAG_DOT = { red: 'bg-danger', yellow: 'bg-warning', green: 'bg-success' }
+const FLAG_LABEL = { red: 'Injured', yellow: 'Questionable', green: 'Active' }
+const FLAG_TEXT  = { red: 'text-danger', yellow: 'text-warning', green: 'text-success' }
 
-const USAGE_ICON = {
-  increasing: { symbol: '↑', color: 'text-success' },
-  stable:     { symbol: '→', color: 'text-text-secondary' },
-  declining:  { symbol: '↓', color: 'text-danger' },
+function relativeDate(published) {
+  if (!published) return ''
+  const ts = published > 1e12 ? published : published * 1000
+  const diff = Date.now() - ts
+  if (diff < 0) return 'just now'
+  const mins = Math.floor(diff / 60000)
+  if (mins < 2) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
 }
 
 function ValueSummary({ giveTotal, getTotal }) {
@@ -49,54 +55,41 @@ function ValueSummary({ giveTotal, getTotal }) {
   )
 }
 
-function PlayerIntelCard({ intel }) {
-  if (intel.error) {
-    return (
-      <div className="px-4 py-3 border-b border-border-default dark:border-border-default last:border-b-0">
-        <p className="font-body text-xs font-semibold text-text-primary dark:text-text-primary mb-0.5">
-          {intel.playerName}
-          <span className="ml-1.5 font-normal text-[10px] uppercase tracking-wide text-text-tertiary dark:text-text-tertiary">
-            {intel.side === 'give' ? 'giving' : 'getting'}
-          </span>
-        </p>
-        <p className="font-body text-xs text-text-tertiary dark:text-text-tertiary">
-          Live data unavailable for {intel.playerName}
-        </p>
-      </div>
-    )
-  }
-
-  const injuryStyle = INJURY_STATUS_STYLE[intel.injuryStatus] ?? INJURY_STATUS_STYLE.Healthy
-  const usageStyle  = USAGE_ICON[intel.usageTrend] ?? USAGE_ICON.stable
+function PlayerNewsCard({ intel }) {
+  const flag  = intel.injuryFlag ?? 'green'
+  const headlines = intel.headlines ?? []
 
   return (
     <div className="px-4 py-3 border-b border-border-default dark:border-border-default last:border-b-0">
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex items-center justify-between mb-1.5">
         <p className="font-body text-xs font-semibold text-text-primary dark:text-text-primary">
           {intel.playerName}
           <span className="ml-1.5 font-normal text-[10px] uppercase tracking-wide text-text-tertiary dark:text-text-tertiary">
             {intel.side === 'give' ? 'giving' : 'getting'}
           </span>
         </p>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className={`font-mono text-sm font-bold ${usageStyle.color}`} title={`Usage: ${intel.usageTrend}`}>
-            {usageStyle.symbol}
-          </span>
-          <span className={`flex items-center gap-1 font-body text-[11px] ${injuryStyle.text}`}>
-            <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${injuryStyle.dot}`} />
-            {injuryStyle.label}
-          </span>
-        </div>
+        <span className={`flex items-center gap-1 font-body text-[11px] shrink-0 ml-2 ${FLAG_TEXT[flag]}`}>
+          <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${FLAG_DOT[flag]}`} />
+          {FLAG_LABEL[flag]}
+        </span>
       </div>
-      {intel.depthChartNote && (
-        <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary mb-0.5">
-          {intel.depthChartNote}
-        </p>
-      )}
-      {intel.newsAlert && (
-        <p className="font-body text-[11px] text-warning mt-1 leading-relaxed">
-          ⚠️ {intel.newsAlert}
-        </p>
+      {headlines.length === 0 ? (
+        <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary italic">No recent news</p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {headlines.slice(0, 2).map((item, i) => (
+            <div key={i} className="flex items-baseline justify-between gap-2">
+              <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-snug flex-1 min-w-0 truncate">
+                {item.title}
+              </p>
+              {item.published && (
+                <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary shrink-0">
+                  {relativeDate(item.published)}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )
@@ -125,7 +118,7 @@ export default function TradeVerdict({
   const vs = verdict ? VERDICT_STYLES[verdict.verdict] : null
 
   const injuredWarnings = liveIntelligence
-    ? liveIntelligence.filter(i => !i.error && i.injuryStatus === 'Out')
+    ? liveIntelligence.filter(i => i.injuryFlag === 'red')
     : []
 
   return (
@@ -229,7 +222,7 @@ export default function TradeVerdict({
               <div key={p.playerName} className="flex items-start gap-2 mb-1 last:mb-0">
                 <AlertTriangle size={13} className="text-danger shrink-0 mt-0.5" strokeWidth={2} />
                 <p className="font-body text-xs text-danger leading-relaxed">
-                  {p.playerName} is currently {p.injuryStatus} — this may affect trade value
+                  {p.playerName} is currently injured — verify status before accepting
                 </p>
               </div>
             ))}
@@ -262,7 +255,7 @@ export default function TradeVerdict({
         <div className="flex items-center justify-center gap-2 py-3 mb-4 rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default">
           <div className="h-3.5 w-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin" />
           <span className="font-body text-xs text-text-secondary dark:text-text-secondary">
-            Researching players…
+            Loading player news…
           </span>
         </div>
       )}
@@ -277,7 +270,7 @@ export default function TradeVerdict({
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
           </div>
           {liveIntelligence.map(intel => (
-            <PlayerIntelCard key={intel.playerName} intel={intel} />
+            <PlayerNewsCard key={intel.playerName} intel={intel} />
           ))}
         </div>
       )}

@@ -1,6 +1,6 @@
 import TrendArrow from '../shared/TrendArrow'
 
-export default function PlayerCard({ player, showSlot = false }) {
+export default function PlayerCard({ player, showSlot = false, onClick }) {
   const {
     name,
     position,
@@ -13,8 +13,13 @@ export default function PlayerCard({ player, showSlot = false }) {
     isStarter,
   } = player
 
+  const Wrapper = onClick ? 'button' : 'div'
+  const wrapperProps = onClick
+    ? { onClick, className: 'w-full text-left py-2.5 border-b border-border-default dark:border-border-default last:border-0 active:opacity-60 transition-opacity' }
+    : { className: 'py-2.5 border-b border-border-default dark:border-border-default last:border-0' }
+
   return (
-    <div className="py-2.5 border-b border-border-default dark:border-border-default last:border-0">
+    <Wrapper {...wrapperProps}>
       {/* Main row */}
       <div className="flex items-center gap-2">
         {/* Starter indicator */}
@@ -69,6 +74,6 @@ export default function PlayerCard({ player, showSlot = false }) {
           </>
         )}
       </div>
-    </div>
+    </Wrapper>
   )
 }
