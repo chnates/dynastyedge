@@ -122,7 +122,10 @@ function slotLabel(rosterPlayer) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function PlayerProfileDrawer({ player, onClose, playerMap = {}, csvColumns = [] }) {
+export default function PlayerProfileDrawer({
+  player, onClose, playerMap = {}, csvColumns = [],
+  isDraftContext = false, note = '', onNoteChange = null,
+}) {
   const overlayRef = useRef(null)
   const sheetRef   = useRef(null)
   const scrollRef  = useRef(null)
@@ -565,6 +568,22 @@ export default function PlayerProfileDrawer({ player, onClose, playerMap = {}, c
                   )}
                 </>
               )}
+            </div>
+          )}
+
+          {/* Scout Note (Draft Board context only) */}
+          {isDraftContext && (
+            <div key={player.sleeperId} className="rounded-xl bg-bg-card border border-border-default px-3 py-3">
+              <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
+                Scout Note
+              </p>
+              <textarea
+                defaultValue={note}
+                placeholder="Add a note about this prospect…"
+                onBlur={e => onNoteChange?.(player.sleeperId, e.target.value)}
+                rows={3}
+                className="w-full bg-transparent font-body text-sm text-text-primary placeholder:text-text-tertiary resize-none focus:outline-none leading-snug"
+              />
             </div>
           )}
 
