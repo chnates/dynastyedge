@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { AlertTriangle } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
@@ -39,8 +39,9 @@ export default function TradeAnalyzer() {
   const { league, loading, error, retry } = useLeagueContext()
   const location = useLocation()
 
-  const initId     = location.state?.opponentRosterId
-  const initTarget = location.state?.whatsFairTarget
+  const initId        = location.state?.opponentRosterId
+  const initTarget    = location.state?.whatsFairTarget
+  const preloadGive   = location.state?.preloadGivePlayer
 
   const [selectedOpponentId, setSelectedOpponentId] = useState(
     initId !== undefined && initId !== null ? Number(initId) : null
@@ -52,6 +53,7 @@ export default function TradeAnalyzer() {
     initTarget ? { ...initTarget, type: 'player', id: String(initTarget.sleeperId) } : null
   )
   const [assetsPreloaded, setAssetsPreloaded] = useState(false)
+  const preloadGiveRef = useRef(preloadGive ? makeAsset(preloadGive, 'player') : null)
 
   const [liveIntelligence, setLiveIntelligence]     = useState(null)
   const [intelligenceLoading, setIntelligenceLoading] = useState(false)
@@ -151,12 +153,17 @@ export default function TradeAnalyzer() {
   function handleOpponentChange(rawValue) {
     const id = rawValue ? Number(rawValue) : null
     setSelectedOpponentId(id)
-    setGiveAssets([])
     setGetAssets([])
     setWhatsFairMode(false)
     setWhatsFairTarget(null)
     setLiveIntelligence(null)
     setIntelligenceLoading(false)
+    if (preloadGiveRef.current) {
+      setGiveAssets([preloadGiveRef.current])
+      preloadGiveRef.current = null
+    } else {
+      setGiveAssets([])
+    }
   }
 
   function toggleGive(item, type) {

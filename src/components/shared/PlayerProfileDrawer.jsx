@@ -283,7 +283,7 @@ export default function PlayerProfileDrawer({
     if (playerContext === 'opponent' && ownerRoster) {
       navigate('/trade/analyze', { state: { opponentRosterId: ownerRoster.rosterId, whatsFairTarget: player } })
     } else {
-      navigate('/trade/analyze')
+      navigate('/trade/analyze', { state: { preloadGivePlayer: player } })
     }
     onClose()
   }
