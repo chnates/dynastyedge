@@ -51,6 +51,7 @@ export default function TradeAnalyzer() {
   const [whatsFairTarget, setWhatsFairTarget] = useState(
     initTarget ? { ...initTarget, type: 'player', id: String(initTarget.sleeperId) } : null
   )
+  const [assetsPreloaded, setAssetsPreloaded] = useState(false)
 
   const [liveIntelligence, setLiveIntelligence]     = useState(null)
   const [intelligenceLoading, setIntelligenceLoading] = useState(false)
@@ -82,6 +83,35 @@ export default function TradeAnalyzer() {
     () => whatsFairTarget ? suggestFairPackage(whatsFairTarget, league?.myRoster) : null,
     [whatsFairTarget, league]
   )
+
+  // Pre-populate YOU GET and YOU GIVE when arriving from What's Fair? navigation
+  useEffect(() => {
+    if (!initTarget || assetsPreloaded) return
+    if (!league?.myRoster || !opponentRoster || !fairPackage) return
+
+    // YOU GET: target player from opponent's roster
+    const targetPlayer = opponentRoster.players.find(
+      p => String(p.sleeperId) === String(initTarget.sleeperId)
+    ) ?? { ...initTarget }
+    setGetAssets([makeAsset(targetPlayer, 'player')])
+
+    // YOU GIVE: map each fair package asset back to its full roster object
+    const giveItems = fairPackage.assets.map(a => {
+      if (a.type === 'player') {
+        const player = league.myRoster.players.find(p => p.sleeperId === a.sleeperId)
+        return player ? makeAsset(player, 'player') : null
+      }
+      // pick: match by reconstructed label (season + round suffix)
+      const pick = league.myRoster.picks.find(p => {
+        const suffix = ['', '1st', '2nd', '3rd', '4th'][p.round] ?? `R${p.round}`
+        return `${p.season} ${suffix}` === a.name
+      })
+      return pick ? makeAsset(pick, 'pick') : null
+    }).filter(Boolean)
+
+    setGiveAssets(giveItems)
+    setAssetsPreloaded(true)
+  }, [initTarget, assetsPreloaded, league, opponentRoster, fairPackage])
 
   // Fetch Sleeper news for all non-pick players in the trade
   useEffect(() => {
