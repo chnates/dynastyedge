@@ -1,7 +1,21 @@
 import { getTeamName } from '../../hooks/useLeague'
 import { getPositionalStrength } from '../../utils/rosterAnalysis'
 import WinWindowBadge from '../shared/WinWindowBadge'
-import { POSITIONS, PICK_YEARS } from '../../constants'
+import { POSITIONS, PICK_YEARS, MY_ROSTER_ID } from '../../constants'
+
+const POSITION_DEPTH = { QB: 3, RB: 5, WR: 5, TE: 3 }
+
+function getPositionalTrend(roster) {
+  const result = {}
+  POSITIONS.forEach(pos => {
+    const players = roster.players
+      .filter(p => p.position === pos && !p.isIR)
+      .sort((a, b) => b.value - a.value)
+      .slice(0, POSITION_DEPTH[pos])
+    result[pos] = players.reduce((s, p) => s + (p.trend30Day ?? 0), 0)
+  })
+  return result
+}
 
 const ROUND_CLASSES = {
   1: { badge: 'bg-amber-100  dark:bg-[#3D2E00] text-amber-800  dark:text-amber-500', text: 'text-amber-800  dark:text-amber-500' },
@@ -133,27 +147,43 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
           </div>
 
           {/* Positional strength bars */}
-          <div className="flex gap-1.5 mb-2.5">
-            {POSITIONS.map(pos => {
-              const strength = getPositionalStrength(roster)
-              const avg = leagueAverages?.[pos] ?? 1
-              const fillPct = Math.min(100, Math.round((strength[pos] / (avg * 2)) * 100))
-              const above = strength[pos] >= avg
-              return (
-                <div key={pos} className="flex flex-col items-center gap-0.5">
-                  <div className="h-1.5 w-8 rounded-full bg-border-default dark:bg-border-default overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${above ? 'bg-accent' : 'bg-text-tertiary dark:bg-text-tertiary'}`}
-                      style={{ width: `${fillPct}%` }}
-                    />
-                  </div>
-                  <span className={`font-body text-[9px] font-semibold uppercase tracking-wide ${above ? 'text-accent' : 'text-text-tertiary dark:text-text-tertiary'}`}>
-                    {pos}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
+          {(() => {
+            const posTrend = getPositionalTrend(roster)
+            const isMyTeam = roster.rosterId === MY_ROSTER_ID
+            return (
+              <div className="flex gap-1.5 mb-2.5">
+                {POSITIONS.map(pos => {
+                  const strength = getPositionalStrength(roster)
+                  const avg = leagueAverages?.[pos] ?? 1
+                  const fillPct = Math.min(100, Math.round((strength[pos] / (avg * 2)) * 100))
+                  const above = strength[pos] >= avg
+                  const trend = posTrend[pos]
+                  const arrow = trend > 50 ? '↑' : trend < -50 ? '↓' : '→'
+                  const trendColor = trend > 50
+                    ? 'text-success'
+                    : trend < -50
+                      ? (isMyTeam ? 'text-warning' : 'text-danger')
+                      : 'text-text-tertiary'
+                  return (
+                    <div key={pos} className="flex flex-col items-center gap-0.5">
+                      <div className="h-1.5 w-8 rounded-full bg-border-default dark:bg-border-default overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${above ? 'bg-accent' : 'bg-text-tertiary dark:bg-text-tertiary'}`}
+                          style={{ width: `${fillPct}%` }}
+                        />
+                      </div>
+                      <span className={`font-body text-[9px] font-semibold uppercase tracking-wide ${above ? 'text-accent' : 'text-text-tertiary dark:text-text-tertiary'}`}>
+                        {pos}
+                      </span>
+                      <span className={`font-body text-[8px] leading-none ${trendColor}`}>
+                        {arrow}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
 
           {/* Footer: pick counts + FAAB */}
           <div className="flex items-center justify-between">

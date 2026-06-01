@@ -45,11 +45,13 @@ export default function DynastyEdgeLogo({ theme = 'dark', size = 88 }) {
 
       {/* Football icon — top right */}
       <g stroke={c.secondary} strokeWidth="0.9" fill="none" strokeLinecap="round">
-        <ellipse cx="84" cy="13" rx="8" ry="4" />
-        <line x1="84" y1="9" x2="84" y2="17" />
-        <line x1="82" y1="11" x2="86" y2="11" />
-        <line x1="82" y1="13" x2="86" y2="13" />
-        <line x1="82" y1="15" x2="86" y2="15" />
+        <ellipse cx="84" cy="13" rx="8.5" ry="4.5" />
+        <line x1="84" y1="8.5" x2="84" y2="17.5" />
+        {/* Lace marks — tightly grouped in center so it reads as lacing, not a globe */}
+        <line x1="82.5" y1="11.2" x2="85.5" y2="11.2" />
+        <line x1="82.5" y1="12.4" x2="85.5" y2="12.4" />
+        <line x1="82.5" y1="13.6" x2="85.5" y2="13.6" />
+        <line x1="82.5" y1="14.8" x2="85.5" y2="14.8" />
       </g>
 
       {/* "De" — dominant center element */}

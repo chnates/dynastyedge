@@ -7,6 +7,7 @@ import LoadingSpinner from '../shared/LoadingSpinner'
 import PlayerCard from './PlayerCard'
 import PickBadge from './PickBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
+import AgeCurveSection from './AgeCurveSection'
 
 const POSITION_ORDER = ['QB', 'RB', 'WR', 'TE']
 
@@ -128,6 +129,15 @@ export default function RosterView() {
         </div>
 
       </div>
+
+      {/* ── Age Curve (own roster only) ── */}
+      {!selectedRosterId && (
+        <AgeCurveSection
+          players={displayRoster.players}
+          avgStarterAge={displayRoster.avgStarterAge}
+          allRosters={league.allRosters}
+        />
+      )}
 
       {/* ── Position groups ── */}
       {POSITION_ORDER.map(pos => {

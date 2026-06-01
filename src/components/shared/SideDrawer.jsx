@@ -76,7 +76,7 @@ export default function SideDrawer({
         aria-hidden={!isOpen}
       >
         {/* Branding */}
-        <div className="px-5 pt-5 pb-6">
+        <div className="px-5 pt-5 pb-4">
           <DynastyEdgeLogo theme={isDark ? 'dark' : 'light'} size={88} />
           {myTeamName && (
             <p className="font-body text-[11px] text-text-tertiary mt-2 select-none">
@@ -113,7 +113,7 @@ export default function SideDrawer({
         </nav>
 
         {/* Utility controls */}
-        <div className="px-3 mt-6 pb-2">
+        <div className="px-3 mt-4 pb-4">
           <div className="h-px bg-border-default mx-2 mb-3" />
 
           {lastUpdated && (
