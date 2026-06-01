@@ -8,6 +8,7 @@ import PlayerCard from './PlayerCard'
 import PickBadge from './PickBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import AgeCurveSection from './AgeCurveSection'
+import RosterActionItems from './RosterActionItems'
 
 const POSITION_ORDER = ['QB', 'RB', 'WR', 'TE']
 
@@ -42,7 +43,7 @@ function ErrorState({ message, onRetry }) {
 }
 
 export default function RosterView() {
-  const { league, loading, error, retry } = useLeagueContext()
+  const { league, loading, error, retry, nflState } = useLeagueContext()
   const location = useLocation()
   const navigate = useNavigate()
   const [selectedPlayer, setSelectedPlayer] = useState(null)
@@ -129,6 +130,11 @@ export default function RosterView() {
         </div>
 
       </div>
+
+      {/* ── Action Items banner (own roster only) ── */}
+      {!selectedRosterId && (
+        <RosterActionItems myRoster={league.myRoster} nflState={nflState} />
+      )}
 
       {/* ── Age Curve (own roster only) ── */}
       {!selectedRosterId && (

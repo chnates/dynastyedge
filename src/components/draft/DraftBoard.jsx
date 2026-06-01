@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import {
   Upload, Save, ChevronUp, ChevronDown, AlertTriangle,
-  FileText, GripVertical, RotateCcw,
+  FileText, GripVertical, RotateCcw, Trash2,
 } from 'lucide-react'
 import {
   DndContext, PointerSensor, TouchSensor, KeyboardSensor,
@@ -819,19 +819,24 @@ export default function DraftBoard() {
 
         {/* ── CSV column chips (user-uploaded only; pre-loaded FP shown via column header) ── */}
         {csvColumns.length > 0 && (
-          <div className="px-4 mb-3 flex flex-wrap gap-1.5">
-            {csvColumns.map(col => (
-              <div key={col.name} className="flex items-center gap-1 px-2 py-0.5 rounded bg-bg-card border border-border-default">
-                <span className="font-body text-[10px] text-text-secondary">{col.name}</span>
-                <button
-                  onClick={() => removeColumn(col.name)}
-                  className="text-text-tertiary hover:text-danger transition-colors ml-0.5 leading-none text-xs"
-                  aria-label={`Remove ${col.name}`}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
+          <div className="px-4 mb-3">
+            <div className="flex flex-wrap gap-1.5 mb-1.5">
+              {csvColumns.map(col => (
+                <div key={col.name} className="flex items-center gap-1 px-2 py-0.5 rounded bg-bg-card border border-border-default">
+                  <span className="font-body text-[10px] text-text-secondary">{col.name}</span>
+                  <button
+                    onClick={() => removeColumn(col.name)}
+                    className="text-text-tertiary hover:text-danger transition-colors ml-0.5 leading-none"
+                    aria-label={`Remove ${col.name}`}
+                  >
+                    <Trash2 size={11} strokeWidth={1.75} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p className="font-body text-[10px] text-text-tertiary">
+              Commit rankings.json to <span className="font-mono">public/rankings.json</span> via Claude Code to sync across devices.
+            </p>
           </div>
         )}
 
