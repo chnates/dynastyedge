@@ -5,7 +5,7 @@ import { useLeagueContext } from '../../context/LeagueContext'
 const SUB_TABS = [
   { label: 'Partners',    to: '/trade',            end: true  },
   { label: 'Analyzer',   to: '/trade/analyze',    end: false },
-  { label: "What's Fair", to: '/trade/whats-fair', end: false },
+  { label: 'Targets', to: '/trade/whats-fair', end: false },
 ]
 
 function DeadlineBanner() {

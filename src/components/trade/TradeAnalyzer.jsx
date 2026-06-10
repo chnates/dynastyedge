@@ -1,13 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import { AlertTriangle, CheckCircle2, RefreshCw, XCircle } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getTeamName } from '../../hooks/useLeague'
 import { analyzeTrade, getTradeVerdict, suggestFairPackage, getCounterSuggestion, adjustVerdictForInjuries } from '../../utils/tradeAnalysis'
+import { rankTradePartners } from '../../utils/rosterAnalysis'
 import { fetchPlayerNews } from '../../hooks/usePlayerNews'
 import TradeBuilder from './TradeBuilder'
 import TradeVerdict from './TradeVerdict'
+import WinWindowBadge from '../shared/WinWindowBadge'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
+
+const DRAFT_KEY = 'dynastyedge_trade_draft'
+
+function loadDraft() {
+  try { return JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? 'null') }
+  catch { return null }
+}
 
 function makeAsset(item, type) {
   if (type === 'player') {
@@ -20,6 +30,107 @@ function makeAsset(item, type) {
   }
 }
 
+// Map a suggestFairPackage result back to full roster asset objects
+function mapPackageToAssets(fairPackage, myRoster) {
+  if (!fairPackage || !myRoster) return []
+  return fairPackage.assets.map(a => {
+    if (a.type === 'player') {
+      const player = myRoster.players.find(p => p.sleeperId === a.sleeperId)
+      return player ? makeAsset(player, 'player') : null
+    }
+    // pick: match by reconstructed label (season + round suffix)
+    const pick = myRoster.picks.find(p => {
+      const suffix = ['', '1st', '2nd', '3rd', '4th'][p.round] ?? `R${p.round}`
+      return `${p.season} ${suffix}` === a.name
+    })
+    return pick ? makeAsset(pick, 'pick') : null
+  }).filter(Boolean)
+}
+
+const VERDICT_CHIP = {
+  Accept:  { Icon: CheckCircle2, cls: 'text-success' },
+  Decline: { Icon: XCircle,      cls: 'text-danger' },
+  Counter: { Icon: RefreshCw,    cls: 'text-warning' },
+}
+
+// Pinned below the sub-tab bar so totals + verdict stay visible while
+// scrolling the builder and verdict panels.
+function StickySummary({ giveTotal, getTotal, verdict }) {
+  const diff   = getTotal - giveTotal
+  const pct    = Math.round(Math.abs(diff) / Math.max(giveTotal, getTotal, 1) * 100)
+  const isEven = pct <= 5
+  const chip   = verdict ? VERDICT_CHIP[verdict.verdict] : null
+
+  return (
+    <div className="sticky top-[37px] z-[4] -mx-4 mb-3 px-4 py-2 bg-bg-secondary/95 dark:bg-bg-secondary/95 backdrop-blur-sm border-b border-border-default dark:border-border-default flex items-center gap-2">
+      <span className="flex-1 font-body text-[11px] text-text-secondary dark:text-text-secondary truncate">
+        Give <span className="font-mono text-xs text-text-primary dark:text-text-primary tabular-nums">{giveTotal.toLocaleString()}</span>
+        <span className="mx-1 text-text-tertiary">⇄</span>
+        Get <span className="font-mono text-xs text-text-primary dark:text-text-primary tabular-nums">{getTotal.toLocaleString()}</span>
+      </span>
+      <span className={`font-mono text-[11px] font-semibold tabular-nums shrink-0 ${
+        isEven ? 'text-text-tertiary' : diff > 0 ? 'text-success' : 'text-danger'
+      }`}>
+        {isEven ? '≈ even' : `${diff > 0 ? '+' : '-'}${pct}%`}
+      </span>
+      {chip && (
+        <span className={`flex items-center gap-1 font-body text-[11px] font-bold uppercase tracking-wide shrink-0 ${chip.cls}`}>
+          <chip.Icon size={13} strokeWidth={2.25} />
+          {verdict.verdict}
+        </span>
+      )}
+    </div>
+  )
+}
+
+// Partner intelligence carried in from the Trade Partner analysis so "what
+// should I offer them" is answerable while building.
+function OpponentContextStrip({ partner }) {
+  return (
+    <div className="mb-4 px-3 py-2.5 rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default flex flex-col gap-1.5">
+      <div className="flex items-center gap-x-3 gap-y-1.5 flex-wrap">
+        {partner.theirNeeds.length > 0 && (
+          <span className="flex items-center gap-1">
+            <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">Needs</span>
+            {partner.theirNeeds.map(pos => (
+              <span key={pos} className="inline-flex items-center rounded px-1.5 py-0.5 font-body text-[10px] font-bold uppercase bg-danger/10 text-danger">
+                {pos}
+              </span>
+            ))}
+          </span>
+        )}
+        {partner.theirHaves.length > 0 && (
+          <span className="flex items-center gap-1">
+            <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">Has</span>
+            {partner.theirHaves.map(pos => (
+              <span key={pos} className="inline-flex items-center rounded px-1.5 py-0.5 font-body text-[10px] font-bold uppercase bg-success/10 text-success">
+                {pos}
+              </span>
+            ))}
+          </span>
+        )}
+        <span className="flex items-center gap-1">
+          <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">Picks</span>
+          <span className={`font-body text-[10px] font-semibold ${
+            partner.pickCapStatus === 'Rich' ? 'text-success'
+              : partner.pickCapStatus === 'Depleted' ? 'text-danger'
+              : 'text-text-secondary dark:text-text-secondary'
+          }`}>
+            {partner.pickCapStatus}
+          </span>
+        </span>
+        <WinWindowBadge tier={partner.winWindowTier} />
+      </div>
+      {partner.mismatchWarning && (
+        <div className="flex items-start gap-1.5">
+          <AlertTriangle size={11} strokeWidth={2} className="text-warning shrink-0 mt-0.5" />
+          <span className="font-body text-[10px] text-warning leading-tight">{partner.mismatchWarning}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function TradeAnalyzer() {
   const { league, loading, error, retry } = useLeagueContext()
   const location = useLocation()
@@ -28,25 +139,40 @@ export default function TradeAnalyzer() {
   const initTarget    = location.state?.whatsFairTarget
   const preloadGive   = location.state?.preloadGivePlayer
 
-  const [selectedOpponentId, setSelectedOpponentId] = useState(
-    initId !== undefined && initId !== null ? Number(initId) : null
-  )
-  const [giveAssets, setGiveAssets]       = useState([])
-  const [getAssets,  setGetAssets]        = useState([])
-  const [whatsFairMode, setWhatsFairMode] = useState(!!initTarget)
-  const [whatsFairTarget, setWhatsFairTarget] = useState(
-    initTarget ? { ...initTarget, type: 'player', id: String(initTarget.sleeperId) } : null
-  )
+  // Navigation state takes priority; otherwise restore the session draft so
+  // hopping to another tab and back doesn't lose a half-built trade.
+  const hasNavState = (initId !== undefined && initId !== null) || !!initTarget || !!preloadGive
+  const draftRef = useRef(hasNavState ? null : loadDraft())
+  const draft = draftRef.current
+
+  const [selectedOpponentId, setSelectedOpponentId] = useState(() => {
+    if (hasNavState) return initId !== undefined && initId !== null ? Number(initId) : null
+    return draft?.opponentId ?? null
+  })
+  const [giveAssets, setGiveAssets] = useState(() => draft?.giveAssets ?? [])
+  const [getAssets,  setGetAssets]  = useState(() => draft?.getAssets ?? [])
+  const [whatsFairTarget, setWhatsFairTarget] = useState(() => {
+    if (initTarget) return { ...initTarget, type: 'player', id: String(initTarget.sleeperId) }
+    return draft?.whatsFairTarget ?? null
+  })
   const [assetsPreloaded, setAssetsPreloaded] = useState(false)
   const preloadGiveRef = useRef(preloadGive ? makeAsset(preloadGive, 'player') : null)
 
-  const [liveIntelligence, setLiveIntelligence]     = useState(null)
+  const [liveIntelligence, setLiveIntelligence]       = useState(null)
   const [intelligenceLoading, setIntelligenceLoading] = useState(false)
 
   const opponentRoster = useMemo(
     () => league?.allRosters?.find(r => r.rosterId === selectedOpponentId) ?? null,
     [league, selectedOpponentId]
   )
+
+  const partnerInfo = useMemo(() => {
+    if (!league?.myRoster || !league?.allRosters?.length || !selectedOpponentId) return null
+    const { partners } = rankTradePartners(league.myRoster, league.allRosters)
+    return partners.find(p => p.rosterId === selectedOpponentId) ?? null
+  }, [league, selectedOpponentId])
+
+  const bothSides = giveAssets.length > 0 && getAssets.length > 0
 
   const analysis = useMemo(
     () => analyzeTrade(giveAssets, getAssets, league?.myRoster, opponentRoster, league?.allRosters),
@@ -62,41 +188,37 @@ export default function TradeAnalyzer() {
   )
 
   const counterSuggestion = useMemo(() => {
-    if (adjustedVerdict?.verdict !== 'Counter') return null
-    return getCounterSuggestion(analysis, league?.myRoster, opponentRoster)
-  }, [adjustedVerdict, analysis, league, opponentRoster])
+    if (!bothSides || adjustedVerdict?.verdict !== 'Counter') return null
+    return getCounterSuggestion(analysis, league?.myRoster, opponentRoster, giveAssets, getAssets)
+  }, [bothSides, adjustedVerdict, analysis, league, opponentRoster, giveAssets, getAssets])
 
   const fairPackage = useMemo(
     () => whatsFairTarget ? suggestFairPackage(whatsFairTarget, league?.myRoster) : null,
     [whatsFairTarget, league]
   )
 
-  // Pre-populate YOU GET and YOU GIVE when arriving from What's Fair? navigation
+  // Persist the in-progress trade for the session
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
+        opponentId: selectedOpponentId,
+        giveAssets,
+        getAssets,
+        whatsFairTarget,
+      }))
+    } catch { /* storage full or unavailable — draft is best-effort */ }
+  }, [selectedOpponentId, giveAssets, getAssets, whatsFairTarget])
+
+  // Pre-populate YOU GET and YOU GIVE when arriving from Targets navigation
   useEffect(() => {
     if (!initTarget || assetsPreloaded) return
     if (!league?.myRoster || !opponentRoster || !fairPackage) return
 
-    // YOU GET: target player from opponent's roster
     const targetPlayer = opponentRoster.players.find(
       p => String(p.sleeperId) === String(initTarget.sleeperId)
     ) ?? { ...initTarget }
     setGetAssets([makeAsset(targetPlayer, 'player')])
-
-    // YOU GIVE: map each fair package asset back to its full roster object
-    const giveItems = fairPackage.assets.map(a => {
-      if (a.type === 'player') {
-        const player = league.myRoster.players.find(p => p.sleeperId === a.sleeperId)
-        return player ? makeAsset(player, 'player') : null
-      }
-      // pick: match by reconstructed label (season + round suffix)
-      const pick = league.myRoster.picks.find(p => {
-        const suffix = ['', '1st', '2nd', '3rd', '4th'][p.round] ?? `R${p.round}`
-        return `${p.season} ${suffix}` === a.name
-      })
-      return pick ? makeAsset(pick, 'pick') : null
-    }).filter(Boolean)
-
-    setGiveAssets(giveItems)
+    setGiveAssets(mapPackageToAssets(fairPackage, league.myRoster))
     setAssetsPreloaded(true)
   }, [initTarget, assetsPreloaded, league, opponentRoster, fairPackage])
 
@@ -139,7 +261,6 @@ export default function TradeAnalyzer() {
     const id = rawValue ? Number(rawValue) : null
     setSelectedOpponentId(id)
     setGetAssets([])
-    setWhatsFairMode(false)
     setWhatsFairTarget(null)
     setLiveIntelligence(null)
     setIntelligenceLoading(false)
@@ -169,18 +290,25 @@ export default function TradeAnalyzer() {
     )
   }
 
-  function handleWhatsFairSelect(player) {
-    const asset = makeAsset(player, 'player')
-    setWhatsFairTarget(prev => (prev?.id === asset.id ? null : asset))
+  // Scale icon on an opponent player → pre-fill the trade with a fair package
+  function applyWhatsFair(player) {
+    const target = makeAsset(player, 'player')
+    setWhatsFairTarget(target)
+    setGetAssets([target])
+    const pkg = suggestFairPackage(player, league.myRoster)
+    setGiveAssets(mapPackageToAssets(pkg, league.myRoster))
   }
 
-  function handleWhatsFairToggle() {
-    if (whatsFairMode) {
-      setWhatsFairMode(false)
-      setWhatsFairTarget(null)
-    } else {
-      setWhatsFairMode(true)
-    }
+  function applyCounter(suggestion) {
+    if (!suggestion?.item) return
+    if (suggestion.side === 'get') toggleGet(suggestion.item, suggestion.type)
+    else toggleGive(suggestion.item, suggestion.type)
+  }
+
+  function clearTrade() {
+    setGiveAssets([])
+    setGetAssets([])
+    setWhatsFairTarget(null)
   }
 
   if (loading && !league) return <LoadingSpinner message="Loading trade data…" />
@@ -192,44 +320,14 @@ export default function TradeAnalyzer() {
   return (
     <div className="px-4 pb-4">
       {/* Header */}
-      <div className="pt-4 pb-3 flex items-center gap-2">
-        <p className="flex-1 font-display text-base font-bold uppercase tracking-wide text-text-primary dark:text-text-primary">
+      <div className="pt-4 pb-3">
+        <p className="font-display text-base font-bold uppercase tracking-wide text-text-primary dark:text-text-primary">
           Trade Analyzer
         </p>
-        <button
-          onClick={handleWhatsFairToggle}
-          disabled={!opponentRoster}
-          className={`font-body text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors shrink-0 disabled:opacity-40
-            ${whatsFairMode
-              ? 'bg-accent/15 border-accent text-accent'
-              : 'bg-bg-secondary dark:bg-bg-secondary border-border-default dark:border-border-default text-text-tertiary dark:text-text-tertiary'
-            }`}
-        >
-          {whatsFairMode ? '● What\'s Fair?' : 'What\'s Fair?'}
-        </button>
       </div>
 
-      {/* What's Fair instruction banner */}
-      {whatsFairMode && (
-        <div className="mb-3 px-3 py-2 rounded-lg bg-accent/10 border border-accent/30 flex items-center justify-between gap-2">
-          <span className="font-body text-xs text-accent leading-tight">
-            {whatsFairTarget
-              ? `Target: ${whatsFairTarget.name} — fair package shown below`
-              : 'What\'s Fair? mode active — tap a player from their roster to see a fair package'}
-          </span>
-          {whatsFairTarget && (
-            <button
-              onClick={() => setWhatsFairTarget(null)}
-              className="text-accent text-base font-bold shrink-0 leading-none"
-            >
-              ×
-            </button>
-          )}
-        </div>
-      )}
-
       {/* Opponent selector */}
-      <div className="mb-4">
+      <div className="mb-3">
         <label className="block font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-1.5">
           Opponent
         </label>
@@ -254,6 +352,16 @@ export default function TradeAnalyzer() {
 
       {opponentRoster ? (
         <>
+          {partnerInfo && <OpponentContextStrip partner={partnerInfo} />}
+
+          {(giveAssets.length > 0 || getAssets.length > 0) && (
+            <StickySummary
+              giveTotal={analysis?.giveTotal ?? 0}
+              getTotal={analysis?.getTotal ?? 0}
+              verdict={bothSides ? adjustedVerdict : null}
+            />
+          )}
+
           <TradeBuilder
             myRoster={league.myRoster}
             opponentRoster={opponentRoster}
@@ -261,16 +369,19 @@ export default function TradeAnalyzer() {
             getAssets={getAssets}
             onToggleGive={toggleGive}
             onToggleGet={toggleGet}
-            whatsFairMode={whatsFairMode}
-            whatsFairTarget={whatsFairTarget}
-            onWhatsFairSelect={handleWhatsFairSelect}
+            onWhatsFair={applyWhatsFair}
+            onClearTrade={clearTrade}
           />
           <TradeVerdict
             analysis={analysis}
             verdict={adjustedVerdict}
+            giveCount={giveAssets.length}
+            getCount={getAssets.length}
             counterSuggestion={counterSuggestion}
+            onApplyCounter={applyCounter}
             fairPackage={fairPackage}
             whatsFairTarget={whatsFairTarget}
+            onClearWhatsFair={() => setWhatsFairTarget(null)}
             liveIntelligence={liveIntelligence}
             intelligenceLoading={intelligenceLoading}
           />

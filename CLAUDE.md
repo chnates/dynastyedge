@@ -281,16 +281,27 @@ Each team card shows:
 
 - Nix Cage always pre-loaded as “Your team”
 - Other team: selected from dropdown, OR pre-loaded when tapping from Trade Partner Finder
-- Two columns: **“You give”** and **“You get”**
+- A context strip under the selector carries the partner intelligence into the
+  build: their needs / surpluses, pick capital status, win-window tier, and the
+  mismatch warning (all from `rankTradePartners`)
+- Two columns: **“You give”** and **“You get”** — each has an **+ Add** button
+  that opens a roster-browser bottom sheet pre-pointed at the right roster
 
 #### Building the trade
 
 - Players must come from actual Sleeper rosters only — no searching all NFL players
-- Show the other team’s full roster with a search bar to filter within it
+- The add sheet has search + position chips (All/QB/RB/WR/TE/Picks) and a
+  "Draft Picks" section; its header shows live Give ⇄ Get totals + % diff so
+  every tap gives instant feedback. Tap toggles, sheet stays open for multi-add.
 - Picks must come from actual pick inventories only
   (derived from traded_picks data — only show picks each team actually owns)
 - Running FantasyCalc value total updates live on both sides as assets are added
+- A **sticky summary bar** (Give ⇄ Get totals, % diff, verdict chip) pins below
+  the sub-tabs while a trade is in progress
 - Show 30-day trend arrow on every player added to the trade
+- The in-progress trade persists in sessionStorage (`dynastyedge_trade_draft`)
+  so navigating away and back doesn't lose it. Navigation state (from Partners
+  or Targets) takes priority over the draft. "× Clear trade" resets it.
 
 #### Analysis — three layers, always shown together
 
@@ -319,17 +330,29 @@ Are you acquiring the right type of asset for where Nix Cage is now?
 > which is your roster’s most critical weakness right now.”*
 > *“❌ Decline — raw value slightly favors you, but you’d be selling QB depth you
 > genuinely need in Superflex.”*
+- The verdict only renders once **both** sides have at least one asset — until
+  then a quiet "add assets to both sides" hint shows instead (totals still show)
 - **Counter:** Name a specific player or pick (never vague) that would make the trade fair.
   Show what needs to move to which side to get within ~5% raw value.
+  The suggestion is structured (`getCounterSuggestion` returns `{side, type, item, text}`)
+  with an **Apply** button that adds the named asset to the right column directly.
+  Assets already in the trade are never suggested.
 
-#### “What’s fair” mode
+#### “What’s fair” (Targets sub-tab + scale icon)
 
-- User taps a target player on the other team’s roster
-- App calculates: what would Nix Cage need to give to make this trade fair?
-- Surfaces specific players/picks from Nix Cage’s actual roster as the suggested return
+There is no separate "mode" — What's Fair is a starting point that pre-fills
+the trade, reachable two ways:
+
+- The **Targets** sub-tab (top suggested trade targets ranked by need × value) —
+  tap a target → Analyzer pre-fills You Get with the target and You Give with a
+  suggested fair package from Nix Cage's actual roster
+- The **scale icon** on any player row in the "their roster" add sheet does the
+  same in place
 - Apply all three analysis layers to the suggested package too
+- The callout card above the analysis is dismissible (×)
 
-**No save / no history.** Live analysis only. Trade history lives in Sleeper.
+**No saved history.** The in-progress trade survives the session via
+sessionStorage, but there is no multi-trade history — that lives in Sleeper.
 
 -----
 
@@ -507,7 +530,7 @@ Side drawer sections:
 |#  |Section|Feature                                                  |
 |---|-------|---------------------------------------------------------|
 |1  |Roster |My Roster · All Teams · Free Agents                      |
-|2  |Trade  |Partners · Analyzer · What's Fair (+ deadline banner)    |
+|2  |Trade  |Partners · Analyzer · Targets (+ deadline banner)        |
 |3  |Lineup |Lineup Optimizer + Season Review (lineup efficiency)     |
 |4  |League |Overview · Activity · Movers                             |
 |5  |Draft  |Rookie draft board · Draft pick tracker                  |
@@ -835,7 +858,8 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
    `dynastyedge_action_dismissals` (roster action items) ·
    `dynastyedge_draft_*` (draft board state) ·
    sessionStorage `dynastyedge_league_sort` / `dynastyedge_league_pos`
-   (League tab filters, preserved across drill-downs).
+   (League tab filters, preserved across drill-downs) ·
+   sessionStorage `dynastyedge_trade_draft` (in-progress trade).
 1. **Shared components:** `ErrorState` and `SectionHeader` live in
    `src/components/shared/` — import them, never redefine them locally.
 1. **The app name is DynastyEdge.** Use it in the page `<title>`,

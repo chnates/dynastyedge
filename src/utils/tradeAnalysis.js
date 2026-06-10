@@ -150,12 +150,28 @@ export function getTradeVerdict(analysis) {
   return { verdict: 'Counter', reasoning }
 }
 
-export function getCounterSuggestion(analysis, myRoster, opponentRoster) {
+// Returns a structured suggestion ({ side, type, item, text }) so the UI can
+// offer an "Apply" action that adds the named asset directly to the trade.
+// Assets already in the trade are excluded from candidates.
+export function getCounterSuggestion(analysis, myRoster, opponentRoster, giveAssets = [], getAssets = []) {
   if (!analysis || !myRoster || !opponentRoster) return null
   const { valueWinner, valuePct, giveTotal, getTotal } = analysis
   if (valueWinner === 'even' || valuePct <= 5) return null
 
   const gap = Math.abs(getTotal - giveTotal)
+  const inTrade = new Set([...giveAssets, ...getAssets].map(a => a.id))
+  const pickAssetId = p => `${p.season}-${p.round}-${p.originalOwner}`
+
+  function candidatesFrom(roster) {
+    return [
+      ...roster.players
+        .filter(p => !p.isIR && !inTrade.has(String(p.sleeperId)))
+        .map(p => ({ type: 'player', name: p.name, value: p.value || 0, item: p })),
+      ...roster.picks
+        .filter(p => !inTrade.has(pickAssetId(p)))
+        .map(p => ({ type: 'pick', name: pickLabel(p), value: p.value ?? 0, item: p })),
+    ]
+  }
 
   function bestBridger(assets) {
     const sorted = assets.filter(a => a.value > 0).sort((a, b) => a.value - b.value)
@@ -166,27 +182,29 @@ export function getCounterSuggestion(analysis, myRoster, opponentRoster) {
   }
 
   if (valueWinner === 'them') {
-    const assets = [
-      ...opponentRoster.players.filter(p => !p.isIR).map(p => ({ type: 'player', name: p.name, value: p.value })),
-      ...opponentRoster.picks.map(p => ({ type: 'pick', name: pickLabel(p), value: p.value ?? 0 })),
-    ]
-    const b = bestBridger(assets)
+    const b = bestBridger(candidatesFrom(opponentRoster))
     if (!b) return null
-    return b.type === 'pick'
-      ? `Ask them to add their ${b.name} (est. ${b.value.toLocaleString()})`
-      : `Ask them to add ${b.name} (${b.value.toLocaleString()})`
+    return {
+      side: 'get',
+      type: b.type,
+      item: b.item,
+      text: b.type === 'pick'
+        ? `Ask them to add their ${b.name} (est. ${b.value.toLocaleString()})`
+        : `Ask them to add ${b.name} (${b.value.toLocaleString()})`,
+    }
   }
 
   // valueWinner === 'you'
-  const assets = [
-    ...myRoster.players.filter(p => !p.isIR).map(p => ({ type: 'player', name: p.name, value: p.value })),
-    ...myRoster.picks.map(p => ({ type: 'pick', name: pickLabel(p), value: p.value ?? 0 })),
-  ]
-  const b = bestBridger(assets)
+  const b = bestBridger(candidatesFrom(myRoster))
   if (!b) return null
-  return b.type === 'pick'
-    ? `Add your ${b.name} (est. ${b.value.toLocaleString()}) to even it out`
-    : `Offer to add ${b.name} (${b.value.toLocaleString()}) to even it out`
+  return {
+    side: 'give',
+    type: b.type,
+    item: b.item,
+    text: b.type === 'pick'
+      ? `Add your ${b.name} (est. ${b.value.toLocaleString()}) to even it out`
+      : `Offer to add ${b.name} (${b.value.toLocaleString()}) to even it out`,
+  }
 }
 
 const VERDICT_UPGRADE   = { Decline: 'Counter', Counter: 'Accept', Accept: 'Accept' }

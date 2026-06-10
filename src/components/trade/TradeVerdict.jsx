@@ -12,7 +12,7 @@ const FLAG_LABEL = { red: 'Injured', yellow: 'Questionable', green: 'Active' }
 const FLAG_TEXT  = { red: 'text-danger', yellow: 'text-warning', green: 'text-success' }
 
 
-function ValueSummary({ giveTotal, getTotal }) {
+function ValueSummary({ giveTotal, getTotal, bothSides }) {
   const diff    = getTotal - giveTotal
   const maxVal  = Math.max(giveTotal, getTotal, 1)
   const pct     = Math.round(Math.abs(diff) / maxVal * 100)
@@ -28,16 +28,22 @@ function ValueSummary({ giveTotal, getTotal }) {
           Get <span className="font-mono text-text-primary dark:text-text-primary tabular-nums">{getTotal.toLocaleString()}</span>
         </span>
       </div>
-      <p className={`font-body text-xs ${
-        isEven ? 'text-text-secondary dark:text-text-secondary'
-               : diff > 0 ? 'text-success' : 'text-danger'
-      }`}>
-        {isEven
-          ? '≈ Even value exchange'
-          : diff > 0
-            ? `▲ You're getting ${pct}% more value`
-            : `▼ You're giving ${pct}% more value`}
-      </p>
+      {bothSides ? (
+        <p className={`font-body text-xs ${
+          isEven ? 'text-text-secondary dark:text-text-secondary'
+                 : diff > 0 ? 'text-success' : 'text-danger'
+        }`}>
+          {isEven
+            ? '≈ Even value exchange'
+            : diff > 0
+              ? `▲ You're getting ${pct}% more value`
+              : `▼ You're giving ${pct}% more value`}
+        </p>
+      ) : (
+        <p className="font-body text-xs text-text-tertiary dark:text-text-tertiary">
+          Add assets to both sides to compare value
+        </p>
+      )}
     </div>
   )
 }
@@ -77,13 +83,17 @@ function PlayerNewsCard({ intel }) {
 export default function TradeVerdict({
   analysis,
   verdict,
+  giveCount = 0,
+  getCount = 0,
   counterSuggestion,
+  onApplyCounter,
   fairPackage,
   whatsFairTarget,
+  onClearWhatsFair,
   liveIntelligence,
   intelligenceLoading,
 }) {
-  if (!analysis || (analysis.giveTotal === 0 && analysis.getTotal === 0)) {
+  if (!analysis || (giveCount === 0 && getCount === 0)) {
     return (
       <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-4 py-8 text-center mb-4">
         <p className="font-body text-sm text-text-tertiary dark:text-text-tertiary">
@@ -94,6 +104,7 @@ export default function TradeVerdict({
   }
 
   const { giveTotal, getTotal, filledNeeds, hurtStrengths, windowScore, windowNote, myTier } = analysis
+  const bothSides = giveCount > 0 && getCount > 0
   const vs = verdict ? VERDICT_STYLES[verdict.verdict] : null
 
   const injuredWarnings = liveIntelligence
@@ -104,8 +115,15 @@ export default function TradeVerdict({
     <div>
       {/* What's Fair callout */}
       {whatsFairTarget && fairPackage && (
-        <div className="mb-4 rounded-xl bg-warning/10 border border-warning/30 px-4 py-3">
-          <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-warning mb-2">
+        <div className="mb-4 rounded-xl bg-warning/10 border border-warning/30 px-4 py-3 relative">
+          <button
+            onClick={onClearWhatsFair}
+            className="absolute top-2 right-3 text-warning text-base font-bold leading-none"
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+          <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-warning mb-2 pr-5">
             What's fair for {whatsFairTarget.name}?
           </p>
           <p className="font-mono text-sm text-warning mb-0.5">
@@ -137,7 +155,7 @@ export default function TradeVerdict({
           <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-tertiary dark:text-text-tertiary mb-2">
             Raw Value
           </p>
-          <ValueSummary giveTotal={giveTotal} getTotal={getTotal} />
+          <ValueSummary giveTotal={giveTotal} getTotal={getTotal} bothSides={bothSides} />
         </div>
 
         {/* Layer 2: Roster fit */}
@@ -208,8 +226,8 @@ export default function TradeVerdict({
           </div>
         )}
 
-        {/* Verdict */}
-        {verdict && vs && (
+        {/* Verdict — only once both sides have at least one asset */}
+        {bothSides && verdict && vs ? (
           <div className={`px-4 py-3 ${vs.bg}`}>
             <div className="flex items-center gap-2 mb-1.5">
               <vs.Icon size={16} strokeWidth={2} className={vs.color} />
@@ -221,10 +239,24 @@ export default function TradeVerdict({
               {verdict.reasoning}
             </p>
             {counterSuggestion && (
-              <p className="font-body text-xs text-text-secondary dark:text-text-secondary mt-2 leading-relaxed border-t border-current/20 pt-2">
-                Counter: {counterSuggestion}
-              </p>
+              <div className="flex items-center gap-2 mt-2 border-t border-current/20 pt-2">
+                <p className="flex-1 font-body text-xs text-text-secondary dark:text-text-secondary leading-relaxed">
+                  Counter: {counterSuggestion.text}
+                </p>
+                <button
+                  onClick={() => onApplyCounter?.(counterSuggestion)}
+                  className="shrink-0 px-2.5 py-1 rounded-lg bg-accent text-white font-body text-[11px] font-semibold active:opacity-80 transition-opacity"
+                >
+                  Apply
+                </button>
+              </div>
             )}
+          </div>
+        ) : (
+          <div className="px-4 py-3">
+            <p className="font-body text-xs text-text-tertiary dark:text-text-tertiary">
+              Add assets to both sides to get a verdict.
+            </p>
           </div>
         )}
       </div>
