@@ -157,6 +157,12 @@ GET https://api.fantasycalc.com/values/current
 - Pick values also come from FantasyCalc — they appear as players with names
   like “2026 Mid 1st” — include them in the dataset
 
+**Rookie ADP rule:** FantasyCalc has no rookie-specific ADP field, and its
+`rookiesOnly` endpoint returns non-rookies — never use it. The Draft section's
+"Rk ADP" is derived locally (`utils/rookieAdp.js`): the Sleeper-verified rookie
+class re-ranked 1..N by FantasyCalc overall rank. Rookies with no FantasyCalc
+rank show `—` and sort to the bottom.
+
 -----
 
 ## Features
@@ -177,11 +183,23 @@ across future seasons.
   color-coded by round (see color system below)
 - Each pick shows original owner if different from current owner
 - Total roster value score at top (sum of all player values + pick values)
+- **Roster Analysis button** (below Action Items) → bottom sheet
+  (`RosterAnalysisSheet`): age chart with one lane per position (QB/RB/WR/TE),
+  each lane shaded with its position-specific peak window (RB 23–26, WR 24–28,
+  TE 25–29, QB 26–33); dots are tappable (detail row below the chart) and a
+  position filter expands a single lane. Stat cards: avg starter age, league
+  avg, core win window years, direction (Ascending / At Peak / Declining).
+  Plus per-position age table vs league average and a collapsible
+  "How to read this" explainer. All data from LeagueContext — no extra fetches.
+  Win-window years derive from `nflState.season`, never hardcoded.
 
 #### League-wide view
 
 - Lives in the Roster section sub-tabs: **My Roster · All Teams · Free Agents**
 - All Teams: all 10 teams ranked by total value, with record and win-window badge
+- Free Agents: search + position filter + **Upgrades Only** and **Hide Rookies**
+  toggles (both default off; rookie detection = Sleeper `years_exp === 0` with
+  the age≤25 fallback, same logic as the Rookie badge)
 - Tap any team card → full roster + picks drill-down (`/roster/teams/:rosterId`)
 - League › Overview team cards also drill into the same view; the back button
   returns to wherever you came from with filters preserved
@@ -607,7 +625,7 @@ dynastyedge/
 │   │   │   ├── AllTeamsView.jsx     ← all 10 teams, tap → roster drill-down
 │   │   │   ├── FreeAgentsView.jsx
 │   │   │   ├── RosterActionItems.jsx
-│   │   │   ├── AgeCurveSection.jsx
+│   │   │   ├── RosterAnalysisSheet.jsx  ← age-lane chart + win window bottom sheet
 │   │   │   ├── PlayerCard.jsx
 │   │   │   └── PickBadge.jsx
 │   │   ├── trade/
@@ -660,6 +678,7 @@ dynastyedge/
 │   │   ├── tradeAnalysis.js     ← trade scoring, verdict logic
 │   │   ├── rosterAnalysis.js    ← positional strength, win window tiers
 │   │   ├── pickCapital.js       ← pick ownership resolution logic
+│   │   ├── rookieAdp.js         ← derived rookie-class ADP for the Draft section
 │   │   ├── lineupHistory.js     ← optimal-lineup math for efficiency review
 │   │   └── projections.js       ← lineup optimization, matchup quality
 │   ├── context/

@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from 'react'
 import { RotateCcw, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useRookieADP } from '../../hooks/useRookieADP'
+import { assignRookieAdp } from '../../utils/rookieAdp'
 import { getTeamName } from '../../hooks/useLeague'
 import { MY_ROSTER_ID } from '../../constants'
 import LoadingSpinner from '../shared/LoadingSpinner'
@@ -205,15 +206,15 @@ export default function DraftTracker() {
       })
     }
 
-    return Object.values(rookieMap)
-      .map(rookieEntry => {
+    return assignRookieAdp(
+      Object.values(rookieMap).map(rookieEntry => {
         const mainEntry = values?.playerMap?.[rookieEntry.sleeperId]
         if (mainEntry) return { ...mainEntry }
         const nameMatch = nameToFCEntry[rookieEntry.name?.toLowerCase()]
         if (nameMatch) return { ...nameMatch, sleeperId: rookieEntry.sleeperId }
         return { ...rookieEntry, adpOnly: true }
       })
-      .sort((a, b) => (a.adp ?? a.overallRank ?? 999) - (b.adp ?? b.overallRank ?? 999))
+    ).sort((a, b) => (a.adp ?? 999) - (b.adp ?? 999))
   }, [rookieMap, values])
 
   const draftOrder    = useMemo(() => buildDraftOrder(league?.allRosters ?? []), [league])
@@ -373,7 +374,7 @@ export default function DraftTracker() {
                         {player.name}
                       </span>
                       {myPicks.some(p => {
-                        const adp = player.adp ?? player.overallRank ?? 999
+                        const adp = player.adp ?? 999
                         return adp >= p.overall - 1 && adp <= p.overall + 1
                       }) && <MyPickBadge />}
                     </div>
@@ -384,7 +385,7 @@ export default function DraftTracker() {
                       {player.adp != null && (
                         <>
                           <span className="text-text-tertiary text-[10px]">·</span>
-                          <span className="font-body text-[10px] text-text-tertiary">ADP {Number(player.adp).toFixed(0)}</span>
+                          <span className="font-body text-[10px] text-text-tertiary">Rk ADP {Number(player.adp).toFixed(0)}</span>
                         </>
                       )}
                     </div>

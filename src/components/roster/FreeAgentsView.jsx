@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useSleeperRookies } from '../../hooks/useSleeperRookies'
@@ -38,7 +38,16 @@ export default function FreeAgentsView() {
   const [sortMode, setSortMode]       = useState('value')
   const [search, setSearch]           = useState('')
   const [upgradesOnly, setUpgradesOnly] = useState(false)
+  const [hideRookies, setHideRookies] = useState(false)
   const [selected, setSelected]       = useState(null)
+
+  // Same rookie detection used by the Rookie badge — Sleeper years_exp===0,
+  // with the age heuristic as fallback when experience data is missing
+  const isRookie = useCallback(p =>
+    !!sleeperRookieMap?.[p.sleeperId]
+      || p.experience === 0
+      || (p.experience == null && p.age != null && p.age <= 25),
+  [sleeperRookieMap])
 
   const myNeeds = useMemo(() => {
     if (!league) return {}
@@ -103,6 +112,10 @@ export default function FreeAgentsView() {
       list = list.filter(p => (p.value ?? 0) > (myWorstByPosition[p.position] ?? 0))
     }
 
+    if (hideRookies) {
+      list = list.filter(p => !isRookie(p))
+    }
+
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       list = list.filter(p => p.name?.toLowerCase().includes(q))
@@ -112,7 +125,7 @@ export default function FreeAgentsView() {
     else list = [...list].sort((a, b) => (a.age ?? 99) - (b.age ?? 99))
 
     return list
-  }, [freeAgents, posFilter, upgradesOnly, search, sortMode, myWorstByPosition])
+  }, [freeAgents, posFilter, upgradesOnly, hideRookies, isRookie, search, sortMode, myWorstByPosition])
 
   if (loading && !league) return <LoadingSpinner message="Loading league data…" />
   if (error && !league)   return <ErrorState message={error} onRetry={retry} />
@@ -151,22 +164,34 @@ export default function FreeAgentsView() {
           ))}
         </div>
 
-        {/* Upgrades Only toggle */}
-        <div className="flex items-center gap-2 mb-3">
-          <button
-            onClick={() => setUpgradesOnly(o => !o)}
-            className={`px-3 py-1.5 rounded-lg font-body text-xs font-semibold uppercase tracking-wide transition-colors ${
-              upgradesOnly
-                ? 'bg-success/20 text-success border border-success/30'
-                : 'bg-bg-card border border-border-default text-text-secondary'
-            }`}
-          >
-            Upgrades Only
-          </button>
+        {/* Filter toggles */}
+        <div className="mb-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setUpgradesOnly(o => !o)}
+              className={`px-3 py-1.5 rounded-lg font-body text-xs font-semibold uppercase tracking-wide transition-colors ${
+                upgradesOnly
+                  ? 'bg-success/20 text-success border border-success/30'
+                  : 'bg-bg-card border border-border-default text-text-secondary'
+              }`}
+            >
+              Upgrades Only
+            </button>
+            <button
+              onClick={() => setHideRookies(h => !h)}
+              className={`px-3 py-1.5 rounded-lg font-body text-xs font-semibold uppercase tracking-wide transition-colors ${
+                hideRookies
+                  ? 'bg-warning/20 text-warning border border-warning/30'
+                  : 'bg-bg-card border border-border-default text-text-secondary'
+              }`}
+            >
+              Hide Rookies
+            </button>
+          </div>
           {upgradesOnly && (
-            <span className="font-body text-[10px] text-text-tertiary leading-tight">
+            <p className="font-body text-[10px] text-text-tertiary leading-tight mt-1.5">
               Better than my worst {posFilter === 'ALL' ? 'at each position' : posFilter}
-            </span>
+            </p>
           )}
         </div>
 
@@ -206,9 +231,7 @@ export default function FreeAgentsView() {
           <div className="rounded-xl bg-bg-card border border-border-default px-3">
             {filtered.map((player, i) => {
               const fillsNeed = needPositions.includes(player.position)
-              const rookie = !!sleeperRookieMap?.[player.sleeperId]
-                || player.experience === 0
-                || (player.experience == null && player.age != null && player.age <= 25)
+              const rookie = isRookie(player)
               return (
                 <button
                   key={player.sleeperId}

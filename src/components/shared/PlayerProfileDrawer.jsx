@@ -404,10 +404,10 @@ export default function PlayerProfileDrawer({
                   <span className="font-body text-[10px] text-text-tertiary ml-1">{player.position}</span>
                 </div>
               )}
-              {player.adp != null && (
+              {isDraftContext && player.adp != null && (
                 <div>
-                  <span className="font-mono text-sm text-text-primary tabular-nums">{Number(player.adp).toFixed(1)}</span>
-                  <span className="font-body text-[10px] text-text-tertiary ml-1">ADP</span>
+                  <span className="font-mono text-sm text-text-primary tabular-nums">{Number(player.adp).toFixed(0)}</span>
+                  <span className="font-body text-[10px] text-text-tertiary ml-1">Rookie ADP</span>
                 </div>
               )}
             </div>

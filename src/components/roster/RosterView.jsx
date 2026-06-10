@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { ChevronRight, ScanSearch } from 'lucide-react'
 import { getTeamName } from '../../hooks/useLeague'
 import { useLeagueContext } from '../../context/LeagueContext'
 import LoadingSpinner from '../shared/LoadingSpinner'
@@ -8,7 +9,7 @@ import SectionHeader from '../shared/SectionHeader'
 import PlayerCard from './PlayerCard'
 import PickBadge from './PickBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
-import AgeCurveSection from './AgeCurveSection'
+import RosterAnalysisSheet from './RosterAnalysisSheet'
 import RosterActionItems from './RosterActionItems'
 
 const POSITION_ORDER = ['QB', 'RB', 'WR', 'TE', 'DEF']
@@ -19,6 +20,7 @@ export default function RosterView() {
   const navigate = useNavigate()
   const params = useParams()
   const [selectedPlayer, setSelectedPlayer] = useState(null)
+  const [analysisOpen, setAnalysisOpen] = useState(false)
 
   const selectedRosterId = params.rosterId
     ? Number(params.rosterId)
@@ -110,13 +112,23 @@ export default function RosterView() {
         <RosterActionItems myRoster={league.myRoster} nflState={nflState} />
       )}
 
-      {/* ── Age Curve (own roster only) ── */}
+      {/* ── Roster Analysis (own roster only) ── */}
       {!selectedRosterId && (
-        <AgeCurveSection
-          players={displayRoster.players}
-          avgStarterAge={displayRoster.avgStarterAge}
-          allRosters={league.allRosters}
-        />
+        <button
+          onClick={() => setAnalysisOpen(true)}
+          className="w-full mt-4 mb-1 flex items-center gap-2.5 px-3 py-3 rounded-xl bg-bg-card border border-border-default active:opacity-60 transition-opacity"
+        >
+          <ScanSearch size={16} strokeWidth={1.75} className="text-accent flex-shrink-0" />
+          <div className="flex-1 text-left">
+            <p className="font-body text-sm font-semibold text-text-primary leading-tight">
+              Roster Analysis
+            </p>
+            <p className="font-body text-[10px] text-text-tertiary mt-0.5">
+              Age curve · win window · position breakdown
+            </p>
+          </div>
+          <ChevronRight size={16} strokeWidth={1.75} className="text-text-tertiary flex-shrink-0" />
+        </button>
       )}
 
       {/* ── Position groups ── */}
@@ -202,6 +214,16 @@ export default function RosterView() {
         <PlayerProfileDrawer
           player={selectedPlayer}
           onClose={() => setSelectedPlayer(null)}
+        />
+      )}
+
+      {analysisOpen && (
+        <RosterAnalysisSheet
+          players={league.myRoster.players}
+          avgStarterAge={league.myRoster.avgStarterAge}
+          allRosters={league.allRosters}
+          nflState={nflState}
+          onClose={() => setAnalysisOpen(false)}
         />
       )}
     </div>

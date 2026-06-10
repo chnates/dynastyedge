@@ -13,6 +13,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useRookieADP } from '../../hooks/useRookieADP'
+import { assignRookieAdp } from '../../utils/rookieAdp'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
@@ -46,7 +47,7 @@ const TIER_COLORS = {
 }
 
 const SORT_COLS = ['value', 'adp', 'age', 'positionRank']
-const COL_LABELS = { value: 'Value', adp: 'ADP', age: 'Age', positionRank: 'Pos Rk' }
+const COL_LABELS = { value: 'Value', adp: 'Rk ADP', age: 'Age', positionRank: 'Pos Rk' }
 
 const BOARD_ORDER_KEY = 'dynastyedge_board_order'
 const NOTES_KEY       = 'dynastyedge_prospect_notes'
@@ -330,7 +331,7 @@ function SortablePlayerRow({
           )
         })}
 
-        <span className="font-mono text-xs text-text-secondary tabular-nums w-10 text-right flex-shrink-0">
+        <span className="font-mono text-xs text-text-secondary tabular-nums w-12 text-right flex-shrink-0">
           {player.adp != null ? Number(player.adp).toFixed(0) : '—'}
         </span>
 
@@ -408,16 +409,17 @@ export default function DraftBoard() {
     return map
   }, [values?.playerMap])
 
-  // Rookie prospects enriched from FantasyCalc
+  // Rookie prospects enriched from FantasyCalc, with adp = rank within the
+  // rookie class (1..N by FantasyCalc overall rank — see utils/rookieAdp.js)
   const rookies = useMemo(() => {
     if (!rookieMap) return []
-    return Object.values(rookieMap).map(rookieEntry => {
+    return assignRookieAdp(Object.values(rookieMap).map(rookieEntry => {
       const mainEntry = values?.playerMap?.[rookieEntry.sleeperId]
       if (mainEntry) return { ...mainEntry }
       const nameMatch = nameToFCEntry[rookieEntry.name?.toLowerCase()]
       if (nameMatch) return { ...nameMatch, sleeperId: rookieEntry.sleeperId }
       return { ...rookieEntry, adpOnly: true }
-    })
+    }))
   }, [rookieMap, values, nameToFCEntry])
 
   // FantasyPros column, notes map, and FP-only players (matched against Sleeper rookies)
@@ -581,13 +583,13 @@ export default function DraftBoard() {
     setMyBoardOrder(prev => {
       if (prev.length === 0) {
         return [...allProspects]
-          .sort((a, b) => (a.adp ?? a.overallRank ?? 999) - (b.adp ?? b.overallRank ?? 999))
+          .sort((a, b) => (a.adp ?? 999) - (b.adp ?? 999))
           .map(p => p.sleeperId)
       }
       const boardSet = new Set(prev)
       const newPlayers = allProspects
         .filter(p => !boardSet.has(p.sleeperId))
-        .sort((a, b) => (a.adp ?? a.overallRank ?? 999) - (b.adp ?? b.overallRank ?? 999))
+        .sort((a, b) => (a.adp ?? 999) - (b.adp ?? 999))
       if (newPlayers.length === 0) return prev
       return [...prev, ...newPlayers.map(p => p.sleeperId)]
     })
@@ -624,7 +626,7 @@ export default function DraftBoard() {
 
   function resetMyBoard() {
     const initialOrder = [...allProspects]
-      .sort((a, b) => (a.adp ?? a.overallRank ?? 999) - (b.adp ?? b.overallRank ?? 999))
+      .sort((a, b) => (a.adp ?? 999) - (b.adp ?? 999))
       .map(p => p.sleeperId)
     setMyBoardOrder(initialOrder)
     setShowResetConfirm(false)
@@ -670,7 +672,7 @@ export default function DraftBoard() {
 
   function isLikelyAvailable(player) {
     if (!myPickSlot) return false
-    return (player.adp ?? player.overallRank ?? 999) > myPickSlot.slot
+    return (player.adp ?? 999) > myPickSlot.slot
   }
 
   function getLookupRank(player, col) {
@@ -873,7 +875,7 @@ export default function DraftBoard() {
               </span>
             )
           )}
-          <SortHeader col="adp"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort} extra="w-10 justify-end" />
+          <SortHeader col="adp"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort} extra="w-12 justify-end" />
           <SortHeader col="value" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} extra="w-12 justify-end" />
           <SortHeader col="age"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort} extra="w-8 justify-end" />
         </div>
