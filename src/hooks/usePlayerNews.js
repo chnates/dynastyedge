@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { SLEEPER_BASE } from '../constants'
+import { fetchJSON } from '../utils/fetchJSON'
 
 // Maps Sleeper's injury_status string to our three-tier flag
 function deriveInjuryFlag(status) {
@@ -18,11 +19,7 @@ export async function fetchPlayerNews(playerId) {
   if (newsCache.has(playerId)) return newsCache.get(playerId)
   if (fetchPromises.has(playerId)) return fetchPromises.get(playerId)
 
-  const promise = fetch(`${SLEEPER_BASE}/players/nfl/${playerId}`)
-    .then(res => {
-      if (!res.ok) throw new Error(`${res.status}`)
-      return res.json()
-    })
+  const promise = fetchJSON(`${SLEEPER_BASE}/players/nfl/${playerId}`, { label: 'Sleeper player' })
     .then(player => {
       const result = {
         injuryFlag:    deriveInjuryFlag(player.injury_status),

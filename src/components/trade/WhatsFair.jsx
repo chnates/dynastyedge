@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getTeamName } from '../../hooks/useLeague'
 import { getTopTradeTargets, assignWinWindowTiers } from '../../utils/rosterAnalysis'
@@ -8,6 +7,7 @@ import { suggestFairPackage } from '../../utils/tradeAnalysis'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import TrendArrow from '../shared/TrendArrow'
 import LoadingSpinner from '../shared/LoadingSpinner'
+import ErrorState from '../shared/ErrorState'
 
 const POS_TAGS = {
   QB: 'bg-accent/20 text-accent',
@@ -18,21 +18,6 @@ const POS_TAGS = {
 
 const POSITION_FILTERS = ['All', 'QB', 'RB', 'WR', 'TE']
 
-
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
-      <AlertTriangle size={24} className="text-warning" strokeWidth={1.75} />
-      <p className="text-text-secondary dark:text-text-secondary font-body text-sm">{message}</p>
-      <button
-        onClick={onRetry}
-        className="mt-1 px-4 py-2 rounded-lg bg-accent text-white font-body font-medium text-sm"
-      >
-        Retry
-      </button>
-    </div>
-  )
-}
 
 function TargetCard({ target, fairPackage, onTap }) {
   const posTag = POS_TAGS[target.position] ?? 'bg-bg-secondary text-text-secondary'
@@ -120,8 +105,8 @@ export default function WhatsFair() {
     return targets.filter(t => t.position === posFilter)
   }, [targets, posFilter])
 
-  if (loading) return <LoadingSpinner message="Finding trade targets…" />
-  if (error)   return <ErrorState message={error} onRetry={retry} />
+  if (loading && !league) return <LoadingSpinner message="Finding trade targets…" />
+  if (error && !league)   return <ErrorState message={error} onRetry={retry} />
   if (!league?.myRoster) return <ErrorState message="Could not load league data." onRetry={retry} />
 
   const myTeamName = getTeamName(league.myRoster.owner)

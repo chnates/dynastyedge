@@ -28,7 +28,7 @@ lineup optimization with matchup context, and a full league-wide competitive lan
 |----------|----------------|-----------------------------------|
 |Framework |React (via Vite)|Functional components + hooks only |
 |Styling   |Tailwind CSS    |Dark mode default, mobile-first    |
-|Navigation|React Router v6 |Bottom tab bar, 4 tabs             |
+|Navigation|React Router v7 |Side drawer menu, 5 sections       |
 |Build tool|Vite            |Outputs to `dist/` for GitHub Pages|
 |Deployment|GitHub Pages    |Auto-deploys via GitHub Actions    |
 |CI/CD     |GitHub Actions  |Triggers on every push to `main`   |
@@ -38,7 +38,9 @@ lineup optimization with matchup context, and a full league-wide competitive lan
 - Always use **functional React components with hooks**. Never class components.
 - All API calls live in **custom hooks** (`/src/hooks/`) or utility files. Never call APIs directly inside a component render.
 - **Mobile-first always.** Every component must look correct at 390px before anything else.
-- **FantasyCalc data is fetched once per app load and cached in memory.** Never re-fetch on every render — it is a large response.
+- **FantasyCalc data is fetched once per app load and cached in memory.** Never re-fetch on every render — it is a large response. The app silently refetches when the tab regains focus with data older than 30 minutes (stale-while-revalidate: cached data stays on screen during the refresh).
+- **All fetches go through `src/utils/fetchJSON.js`** — it adds a hard timeout via AbortController so a hung API can never leave the app on a permanent spinner. Never call raw `fetch()` in a hook.
+- **Sleeper's full player DB (`/players/nfl`, ~5–8MB) is fetched at most once per session** via the shared `usePlayerDB` hook. Never fetch it anywhere else — rookie detection, injury statuses, unranked-player names, and lineup history all read from that one cache.
 - **Never hardcode player names, values, or roster data.** Everything comes live from APIs.
 - **Dark mode is the default.** The app ships in dark mode. A toggle is available to switch to light mode — store the preference in `localStorage`.
 
@@ -84,12 +86,14 @@ No authentication required. Read-only. Stay under 1,000 API calls per minute.
 
 |Data needed                    |Endpoint                                         |
 |-------------------------------|-------------------------------------------------|
-|All rosters + player IDs       |`/league/1313933520715907072/rosters`            |
+|League settings (FAAB budget, trade deadline)|`/league/1313933520715907072`      |
+|All rosters + player IDs + records|`/league/1313933520715907072/rosters`         |
 |All users + team names         |`/league/1313933520715907072/users`              |
 |Traded picks                   |`/league/1313933520715907072/traded_picks`       |
 |Matchups (week N)              |`/league/1313933520715907072/matchups/{week}`    |
 |Transactions (week N)          |`/league/1313933520715907072/transactions/{week}`|
 |NFL state (current week/season)|`/state/nfl`                                     |
+|Full player DB (names/positions/injuries)|`/players/nfl` (once per session, via `usePlayerDB`)|
 |Weekly projections             |`/projections/nfl/regular/{year}/{week}`         |
 |Weekly stats                   |`/stats/nfl/regular/{year}/{week}`               |
 |NFL schedule                   |`/schedule/nfl/regular/{year}`                   |
@@ -97,7 +101,17 @@ No authentication required. Read-only. Stay under 1,000 API calls per minute.
 **Critical Sleeper note:** Roster endpoints return **numeric player IDs only** —
 not names. Player names are resolved by matching Sleeper IDs against FantasyCalc
 data (which includes a `sleeperId` field). This is the bridge between the two APIs.
-Always use `sleeperId` as the join key.
+Always use `sleeperId` as the join key (normalized to strings). Players FantasyCalc
+doesn't rank fall back to the shared player DB for name/position and display `—`
+as their value.
+
+**Standings note:** Win/loss records and points for/against come from
+`roster.settings` (`wins`, `losses`, `ties`, `fpts`, `fpts_against`) on the
+rosters endpoint — no extra call needed.
+
+**Transactions note:** The transaction feed fetches all 18 weekly buckets in
+parallel (small responses, well under the rate limit) and caches per session.
+Waiver claims include the winning FAAB bid in `settings.waiver_bid`.
 
 **Offseason detection:** Call `/state/nfl` on app load. If `season_type !== 'regular'`,
 hide all in-season UI: current matchups, weekly projections, lineup optimizer flags.
@@ -166,9 +180,11 @@ across future seasons.
 
 #### League-wide view
 
-- Toggle between “My Team” and “All Teams” at top of screen
-- All 10 teams displayed, each with the same detail as your own team view
-- Tap any team card → full roster + picks drill-down
+- Lives in the Roster section sub-tabs: **My Roster · All Teams · Free Agents**
+- All Teams: all 10 teams ranked by total value, with record and win-window badge
+- Tap any team card → full roster + picks drill-down (`/roster/teams/:rosterId`)
+- League › Overview team cards also drill into the same view; the back button
+  returns to wherever you came from with filters preserved
 
 #### Sorting and filtering (league-wide)
 
@@ -375,11 +391,13 @@ Single line, always at the top. Immediate landscape read.
 
 **Default:** Vertical list, all 10 teams sorted by total roster value (high to low)
 
-**Sort toggle:** Overall value / Pick capital / FAAB remaining
+**Sort toggle:** Overall value / Record / Pick capital / FAAB remaining
+(Record sorts by wins, then points for; FAAB mode shows remaining + spent of budget)
 
 **Position filter:** Tap QB / RB / WR / TE →
-List switches to a **horizontal swipeable ranking** sorted by that position’s
-strength across all 10 teams. Swipe left/right through teams ranked 1–10 at that position.
+List switches to a ranked list (1–10) sorted by that position's strength.
+Sort and position filters persist in sessionStorage so drilling into a team
+and coming back doesn't reset them.
 
 **Each team card shows:**
 
@@ -390,23 +408,95 @@ strength across all 10 teams. Swipe left/right through teams ranked 1–10 at th
   (above average = filled, below average = unfilled)
 - Pick capital: 2026 / 2027 / 2028 — show count of picks owned per year
 - FAAB remaining (from Sleeper roster data, format as `$XXX`)
+- Win/loss record next to the owner username (when the season has records)
 - **Tap → full roster + picks detail (same as Roster + Picks Viewer drill-down)**
+
+-----
+
+### Feature 6 — League Activity (League › Activity)
+
+Season-wide transaction feed: trades, waiver claims (with winning FAAB bid),
+and free-agent moves, newest first.
+
+- Trades show each side's full haul: players, picks (with original owner), FAAB
+- Player names resolve via FantasyCalc playerMap, falling back to the player DB
+  (so dropped players still show names)
+- 25 entries per page with a "Show more" button
+- Data: all 18 weekly `/transactions/{week}` buckets fetched in parallel,
+  filtered to `status === 'complete'`, cached per session
+
+-----
+
+### Feature 7 — Market Movers (League › Movers)
+
+30-day dynasty value trends, turned into actionable lists:
+
+- **Buy-Low Targets** — falling players (trend < −50) at my deficit positions,
+  not on my roster, value ≥ 1000. A rebuilding owner is flagged as a prime target.
+- **Sell-High Candidates** — my rising players (trend > +50) at my surplus positions
+- **Top Risers / Top Fallers** — league-wide, rostered players plus free agents
+  with value ≥ 500 (filters out deep-FA noise)
+- Tap any row → Player Profile drawer
+- Zero extra API calls: computed entirely from cached FantasyCalc data
+
+-----
+
+### Feature 8 — Watchlist
+
+Star any player from the Player Profile drawer (star icon in the header).
+
+- Stored in `localStorage` key `dynastyedge_watchlist_v1` via the `useWatchlist`
+  hook (a shared external store — all components update together)
+- Trade Partner Finder shows "Watching: …" on any partner card whose roster
+  holds watched players
+
+-----
+
+### Feature 9 — Lineup Efficiency (Lineup › Season Review)
+
+"How many points did I leave on the bench?" — actual vs optimal lineup for
+every completed week.
+
+- Optimal lineup computed from `players_points` in past matchups, filling
+  single-position slots first, then FLEX, then Superflex (see `utils/lineupHistory.js`)
+- Summary card: efficiency % + total points left on bench
+- Per-week rows: actual, optimal, delta (green ✓ when optimal, amber/red otherwise)
+- Shows during the offseason too (it reviews the completed season)
+- Data: `/matchups/{week}` for completed weeks, cached per session
+
+-----
+
+### Trade deadline banner
+
+The Trade section shows a persistent banner under the sub-tabs during the
+regular season (deadline week comes from league settings — Week 13):
+
+- More than 2 weeks out: neutral "Trade deadline: Week 13 · N weeks away"
+- 2 weeks or less: amber urgency styling; deadline week says "THIS WEEK"
+- After the deadline: muted "Trade deadline passed"
+- Hidden entirely in the offseason
 
 -----
 
 ## Navigation
 
-Bottom tab bar — 4 tabs, always visible:
+**There is NO bottom tab bar.** Navigation is a side drawer (hamburger menu, top-left),
+opened by tap or by swiping right from the left screen edge. This is a deliberate
+design decision — do not add a bottom nav.
 
-|Tab|Icon|Label |Feature                                     |
-|---|----|------|--------------------------------------------|
-|1  |🏈   |Roster|Roster + Picks Viewer (defaults to Nix Cage)|
-|2  |🔄   |Trade |Trade Partner Finder → Trade Analyzer       |
-|3  |📋   |Lineup|Lineup Optimizer                            |
-|4  |🏆   |League|League-Wide Overview                        |
+Side drawer sections:
 
-Tab bar stays fixed at the bottom. Content scrolls above it.
-Active tab is clearly highlighted.
+|#  |Section|Feature                                                  |
+|---|-------|---------------------------------------------------------|
+|1  |Roster |My Roster · All Teams · Free Agents                      |
+|2  |Trade  |Partners · Analyzer · What's Fair (+ deadline banner)    |
+|3  |Lineup |Lineup Optimizer + Season Review (lineup efficiency)     |
+|4  |League |Overview · Activity · Movers                             |
+|5  |Draft  |Rookie draft board · Draft pick tracker                  |
+
+Sections with multiple views use a sub-tab bar pinned under the app header.
+The drawer also holds: data freshness timestamp, manual Refresh, and the theme toggle.
+The active section is highlighted in the drawer; the app header shows the section name.
 
 -----
 
@@ -487,7 +577,7 @@ Load from Google Fonts. Both are free.
 
 - Content padding: `16px` left/right on mobile
 - Card border radius: `12px`
-- Tab bar height: `64px` (includes safe area for iPhone home indicator)
+- Side drawer width: `80vw`, max `300px`; respects iPhone safe-area insets
 - Section headers: uppercase, 11px, letter-spacing 0.08em, text-secondary color
 - Player cards: compact — name + team + value must fit in one row at 390px
 
@@ -512,37 +602,68 @@ dynastyedge/
 ├── src/
 │   ├── components/
 │   │   ├── roster/
-│   │   │   ├── RosterView.jsx
+│   │   │   ├── RosterLayout.jsx     ← sub-tabs: My Roster / All Teams / Free Agents
+│   │   │   ├── RosterView.jsx       ← own roster + drill-down for any team
+│   │   │   ├── AllTeamsView.jsx     ← all 10 teams, tap → roster drill-down
+│   │   │   ├── FreeAgentsView.jsx
+│   │   │   ├── RosterActionItems.jsx
+│   │   │   ├── AgeCurveSection.jsx
 │   │   │   ├── PlayerCard.jsx
 │   │   │   └── PickBadge.jsx
 │   │   ├── trade/
+│   │   │   ├── TradeLayout.jsx      ← sub-tabs + trade deadline banner
 │   │   │   ├── TradePartnerFinder.jsx
 │   │   │   ├── TradeAnalyzer.jsx
 │   │   │   ├── TradeBuilder.jsx
-│   │   │   └── TradeVerdict.jsx
+│   │   │   ├── TradeVerdict.jsx
+│   │   │   └── WhatsFair.jsx
 │   │   ├── lineup/
 │   │   │   ├── LineupOptimizer.jsx
+│   │   │   ├── LineupEfficiency.jsx ← season review: actual vs optimal points
 │   │   │   ├── StarterSlot.jsx
 │   │   │   └── FreeAgentDrawer.jsx
 │   │   ├── league/
+│   │   │   ├── LeagueLayout.jsx     ← sub-tabs: Overview / Activity / Movers
 │   │   │   ├── LeagueOverview.jsx
+│   │   │   ├── LeagueActivity.jsx   ← transaction feed (trades, waivers, FAAB bids)
+│   │   │   ├── MarketMovers.jsx     ← risers/fallers, buy-low / sell-high
 │   │   │   ├── TeamCard.jsx
 │   │   │   └── MatchupCard.jsx
+│   │   ├── draft/
+│   │   │   ├── DraftLayout.jsx
+│   │   │   ├── DraftBoard.jsx
+│   │   │   └── DraftTracker.jsx
 │   │   └── shared/
-│   │       ├── BottomNav.jsx
-│   │       ├── ThemeToggle.jsx
+│   │       ├── SideDrawer.jsx       ← the app's only navigation
+│   │       ├── ErrorState.jsx       ← THE error component — never duplicate it
+│   │       ├── SectionHeader.jsx    ← THE section header — never duplicate it
+│   │       ├── PlayerProfileDrawer.jsx
 │   │       ├── WinWindowBadge.jsx
 │   │       ├── TrendArrow.jsx
+│   │       ├── DynastyEdgeLogo.jsx
 │   │       └── LoadingSpinner.jsx
 │   ├── hooks/
-│   │   ├── useSleeper.js        ← all Sleeper API calls
-│   │   ├── useFantasyCalc.js    ← FantasyCalc fetch + cache
-│   │   └── useLeague.js         ← combined league state, player resolution
+│   │   ├── useSleeper.js        ← league/rosters/users/picks/state fetch
+│   │   ├── useFantasyCalc.js    ← FantasyCalc fetch + module cache
+│   │   ├── usePlayerDB.js       ← shared /players/nfl cache (one fetch/session)
+│   │   ├── useLeague.js         ← combined league state, player resolution
+│   │   ├── useTransactions.js   ← season-wide transaction feed
+│   │   ├── useLineupHistory.js  ← my past matchups for efficiency review
+│   │   ├── useLineupData.js     ← projections, statuses, schedule, def stats
+│   │   ├── useWatchlist.js      ← starred players (localStorage-backed store)
+│   │   ├── useTheme.js          ← dark/light toggle
+│   │   ├── usePlayerNews.js     ← per-player injury status
+│   │   ├── useSleeperRookies.js ← rookie map derived from usePlayerDB
+│   │   └── useRookieADP.js
 │   ├── utils/
+│   │   ├── fetchJSON.js         ← shared fetch wrapper with timeout — use everywhere
 │   │   ├── tradeAnalysis.js     ← trade scoring, verdict logic
 │   │   ├── rosterAnalysis.js    ← positional strength, win window tiers
 │   │   ├── pickCapital.js       ← pick ownership resolution logic
+│   │   ├── lineupHistory.js     ← optimal-lineup math for efficiency review
 │   │   └── projections.js       ← lineup optimization, matchup quality
+│   ├── context/
+│   │   └── LeagueContext.jsx
 │   ├── constants.js             ← league ID, my roster ID, API base URLs
 │   ├── App.jsx
 │   └── main.jsx
@@ -653,6 +774,20 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 1. **FantasyCalc caching:** Fetch once at app load via `useFantasyCalc` hook.
    Store result in React state at the app level. Pass down as props or via context.
    Never fetch inside a component that renders repeatedly.
+   Auto-refresh on tab focus when data is >30 min old — silently, keeping
+   cached data on screen while the refetch runs (stale-while-revalidate).
+1. **Fetch timeouts:** Every network call goes through `src/utils/fetchJSON.js`
+   (AbortController timeout). Never call raw `fetch()` directly.
+1. **Player DB:** `/players/nfl` is fetched once per session via `usePlayerDB`.
+   All consumers (rookies, injury statuses, unranked names, lineup history,
+   transaction feed) read from that single cache.
+1. **Unranked players:** Rostered players with no FantasyCalc value (deep
+   stashes, some rookies, DEFs) are still shown — name resolved from the
+   player DB, value displayed as `—`, contributing 0 to roster totals.
+   Never silently drop a rostered player from a roster view.
+1. **Sleeper ID normalization:** Sleeper returns IDs as strings or numbers
+   depending on endpoint. Normalize to `String(id)` at ingestion (useLeague
+   does this); all lookups and joins use string IDs.
 1. **FAAB display:** Always format as `$XXX` (e.g. `$142`, not `142`).
 1. **Dynasty values display:** Whole numbers only on 0–10000 scale.
    Never show decimals for values.
@@ -668,12 +803,22 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 1. **Mobile layout:** Every component must work at 390px width. Test mentally
    before considering it done. Nothing should require horizontal scrolling
    unless explicitly designed as a swipeable horizontal list.
-1. **Tab bar safe area:** Bottom nav must account for iPhone home indicator.
-   Use `pb-safe` or `padding-bottom: env(safe-area-inset-bottom)`.
+1. **Safe areas:** The main scroll area and the side drawer must account for
+   the iPhone home indicator and notch via `env(safe-area-inset-*)`.
+   There is no bottom nav — do not add one.
 1. **Error states:** Every API call needs a loading state and an error state.
    Never show a blank screen. If an API call fails, show a message and a retry button.
 1. **Theme toggle:** Stored in `localStorage` key `dynastyedge_theme`.
    Default to `dark` if no preference is stored. Apply theme class to `<html>` element.
+   All theme logic lives in the `useTheme` hook — never duplicate it.
+1. **localStorage / sessionStorage keys** (all prefixed `dynastyedge_`):
+   `dynastyedge_theme` (theme) · `dynastyedge_watchlist_v1` (starred players) ·
+   `dynastyedge_action_dismissals` (roster action items) ·
+   `dynastyedge_draft_*` (draft board state) ·
+   sessionStorage `dynastyedge_league_sort` / `dynastyedge_league_pos`
+   (League tab filters, preserved across drill-downs).
+1. **Shared components:** `ErrorState` and `SectionHeader` live in
+   `src/components/shared/` — import them, never redefine them locally.
 1. **The app name is DynastyEdge.** Use it in the page `<title>`,
    the header, and any loading/splash screen.
 
@@ -684,8 +829,18 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 These are noted so the codebase is structured to support them later.
 Do not implement them until explicitly asked.
 
-- Player news feed (injury reports, beat reporter updates)
+- Player news feed with beat reporter updates (injury-status tracking is built;
+  full news is not)
 - FAAB bid recommender for waiver pickups
 - Claude Design visual refresh
-- Rookie draft board and ADP tracker
+- Playoff strength-of-schedule view (Weeks 15–17 matchup outlook for starters)
 - Push notifications for trade offers (requires backend — out of scope for v1)
+
+### Already built (formerly future features)
+
+- Rookie draft board and ADP tracker → Draft section
+- Injury-status player news → PlayerProfileDrawer + trade analysis
+- League transaction feed with FAAB bids → League › Activity
+- Market movers / buy-low / sell-high → League › Movers
+- Watchlist (star players, surfaced in Trade Partners) → `useWatchlist`
+- Lineup efficiency season review → Lineup › Season Review

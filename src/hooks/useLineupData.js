@@ -1,26 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { SLEEPER_BASE } from '../constants'
-
-function fetchJSON(url) {
-  return fetch(url).then(r => {
-    if (!r.ok) throw new Error(`Sleeper ${r.status}: ${url}`)
-    return r.json()
-  })
-}
-
-// Module-level cache — /players/nfl is ~8MB, fetch once per session
-let cachedPlayerStatuses = null
-let statusFetchPromise = null
-
-function getPlayerStatuses() {
-  if (cachedPlayerStatuses) return Promise.resolve(cachedPlayerStatuses)
-  if (!statusFetchPromise) {
-    statusFetchPromise = fetchJSON(`${SLEEPER_BASE}/players/nfl`)
-      .then(data => { cachedPlayerStatuses = data; return data })
-      .catch(err => { statusFetchPromise = null; throw err })
-  }
-  return statusFetchPromise
-}
+import { fetchJSON } from '../utils/fetchJSON'
+import { loadPlayerDB } from './usePlayerDB'
 
 function parseByeTeams(schedule, currentWeek) {
   const games = Array.isArray(schedule)
@@ -50,7 +31,7 @@ export function useLineupData() {
     setError(null)
 
     try {
-      const state = await fetchJSON(`${SLEEPER_BASE}/state/nfl`)
+      const state = await fetchJSON(`${SLEEPER_BASE}/state/nfl`, { label: 'Sleeper' })
       setNflState(state)
 
       if (state.season_type !== 'regular') {
@@ -64,12 +45,12 @@ export function useLineupData() {
       const prevWeek = Math.max(1, week - 1)
 
       const [projData, scheduleData, statsData, statuses] = await Promise.all([
-        fetchJSON(`${SLEEPER_BASE}/projections/nfl/regular/${season}/${week}`),
-        fetchJSON(`${SLEEPER_BASE}/schedule/nfl/regular/${season}`),
+        fetchJSON(`${SLEEPER_BASE}/projections/nfl/regular/${season}/${week}`, { label: 'Sleeper' }),
+        fetchJSON(`${SLEEPER_BASE}/schedule/nfl/regular/${season}`, { label: 'Sleeper' }),
         prevWeek > 0
-          ? fetchJSON(`${SLEEPER_BASE}/stats/nfl/regular/${season}/${prevWeek}`)
+          ? fetchJSON(`${SLEEPER_BASE}/stats/nfl/regular/${season}/${prevWeek}`, { label: 'Sleeper' })
           : Promise.resolve({}),
-        getPlayerStatuses(),
+        loadPlayerDB(),
       ])
 
       setProjMap(projData)

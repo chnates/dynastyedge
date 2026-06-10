@@ -1,42 +1,41 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { assignWinWindowTiers, computeLeagueAverages, getPositionalStrength } from '../../utils/rosterAnalysis'
 import { getTeamName } from '../../hooks/useLeague'
-import { POSITIONS, PICK_YEARS } from '../../constants'
+import { POSITIONS } from '../../constants'
 import LoadingSpinner from '../shared/LoadingSpinner'
+import ErrorState from '../shared/ErrorState'
+import SectionHeader from '../shared/SectionHeader'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import TeamCard from './TeamCard'
 import MatchupCard from './MatchupCard'
 
 const SORT_OPTIONS = [
-  { id: 'value', label: 'Overall Value' },
-  { id: 'picks', label: 'Pick Capital' },
-  { id: 'faab',  label: 'FAAB' },
+  { id: 'value',  label: 'Overall Value' },
+  { id: 'record', label: 'Record' },
+  { id: 'picks',  label: 'Pick Capital' },
+  { id: 'faab',   label: 'FAAB' },
 ]
 
-function SectionHeader({ label }) {
-  return (
-    <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary pt-4 pb-1.5">
-      {label}
-    </p>
-  )
+// Filters survive drill-down + back navigation via sessionStorage.
+const SORT_KEY = 'dynastyedge_league_sort'
+const POS_KEY = 'dynastyedge_league_pos'
+
+function readSession(key, fallback) {
+  try {
+    return sessionStorage.getItem(key) ?? fallback
+  } catch {
+    return fallback
+  }
 }
 
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
-      <AlertTriangle size={24} className="text-warning" strokeWidth={1.75} />
-      <p className="text-text-secondary dark:text-text-secondary font-body text-sm">{message}</p>
-      <button
-        onClick={onRetry}
-        className="mt-1 px-4 py-2 rounded-lg bg-accent text-white font-body font-medium text-sm"
-      >
-        Retry
-      </button>
-    </div>
-  )
+function writeSession(key, value) {
+  try {
+    sessionStorage.setItem(key, value)
+  } catch {
+    // private mode — filters just won't persist
+  }
 }
 
 function PositionRankCard({ roster, posFilter, tier, posStrength, posRank, onTap }) {
@@ -76,8 +75,18 @@ export default function LeagueOverview() {
   const { league, nflState, matchups, isOffseason, loading, error, retry } = useLeagueContext()
   const navigate = useNavigate()
 
-  const [sortMode, setSortMode] = useState('value')
-  const [posFilter, setPosFilter] = useState('ALL')
+  const [sortMode, setSortModeState] = useState(() => readSession(SORT_KEY, 'value'))
+  const [posFilter, setPosFilterState] = useState(() => readSession(POS_KEY, 'ALL'))
+
+  function setSortMode(mode) {
+    setSortModeState(mode)
+    writeSession(SORT_KEY, mode)
+  }
+
+  function setPosFilter(pos) {
+    setPosFilterState(pos)
+    writeSession(POS_KEY, pos)
+  }
 
   const derived = useMemo(() => {
     if (!league?.allRosters) return null
@@ -90,8 +99,12 @@ export default function LeagueOverview() {
     Object.values(winWindowTiers).forEach(t => { tierCounts[t] = (tierCounts[t] ?? 0) + 1 })
 
     const sortedRosters = [...allRosters].sort((a, b) => {
-      if (sortMode === 'picks') return (b.pickCapitalScore ?? 0) - (a.pickCapitalScore ?? 0)
-      if (sortMode === 'faab')  return b.faabRemaining - a.faabRemaining
+      if (sortMode === 'picks')  return (b.pickCapitalScore ?? 0) - (a.pickCapitalScore ?? 0)
+      if (sortMode === 'faab')   return b.faabRemaining - a.faabRemaining
+      if (sortMode === 'record') {
+        const winDiff = (b.record?.wins ?? 0) - (a.record?.wins ?? 0)
+        return winDiff !== 0 ? winDiff : (b.pointsFor ?? 0) - (a.pointsFor ?? 0)
+      }
       return b.totalValue - a.totalValue
     })
 
@@ -111,14 +124,14 @@ export default function LeagueOverview() {
     return { winWindowTiers, leagueAverages, tierCounts, sortedRosters, positionRanked }
   }, [league, sortMode, posFilter])
 
-  if (loading) return <LoadingSpinner message="Loading league data…" />
-  if (error)   return <ErrorState message={error} onRetry={retry} />
-  if (!league) return <ErrorState message="Could not load league data." onRetry={retry} />
+  if (loading && !league) return <LoadingSpinner message="Loading league data…" />
+  if (error && !league)   return <ErrorState message={error} onRetry={retry} />
+  if (!league || !derived) return <ErrorState message="Could not load league data." onRetry={retry} />
 
   const { winWindowTiers, leagueAverages, tierCounts, sortedRosters, positionRanked } = derived
 
   function handleTeamTap(rosterId) {
-    navigate('/roster/my-team', { state: { selectedRosterId: rosterId } })
+    navigate(`/roster/teams/${rosterId}`)
   }
 
   const currentWeek = nflState?.week
@@ -152,8 +165,8 @@ export default function LeagueOverview() {
       )}
 
       {/* ── Sort Toggle ── */}
-      <div className="pt-4 pb-2">
-        <div className="flex gap-1.5">
+      <div className="pt-4 pb-2 -mx-4 px-4 overflow-x-auto scrollbar-none">
+        <div className="flex gap-1.5 w-max">
           {SORT_OPTIONS.map(opt => (
             <button
               key={opt.id}
@@ -161,7 +174,7 @@ export default function LeagueOverview() {
                 setSortMode(opt.id)
                 if (opt.id !== 'value') setPosFilter('ALL')
               }}
-              className={`px-2.5 py-1 rounded-full font-body text-xs font-medium transition-colors ${
+              className={`shrink-0 px-2.5 py-1 rounded-full font-body text-xs font-medium transition-colors ${
                 sortMode === opt.id
                   ? 'bg-accent text-white'
                   : 'bg-bg-secondary dark:bg-bg-secondary text-text-secondary dark:text-text-secondary border border-border-default dark:border-border-default'
@@ -194,8 +207,8 @@ export default function LeagueOverview() {
         </div>
       )}
 
-      {/* ── Team List OR Position Swipe Ranking ── */}
-      {posFilter === 'ALL' ? (
+      {/* ── Team List OR Position Ranking ── */}
+      {posFilter === 'ALL' || sortMode !== 'value' ? (
         <div className="flex flex-col gap-2">
           {sortedRosters.map(roster => (
             <TeamCard

@@ -1,18 +1,23 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Menu } from 'lucide-react'
 import { useLeague } from './hooks/useLeague'
+import { useTheme } from './hooks/useTheme'
 import { LeagueContext } from './context/LeagueContext'
 import SideDrawer from './components/shared/SideDrawer'
 import RosterLayout from './components/roster/RosterLayout'
 import RosterView from './components/roster/RosterView'
+import AllTeamsView from './components/roster/AllTeamsView'
 import FreeAgentsView from './components/roster/FreeAgentsView'
 import TradeLayout from './components/trade/TradeLayout'
 import TradePartnerFinder from './components/trade/TradePartnerFinder'
 import TradeAnalyzer from './components/trade/TradeAnalyzer'
 import WhatsFair from './components/trade/WhatsFair'
 import LineupOptimizer from './components/lineup/LineupOptimizer'
+import LeagueLayout from './components/league/LeagueLayout'
 import LeagueOverview from './components/league/LeagueOverview'
+import LeagueActivity from './components/league/LeagueActivity'
+import MarketMovers from './components/league/MarketMovers'
 import DraftLayout from './components/draft/DraftLayout'
 import DraftBoard from './components/draft/DraftBoard'
 import DraftTracker from './components/draft/DraftTracker'
@@ -24,6 +29,9 @@ const SECTION_NAMES = {
   '/league': 'League',
   '/draft':  'Draft',
 }
+
+// Refetch league + value data when the app regains focus with stale data.
+const STALE_AFTER_MS = 30 * 60 * 1000
 
 function getSectionName(pathname) {
   for (const [prefix, name] of Object.entries(SECTION_NAMES)) {
@@ -46,9 +54,7 @@ function formatTimestamp(ts) {
 function AppShell({ leagueData }) {
   const location = useLocation()
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [isDark, setIsDark] = useState(
-    () => document.documentElement.classList.contains('dark')
-  )
+  const { isDark, toggleTheme } = useTheme()
   const edgeTouchStartX = useRef(null)
 
   const { loading, retry, sleeperFetchedAt, fcFetchedAt } = leagueData
@@ -56,18 +62,22 @@ function AppShell({ leagueData }) {
   const ts2 = fcFetchedAt ?? 0
   const lastUpdated = Math.max(ts1, ts2) || null
 
-  function toggleTheme() {
-    const next = !isDark
-    const html = document.documentElement
-    if (next) {
-      html.classList.add('dark')
-      localStorage.setItem('dynastyedge_theme', 'dark')
-    } else {
-      html.classList.remove('dark')
-      localStorage.setItem('dynastyedge_theme', 'light')
+  // Auto-refresh: when the Safari tab comes back into focus and the data is
+  // older than 30 minutes, silently refetch. Views keep showing the cached
+  // data while the refresh runs (stale-while-revalidate).
+  useEffect(() => {
+    function maybeRefresh() {
+      if (document.visibilityState !== 'visible') return
+      if (loading || !lastUpdated) return
+      if (Date.now() - lastUpdated > STALE_AFTER_MS) retry()
     }
-    setIsDark(next)
-  }
+    document.addEventListener('visibilitychange', maybeRefresh)
+    window.addEventListener('focus', maybeRefresh)
+    return () => {
+      document.removeEventListener('visibilitychange', maybeRefresh)
+      window.removeEventListener('focus', maybeRefresh)
+    }
+  }, [loading, lastUpdated, retry])
 
   // Swipe right from left edge (≤20px) to open drawer
   function handleTouchStart(e) {
@@ -122,6 +132,8 @@ function AppShell({ leagueData }) {
           <Route path="/roster" element={<RosterLayout />}>
             <Route index element={<Navigate to="my-team" replace />} />
             <Route path="my-team" element={<RosterView />} />
+            <Route path="teams" element={<AllTeamsView />} />
+            <Route path="teams/:rosterId" element={<RosterView />} />
             <Route path="free-agents" element={<FreeAgentsView />} />
           </Route>
           <Route path="/trade" element={<TradeLayout />}>
@@ -130,7 +142,11 @@ function AppShell({ leagueData }) {
             <Route path="whats-fair" element={<WhatsFair />} />
           </Route>
           <Route path="/lineup" element={<LineupOptimizer />} />
-          <Route path="/league" element={<LeagueOverview />} />
+          <Route path="/league" element={<LeagueLayout />}>
+            <Route index element={<LeagueOverview />} />
+            <Route path="activity" element={<LeagueActivity />} />
+            <Route path="movers" element={<MarketMovers />} />
+          </Route>
           <Route path="/draft" element={<DraftLayout />}>
             <Route index element={<Navigate to="board" replace />} />
             <Route path="board" element={<DraftBoard />} />

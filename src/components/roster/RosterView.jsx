@@ -1,54 +1,28 @@
 import { useMemo, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
-import { AlertTriangle } from 'lucide-react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getTeamName } from '../../hooks/useLeague'
 import { useLeagueContext } from '../../context/LeagueContext'
 import LoadingSpinner from '../shared/LoadingSpinner'
+import ErrorState from '../shared/ErrorState'
+import SectionHeader from '../shared/SectionHeader'
 import PlayerCard from './PlayerCard'
 import PickBadge from './PickBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import AgeCurveSection from './AgeCurveSection'
 import RosterActionItems from './RosterActionItems'
 
-const POSITION_ORDER = ['QB', 'RB', 'WR', 'TE']
-
-function SectionHeader({ label, count }) {
-  return (
-    <div className="flex items-center justify-between pt-4 pb-1.5">
-      <span className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary">
-        {label}
-      </span>
-      {count != null && (
-        <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
-          {count}
-        </span>
-      )}
-    </div>
-  )
-}
-
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
-      <AlertTriangle size={24} className="text-warning" strokeWidth={1.75} />
-      <p className="text-text-secondary dark:text-text-secondary font-body text-sm">{message}</p>
-      <button
-        onClick={onRetry}
-        className="mt-1 px-4 py-2 rounded-lg bg-accent text-white font-body font-medium text-sm"
-      >
-        Retry
-      </button>
-    </div>
-  )
-}
+const POSITION_ORDER = ['QB', 'RB', 'WR', 'TE', 'DEF']
 
 export default function RosterView() {
   const { league, loading, error, retry, nflState } = useLeagueContext()
   const location = useLocation()
   const navigate = useNavigate()
+  const params = useParams()
   const [selectedPlayer, setSelectedPlayer] = useState(null)
 
-  const selectedRosterId = location.state?.selectedRosterId
+  const selectedRosterId = params.rosterId
+    ? Number(params.rosterId)
+    : location.state?.selectedRosterId
 
   const displayRoster = useMemo(() => {
     if (!league) return null
@@ -80,10 +54,10 @@ export default function RosterView() {
     })
 
     return { byPosition, taxi, ir, picksByYear }
-  }, [league])
+  }, [displayRoster])
 
-  if (loading) return <LoadingSpinner message="Loading roster data…" />
-  if (error) return <ErrorState message={error} onRetry={retry} />
+  if (loading && !league) return <LoadingSpinner message="Loading roster data…" />
+  if (error && !league) return <ErrorState message={error} onRetry={retry} />
   if (!displayRoster) return <ErrorState message="Could not load roster." onRetry={retry} />
 
   const { userMap } = league
@@ -96,13 +70,13 @@ export default function RosterView() {
 
   return (
     <div className="px-4 pb-4">
-      {/* ── Back button (when drilling down from League tab) ── */}
+      {/* ── Back button (when drilling down from League / All Teams) ── */}
       {selectedRosterId && (
         <button
-          onClick={() => navigate('/league')}
+          onClick={() => navigate(-1)}
           className="flex items-center gap-1 pt-4 pb-1 text-accent font-body text-sm"
         >
-          ← League
+          ← Back
         </button>
       )}
 
@@ -125,7 +99,7 @@ export default function RosterView() {
         <div className="flex items-center gap-1 mt-1.5">
           <span className="block w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
           <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">
-            = starting lineup
+            = starting lineup · — = no market value yet
           </span>
         </div>
 

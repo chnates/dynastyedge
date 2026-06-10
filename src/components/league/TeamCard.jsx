@@ -25,6 +25,10 @@ const ROUND_CLASSES = {
 }
 const ROUND_LABELS = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th' }
 
+function formatRecord({ wins, losses, ties }) {
+  return ties > 0 ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`
+}
+
 export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortMode = 'value', onTap }) {
   const teamName = getTeamName(roster.owner)
   const username = roster.owner?.username ?? ''
@@ -58,9 +62,14 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
           <p className="font-body text-sm font-semibold text-text-primary dark:text-text-primary truncate leading-tight">
             {teamName}
           </p>
-          {username && (
+          {(username || roster.hasRecord) && (
             <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary truncate leading-tight mt-0.5">
-              @{username}
+              {username ? `@${username}` : ''}
+              {roster.hasRecord && (
+                <span className="font-mono tabular-nums">
+                  {username ? ' · ' : ''}{formatRecord(roster.record)}
+                </span>
+              )}
             </p>
           )}
         </div>
@@ -110,6 +119,31 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
             })}
           </div>
         </div>
+      ) : sortMode === 'record' ? (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-baseline gap-1.5">
+            <span className="font-mono text-xl font-semibold text-accent tabular-nums">
+              {roster.hasRecord ? formatRecord(roster.record) : '—'}
+            </span>
+            <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
+              record
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-baseline gap-1">
+              <span className="font-mono text-sm font-medium text-text-secondary dark:text-text-secondary tabular-nums">
+                {Math.round(roster.pointsFor).toLocaleString()}
+              </span>
+              <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">PF</span>
+            </div>
+            <div className="flex items-baseline gap-1">
+              <span className="font-mono text-sm font-medium text-text-secondary dark:text-text-secondary tabular-nums">
+                {Math.round(roster.pointsAgainst).toLocaleString()}
+              </span>
+              <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">PA</span>
+            </div>
+          </div>
+        </div>
       ) : sortMode === 'faab' ? (
         <div className="flex flex-col gap-2">
           <div className="flex items-baseline gap-1.5">
@@ -117,7 +151,7 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
               ${roster.faabRemaining}
             </span>
             <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
-              FAAB remaining
+              FAAB remaining · spent ${roster.faabSpent} of ${roster.faabBudget}
             </span>
           </div>
           <div className="flex items-center gap-3">

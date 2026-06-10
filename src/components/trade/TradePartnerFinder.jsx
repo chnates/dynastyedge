@@ -1,11 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Target, CheckCircle2, Circle, AlertTriangle } from 'lucide-react'
+import { Target, CheckCircle2, Circle, AlertTriangle, Star } from 'lucide-react'
 import { getTeamName } from '../../hooks/useLeague'
 import { useLeagueContext } from '../../context/LeagueContext'
+import { useWatchlist } from '../../hooks/useWatchlist'
 import { rankTradePartners } from '../../utils/rosterAnalysis'
+import { MY_ROSTER_ID } from '../../constants'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import LoadingSpinner from '../shared/LoadingSpinner'
+import ErrorState from '../shared/ErrorState'
 
 const FILTER_TABS = ['All', 'QB', 'RB', 'WR', 'TE', 'Picks']
 
@@ -21,28 +24,13 @@ const PICK_CAP_STYLES = {
   Depleted: 'text-danger bg-danger/10',
 }
 
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
-      <AlertTriangle size={24} className="text-warning" strokeWidth={1.75} />
-      <p className="text-text-secondary dark:text-text-secondary font-body text-sm">{message}</p>
-      <button
-        onClick={onRetry}
-        className="mt-1 px-4 py-2 rounded-lg bg-accent text-white font-body font-medium text-sm"
-      >
-        Retry
-      </button>
-    </div>
-  )
-}
-
 function PositionChip({ position, variant }) {
   const base = 'inline-flex items-center rounded px-1.5 py-0.5 font-body text-[10px] font-bold uppercase'
   const color = variant === 'need' ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success'
   return <span className={`${base} ${color}`}>{position}</span>
 }
 
-function TradePartnerCard({ partner, onClick }) {
+function TradePartnerCard({ partner, watchedNames, onClick }) {
   const { owner, fitBadge, winWindowTier, mismatchWarning, theirNeeds, theirHaves, pickCapStatus } = partner
   const badge = FIT_BADGE[fitBadge] ?? FIT_BADGE['Poor Fit']
 
@@ -94,6 +82,16 @@ function TradePartnerCard({ partner, onClick }) {
         </span>
       </div>
 
+      {/* Watched players on this roster */}
+      {watchedNames?.length > 0 && (
+        <div className="flex items-start gap-1.5">
+          <Star size={12} strokeWidth={2} className="text-accent shrink-0 mt-0.5 fill-accent" />
+          <span className="font-body text-[11px] text-accent leading-tight">
+            Watching: {watchedNames.join(', ')}
+          </span>
+        </div>
+      )}
+
       {/* Row 5: win window mismatch warning */}
       {mismatchWarning && (
         <div className="flex items-start gap-1.5">
@@ -107,6 +105,7 @@ function TradePartnerCard({ partner, onClick }) {
 
 export default function TradePartnerFinder() {
   const { league, loading, error, retry } = useLeagueContext()
+  const { watchlist } = useWatchlist()
   const [activeFilter, setActiveFilter] = useState('All')
   const navigate = useNavigate()
 
@@ -114,6 +113,22 @@ export default function TradePartnerFinder() {
     if (!league?.myRoster || !league?.allRosters?.length) return null
     return rankTradePartners(league.myRoster, league.allRosters)
   }, [league])
+
+  // Watched players on opponent rosters, grouped by owning team.
+  const watchedByRoster = useMemo(() => {
+    if (!league?.allRosters || watchlist.length === 0) return {}
+    const byRoster = {}
+    league.allRosters.forEach(r => {
+      if (r.rosterId === MY_ROSTER_ID) return
+      r.players.forEach(p => {
+        if (!watchlist.includes(p.sleeperId)) return
+        if (!byRoster[r.rosterId]) byRoster[r.rosterId] = []
+        byRoster[r.rosterId].push(p)
+      })
+    })
+    Object.values(byRoster).forEach(list => list.sort((a, b) => b.value - a.value))
+    return byRoster
+  }, [league, watchlist])
 
   const displayedPartners = useMemo(() => {
     if (!analysis) return []
@@ -125,8 +140,8 @@ export default function TradePartnerFinder() {
     return [...partners].sort((a, b) => b.positionalDeltas[activeFilter] - a.positionalDeltas[activeFilter])
   }, [analysis, activeFilter])
 
-  if (loading) return <LoadingSpinner message="Analyzing trade partners…" />
-  if (error)   return <ErrorState message={error} onRetry={retry} />
+  if (loading && !league) return <LoadingSpinner message="Analyzing trade partners…" />
+  if (error && !league)   return <ErrorState message={error} onRetry={retry} />
   if (!league?.myRoster) return <ErrorState message="Could not load league data." onRetry={retry} />
 
   const myTeamName = getTeamName(league.myRoster.owner)
@@ -171,6 +186,7 @@ export default function TradePartnerFinder() {
             <TradePartnerCard
               key={partner.rosterId}
               partner={partner}
+              watchedNames={(watchedByRoster[partner.rosterId] ?? []).map(p => p.name)}
               onClick={() => navigate('/trade/analyze', { state: { opponentRosterId: partner.rosterId } })}
             />
           ))}

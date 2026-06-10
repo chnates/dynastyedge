@@ -4,6 +4,7 @@ import { useLeagueContext } from '../../context/LeagueContext'
 import { useSleeperRookies } from '../../hooks/useSleeperRookies'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import LoadingSpinner from '../shared/LoadingSpinner'
+import ErrorState from '../shared/ErrorState'
 import TrendArrow from '../shared/TrendArrow'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 
@@ -12,17 +13,6 @@ const SORT_OPTIONS = [
   { id: 'value', label: 'Value' },
   { id: 'age',   label: 'Age'   },
 ]
-
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
-      <p className="text-text-secondary font-body text-sm">{message}</p>
-      <button onClick={onRetry} className="px-4 py-2 rounded-lg bg-accent text-white font-body font-medium text-sm">
-        Retry
-      </button>
-    </div>
-  )
-}
 
 function FillsNeedBadge() {
   return (
@@ -124,8 +114,8 @@ export default function FreeAgentsView() {
     return list
   }, [freeAgents, posFilter, upgradesOnly, search, sortMode, myWorstByPosition])
 
-  if (loading) return <LoadingSpinner message="Loading league data…" />
-  if (error)   return <ErrorState message={error} onRetry={retry} />
+  if (loading && !league) return <LoadingSpinner message="Loading league data…" />
+  if (error && !league)   return <ErrorState message={error} onRetry={retry} />
 
   return (
     <>

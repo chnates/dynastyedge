@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { AlertTriangle } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getTeamName } from '../../hooks/useLeague'
 import { analyzeTrade, getTradeVerdict, suggestFairPackage, getCounterSuggestion, adjustVerdictForInjuries } from '../../utils/tradeAnalysis'
@@ -8,21 +7,7 @@ import { fetchPlayerNews } from '../../hooks/usePlayerNews'
 import TradeBuilder from './TradeBuilder'
 import TradeVerdict from './TradeVerdict'
 import LoadingSpinner from '../shared/LoadingSpinner'
-
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
-      <AlertTriangle size={24} className="text-warning" strokeWidth={1.75} />
-      <p className="text-text-secondary dark:text-text-secondary font-body text-sm">{message}</p>
-      <button
-        onClick={onRetry}
-        className="mt-1 px-4 py-2 rounded-lg bg-accent text-white font-body font-medium text-sm"
-      >
-        Retry
-      </button>
-    </div>
-  )
-}
+import ErrorState from '../shared/ErrorState'
 
 function makeAsset(item, type) {
   if (type === 'player') {
@@ -198,8 +183,8 @@ export default function TradeAnalyzer() {
     }
   }
 
-  if (loading) return <LoadingSpinner message="Loading trade data…" />
-  if (error)   return <ErrorState message={error} onRetry={retry} />
+  if (loading && !league) return <LoadingSpinner message="Loading trade data…" />
+  if (error && !league)   return <ErrorState message={error} onRetry={retry} />
   if (!league?.myRoster) return <ErrorState message="Could not load league data." onRetry={retry} />
 
   const opponents = league.allRosters.filter(r => r.rosterId !== league.myRoster.rosterId)

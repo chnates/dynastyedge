@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { AlertTriangle, LayoutList } from 'lucide-react'
+import { LayoutList } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useFantasyCalc } from '../../hooks/useFantasyCalc'
 import { useLineupData } from '../../hooks/useLineupData'
@@ -17,39 +17,12 @@ import {
 } from '../../utils/rosterAnalysis'
 import { ROSTER_SLOTS, POSITIONS, PICK_YEARS } from '../../constants'
 import LoadingSpinner from '../shared/LoadingSpinner'
+import ErrorState from '../shared/ErrorState'
+import SectionHeader from '../shared/SectionHeader'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import StarterSlot from './StarterSlot'
 import FreeAgentDrawer from './FreeAgentDrawer'
-
-function SectionHeader({ label, count }) {
-  return (
-    <div className="flex items-center justify-between pt-4 pb-1.5">
-      <span className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary">
-        {label}
-      </span>
-      {count != null && (
-        <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
-          {count}
-        </span>
-      )}
-    </div>
-  )
-}
-
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
-      <AlertTriangle size={24} className="text-warning" strokeWidth={1.75} />
-      <p className="text-text-secondary dark:text-text-secondary font-body text-sm">{message}</p>
-      <button
-        onClick={onRetry}
-        className="mt-1 px-4 py-2 rounded-lg bg-accent text-white font-body font-medium text-sm"
-      >
-        Retry
-      </button>
-    </div>
-  )
-}
+import LineupEfficiency from './LineupEfficiency'
 
 function OffseasonPlaceholder({ league }) {
   const myRoster = league?.myRoster
@@ -131,6 +104,9 @@ function OffseasonPlaceholder({ league }) {
           </div>
         </div>
       )}
+
+      {/* Last season's lineup efficiency — historical, so fine to show offseason */}
+      <LineupEfficiency />
     </div>
   )
 }
@@ -270,6 +246,9 @@ export default function LineupOptimizer() {
           </div>
         </section>
       )}
+
+      {/* Season-to-date efficiency review */}
+      <LineupEfficiency />
 
       {/* Free agent drawer */}
       {drawerState && fcValues?.playerMap && (

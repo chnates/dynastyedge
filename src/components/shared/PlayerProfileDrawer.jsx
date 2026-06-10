@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { X, ArrowRight } from 'lucide-react'
+import { X, ArrowRight, Star } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import TrendArrow from './TrendArrow'
 import { usePlayerNews } from '../../hooks/usePlayerNews'
+import { useWatchlist } from '../../hooks/useWatchlist'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { getTeamName } from '../../hooks/useLeague'
@@ -136,6 +137,8 @@ export default function PlayerProfileDrawer({
   const values = ctx?.values
 
   const { injuryFlag, injuryStatus, injuryDetail, injuryNotes, loading: newsLoading } = usePlayerNews(player.sleeperId)
+  const { toggleWatch, isWatched } = useWatchlist()
+  const watched = isWatched(player.sleeperId)
 
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
@@ -330,12 +333,21 @@ export default function PlayerProfileDrawer({
               {player.team || 'FA'}{player.age != null ? ` · Age ${Math.floor(player.age)}` : ''}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="w-9 h-9 flex items-center justify-center rounded-lg text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex-shrink-0"
-          >
-            <X size={18} strokeWidth={1.75} />
-          </button>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={() => toggleWatch(player.sleeperId)}
+              aria-label={watched ? 'Remove from watchlist' : 'Add to watchlist'}
+              className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors hover:bg-black/5 dark:hover:bg-white/5 ${watched ? 'text-accent' : 'text-text-secondary hover:text-text-primary'}`}
+            >
+              <Star size={18} strokeWidth={1.75} className={watched ? 'fill-accent' : ''} />
+            </button>
+            <button
+              onClick={onClose}
+              className="w-9 h-9 flex items-center justify-center rounded-lg text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            >
+              <X size={18} strokeWidth={1.75} />
+            </button>
+          </div>
         </div>
 
         <div className="px-4 pb-6 pt-3 flex flex-col gap-4">
