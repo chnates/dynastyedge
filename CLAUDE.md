@@ -134,25 +134,33 @@ context, peak-window status, and recent news. Sources:
 
 -----
 
-### ESPN API (unofficial — news only)
+### Player news pipeline (GitHub Actions + multi-source aggregation)
 
-**Base URL:** `https://site.api.espn.com` — no authentication, no key.
+News sources (ESPN, FantasyPros, Yahoo, CBS) block browser/CORS access, so
+news is aggregated **server-side in GitHub Actions** and served as a static
+file — keeping the no-backend architecture:
 
-Per-player fantasy news (primary, with automatic fallback):
-
-```
-GET https://site.api.espn.com/apis/fantasy/v2/games/ffl/news/players?playerId={espnId}&limit=3
-GET https://site.web.api.espn.com/apis/common/v3/sports/football/nfl/athletes/{espnId}/news?limit=3
-```
-
-- **Join key:** `espn_id` from the Sleeper player DB (kept in the
-  `usePlayerDB` trimmed cache)
-- **This API is unofficial and may change or disappear without notice.**
-  Every call must degrade silently — on any failure the news section simply
-  hides. Never block a panel, show an error, or retry-loop on ESPN.
-- Fetched lazily per player on profile open, cached per session
-  (`usePlayerIntel`). Response items used: `headline`, `story` (HTML is
-  stripped), `published`.
+- `.github/workflows/news.yml` runs twice an hour (cron `17,47 * * * *`,
+  plus manual `workflow_dispatch`). It runs `scripts/fetch-news.mjs`, which
+  tries five sources (ESPN news API, FantasyPros player-news RSS, Yahoo RSS,
+  ESPN RSS, CBS RSS), merges + dedupes to ≤100 items, and **force-pushes a
+  single-commit `news-data` branch** containing `news.json`.
+- Every source is best-effort; the script only fails (keeping the previous
+  feed) when all sources return nothing.
+- The app fetches `NEWS_FEED_URL`
+  (`raw.githubusercontent.com/chnates/dynastyedge/news-data/news.json` —
+  sends CORS `*`, ~5 min CDN cache) once per session in `usePlayerIntel`.
+- **Player matching:** ESPN API items carry `athleteIds` (matched against
+  `espn_id` from the Sleeper player DB); all other items match by normalized
+  full player name in the headline.
+- If the feed has no items for a player, the client falls back to ESPN's
+  unofficial per-player endpoints (`site.api.espn.com/apis/fantasy/v2/...`,
+  `site.web.api.espn.com/apis/common/v3/...`) — these are CORS-blocked in
+  practice but cost nothing and degrade silently.
+- **News must never block a panel, show an error, or retry-loop.** On any
+  failure the news section simply hides.
+- Caveat: GitHub disables cron workflows after ~60 days without repo
+  activity — any push re-enables it.
 
 -----
 
@@ -674,7 +682,10 @@ Load from Google Fonts. Both are free.
 dynastyedge/
 ├── .github/
 │   └── workflows/
-│       └── deploy.yml          ← GitHub Actions auto-deploy
+│       ├── deploy.yml          ← GitHub Actions auto-deploy
+│       └── news.yml            ← twice-hourly news aggregation → news-data branch
+├── scripts/
+│   └── fetch-news.mjs          ← multi-source news fetcher (runs in Actions)
 ├── public/
 │   └── favicon.ico
 ├── src/

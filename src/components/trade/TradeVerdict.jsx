@@ -102,7 +102,7 @@ function PlayerNewsCard({ intel }) {
         </p>
       )}
 
-      {/* Latest headline (ESPN — hidden when unavailable) */}
+      {/* Latest headline (hidden when unavailable) */}
       {topNews && (
         <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary mt-1 leading-snug">
           {topNews.headline}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { SLEEPER_BASE, ESPN_BASE, ESPN_WEB_BASE } from '../constants'
+import { SLEEPER_BASE, ESPN_BASE, ESPN_WEB_BASE, NEWS_FEED_URL } from '../constants'
 import { fetchJSON } from '../utils/fetchJSON'
 import { loadPlayerDB } from './usePlayerDB'
 
@@ -71,6 +71,45 @@ function stripHtml(s) {
   return s ? s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : ''
 }
 
+// ── Aggregated news feed (GitHub Actions pipeline) ───────────────────────────
+// Primary news source: news.json on the news-data branch, refreshed twice an
+// hour by .github/workflows/news.yml from ESPN/FantasyPros/Yahoo/CBS. Fetched
+// once per session; players are matched by ESPN athlete id when the item has
+// one, otherwise by full name in the headline.
+
+let newsFeedPromise = null
+
+function loadNewsFeed() {
+  if (!newsFeedPromise) {
+    newsFeedPromise = fetchJSON(NEWS_FEED_URL, { timeoutMs: 10000, label: 'News feed' })
+      .then(data => (Array.isArray(data?.items) ? data.items : []))
+      .catch(() => [])
+  }
+  return newsFeedPromise
+}
+
+function normalizeName(s) {
+  return (s ?? '').toLowerCase().replace(/[.'’-]/g, '').replace(/\s+/g, ' ').trim()
+}
+
+function matchFeedItems(items, name, espnId) {
+  const id = espnId != null ? Number(espnId) : null
+  const n = normalizeName(name)
+  const usable = n.length >= 6 && n.includes(' ')  // full names only — avoid false hits
+  return items
+    .filter(item =>
+      (id != null && item.athleteIds?.includes(id)) ||
+      (usable && normalizeName(item.headline).includes(n))
+    )
+    .slice(0, 3)
+    .map(item => ({
+      headline: item.headline,
+      story: item.story ?? '',
+      published: item.published ?? null,
+      source: item.source ?? null,
+    }))
+}
+
 // Handles both ESPN response shapes: fantasy v2 ({feed}) and common v3 ({articles})
 function parseEspnItems(data) {
   const items = data?.feed ?? data?.articles ?? []
@@ -80,6 +119,7 @@ function parseEspnItems(data) {
       headline: item.headline ?? item.title ?? '',
       story: stripHtml(item.story ?? item.description ?? ''),
       published: item.published ?? item.lastModified ?? null,
+      source: 'ESPN',
     }))
     .filter(n => n.headline)
 }
@@ -179,7 +219,13 @@ export async function getPlayerIntel(sleeperId, nflState) {
     inSeason && week > 1
       ? buildRecentGames(seasonNum, week, sleeperId, position).catch(() => [])
       : Promise.resolve([]),
-    loadEspnNews(meta.espn_id),
+    // Aggregated feed first; direct ESPN per-player call as a bonus fallback
+    loadNewsFeed()
+      .then(items => {
+        const matches = matchFeedItems(items, meta.name, meta.espn_id)
+        return matches.length > 0 ? matches : loadEspnNews(meta.espn_id)
+      })
+      .catch(() => []),
   ])
 
   return {

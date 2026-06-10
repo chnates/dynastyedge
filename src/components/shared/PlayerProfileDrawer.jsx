@@ -488,9 +488,9 @@ export default function PlayerProfileDrawer({
                       <p className="flex-1 font-body text-sm font-medium text-text-primary leading-snug">
                         {n.headline}
                       </p>
-                      {relativeTime(n.published) && (
+                      {(n.source || relativeTime(n.published)) && (
                         <span className="font-body text-[10px] text-text-tertiary shrink-0">
-                          {relativeTime(n.published)}
+                          {[n.source, relativeTime(n.published)].filter(Boolean).join(' · ')}
                         </span>
                       )}
                     </div>
