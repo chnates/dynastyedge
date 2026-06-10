@@ -3,6 +3,7 @@ import { Info, Plus, Scale } from 'lucide-react'
 import TrendArrow from '../shared/TrendArrow'
 import PickBadge from '../roster/PickBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
+import { useScrollLock } from '../../hooks/useScrollLock'
 
 const POS_TAGS = {
   QB: 'bg-accent/20 text-accent',
@@ -176,6 +177,8 @@ function AddAssetSheet({
   const [searchQuery, setSearchQuery] = useState('')
   const [posFilter, setPosFilter]     = useState('All')
 
+  useScrollLock()
+
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
@@ -278,7 +281,7 @@ function AddAssetSheet({
         </div>
 
         {/* Player / pick rows */}
-        <div className="overflow-y-auto px-4" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
+        <div className="overflow-y-auto px-4" style={{ overscrollBehavior: 'contain', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
           {visiblePlayers.length === 0 && visiblePicks.length === 0 ? (
             <p className="font-body text-sm text-text-tertiary dark:text-text-tertiary py-6 text-center">
               {searchQuery ? 'No players match your search.' : 'No players at this position.'}

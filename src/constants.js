@@ -7,6 +7,7 @@ export const SLEEPER_BASE = 'https://api.sleeper.app/v1'
 export const FANTASYCALC_BASE = 'https://api.fantasycalc.com'
 // Unofficial ESPN API — no auth; used only for per-player news, degrades silently
 export const ESPN_BASE = 'https://site.api.espn.com'
+export const ESPN_WEB_BASE = 'https://site.web.api.espn.com'
 
 export const FANTASYCALC_PARAMS = {
   isDynasty: true,

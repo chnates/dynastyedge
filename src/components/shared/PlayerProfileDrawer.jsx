@@ -5,6 +5,7 @@ import TrendArrow from './TrendArrow'
 import { usePlayerNews } from '../../hooks/usePlayerNews'
 import { usePlayerIntel, relativeTime, TOUCH_LABEL } from '../../hooks/usePlayerIntel'
 import { getPeakStatus } from '../../utils/peakWindows'
+import { useScrollLock } from '../../hooks/useScrollLock'
 import { useWatchlist } from '../../hooks/useWatchlist'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
@@ -137,6 +138,8 @@ export default function PlayerProfileDrawer({
   const ctx = useLeagueContext()
   const league = ctx?.league
   const values = ctx?.values
+
+  useScrollLock()
 
   const { injuryFlag, injuryStatus, injuryDetail, injuryNotes, loading: newsLoading } = usePlayerNews(player.sleeperId)
   const intel = usePlayerIntel(player.sleeperId, ctx?.nflState)
@@ -304,7 +307,11 @@ export default function PlayerProfileDrawer({
       className="fixed inset-0 z-50 flex items-end bg-black/60"
     >
       <div ref={sheetRef} className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default">
-        <div ref={scrollRef} className="max-h-[85vh] overflow-y-auto">
+        <div
+          ref={scrollRef}
+          className="max-h-[85vh] overflow-y-auto"
+          style={{ overscrollBehavior: 'contain', paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
 
         {/* Handle bar */}
         <div className="flex justify-center pt-3 pb-1">

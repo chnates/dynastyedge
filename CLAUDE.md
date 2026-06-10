@@ -138,10 +138,11 @@ context, peak-window status, and recent news. Sources:
 
 **Base URL:** `https://site.api.espn.com` — no authentication, no key.
 
-Per-player fantasy news:
+Per-player fantasy news (primary, with automatic fallback):
 
 ```
-GET /apis/fantasy/v2/games/ffl/news/players?playerId={espnId}&limit=3
+GET https://site.api.espn.com/apis/fantasy/v2/games/ffl/news/players?playerId={espnId}&limit=3
+GET https://site.web.api.espn.com/apis/common/v3/sports/football/nfl/athletes/{espnId}/news?limit=3
 ```
 
 - **Join key:** `espn_id` from the Sleeper player DB (kept in the
@@ -729,6 +730,7 @@ dynastyedge/
 │   │   ├── useLineupData.js     ← projections, statuses, schedule, def stats
 │   │   ├── useWatchlist.js      ← starred players (localStorage-backed store)
 │   │   ├── usePlayerIntel.js    ← production stats + depth chart + ESPN news
+│   │   ├── useScrollLock.js     ← freezes <main> while a bottom sheet is open
 │   │   ├── useTheme.js          ← dark/light toggle
 │   │   ├── usePlayerNews.js     ← per-player injury status
 │   │   ├── useSleeperRookies.js ← rookie map derived from usePlayerDB
@@ -886,6 +888,12 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 1. **Safe areas:** The main scroll area and the side drawer must account for
    the iPhone home indicator and notch via `env(safe-area-inset-*)`.
    There is no bottom nav — do not add one.
+1. **Bottom sheets:** The app's scroll container is `<main>` — the body never
+   scrolls. Every bottom sheet (PlayerProfileDrawer, RosterAnalysisSheet,
+   trade add sheet, and any future sheet) must: call `useScrollLock()` while
+   mounted (prevents iOS scroll chaining to the page behind), set
+   `overscroll-behavior: contain` on its scroll container, and pad its bottom
+   with `env(safe-area-inset-bottom)`.
 1. **Error states:** Every API call needs a loading state and an error state.
    Never show a blank screen. If an API call fails, show a message and a retry button.
 1. **Theme toggle:** Stored in `localStorage` key `dynastyedge_theme`.

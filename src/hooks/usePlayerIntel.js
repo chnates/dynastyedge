@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { SLEEPER_BASE, ESPN_BASE } from '../constants'
+import { SLEEPER_BASE, ESPN_BASE, ESPN_WEB_BASE } from '../constants'
 import { fetchJSON } from '../utils/fetchJSON'
 import { loadPlayerDB } from './usePlayerDB'
 
@@ -71,25 +71,35 @@ function stripHtml(s) {
   return s ? s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : ''
 }
 
+// Handles both ESPN response shapes: fantasy v2 ({feed}) and common v3 ({articles})
+function parseEspnItems(data) {
+  const items = data?.feed ?? data?.articles ?? []
+  return items
+    .slice(0, 3)
+    .map(item => ({
+      headline: item.headline ?? item.title ?? '',
+      story: stripHtml(item.story ?? item.description ?? ''),
+      published: item.published ?? item.lastModified ?? null,
+    }))
+    .filter(n => n.headline)
+}
+
 export function loadEspnNews(espnId) {
   if (!espnId) return Promise.resolve([])
   if (!espnNewsCache.has(espnId)) {
+    const primary  = `${ESPN_BASE}/apis/fantasy/v2/games/ffl/news/players?playerId=${espnId}&limit=3`
+    const fallback = `${ESPN_WEB_BASE}/apis/common/v3/sports/football/nfl/athletes/${espnId}/news?limit=3`
     espnNewsCache.set(
       espnId,
-      fetchJSON(`${ESPN_BASE}/apis/fantasy/v2/games/ffl/news/players?playerId=${espnId}&limit=3`, {
-        timeoutMs: 8000,
-        label: 'ESPN news',
-      })
-        .then(data => (data?.feed ?? [])
-          .slice(0, 3)
-          .map(item => ({
-            headline: item.headline ?? '',
-            story: stripHtml(item.story ?? ''),
-            published: item.published ?? item.lastModified ?? null,
-          }))
-          .filter(n => n.headline)
-        )
+      fetchJSON(primary, { timeoutMs: 8000, label: 'ESPN news' })
+        .then(parseEspnItems)
         .catch(() => [])
+        .then(items => items.length > 0
+          ? items
+          : fetchJSON(fallback, { timeoutMs: 8000, label: 'ESPN news' })
+              .then(parseEspnItems)
+              .catch(() => [])
+        )
     )
   }
   return espnNewsCache.get(espnId)

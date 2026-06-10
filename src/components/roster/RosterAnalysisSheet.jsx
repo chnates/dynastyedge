@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { X, ChevronDown, ChevronUp } from 'lucide-react'
 import { PEAK_WINDOWS } from '../../utils/peakWindows'
+import { useScrollLock } from '../../hooks/useScrollLock'
 
 const POS_COLORS = {
   QB: '#4F7FFF',
@@ -86,6 +87,8 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
   const [selectedId, setSelectedId] = useState(null)
   const [howToOpen, setHowToOpen] = useState(false)
 
+  useScrollLock()
+
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
@@ -164,7 +167,7 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
       className="fixed inset-0 z-50 flex items-end bg-black/60"
     >
       <div className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default">
-        <div className="max-h-[85vh] overflow-y-auto" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <div className="max-h-[85vh] overflow-y-auto" style={{ overscrollBehavior: 'contain', paddingBottom: 'env(safe-area-inset-bottom)' }}>
 
           {/* Handle bar */}
           <div className="flex justify-center pt-3 pb-1">
