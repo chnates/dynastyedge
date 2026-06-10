@@ -6,6 +6,7 @@ import { getTeamName } from '../../hooks/useLeague'
 import { analyzeTrade, getTradeVerdict, suggestFairPackage, getCounterSuggestion, adjustVerdictForInjuries } from '../../utils/tradeAnalysis'
 import { rankTradePartners } from '../../utils/rosterAnalysis'
 import { fetchPlayerNews } from '../../hooks/usePlayerNews'
+import { getPlayerIntel } from '../../hooks/usePlayerIntel'
 import TradeBuilder from './TradeBuilder'
 import TradeVerdict from './TradeVerdict'
 import WinWindowBadge from '../shared/WinWindowBadge'
@@ -132,7 +133,7 @@ function OpponentContextStrip({ partner }) {
 }
 
 export default function TradeAnalyzer() {
-  const { league, loading, error, retry } = useLeagueContext()
+  const { league, loading, error, retry, nflState } = useLeagueContext()
   const location = useLocation()
 
   const initId        = location.state?.opponentRosterId
@@ -241,7 +242,10 @@ export default function TradeAnalyzer() {
 
     Promise.all(
       allPlayers.map(p =>
-        fetchPlayerNews(p.sleeperId).then(r => ({ ...r, playerName: p.name, side: p.side }))
+        Promise.all([
+          fetchPlayerNews(p.sleeperId),
+          getPlayerIntel(p.sleeperId, nflState).catch(() => null),
+        ]).then(([news, intel]) => ({ ...news, intel, playerName: p.name, side: p.side }))
       )
     )
       .then(results => {
@@ -255,7 +259,7 @@ export default function TradeAnalyzer() {
       })
 
     return () => { cancelled = true }
-  }, [giveAssets, getAssets])
+  }, [giveAssets, getAssets, nflState])
 
   function handleOpponentChange(rawValue) {
     const id = rawValue ? Number(rawValue) : null

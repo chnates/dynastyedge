@@ -3,6 +3,8 @@ import { X, ArrowRight, Star } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import TrendArrow from './TrendArrow'
 import { usePlayerNews } from '../../hooks/usePlayerNews'
+import { usePlayerIntel, relativeTime, TOUCH_LABEL } from '../../hooks/usePlayerIntel'
+import { getPeakStatus } from '../../utils/peakWindows'
 import { useWatchlist } from '../../hooks/useWatchlist'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
@@ -137,6 +139,8 @@ export default function PlayerProfileDrawer({
   const values = ctx?.values
 
   const { injuryFlag, injuryStatus, injuryDetail, injuryNotes, loading: newsLoading } = usePlayerNews(player.sleeperId)
+  const intel = usePlayerIntel(player.sleeperId, ctx?.nflState)
+  const peak = getPeakStatus(player.position, player.age)
   const { toggleWatch, isWatched } = useWatchlist()
   const watched = isWatched(player.sleeperId)
 
@@ -378,7 +382,124 @@ export default function PlayerProfileDrawer({
                 </div>
               </div>
             )}
+            {(intel.depthChart || peak) && (
+              <div className="mt-2.5 pt-2.5 border-t border-border-default flex flex-col gap-1">
+                {intel.depthChart && (
+                  <p className="font-body text-xs text-text-secondary">
+                    Depth chart:{' '}
+                    <span className="font-semibold text-text-primary">
+                      {intel.depthChart.slot}{intel.depthChart.order ?? ''}
+                    </span>
+                    {player.team ? ` · ${player.team}` : ''}
+                  </p>
+                )}
+                {peak && (
+                  <p className={`font-body text-xs ${
+                    peak.phase === 'ascending' ? 'text-success'
+                      : peak.phase === 'peak' ? 'text-warning'
+                      : 'text-danger'
+                  }`}>
+                    {peak.label}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
+
+          {/* Production — recent games in-season, last-season summary otherwise */}
+          {(intel.loading || intel.seasonSummary || intel.recentGames.some(g => g.pts != null)) && (
+            <div className="rounded-xl bg-bg-card border border-border-default px-3 py-3">
+              <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
+                Production
+              </p>
+              {intel.loading ? (
+                <div className="flex items-center gap-2 py-1">
+                  <div className="h-3 w-3 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+                  <span className="font-body text-xs text-text-tertiary">Loading stats…</span>
+                </div>
+              ) : (
+                <>
+                  {intel.seasonSummary && (
+                    <>
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-mono text-2xl font-semibold text-accent tabular-nums">
+                          {intel.seasonSummary.ppg ?? intel.seasonSummary.pts}
+                        </span>
+                        <span className="font-body text-[10px] text-text-tertiary">
+                          {intel.seasonSummary.ppg != null ? 'PPG' : 'PTS'} · {intel.seasonSummary.year} season
+                        </span>
+                      </div>
+                      <div className="flex gap-4 mt-2">
+                        {intel.seasonSummary.posRank != null && intel.position && (
+                          <div>
+                            <span className="font-mono text-sm text-text-primary tabular-nums">{intel.position}{intel.seasonSummary.posRank}</span>
+                            <span className="font-body text-[10px] text-text-tertiary ml-1">finish</span>
+                          </div>
+                        )}
+                        <div>
+                          <span className="font-mono text-sm text-text-primary tabular-nums">{intel.seasonSummary.pts.toLocaleString()}</span>
+                          <span className="font-body text-[10px] text-text-tertiary ml-1">pts</span>
+                        </div>
+                        {intel.seasonSummary.gp != null && (
+                          <div>
+                            <span className="font-mono text-sm text-text-primary tabular-nums">{intel.seasonSummary.gp}</span>
+                            <span className="font-body text-[10px] text-text-tertiary ml-1">games</span>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                  {intel.recentGames.length > 0 && (
+                    <div className={`flex flex-col gap-1 ${intel.seasonSummary ? 'mt-2.5 pt-2.5 border-t border-border-default' : ''}`}>
+                      {intel.recentGames.map(g => (
+                        <div key={g.week} className="flex items-center justify-between">
+                          <span className="font-body text-xs text-text-tertiary">Week {g.week}</span>
+                          <span className="font-mono text-xs text-text-primary tabular-nums">
+                            {g.pts != null
+                              ? `${g.pts.toFixed(1)} pts${g.touches != null ? ` · ${g.touches} ${TOUCH_LABEL[intel.position] ?? ''}` : ''}`
+                              : 'DNP'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Latest News (ESPN — unofficial, hidden when unavailable) */}
+          {intel.news.length > 0 && (
+            <div className="rounded-xl bg-bg-card border border-border-default px-3 py-3">
+              <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
+                Latest News
+              </p>
+              <div className="flex flex-col">
+                {intel.news.map((n, i) => (
+                  <div key={i} className={i < intel.news.length - 1 ? 'pb-2.5 mb-2.5 border-b border-border-default' : ''}>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="flex-1 font-body text-sm font-medium text-text-primary leading-snug">
+                        {n.headline}
+                      </p>
+                      {relativeTime(n.published) && (
+                        <span className="font-body text-[10px] text-text-tertiary shrink-0">
+                          {relativeTime(n.published)}
+                        </span>
+                      )}
+                    </div>
+                    {n.story && (
+                      <p
+                        className="font-body text-xs text-text-secondary mt-1 leading-snug"
+                        style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                      >
+                        {n.story}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Dynasty value */}
           <div className="rounded-xl bg-bg-card border border-border-default px-3 py-3">

@@ -1,20 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { X, ChevronDown, ChevronUp } from 'lucide-react'
+import { PEAK_WINDOWS } from '../../utils/peakWindows'
 
 const POS_COLORS = {
   QB: '#4F7FFF',
   RB: '#22C55E',
   WR: '#F59E0B',
   TE: '#EF4444',
-}
-
-// Typical production peak ages per position — RBs peak (and decline) earliest
-// due to workload; QBs hold value deep into their 30s.
-const PEAK_WINDOWS = {
-  QB: [26, 33],
-  RB: [23, 26],
-  WR: [24, 28],
-  TE: [25, 29],
 }
 
 const LANE_ORDER = ['QB', 'RB', 'WR', 'TE']

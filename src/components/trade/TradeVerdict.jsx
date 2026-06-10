@@ -1,5 +1,6 @@
 import { CheckCircle2, XCircle, RefreshCw, CheckCircle, XCircle as XCircleSmall, Circle, AlertTriangle } from 'lucide-react'
 import WinWindowBadge from '../shared/WinWindowBadge'
+import { relativeTime } from '../../hooks/usePlayerIntel'
 
 const VERDICT_STYLES = {
   Accept:  { Icon: CheckCircle2, color: 'text-success',  bg: 'bg-success/10 border-success/30' },
@@ -54,6 +55,11 @@ function PlayerNewsCard({ intel }) {
     ? intel.injuryDetail ? `${intel.injuryStatus} — ${intel.injuryDetail}` : intel.injuryStatus
     : 'Active'
 
+  const extra   = intel.intel
+  const summary = extra?.seasonSummary
+  const recent  = (extra?.recentGames ?? []).filter(g => g.pts != null)
+  const topNews = extra?.news?.[0]
+
   return (
     <div className="px-4 py-3 border-b border-border-default dark:border-border-default last:border-b-0">
       <div className="flex items-center justify-between mb-1">
@@ -74,6 +80,33 @@ function PlayerNewsCard({ intel }) {
       {intel.injuryNotes && (
         <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary mt-0.5 leading-snug">
           {intel.injuryNotes}
+        </p>
+      )}
+
+      {/* Production + role context */}
+      {(summary || extra?.depthChart) && (
+        <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary mt-1">
+          {summary && (
+            <>
+              {summary.year}: <span className="font-mono tabular-nums">{summary.ppg ?? summary.pts}</span> {summary.ppg != null ? 'PPG' : 'pts'}
+              {summary.posRank != null && extra.position ? ` · ${extra.position}${summary.posRank}` : ''}
+            </>
+          )}
+          {summary && extra?.depthChart ? ' · ' : ''}
+          {extra?.depthChart ? `${extra.depthChart.slot}${extra.depthChart.order ?? ''} on depth chart` : ''}
+        </p>
+      )}
+      {recent.length > 0 && (
+        <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary mt-0.5">
+          Last {recent.length} wks: <span className="font-mono tabular-nums">{recent.map(g => g.pts.toFixed(1)).join(' · ')}</span> pts
+        </p>
+      )}
+
+      {/* Latest headline (ESPN — hidden when unavailable) */}
+      {topNews && (
+        <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary mt-1 leading-snug">
+          {topNews.headline}
+          {relativeTime(topNews.published) ? ` — ${relativeTime(topNews.published)}` : ''}
         </p>
       )}
     </div>

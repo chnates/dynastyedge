@@ -96,6 +96,7 @@ No authentication required. Read-only. Stay under 1,000 API calls per minute.
 |Full player DB (names/positions/injuries)|`/players/nfl` (once per session, via `usePlayerDB`)|
 |Weekly projections             |`/projections/nfl/regular/{year}/{week}`         |
 |Weekly stats                   |`/stats/nfl/regular/{year}/{week}`               |
+|Season stats (player intel)    |`/stats/nfl/regular/{year}` (lazy, once per session)|
 |NFL schedule                   |`/schedule/nfl/regular/{year}`                   |
 
 **Critical Sleeper note:** Roster endpoints return **numeric player IDs only** —
@@ -116,6 +117,41 @@ Waiver claims include the winning FAAB bid in `settings.waiver_bid`.
 **Offseason detection:** Call `/state/nfl` on app load. If `season_type !== 'regular'`,
 hide all in-season UI: current matchups, weekly projections, lineup optimizer flags.
 The app still works fully in the offseason — it just hides irrelevant weekly features.
+
+**Player intelligence (`usePlayerIntel`):** the PlayerProfileDrawer and the
+trade Live Intelligence cards show recent fantasy production, depth chart
+context, peak-window status, and recent news. Sources:
+
+- **Production:** Sleeper season stats (`/stats/nfl/regular/{year}`, half-PPR
+  points, games, positional finish ranked client-side) — in-season also the
+  last 3 weekly stat buckets (points + targets/carries). Offseason shows the
+  last completed season's summary.
+- **Depth chart / news recency:** `depth_chart_position`, `depth_chart_order`,
+  `news_updated`, and `espn_id` are kept in the trimmed `usePlayerDB` cache.
+- **Peak window:** `utils/peakWindows.js` (shared with Roster Analysis).
+- All fetches are lazy (first profile open) and session-cached — nothing at
+  app load.
+
+-----
+
+### ESPN API (unofficial — news only)
+
+**Base URL:** `https://site.api.espn.com` — no authentication, no key.
+
+Per-player fantasy news:
+
+```
+GET /apis/fantasy/v2/games/ffl/news/players?playerId={espnId}&limit=3
+```
+
+- **Join key:** `espn_id` from the Sleeper player DB (kept in the
+  `usePlayerDB` trimmed cache)
+- **This API is unofficial and may change or disappear without notice.**
+  Every call must degrade silently — on any failure the news section simply
+  hides. Never block a panel, show an error, or retry-loop on ESPN.
+- Fetched lazily per player on profile open, cached per session
+  (`usePlayerIntel`). Response items used: `headline`, `story` (HTML is
+  stripped), `published`.
 
 -----
 
@@ -692,6 +728,7 @@ dynastyedge/
 │   │   ├── useLineupHistory.js  ← my past matchups for efficiency review
 │   │   ├── useLineupData.js     ← projections, statuses, schedule, def stats
 │   │   ├── useWatchlist.js      ← starred players (localStorage-backed store)
+│   │   ├── usePlayerIntel.js    ← production stats + depth chart + ESPN news
 │   │   ├── useTheme.js          ← dark/light toggle
 │   │   ├── usePlayerNews.js     ← per-player injury status
 │   │   ├── useSleeperRookies.js ← rookie map derived from usePlayerDB
@@ -702,6 +739,7 @@ dynastyedge/
 │   │   ├── rosterAnalysis.js    ← positional strength, win window tiers
 │   │   ├── pickCapital.js       ← pick ownership resolution logic
 │   │   ├── rookieAdp.js         ← derived rookie-class ADP for the Draft section
+│   │   ├── peakWindows.js       ← position peak-age windows + status helper
 │   │   ├── lineupHistory.js     ← optimal-lineup math for efficiency review
 │   │   └── projections.js       ← lineup optimization, matchup quality
 │   ├── context/
@@ -872,8 +910,8 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 These are noted so the codebase is structured to support them later.
 Do not implement them until explicitly asked.
 
-- Player news feed with beat reporter updates (injury-status tracking is built;
-  full news is not)
+- League-wide news feed page (per-player ESPN news is built into the
+  Player Profile drawer; a browsable all-news feed is not)
 - FAAB bid recommender for waiver pickups
 - Claude Design visual refresh
 - Playoff strength-of-schedule view (Weeks 15–17 matchup outlook for starters)
@@ -883,6 +921,8 @@ Do not implement them until explicitly asked.
 
 - Rookie draft board and ADP tracker → Draft section
 - Injury-status player news → PlayerProfileDrawer + trade analysis
+- Player intelligence panel (production, depth chart, peak window, ESPN news)
+  → PlayerProfileDrawer + trade Live Intelligence (`usePlayerIntel`)
 - League transaction feed with FAAB bids → League › Activity
 - Market movers / buy-low / sell-high → League › Movers
 - Watchlist (star players, surfaced in Trade Partners) → `useWatchlist`
