@@ -1,81 +1,56 @@
-const DARK = {
-  bg: '#0B1120',
-  border: '#1E3A5F',
-  borderWidth: '1.5',
-  symbol: '#4A90D9',
-  secondary: '#C8D8EA',
-}
+// Crown Crest lockup: gradient crown mark (three ascending bars as crown
+// prongs, jewel dots above the tips, detached circlet band) + wordmark.
+// The crown geometry is mirrored in scripts/generate-icons.mjs (app icon /
+// favicons) — keep the two in sync, and re-run that script after changes.
 
-const LIGHT = {
-  bg: '#F5F5F0',
-  border: '#0D1B2A',
-  borderWidth: '2.5',
-  symbol: '#0D1B2A',
-  secondary: '#2A3A4A',
-}
+const GRADIENT_FROM = '#4F7FFF'
+const GRADIENT_TO = '#A78BFA'
 
 export default function DynastyEdgeLogo({ theme = 'dark', size = 88 }) {
-  const c = theme === 'light' ? LIGHT : DARK
+  const markSize = Math.round(size * 0.5)
+  const fontSize = Math.round(size * 0.3)
+  const textColor = theme === 'light' ? '#0D0D0F' : '#F0F0F5'
 
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 100 100"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
+    <div
+      className="flex items-center"
+      style={{ gap: Math.round(size * 0.1) }}
       aria-label="DynastyEdge"
       role="img"
     >
-      {/* Card background */}
-      <rect width="100" height="100" rx="8" fill={c.bg} />
-
-      {/* Card border */}
-      <rect x="1.5" y="1.5" width="97" height="97" rx="7" stroke={c.border} strokeWidth={c.borderWidth} fill="none" />
-
-      {/* "01" — top left */}
-      <text
-        x="9"
-        y="17"
-        fontFamily="'IBM Plex Sans', system-ui, sans-serif"
-        fontSize="10"
-        fontWeight="300"
-        fill={c.secondary}
-      >01</text>
-
-      {/* Football icon — top right */}
-      <g stroke={c.secondary} strokeWidth="0.9" fill="none" strokeLinecap="round">
-        <ellipse cx="84" cy="13" rx="8.5" ry="4.5" />
-        <line x1="84" y1="8.5" x2="84" y2="17.5" />
-        {/* Lace marks — tightly grouped in center so it reads as lacing, not a globe */}
-        <line x1="82.5" y1="11.2" x2="85.5" y2="11.2" />
-        <line x1="82.5" y1="12.4" x2="85.5" y2="12.4" />
-        <line x1="82.5" y1="13.6" x2="85.5" y2="13.6" />
-        <line x1="82.5" y1="14.8" x2="85.5" y2="14.8" />
-      </g>
-
-      {/* "De" — dominant center element */}
-      <text
-        x="50"
-        y="67"
-        fontFamily="'IBM Plex Sans', system-ui, sans-serif"
-        fontSize="53"
-        fontWeight="300"
-        fill={c.symbol}
-        textAnchor="middle"
-      >De</text>
-
-      {/* "DYNASTYEDGE" — bottom */}
-      <text
-        x="50"
-        y="90"
-        fontFamily="'IBM Plex Sans', system-ui, sans-serif"
-        fontSize="6.5"
-        fontWeight="400"
-        fill={c.secondary}
-        textAnchor="middle"
-        letterSpacing="1.5"
-      >DYNASTYEDGE</text>
-    </svg>
+      <svg width={markSize} height={markSize} viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="de-crown-grad" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor={GRADIENT_FROM} />
+            <stop offset="1" stopColor={GRADIENT_TO} />
+          </linearGradient>
+        </defs>
+        <g fill="url(#de-crown-grad)">
+          <circle cx="28" cy="39" r="4.5" />
+          <circle cx="48" cy="27" r="4.5" />
+          <circle cx="68" cy="15" r="4.5" />
+          <rect x="22" y="48" width="12" height="12" rx="5" />
+          <rect x="42" y="36" width="12" height="24" rx="5" />
+          <rect x="62" y="24" width="12" height="36" rx="5" />
+          <rect x="20" y="66" width="56" height="10" rx="5" />
+        </g>
+      </svg>
+      <span
+        className="font-display font-bold uppercase leading-none tracking-wide whitespace-nowrap"
+        style={{ fontSize, color: textColor }}
+      >
+        Dynasty
+        <span
+          style={{
+            backgroundImage: `linear-gradient(90deg, ${GRADIENT_FROM}, ${GRADIENT_TO})`,
+            WebkitBackgroundClip: 'text',
+            backgroundClip: 'text',
+            color: 'transparent',
+          }}
+        >
+          Edge
+        </span>
+      </span>
+    </div>
   )
 }
