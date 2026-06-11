@@ -13,11 +13,18 @@
   --border-default:228 228 232;   /* #E4E4E8 */
   --text-primary:  13 13 15;      /* #0D0D0F */
   --text-secondary:85 85 95;      /* #55555F */
-  --text-tertiary: 85 85 95;      /* #55555F */
+  --text-tertiary: 138 138 149;   /* #8A8A95 */
   --accent:        59 111 239;    /* #3B6FEF */
   --success:       34 197 94;     /* #22C55E */
   --warning:       245 158 11;    /* #F59E0B */
   --danger:        239 68 68;     /* #EF4444 */
+
+  /* Position identity colors — darker shades for light backgrounds */
+  --pos-qb:        219 39 119;    /* #DB2777 pink */
+  --pos-rb:        13 148 136;    /* #0D9488 teal */
+  --pos-wr:        2 132 199;     /* #0284C7 sky */
+  --pos-te:        234 88 12;     /* #EA580C orange */
+  --pos-def:       124 58 237;    /* #7C3AED violet */
 }
 
 .dark {
@@ -32,6 +39,13 @@
   --success:       34 197 94;     /* #22C55E */
   --warning:       245 158 11;    /* #F59E0B */
   --danger:        239 68 68;     /* #EF4444 */
+
+  /* Position identity colors — brighter shades for dark backgrounds */
+  --pos-qb:        244 114 182;   /* #F472B6 pink */
+  --pos-rb:        45 212 191;    /* #2DD4BF teal */
+  --pos-wr:        56 189 248;    /* #38BDF8 sky */
+  --pos-te:        251 146 60;    /* #FB923C orange */
+  --pos-def:       167 139 250;   /* #A78BFA violet */
 }
 
 body {

@@ -10,6 +10,7 @@ import SectionHeader from '../shared/SectionHeader'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import TeamCard from './TeamCard'
 import MatchupCard from './MatchupCard'
+import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
 
 const SORT_OPTIONS = [
   { id: 'value',  label: 'Overall Value' },
@@ -75,10 +76,10 @@ function PositionRankCard({ roster, posFilter, tier, posStrength, posRank, onTap
       <div className="flex items-center justify-between">
         <WinWindowBadge tier={tier} />
         <div className="flex items-baseline gap-1">
-          <span className="font-mono text-base font-semibold text-accent tabular-nums">
+          <span className={`font-mono text-base font-semibold tabular-nums ${POS_TEXT[posFilter] ?? 'text-accent'}`}>
             {posStrength.toLocaleString()}
           </span>
-          <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">
+          <span className={`font-body text-[10px] font-semibold ${POS_TEXT[posFilter] ?? 'text-text-tertiary dark:text-text-tertiary'}`}>
             {posFilter}
           </span>
         </div>
@@ -279,7 +280,7 @@ export default function LeagueOverview() {
                 onClick={() => setPosFilter(pos)}
                 className={`px-2.5 py-1 rounded-full font-body text-xs font-medium transition-colors ${
                   posFilter === pos
-                    ? 'bg-accent text-white'
+                    ? POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-white'
                     : 'bg-bg-secondary dark:bg-bg-secondary text-text-secondary dark:text-text-secondary border border-border-default dark:border-border-default'
                 }`}
               >

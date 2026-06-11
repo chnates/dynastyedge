@@ -739,10 +739,47 @@ but organized, purposeful use of color, confident typography.
 |Border                               |`#E4E4E8`|
 |Text primary                         |`#0D0D0F`|
 |Text secondary                       |`#55555F`|
+|Text tertiary                        |`#8A8A95`|
 |Accent                               |`#3B6FEF`|
 |(All status colors same as dark mode)|         |
 
+### Position identity colors (consistent across entire app)
+
+Every position has its own identity color — this is what keeps the app from
+feeling monochrome. Tokens live in `index.css` (`--pos-*`), are exposed via
+Tailwind (`text-pos-qb`, `bg-pos-rb/15`, …), and all class maps live in
+`src/utils/positionColors.js` (`POS_TEXT`, `POS_BG`, `POS_TAG`,
+`POS_CHIP_ACTIVE`, `POS_SVG`). **Never hand-roll position colors locally, and
+never reuse status colors (success/warning/danger) to mean a position.**
+
+|Position|Dark mode          |Light mode         |
+|--------|-------------------|-------------------|
+|QB      |`#F472B6` (pink)   |`#DB2777`          |
+|RB      |`#2DD4BF` (teal)   |`#0D9488`          |
+|WR      |`#38BDF8` (sky)    |`#0284C7`          |
+|TE      |`#FB923C` (orange) |`#EA580C`          |
+|DEF     |`#A78BFA` (violet) |`#7C3AED`          |
+
+Where they apply:
+
+- Position labels on player rows (roster, free agents, movers, draft, drawers)
+- Position rank (`#3 WR`) on PlayerCard and in the Player Profile drawer
+- Active position filter chips everywhere (tinted style: `bg-pos-x/15 text-pos-x
+  border-pos-x/40`); the All / Picks chips keep the solid accent style
+- Positional strength bars + labels on TeamCard (above-average = position color)
+- Position group headers in RosterView (accent bar via `SectionHeader`'s
+  `accentBar` prop)
+- Roster Analysis age-chart lanes (`POS_SVG` for SVG fill/stroke)
+- Lineup slot labels (FLEX / Superflex slots keep accent)
+- Position tags in the trade builder / What's Fair / lineup FA drawer (`POS_TAG`)
+
+Status colors (success/warning/danger) keep their exclusive meanings:
+health/verdicts/flags — a TE label must never read as "danger".
+
 ### Pick round colors (consistent across entire app)
+
+Class maps live in `src/utils/roundColors.js` (`ROUND_CLASSES`, `ROUND_TEXT`,
+`ROUND_LABELS`) — shared by PickBadge and TeamCard, never redefined locally.
 
 |Round|Dark bg  |Dark text|Light bg |Light text|
 |-----|---------|---------|---------|----------|
@@ -865,6 +902,8 @@ dynastyedge/
 │   │   └── useRookieADP.js
 │   ├── utils/
 │   │   ├── fetchJSON.js         ← shared fetch wrapper with timeout — use everywhere
+│   │   ├── positionColors.js    ← position identity color class maps — use everywhere
+│   │   ├── roundColors.js       ← pick round color classes (PickBadge, TeamCard)
 │   │   ├── tradeAnalysis.js     ← trade scoring, verdict logic
 │   │   ├── rosterAnalysis.js    ← positional strength, win window tiers
 │   │   ├── pickCapital.js       ← pick ownership resolution logic

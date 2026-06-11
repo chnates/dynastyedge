@@ -4,13 +4,7 @@ import TrendArrow from '../shared/TrendArrow'
 import PickBadge from '../roster/PickBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { useScrollLock } from '../../hooks/useScrollLock'
-
-const POS_TAGS = {
-  QB: 'bg-accent/20 text-accent',
-  RB: 'bg-success/20 text-success',
-  WR: 'bg-warning/20 text-warning',
-  TE: 'bg-danger/20 text-danger',
-}
+import { POS_CHIP_ACTIVE, POS_TAG as POS_TAGS } from '../../utils/positionColors'
 
 const FILTER_TABS = ['All', 'QB', 'RB', 'WR', 'TE', 'Picks']
 
@@ -271,7 +265,7 @@ function AddAssetSheet({
               onClick={() => setPosFilter(tab)}
               className={`shrink-0 px-2.5 py-1 rounded-full font-body text-[11px] font-semibold uppercase tracking-wider transition-colors
                 ${posFilter === tab
-                  ? 'bg-accent text-white'
+                  ? POS_CHIP_ACTIVE[tab] ?? 'bg-accent text-white'
                   : 'bg-bg-card dark:bg-bg-card text-text-secondary dark:text-text-secondary border border-border-default dark:border-border-default'
                 }`}
             >

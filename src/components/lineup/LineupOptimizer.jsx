@@ -3,6 +3,7 @@ import { LayoutList } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useFantasyCalc } from '../../hooks/useFantasyCalc'
 import { useLineupData } from '../../hooks/useLineupData'
+import { POS_TEXT } from '../../utils/positionColors'
 import {
   getProjPts,
   computeDefenseRankings,
@@ -231,7 +232,7 @@ export default function LineupOptimizer() {
                   <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary shrink-0 uppercase tracking-wide">
                     {player.team}
                   </span>
-                  <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary shrink-0 uppercase">
+                  <span className={`font-body text-[10px] font-semibold shrink-0 uppercase ${POS_TEXT[player.position] ?? 'text-text-tertiary dark:text-text-tertiary'}`}>
                     {player.position}
                   </span>
                   <span className="font-mono text-sm font-semibold text-text-primary dark:text-text-primary shrink-0 w-10 text-right tabular-nums">

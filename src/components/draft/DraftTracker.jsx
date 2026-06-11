@@ -13,6 +13,7 @@ import { MY_ROSTER_ID } from '../../constants'
 import { BOARD_ORDER_KEY, NOTES_KEY, readJSON } from './boardStorage'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
+import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
 
 const MANUAL_STORAGE_KEY = `dynastyedge_draft_tracker_${DRAFT_SEASON}`
 const POS_FILTERS = ['ALL', 'QB', 'RB', 'WR', 'TE']
@@ -170,7 +171,7 @@ function BestAvailableCard({ rows, onSelect }) {
         >
           <span className="font-body text-[10px] text-text-tertiary w-24 flex-shrink-0 truncate">{tag}</span>
           <span className="font-body text-sm font-medium text-text-primary flex-1 truncate">{player.name}</span>
-          <span className="font-body text-[10px] font-semibold uppercase text-text-tertiary flex-shrink-0">{player.position}</span>
+          <span className={`font-body text-[10px] font-semibold uppercase flex-shrink-0 ${POS_TEXT[player.position] ?? 'text-text-tertiary'}`}>{player.position}</span>
           <span className="font-mono text-xs font-medium text-accent tabular-nums flex-shrink-0">
             {(player.value ?? 0).toLocaleString()}
           </span>
@@ -243,7 +244,7 @@ function ProspectList({
             onClick={() => setPosFilter(pos)}
             className={`flex-shrink-0 px-3 py-1.5 rounded-lg font-body text-xs font-semibold uppercase tracking-wide transition-colors ${
               posFilter === pos
-                ? 'bg-accent text-white'
+                ? POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-white'
                 : 'bg-bg-card border border-border-default text-text-secondary'
             }`}
           >
@@ -284,7 +285,7 @@ function ProspectList({
                     {needPositions.includes(player.position) && <NeedBadge />}
                   </div>
                   <div className="flex items-center gap-1">
-                    <span className="font-body text-[10px] font-semibold uppercase text-text-tertiary">{player.position}</span>
+                    <span className={`font-body text-[10px] font-semibold uppercase ${POS_TEXT[player.position] ?? 'text-text-tertiary'}`}>{player.position}</span>
                     <span className="text-text-tertiary text-[10px]">·</span>
                     <span className="font-body text-[10px] text-text-tertiary">{player.team || 'TBD'}</span>
                     {player.adp != null && (
@@ -321,7 +322,7 @@ function PickRow({ pick, player, teamName, isMine, label, delta, isLast, onSelec
       <span className="font-mono text-xs text-text-secondary tabular-nums flex-shrink-0">
         {(player.value ?? 0) > 0 ? player.value.toLocaleString() : '—'}
       </span>
-      <span className="font-body text-[10px] font-semibold uppercase text-text-tertiary w-7 text-right flex-shrink-0">
+      <span className={`font-body text-[10px] font-semibold uppercase w-7 text-right flex-shrink-0 ${POS_TEXT[player.position] ?? 'text-text-tertiary'}`}>
         {player.position}
       </span>
     </>
@@ -953,7 +954,7 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
                       {player.name}
                     </span>
                     <div className="flex items-center gap-1">
-                      <span className="font-body text-[10px] font-semibold uppercase text-text-tertiary">{player.position}</span>
+                      <span className={`font-body text-[10px] font-semibold uppercase ${POS_TEXT[player.position] ?? 'text-text-tertiary'}`}>{player.position}</span>
                       <span className="text-text-tertiary text-[10px]">·</span>
                       <span className="font-body text-[10px] text-text-tertiary">{player.team || 'TBD'}</span>
                       {player.adp != null && (
@@ -1009,7 +1010,7 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
                           {team}{isMine ? ' · You' : ''}
                         </p>
                       </div>
-                      <span className="font-body text-[10px] font-semibold uppercase text-text-tertiary flex-shrink-0">
+                      <span className={`font-body text-[10px] font-semibold uppercase flex-shrink-0 ${POS_TEXT[player?.position] ?? 'text-text-tertiary'}`}>
                         {player?.position}
                       </span>
                     </button>

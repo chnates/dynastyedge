@@ -2,13 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { X, ChevronDown, ChevronUp } from 'lucide-react'
 import { PEAK_WINDOWS } from '../../utils/peakWindows'
 import { useScrollLock } from '../../hooks/useScrollLock'
-
-const POS_COLORS = {
-  QB: '#4F7FFF',
-  RB: '#22C55E',
-  WR: '#F59E0B',
-  TE: '#EF4444',
-}
+import { POS_SVG as POS_COLORS } from '../../utils/positionColors'
 
 const LANE_ORDER = ['QB', 'RB', 'WR', 'TE']
 const POS_FILTERS = ['ALL', ...LANE_ORDER]
@@ -98,7 +92,7 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
   const currentYear = Number(nflState?.season) || new Date().getFullYear()
 
   const chartPlayers = useMemo(() =>
-    players.filter(p => p.age != null && p.age > 0 && POS_COLORS[p.position]),
+    players.filter(p => p.age != null && p.age > 0 && LANE_ORDER.includes(p.position)),
   [players])
 
   const lanes = useMemo(() => posFilter === 'ALL' ? LANE_ORDER : [posFilter], [posFilter])

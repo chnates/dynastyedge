@@ -11,6 +11,7 @@ import PickBadge from './PickBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import RosterAnalysisSheet from './RosterAnalysisSheet'
 import RosterActionItems from './RosterActionItems'
+import { POS_BG } from '../../utils/positionColors'
 
 const POSITION_ORDER = ['QB', 'RB', 'WR', 'TE', 'DEF']
 
@@ -82,8 +83,8 @@ export default function RosterView() {
         </button>
       )}
 
-      {/* ── Header ── */}
-      <div className={`${selectedRosterId ? 'pt-1' : 'pt-4'} pb-3 border-b border-border-default dark:border-border-default`}>
+      {/* ── Header — gradient hero card ── */}
+      <div className={`${selectedRosterId ? 'mt-1' : 'mt-4'} rounded-xl px-4 pt-3 pb-3 bg-gradient-to-br from-accent/15 via-bg-card to-bg-card dark:from-accent/15 dark:via-bg-card dark:to-bg-card border border-accent/20`}>
         <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-0.5">
           Dynasty Roster
         </p>
@@ -137,7 +138,7 @@ export default function RosterView() {
         if (!group?.length) return null
         return (
           <section key={pos}>
-            <SectionHeader label={pos} count={group.length} />
+            <SectionHeader label={pos} count={group.length} accentBar={POS_BG[pos]} />
             <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
               {group.map(player => (
                 <PlayerCard key={player.sleeperId} player={player} onClick={() => setSelectedPlayer(player)} />

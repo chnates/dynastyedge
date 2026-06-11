@@ -20,6 +20,7 @@ import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAn
 import { BOARD_ORDER_KEY, NOTES_KEY, CSV_KEY } from './boardStorage'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
+import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -308,7 +309,7 @@ function SortablePlayerRow({
             {!player.fpOnly && player.adpOnly && <AdpOnlyBadge />}
           </div>
           <div className="flex items-center gap-1 mt-0.5">
-            <span className="font-body text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">{player.position}</span>
+            <span className={`font-body text-[10px] font-semibold uppercase tracking-wide ${POS_TEXT[player.position] ?? 'text-text-tertiary'}`}>{player.position}</span>
             <span className="text-text-tertiary text-[10px]">·</span>
             <span className="font-body text-[10px] text-text-tertiary">{player.team || 'TBD'}</span>
             {player.age != null && (
@@ -788,7 +789,7 @@ export default function DraftBoard() {
                 onClick={() => setPosFilter(pos)}
                 className={`flex-shrink-0 px-3 py-1.5 rounded-lg font-body text-xs font-semibold uppercase tracking-wide transition-colors ${
                   posFilter === pos
-                    ? 'bg-accent text-white'
+                    ? POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-white'
                     : 'bg-bg-card border border-border-default text-text-secondary'
                 }`}
               >

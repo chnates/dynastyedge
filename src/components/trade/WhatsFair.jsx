@@ -8,13 +8,7 @@ import WinWindowBadge from '../shared/WinWindowBadge'
 import TrendArrow from '../shared/TrendArrow'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
-
-const POS_TAGS = {
-  QB: 'bg-accent/20 text-accent',
-  RB: 'bg-success/20 text-success',
-  WR: 'bg-warning/20 text-warning',
-  TE: 'bg-danger/20 text-danger',
-}
+import { POS_CHIP_ACTIVE, POS_TAG as POS_TAGS } from '../../utils/positionColors'
 
 const POSITION_FILTERS = ['All', 'QB', 'RB', 'WR', 'TE']
 
@@ -134,7 +128,7 @@ export default function WhatsFair() {
             onClick={() => setPosFilter(pos)}
             className={`shrink-0 px-3 py-1 rounded-full font-body text-xs font-semibold uppercase tracking-wider transition-colors
               ${posFilter === pos
-                ? 'bg-accent text-white'
+                ? POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-white'
                 : 'bg-bg-card dark:bg-bg-card text-text-secondary dark:text-text-secondary border border-border-default dark:border-border-default'
               }`}
           >

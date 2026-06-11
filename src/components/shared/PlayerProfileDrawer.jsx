@@ -10,6 +10,7 @@ import { useWatchlist } from '../../hooks/useWatchlist'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { getTeamName } from '../../hooks/useLeague'
+import { POS_TEXT } from '../../utils/positionColors'
 
 // ── Opportunity grade ────────────────────────────────────────────────────────
 
@@ -326,7 +327,7 @@ export default function PlayerProfileDrawer({
                 {grade} — {GRADE_LABELS[grade]}
               </span>
               {player.position && (
-                <span className="font-body text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
+                <span className={`font-body text-[10px] font-semibold uppercase tracking-wider ${POS_TEXT[player.position] ?? 'text-text-tertiary'}`}>
                   {player.position}
                 </span>
               )}
@@ -529,7 +530,7 @@ export default function PlayerProfileDrawer({
               {player.positionRank != null && (
                 <div>
                   <span className="font-mono text-sm text-text-primary tabular-nums">#{player.positionRank}</span>
-                  <span className="font-body text-[10px] text-text-tertiary ml-1">{player.position}</span>
+                  <span className={`font-body text-[10px] font-semibold ml-1 ${POS_TEXT[player.position] ?? 'text-text-tertiary'}`}>{player.position}</span>
                 </div>
               )}
               {isDraftContext && player.adp != null && (

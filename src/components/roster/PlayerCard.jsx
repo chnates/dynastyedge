@@ -1,4 +1,5 @@
 import TrendArrow from '../shared/TrendArrow'
+import { POS_TEXT } from '../../utils/positionColors'
 
 export default function PlayerCard({ player, showSlot = false, onClick }) {
   const {
@@ -61,7 +62,7 @@ export default function PlayerCard({ player, showSlot = false, onClick }) {
           <span className="text-[10px] text-text-tertiary dark:text-text-tertiary">·</span>
         )}
         {positionRank != null && (
-          <span className="text-[10px] text-text-tertiary dark:text-text-tertiary font-body">
+          <span className={`text-[10px] font-body font-semibold ${POS_TEXT[position] ?? 'text-text-tertiary dark:text-text-tertiary'}`}>
             #{positionRank} {position}
           </span>
         )}

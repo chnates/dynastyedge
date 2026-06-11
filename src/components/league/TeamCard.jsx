@@ -2,6 +2,8 @@ import { getTeamName } from '../../hooks/useLeague'
 import { getPositionalStrength } from '../../utils/rosterAnalysis'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import { POSITIONS, PICK_YEARS, MY_ROSTER_ID } from '../../constants'
+import { POS_TEXT, POS_BG } from '../../utils/positionColors'
+import { ROUND_CLASSES, ROUND_TEXT, ROUND_LABELS } from '../../utils/roundColors'
 
 const POSITION_DEPTH = { QB: 3, RB: 5, WR: 5, TE: 3 }
 
@@ -16,14 +18,6 @@ function getPositionalTrend(roster) {
   })
   return result
 }
-
-const ROUND_CLASSES = {
-  1: { badge: 'bg-amber-100  dark:bg-[#3D2E00] text-amber-800  dark:text-amber-500', text: 'text-amber-800  dark:text-amber-500' },
-  2: { badge: 'bg-blue-100   dark:bg-[#0C2A4A] text-blue-800   dark:text-blue-400',  text: 'text-blue-800   dark:text-blue-400'  },
-  3: { badge: 'bg-violet-100 dark:bg-[#2A1A4A] text-violet-800 dark:text-violet-400', text: 'text-violet-800 dark:text-violet-400' },
-  4: { badge: 'bg-gray-100   dark:bg-[#1F1F25] text-gray-700   dark:text-gray-400',  text: 'text-gray-700   dark:text-gray-400'  },
-}
-const ROUND_LABELS = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th' }
 
 function formatRecord({ wins, losses, ties }) {
   return ties > 0 ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`
@@ -124,7 +118,8 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
             </div>
             {/* One row per active round */}
             {activeRounds.map(r => {
-              const { badge, text } = ROUND_CLASSES[r] ?? ROUND_CLASSES[4]
+              const badge = ROUND_CLASSES[r] ?? ROUND_CLASSES[4]
+              const text  = ROUND_TEXT[r] ?? ROUND_TEXT[4]
               return (
                 <div key={r} className="flex items-center">
                   <div className="w-10 shrink-0">
@@ -229,11 +224,11 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
                     <div key={pos} className="flex flex-col items-center gap-0.5">
                       <div className="h-1.5 w-8 rounded-full bg-border-default dark:bg-border-default overflow-hidden">
                         <div
-                          className={`h-full rounded-full ${above ? 'bg-accent' : 'bg-text-tertiary dark:bg-text-tertiary'}`}
+                          className={`h-full rounded-full ${above ? POS_BG[pos] : 'bg-text-tertiary dark:bg-text-tertiary'}`}
                           style={{ width: `${fillPct}%` }}
                         />
                       </div>
-                      <span className={`font-body text-[9px] font-semibold uppercase tracking-wide ${above ? 'text-accent' : 'text-text-tertiary dark:text-text-tertiary'}`}>
+                      <span className={`font-body text-[9px] font-semibold uppercase tracking-wide ${above ? POS_TEXT[pos] : 'text-text-tertiary dark:text-text-tertiary'}`}>
                         {pos}
                       </span>
                       <span className={`font-body text-[8px] leading-none ${trendColor}`}>

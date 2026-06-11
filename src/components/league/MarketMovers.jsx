@@ -11,6 +11,7 @@ import {
 import { POSITIONS, MY_ROSTER_ID } from '../../constants'
 import { useWatchlist } from '../../hooks/useWatchlist'
 import { useValueHistory } from '../../hooks/useValueHistory'
+import { POS_TEXT } from '../../utils/positionColors'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import SectionHeader from '../shared/SectionHeader'
@@ -58,7 +59,7 @@ function MoverRow({ player, ownerLabel, note, series, onClick, onBuildTrade }) {
         <span className="flex-1 font-body font-medium text-sm text-text-primary dark:text-text-primary truncate min-w-0">
           {player.name}
         </span>
-        <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary shrink-0 uppercase">
+        <span className={`font-body text-[10px] font-semibold shrink-0 uppercase ${POS_TEXT[player.position] ?? 'text-text-tertiary dark:text-text-tertiary'}`}>
           {player.position}
         </span>
         <span className="font-mono text-sm font-medium text-text-primary dark:text-text-primary shrink-0 w-14 text-right tabular-nums">

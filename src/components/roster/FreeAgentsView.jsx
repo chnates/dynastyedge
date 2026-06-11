@@ -7,6 +7,7 @@ import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import TrendArrow from '../shared/TrendArrow'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
+import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
 
 const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE']
 const SORT_OPTIONS = [
@@ -155,7 +156,7 @@ export default function FreeAgentsView() {
               onClick={() => setPosFilter(pos)}
               className={`flex-shrink-0 px-3 py-1.5 rounded-lg font-body text-xs font-semibold uppercase tracking-wide transition-colors ${
                 posFilter === pos
-                  ? 'bg-accent text-white'
+                  ? POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-white'
                   : 'bg-bg-card border border-border-default text-text-secondary'
               }`}
             >
@@ -252,7 +253,7 @@ export default function FreeAgentsView() {
                     <TrendArrow trend={player.trend30Day ?? 0} />
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="font-body text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">
+                    <span className={`font-body text-[10px] font-semibold uppercase tracking-wide ${POS_TEXT[player.position] ?? 'text-text-tertiary'}`}>
                       {player.position}
                     </span>
                     <span className="text-text-tertiary text-[10px]">·</span>

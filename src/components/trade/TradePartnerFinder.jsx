@@ -9,6 +9,7 @@ import { MY_ROSTER_ID } from '../../constants'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
+import { POS_CHIP_ACTIVE } from '../../utils/positionColors'
 
 const FILTER_TABS = ['All', 'QB', 'RB', 'WR', 'TE', 'Picks']
 
@@ -166,7 +167,7 @@ export default function TradePartnerFinder() {
             onClick={() => setActiveFilter(tab)}
             className={`shrink-0 px-3 py-1 rounded-full font-body text-xs font-semibold uppercase tracking-wider transition-colors
               ${activeFilter === tab
-                ? 'bg-accent text-white'
+                ? POS_CHIP_ACTIVE[tab] ?? 'bg-accent text-white'
                 : 'bg-bg-card dark:bg-bg-card text-text-secondary dark:text-text-secondary border border-border-default dark:border-border-default'
               }`}
           >
