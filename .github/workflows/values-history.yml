@@ -1,0 +1,30 @@
+name: Snapshot dynasty values
+
+on:
+  schedule:
+    - cron: '41 9 * * *'   # daily, offset from top-of-hour congestion
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Append today's FantasyCalc snapshot
+        run: node scripts/snapshot-values.mjs
+      - name: Publish values-history.json to the values-history branch
+        run: |
+          mkdir -p /tmp/valuesrepo && cd /tmp/valuesrepo
+          git init -b values-history .
+          cp "$GITHUB_WORKSPACE/values-history.json" .
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add values-history.json
+          git commit -m "Update values history"
+          git push --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" values-history

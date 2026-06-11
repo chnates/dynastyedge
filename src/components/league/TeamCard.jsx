@@ -29,10 +29,17 @@ function formatRecord({ wins, losses, ties }) {
   return ties > 0 ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`
 }
 
-export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortMode = 'value', onTap }) {
+const DIVERGENCE_META = {
+  under: { label: 'Underperforming', cls: 'bg-warning/15 text-warning' },
+  over:  { label: 'Overachieving',   cls: 'bg-accent/15 text-accent' },
+}
+
+export default function TeamCard({ roster, rank, divergence, leagueAverages, winWindowTiers, sortMode = 'value', onTap }) {
   const teamName = getTeamName(roster.owner)
   const username = roster.owner?.username ?? ''
   const tier = winWindowTiers?.[roster.rosterId] ?? 'Middle'
+  const isMyTeam = roster.rosterId === MY_ROSTER_ID
+  const divergenceMeta = divergence ? DIVERGENCE_META[divergence] : null
 
   const totalPicks = roster.picks.length
 
@@ -54,14 +61,28 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
   return (
     <button
       onClick={() => onTap(roster.rosterId)}
-      className="w-full text-left rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-3 active:opacity-70 transition-opacity"
+      className={`w-full text-left rounded-xl bg-bg-card dark:bg-bg-card border px-3 py-3 active:opacity-70 transition-opacity ${
+        isMyTeam ? 'border-accent/60' : 'border-border-default dark:border-border-default'
+      }`}
     >
       {/* Header row */}
       <div className="flex items-start justify-between gap-2 mb-2">
+        {rank != null && (
+          <span className="font-mono text-lg font-bold text-text-tertiary dark:text-text-tertiary tabular-nums w-6 shrink-0 leading-tight">
+            {rank}
+          </span>
+        )}
         <div className="flex-1 min-w-0">
-          <p className="font-body text-sm font-semibold text-text-primary dark:text-text-primary truncate leading-tight">
-            {teamName}
-          </p>
+          <div className="flex items-center gap-1.5">
+            <p className="font-body text-sm font-semibold text-text-primary dark:text-text-primary truncate leading-tight">
+              {teamName}
+            </p>
+            {isMyTeam && (
+              <span className="shrink-0 font-body text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 bg-accent/15 text-accent">
+                You
+              </span>
+            )}
+          </div>
           {(username || roster.hasRecord) && (
             <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary truncate leading-tight mt-0.5">
               {username ? `@${username}` : ''}
@@ -73,7 +94,14 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
             </p>
           )}
         </div>
-        <WinWindowBadge tier={tier} />
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <WinWindowBadge tier={tier} />
+          {divergenceMeta && (
+            <span className={`font-body text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 ${divergenceMeta.cls}`}>
+              {divergenceMeta.label}
+            </span>
+          )}
+        </div>
       </div>
 
       {sortMode === 'picks' ? (
@@ -183,7 +211,6 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
           {/* Positional strength bars */}
           {(() => {
             const posTrend = getPositionalTrend(roster)
-            const isMyTeam = roster.rosterId === MY_ROSTER_ID
             return (
               <div className="flex gap-1.5 mb-2.5">
                 {POSITIONS.map(pos => {

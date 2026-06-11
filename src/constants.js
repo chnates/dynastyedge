@@ -13,6 +13,11 @@ export const ESPN_WEB_BASE = 'https://site.web.api.espn.com'
 // news-data branch (raw.githubusercontent.com sends CORS headers)
 export const NEWS_FEED_URL = 'https://raw.githubusercontent.com/chnates/dynastyedge/news-data/news.json'
 
+// Daily FantasyCalc value snapshots published by
+// .github/workflows/values-history.yml to the values-history branch —
+// powers sparklines. Best-effort: when missing, sparklines simply hide.
+export const VALUES_HISTORY_URL = 'https://raw.githubusercontent.com/chnates/dynastyedge/values-history/values-history.json'
+
 export const FANTASYCALC_PARAMS = {
   isDynasty: true,
   numQbs: 2,

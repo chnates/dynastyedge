@@ -164,6 +164,33 @@ file — keeping the no-backend architecture:
 
 -----
 
+### Value history pipeline (GitHub Actions + daily snapshots)
+
+FantasyCalc only exposes a single `trend30Day` scalar — no time series. Real
+per-player value history is accumulated by a daily snapshot, same
+architecture as the news pipeline:
+
+- `.github/workflows/values-history.yml` runs daily (cron `41 9 * * *`, plus
+  `workflow_dispatch`). It runs `scripts/snapshot-values.mjs`, which fetches
+  FantasyCalc, appends today's column to the rolling history, and
+  force-pushes a single-commit `values-history` branch containing
+  `values-history.json`.
+- **Format is columnar** to stay mobile-sized:
+  `{ updatedAt, dates: ['YYYY-MM-DD', …], players: { sleeperId: [v|null, …] } }`
+  — arrays aligned to `dates`. Rolling window: 90 days, top 500 players by
+  current value (players already tracked keep their row until it's all-null).
+  One column per UTC day; re-runs on the same day replace that column.
+- The app fetches `VALUES_HISTORY_URL` lazily (first consumer mount) once per
+  session via `useValueHistory`. `getSeries(sleeperId)` returns the non-null
+  points, or `null` when fewer than 2 exist.
+- **Strictly best-effort:** history starts accumulating the day the pipeline
+  ships. Missing branch / bad shape / fetch failure ⇒ sparklines simply hide.
+  Never show an error or a loading state for history.
+- `Sparkline` (shared component) renders the series as a tiny SVG polyline —
+  green when net-up over the window, red when net-down, muted when flat.
+
+-----
+
 ### FantasyCalc API
 
 **Base URL:** `https://api.fantasycalc.com`
@@ -469,21 +496,34 @@ landscape before making any move.
 
 #### League health banner *(always visible)*
 
-> “3 Contending · 4 Middle · 3 Rebuilding”
-
-Single line, always at the top. Immediate landscape read.
+Three tappable tier chips — “3 Contending · 4 Middle · 3 Rebuilding” — plus
+a “You: <tier>” readout. Tapping a chip filters the team list to that tier
+(tap again to clear). The tier filter persists in sessionStorage
+(`dynastyedge_league_tier`) and applies to both the team list and the
+position-ranking view (ranks stay league-wide; the filter only hides rows).
 
 #### Team list
 
-**Default:** Vertical list, all 10 teams sorted by total roster value (high to low)
+**Default:** Vertical list, all 10 teams sorted by total roster value (high to low).
+Every card shows its rank ordinal for the current sort (computed before the
+tier filter, so ranks always reflect true league-wide standing). Nix Cage's
+card is highlighted (accent border + “You” chip) in both the team list and
+the position-ranking view.
 
 **Sort toggle:** Overall value / Record / Pick capital / FAAB remaining
-(Record sorts by wins, then points for; FAAB mode shows remaining + spent of budget)
+(Record sorts by wins, then points for; FAAB mode shows remaining + spent of
+budget). The Record option is hidden entirely when no team has played a game
+yet (offseason) — a persisted `record` sort silently falls back to value.
 
 **Position filter:** Tap QB / RB / WR / TE →
 List switches to a ranked list (1–10) sorted by that position's strength.
 Sort and position filters persist in sessionStorage so drilling into a team
 and coming back doesn't reset them.
+
+**Divergence badges:** when records exist, teams whose roster-value rank and
+record rank differ by ≥ 4 places get a badge — **Underperforming** (amber:
+talented roster, bad record — a frustrated owner is a buy window) or
+**Overachieving** (blue: record outruns talent — regression candidate).
 
 **Each team card shows:**
 
@@ -504,7 +544,19 @@ and coming back doesn't reset them.
 Season-wide transaction feed: trades, waiver claims (with winning FAAB bid),
 and free-agent moves, newest first.
 
+- **Filter chips:** All / Trades / Waivers / FA / My Moves (My Moves = any
+  transaction involving roster 6). Changing the filter resets pagination.
 - Trades show each side's full haul: players, picks (with original owner), FAAB
+- **Every asset shows its current FantasyCalc value** with a per-side total
+  next to each "X gets" header; when two sides' totals differ by more than
+  5%, the larger haul renders green. Pick values use the same median-of-round
+  logic as pick capital (`findPickValue`). FAAB dollars display but don't
+  count toward totals. A header note says values are at today's prices, not
+  at trade time. Unranked players show `—`.
+- **Player names are tappable** (dotted underline) and open the
+  PlayerProfileDrawer — only for FantasyCalc-ranked players; unranked
+  fallback names are plain text.
+- Transactions involving Nix Cage get an accent border + “You” chip.
 - Player names resolve via FantasyCalc playerMap, falling back to the player DB
   (so dropped players still show names)
 - 25 entries per page with a "Show more" button
@@ -517,13 +569,27 @@ and free-agent moves, newest first.
 
 30-day dynasty value trends, turned into actionable lists:
 
+- **Watching** (top section) — every watchlisted player, sorted by absolute
+  trend, shown regardless of trend size. Hidden when the watchlist is empty.
 - **Buy-Low Targets** — falling players (trend < −50) at my deficit positions,
   not on my roster, value ≥ 1000. A rebuilding owner is flagged as a prime target.
 - **Sell-High Candidates** — my rising players (trend > +50) at my surplus positions
 - **Top Risers / Top Fallers** — league-wide, rostered players plus free agents
   with value ≥ 500 (filters out deep-FA noise)
+- **Trend shows both absolute and %** (vs the value 30 days ago) — +120 on an
+  800 player reads very differently than on a 7,500 one.
+- **Buy-Low and Sell-High never vanish silently** — when empty they render a
+  one-line hint explaining why (no deficit/surplus positions, or no movers
+  matching them). Watching/Risers/Fallers still hide when empty.
+- Every rostered player's row has a **Trade button** that deep-links into the
+  Trade Analyzer: an opponent's player arrives as a What's Fair target
+  (opponent + fair package pre-filled); my own player arrives pre-loaded in
+  You Give. Free agents get no button.
+- Rows show a **sparkline** when the values-history feed has ≥ 2 snapshots
+  for the player (see Value history pipeline).
 - Tap any row → Player Profile drawer
-- Zero extra API calls: computed entirely from cached FantasyCalc data
+- Zero extra API calls beyond the lazy once-per-session history fetch:
+  computed from cached FantasyCalc data
 
 -----
 
@@ -683,9 +749,11 @@ dynastyedge/
 ├── .github/
 │   └── workflows/
 │       ├── deploy.yml          ← GitHub Actions auto-deploy
-│       └── news.yml            ← twice-hourly news aggregation → news-data branch
+│       ├── news.yml            ← twice-hourly news aggregation → news-data branch
+│       └── values-history.yml  ← daily value snapshot → values-history branch
 ├── scripts/
-│   └── fetch-news.mjs          ← multi-source news fetcher (runs in Actions)
+│   ├── fetch-news.mjs          ← multi-source news fetcher (runs in Actions)
+│   └── snapshot-values.mjs     ← daily FantasyCalc snapshot appender (runs in Actions)
 ├── public/
 │   └── favicon.ico
 ├── src/
@@ -730,6 +798,7 @@ dynastyedge/
 │   │       ├── WinWindowBadge.jsx
 │   │       ├── TrendArrow.jsx
 │   │       ├── DynastyEdgeLogo.jsx
+│   │       ├── Sparkline.jsx        ← tiny SVG trend line for value history
 │   │       └── LoadingSpinner.jsx
 │   ├── hooks/
 │   │   ├── useSleeper.js        ← league/rosters/users/picks/state fetch
@@ -740,6 +809,7 @@ dynastyedge/
 │   │   ├── useLineupHistory.js  ← my past matchups for efficiency review
 │   │   ├── useLineupData.js     ← projections, statuses, schedule, def stats
 │   │   ├── useWatchlist.js      ← starred players (localStorage-backed store)
+│   │   ├── useValueHistory.js   ← daily value snapshots for sparklines (best-effort)
 │   │   ├── usePlayerIntel.js    ← production stats + depth chart + ESPN news
 │   │   ├── useScrollLock.js     ← freezes <main> while a bottom sheet is open
 │   │   ├── useTheme.js          ← dark/light toggle
@@ -914,8 +984,8 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
    `dynastyedge_theme` (theme) · `dynastyedge_watchlist_v1` (starred players) ·
    `dynastyedge_action_dismissals` (roster action items) ·
    `dynastyedge_draft_*` (draft board state) ·
-   sessionStorage `dynastyedge_league_sort` / `dynastyedge_league_pos`
-   (League tab filters, preserved across drill-downs) ·
+   sessionStorage `dynastyedge_league_sort` / `dynastyedge_league_pos` /
+   `dynastyedge_league_tier` (League tab filters, preserved across drill-downs) ·
    sessionStorage `dynastyedge_trade_draft` (in-progress trade).
 1. **Shared components:** `ErrorState` and `SectionHeader` live in
    `src/components/shared/` — import them, never redefine them locally.
