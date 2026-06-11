@@ -237,13 +237,13 @@ export default function PlayerProfileDrawer({
     return league.myRoster.players.find(p => p.sleeperId === player.sleeperId) ?? null
   }, [league, player.sleeperId, playerContext])
 
-  // Competitors at same position on my roster
+  // My full position group, viewed player included — shows where they rank
   const competitors = useMemo(() => {
     if (!league?.myRoster || !player.position || playerContext !== 'mine') return []
     return league.myRoster.players
-      .filter(p => p.position === player.position && p.sleeperId !== player.sleeperId)
+      .filter(p => p.position === player.position)
       .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
-  }, [league, player.position, player.sleeperId, playerContext])
+  }, [league, player.position, playerContext])
 
   // My roster players at same position (for FA context)
   const myPositionPlayers = useMemo(() => {
@@ -658,17 +658,25 @@ export default function PlayerProfileDrawer({
                     <>
                       <p className="font-body text-[10px] text-text-tertiary mb-1.5">Position group</p>
                       <div className="flex flex-col gap-0">
-                        {competitors.map((comp, i) => (
-                          <div
-                            key={comp.sleeperId}
-                            className={`flex items-center justify-between py-1.5 ${i < competitors.length - 1 ? 'border-b border-border-default' : ''}`}
-                          >
-                            <p className="font-body text-xs text-text-primary truncate flex-1 min-w-0">{comp.name}</p>
-                            <span className="font-mono text-xs text-text-secondary tabular-nums ml-2 flex-shrink-0">
-                              {(comp.value ?? 0).toLocaleString()}
-                            </span>
-                          </div>
-                        ))}
+                        {competitors.map((comp, i) => {
+                          const isViewed = String(comp.sleeperId) === String(player.sleeperId)
+                          return (
+                            <div
+                              key={comp.sleeperId}
+                              className={`flex items-center justify-between py-1.5 ${i < competitors.length - 1 ? 'border-b border-border-default' : ''}`}
+                            >
+                              <span className="font-mono text-[10px] text-text-tertiary tabular-nums w-4 shrink-0">
+                                {i + 1}
+                              </span>
+                              <p className={`font-body text-xs truncate flex-1 min-w-0 ${isViewed ? 'font-semibold text-accent' : 'text-text-primary'}`}>
+                                {comp.name}
+                              </p>
+                              <span className={`font-mono text-xs tabular-nums ml-2 flex-shrink-0 ${isViewed ? 'font-semibold text-accent' : 'text-text-secondary'}`}>
+                                {(comp.value ?? 0).toLocaleString()}
+                              </span>
+                            </div>
+                          )
+                        })}
                       </div>
                     </>
                   )}
