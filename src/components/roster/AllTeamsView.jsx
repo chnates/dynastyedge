@@ -7,6 +7,8 @@ import { MY_ROSTER_ID } from '../../constants'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import WinWindowBadge from '../shared/WinWindowBadge'
+import TeamAvatar from '../shared/TeamAvatar'
+import { rankClass } from '../../utils/rankColors'
 
 function formatRecord({ wins, losses, ties }) {
   return ties > 0 ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`
@@ -47,9 +49,10 @@ export default function AllTeamsView() {
             className="w-full text-left rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-3 active:opacity-70 transition-opacity"
           >
             <div className="flex items-center gap-2.5">
-              <span className="font-mono text-base font-bold text-text-tertiary dark:text-text-tertiary tabular-nums w-6 shrink-0">
+              <span className={`font-mono text-base font-bold tabular-nums w-6 shrink-0 ${rankClass(i + 1)}`}>
                 {i + 1}
               </span>
+              <TeamAvatar owner={roster.owner} size={30} />
               <div className="flex-1 min-w-0">
                 <p className="font-body text-sm font-semibold text-text-primary dark:text-text-primary truncate leading-tight">
                   {getTeamName(roster.owner)}

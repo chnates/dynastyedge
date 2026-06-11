@@ -727,7 +727,8 @@ but organized, purposeful use of color, confident typography.
 |Warning amber       |`#F59E0B`                |
 |Danger red          |`#EF4444`                |
 |Contending gold     |`#F59E0B`                |
-|Rebuilding slate    |`#6B7280`                |
+|Middle cyan         |`#22D3EE` (dark) / `#0891B2` (light)|
+|Rebuilding indigo   |`#818CF8` (dark) / `#4F46E5` (light)|
 
 #### Light mode
 
@@ -798,6 +799,54 @@ Class maps live in `src/utils/roundColors.js` (`ROUND_CLASSES`, `ROUND_TEXT`,
 |🎯 Priority            |Accent blue  |Top trade partner tier                        |
 |✅ Good Fit            |Muted green  |Second trade partner tier                     |
 |⚪ Poor Fit            |Text tertiary|Lowest trade partner tier                     |
+
+Verdict blocks (Accept/Decline/Counter) use a soft diagonal gradient of their
+status color (`from-x/20 via-x/10 to-transparent`), not a flat tint.
+
+### Win window tier colors
+
+Every tier has an identity color — maps live in `src/utils/tierColors.js`
+(`TIER_BADGE`, `TIER_TEXT`), shared by `WinWindowBadge` and the League health
+banner chips. Never redefine locally.
+
+|Tier      |Color                                   |
+|----------|----------------------------------------|
+|Contending|Gold (warning amber)                    |
+|Middle    |Cyan (`cyan-600` light / `cyan-400` dark)|
+|Rebuilding|Indigo (`indigo-600` light / `indigo-400` dark)|
+
+### Rank medals
+
+Ranking ordinals (league value rank, position rank cards, All Teams) color the
+top 3 as medals — gold/silver/bronze — via `rankClass(rank)` in
+`src/utils/rankColors.js`. Everyone else stays text-tertiary.
+
+### Team avatars
+
+`src/components/shared/TeamAvatar.jsx` shows the owner's Sleeper avatar
+everywhere teams appear (team cards, position rankings, All Teams, matchups,
+roster hero header, side drawer). Sources, in order: custom team avatar URL
+(`user.metadata.avatar`), Sleeper CDN thumb
+(`https://sleepercdn.com/avatars/thumbs/{user.avatar}`), then a deterministic
+gradient initial circle (hash of team name). Static `<img>` tags only — this
+is not an API call, so it doesn't go through `fetchJSON`. Always render the
+fallback on image error; never let a broken avatar break a card.
+
+### Ambient background glow
+
+The app shell uses the `.app-bg` class (`index.css`): the flat background plus
+two faint radial glows at the top (accent blue left, violet right), stronger
+in dark mode. The fixed app header is translucent (`bg-bg-secondary/85
+backdrop-blur-md`) so the glow reads through it. Bottom sheets and drawers
+keep their opaque backgrounds.
+
+### Section identity colors (side drawer)
+
+Each nav section has an identity hue (defined inline in `SideDrawer.jsx`):
+Roster sky · Trade green · Lineup orange · League gold · Draft pink. Icons
+always wear the section color; the active item gets the matching tinted
+background and edge bar. These are navigation identity only — they carry no
+status meaning.
 
 ### Typography
 
@@ -881,6 +930,7 @@ dynastyedge/
 │   │       ├── WinWindowBadge.jsx
 │   │       ├── TrendArrow.jsx
 │   │       ├── DynastyEdgeLogo.jsx
+│   │       ├── TeamAvatar.jsx       ← Sleeper avatar + gradient-initial fallback
 │   │       ├── Sparkline.jsx        ← tiny SVG trend line for value history
 │   │       └── LoadingSpinner.jsx
 │   ├── hooks/
@@ -904,6 +954,8 @@ dynastyedge/
 │   │   ├── fetchJSON.js         ← shared fetch wrapper with timeout — use everywhere
 │   │   ├── positionColors.js    ← position identity color class maps — use everywhere
 │   │   ├── roundColors.js       ← pick round color classes (PickBadge, TeamCard)
+│   │   ├── tierColors.js        ← win-window tier colors (badge + banner chips)
+│   │   ├── rankColors.js        ← gold/silver/bronze medal colors for rank ordinals
 │   │   ├── tradeAnalysis.js     ← trade scoring, verdict logic
 │   │   ├── rosterAnalysis.js    ← positional strength, win window tiers
 │   │   ├── pickCapital.js       ← pick ownership resolution logic

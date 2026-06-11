@@ -52,6 +52,25 @@ body {
   background-color: rgb(var(--bg-primary));
 }
 
+/* ── App background: ambient color glow at the top of the screen ── */
+/* Applied to the app shell div (App.jsx), not <body> — the shell     */
+/* paints over the body. Fixed at the top since the body never        */
+/* scrolls (<main> is the scroll container).                          */
+
+.app-bg {
+  background-color: rgb(var(--bg-primary));
+  background-image:
+    radial-gradient(600px 300px at 12% -4%, rgb(var(--accent) / 0.07), transparent 70%),
+    radial-gradient(520px 260px at 92% -6%, rgb(var(--pos-def) / 0.06), transparent 70%);
+  background-repeat: no-repeat;
+}
+
+.dark .app-bg {
+  background-image:
+    radial-gradient(600px 300px at 12% -4%, rgb(var(--accent) / 0.16), transparent 70%),
+    radial-gradient(520px 260px at 92% -6%, rgb(var(--pos-def) / 0.13), transparent 70%);
+}
+
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }

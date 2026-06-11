@@ -11,7 +11,8 @@ import PickBadge from './PickBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import RosterAnalysisSheet from './RosterAnalysisSheet'
 import RosterActionItems from './RosterActionItems'
-import { POS_BG } from '../../utils/positionColors'
+import { POS_BG, POS_TEXT } from '../../utils/positionColors'
+import TeamAvatar from '../shared/TeamAvatar'
 
 const POSITION_ORDER = ['QB', 'RB', 'WR', 'TE', 'DEF']
 
@@ -88,11 +89,14 @@ export default function RosterView() {
         <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-0.5">
           Dynasty Roster
         </p>
-        <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-text-primary dark:text-text-primary leading-tight">
-          {teamName}
-        </h1>
+        <div className="flex items-center gap-2.5">
+          <TeamAvatar owner={displayRoster.owner} size={36} />
+          <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-text-primary dark:text-text-primary leading-tight min-w-0 truncate">
+            {teamName}
+          </h1>
+        </div>
         <div className="flex items-baseline gap-2 mt-1.5">
-          <span className="font-mono text-3xl font-medium text-accent tabular-nums">
+          <span className="font-mono text-3xl font-medium tabular-nums text-transparent bg-clip-text bg-gradient-to-r from-accent to-pos-def">
             {displayRoster.totalValue.toLocaleString()}
           </span>
           <span className="font-body text-xs text-text-secondary dark:text-text-secondary">
@@ -138,7 +142,7 @@ export default function RosterView() {
         if (!group?.length) return null
         return (
           <section key={pos}>
-            <SectionHeader label={pos} count={group.length} accentBar={POS_BG[pos]} />
+            <SectionHeader label={pos} count={group.length} accentBar={POS_BG[pos]} accentText={POS_TEXT[pos]} />
             <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
               {group.map(player => (
                 <PlayerCard key={player.sleeperId} player={player} onClick={() => setSelectedPlayer(player)} />

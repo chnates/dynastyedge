@@ -38,6 +38,15 @@ export const POS_TAG = {
   DEF: 'text-pos-def bg-pos-def/15',
 }
 
+// Gradient fill for positional strength bars.
+export const POS_BAR = {
+  QB: 'bg-gradient-to-r from-pos-qb/60 to-pos-qb',
+  RB: 'bg-gradient-to-r from-pos-rb/60 to-pos-rb',
+  WR: 'bg-gradient-to-r from-pos-wr/60 to-pos-wr',
+  TE: 'bg-gradient-to-r from-pos-te/60 to-pos-te',
+  DEF: 'bg-gradient-to-r from-pos-def/60 to-pos-def',
+}
+
 // CSS color values for SVG fill/stroke (resolve via the theme variables).
 export const POS_SVG = {
   QB: 'rgb(var(--pos-qb))',

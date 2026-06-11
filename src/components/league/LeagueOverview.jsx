@@ -11,6 +11,9 @@ import WinWindowBadge from '../shared/WinWindowBadge'
 import TeamCard from './TeamCard'
 import MatchupCard from './MatchupCard'
 import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
+import { TIER_BADGE, TIER_TEXT } from '../../utils/tierColors'
+import { rankClass } from '../../utils/rankColors'
+import TeamAvatar from '../shared/TeamAvatar'
 
 const SORT_OPTIONS = [
   { id: 'value',  label: 'Overall Value' },
@@ -20,11 +23,6 @@ const SORT_OPTIONS = [
 ]
 
 const TIERS = ['Contending', 'Middle', 'Rebuilding']
-const TIER_ACTIVE_CLASSES = {
-  Contending: 'bg-warning/15 text-warning border-warning/40',
-  Middle:     'bg-bg-card dark:bg-bg-card text-text-primary dark:text-text-primary border-text-secondary/40',
-  Rebuilding: 'bg-bg-card dark:bg-bg-card text-text-secondary dark:text-text-secondary border-text-secondary/40',
-}
 
 // Filters survive drill-down + back navigation via sessionStorage.
 const SORT_KEY = 'dynastyedge_league_sort'
@@ -59,9 +57,10 @@ function PositionRankCard({ roster, posFilter, tier, posStrength, posRank, onTap
       }`}
     >
       <div className="flex items-center gap-2 mb-2">
-        <span className="font-mono text-lg font-bold text-text-tertiary dark:text-text-tertiary tabular-nums w-6 shrink-0">
+        <span className={`font-mono text-lg font-bold tabular-nums w-6 shrink-0 ${rankClass(posRank)}`}>
           {posRank}
         </span>
+        <TeamAvatar owner={roster.owner} size={26} />
         <div className="flex-1 min-w-0 flex items-center gap-1.5">
           <p className="font-body text-sm font-semibold text-text-primary dark:text-text-primary truncate">
             {teamName}
@@ -213,7 +212,7 @@ export default function LeagueOverview() {
             League Health
           </p>
           <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary">
-            You: <span className={myTier === 'Contending' ? 'text-warning font-semibold' : 'text-text-primary dark:text-text-primary font-semibold'}>{myTier}</span>
+            You: <span className={`font-semibold ${TIER_TEXT[myTier] ?? 'text-text-primary dark:text-text-primary'}`}>{myTier}</span>
           </p>
         </div>
         <div className="flex gap-1.5">
@@ -225,7 +224,7 @@ export default function LeagueOverview() {
                 onClick={() => setTierFilter(active ? 'ALL' : tier)}
                 className={`px-2.5 py-1 rounded-full font-body text-xs font-medium border transition-colors ${
                   active
-                    ? TIER_ACTIVE_CLASSES[tier]
+                    ? TIER_BADGE[tier]
                     : 'bg-bg-secondary dark:bg-bg-secondary text-text-secondary dark:text-text-secondary border-border-default dark:border-border-default'
                 }`}
               >

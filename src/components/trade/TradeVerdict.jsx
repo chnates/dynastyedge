@@ -3,9 +3,9 @@ import WinWindowBadge from '../shared/WinWindowBadge'
 import { relativeTime } from '../../hooks/usePlayerIntel'
 
 const VERDICT_STYLES = {
-  Accept:  { Icon: CheckCircle2, color: 'text-success',  bg: 'bg-success/10 border-success/30' },
-  Decline: { Icon: XCircle,      color: 'text-danger',   bg: 'bg-danger/10 border-danger/30' },
-  Counter: { Icon: RefreshCw,    color: 'text-warning',  bg: 'bg-warning/10 border-warning/30' },
+  Accept:  { Icon: CheckCircle2, color: 'text-success', bg: 'bg-gradient-to-br from-success/20 via-success/10 to-transparent' },
+  Decline: { Icon: XCircle,      color: 'text-danger',  bg: 'bg-gradient-to-br from-danger/20 via-danger/10 to-transparent' },
+  Counter: { Icon: RefreshCw,    color: 'text-warning', bg: 'bg-gradient-to-br from-warning/20 via-warning/10 to-transparent' },
 }
 
 const FLAG_DOT = { red: 'bg-danger', yellow: 'bg-warning', green: 'bg-success' }

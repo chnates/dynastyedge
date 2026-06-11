@@ -94,7 +94,7 @@ function AppShell({ leagueData }) {
 
   return (
     <div
-      className="min-h-screen bg-bg-primary text-text-primary font-body"
+      className="min-h-screen app-bg text-text-primary font-body"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
@@ -108,7 +108,7 @@ function AppShell({ leagueData }) {
         onToggleTheme={toggleTheme}
       />
 
-      <header className="fixed top-0 left-0 right-0 z-30 bg-bg-secondary border-b border-border-default">
+      <header className="fixed top-0 left-0 right-0 z-30 bg-bg-secondary/85 backdrop-blur-md border-b border-border-default">
         <div className="flex items-center h-12 px-1">
           <button
             onClick={() => setDrawerOpen(true)}

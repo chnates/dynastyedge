@@ -2,8 +2,10 @@ import { getTeamName } from '../../hooks/useLeague'
 import { getPositionalStrength } from '../../utils/rosterAnalysis'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import { POSITIONS, PICK_YEARS, MY_ROSTER_ID } from '../../constants'
-import { POS_TEXT, POS_BG } from '../../utils/positionColors'
+import { POS_TEXT, POS_BAR } from '../../utils/positionColors'
 import { ROUND_CLASSES, ROUND_TEXT, ROUND_LABELS } from '../../utils/roundColors'
+import { rankClass } from '../../utils/rankColors'
+import TeamAvatar from '../shared/TeamAvatar'
 
 const POSITION_DEPTH = { QB: 3, RB: 5, WR: 5, TE: 3 }
 
@@ -62,10 +64,11 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
       {/* Header row */}
       <div className="flex items-start justify-between gap-2 mb-2">
         {rank != null && (
-          <span className="font-mono text-lg font-bold text-text-tertiary dark:text-text-tertiary tabular-nums w-6 shrink-0 leading-tight">
+          <span className={`font-mono text-lg font-bold tabular-nums w-6 shrink-0 leading-tight ${rankClass(rank)}`}>
             {rank}
           </span>
         )}
+        <TeamAvatar owner={roster.owner} size={30} className="mt-0.5" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <p className="font-body text-sm font-semibold text-text-primary dark:text-text-primary truncate leading-tight">
@@ -224,7 +227,7 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
                     <div key={pos} className="flex flex-col items-center gap-0.5">
                       <div className="h-1.5 w-8 rounded-full bg-border-default dark:bg-border-default overflow-hidden">
                         <div
-                          className={`h-full rounded-full ${above ? POS_BG[pos] : 'bg-text-tertiary dark:bg-text-tertiary'}`}
+                          className={`h-full rounded-full ${above ? POS_BAR[pos] : 'bg-text-tertiary dark:bg-text-tertiary'}`}
                           style={{ width: `${fillPct}%` }}
                         />
                       </div>
