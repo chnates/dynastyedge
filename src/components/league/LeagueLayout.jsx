@@ -4,6 +4,7 @@ const SUB_TABS = [
   { label: 'Overview', to: '/league',          end: true  },
   { label: 'Activity', to: '/league/activity', end: false },
   { label: 'Movers',   to: '/league/movers',   end: false },
+  { label: 'Managers', to: '/league/managers', end: false },
 ]
 
 export default function LeagueLayout() {

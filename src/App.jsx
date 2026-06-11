@@ -18,6 +18,7 @@ import LeagueLayout from './components/league/LeagueLayout'
 import LeagueOverview from './components/league/LeagueOverview'
 import LeagueActivity from './components/league/LeagueActivity'
 import MarketMovers from './components/league/MarketMovers'
+import ManagersView from './components/league/ManagersView'
 import DraftLayout from './components/draft/DraftLayout'
 import DraftBoard from './components/draft/DraftBoard'
 import DraftTracker from './components/draft/DraftTracker'
@@ -152,6 +153,7 @@ function AppShell({ leagueData }) {
             <Route index element={<LeagueOverview />} />
             <Route path="activity" element={<LeagueActivity />} />
             <Route path="movers" element={<MarketMovers />} />
+            <Route path="managers" element={<ManagersView />} />
           </Route>
           <Route path="/draft" element={<DraftLayout />}>
             <Route index element={<Navigate to="board" replace />} />

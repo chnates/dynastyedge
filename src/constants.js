@@ -18,6 +18,11 @@ export const NEWS_FEED_URL = 'https://raw.githubusercontent.com/chnates/dynastye
 // powers sparklines. Best-effort: when missing, sparklines simply hide.
 export const VALUES_HISTORY_URL = 'https://raw.githubusercontent.com/chnates/dynastyedge/values-history/values-history.json'
 
+// Trade-time value archive published by the same workflow — records asset
+// values within ~a day of each trade, forever. Best-effort: when missing,
+// the scouting ledger's "at trade time" line simply hides.
+export const TRADE_VALUES_URL = 'https://raw.githubusercontent.com/chnates/dynastyedge/values-history/trade-values.json'
+
 export const FANTASYCALC_PARAMS = {
   isDynasty: true,
   numQbs: 2,

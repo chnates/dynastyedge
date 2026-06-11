@@ -100,6 +100,7 @@ No authentication required. Read-only. Stay under 1,000 API calls per minute.
 |NFL schedule                   |`/schedule/nfl/regular/{year}`                   |
 |League drafts (rookie draft sync)|`/league/1313933520715907072/drafts`           |
 |Live draft picks / in-draft pick trades|`/draft/{draft_id}/picks` · `/draft/{draft_id}/traded_picks`|
+|League history (manager scouting)|`/league/{id}` → `previous_league_id` chain, then per past season: users · rosters · transactions · drafts + picks (lazy, once per session, via `useLeagueHistory`)|
 
 **Critical Sleeper note:** Roster endpoints return **numeric player IDs only** —
 not names. Player names are resolved by matching Sleeper IDs against FantasyCalc
@@ -190,6 +191,12 @@ architecture as the news pipeline:
   Never show an error or a loading state for history.
 - `Sparkline` (shared component) renders the series as a tiny SVG polyline —
   green when net-up over the window, red when net-down, muted when flat.
+- The same workflow also runs `scripts/snapshot-trade-values.mjs`
+  (`continue-on-error`), which archives asset values for trades completed in
+  the last 8 days into `trade-values.json` on the same branch — permanent
+  (never pruned), read lazily via `useTradeTimeValues` for the manager
+  scouting ledger's "at trade time" line (see Feature 11). The publish step
+  re-fetches the previous archive when the script fails so it's never erased.
 
 -----
 
@@ -663,6 +670,75 @@ Draft-section storage keys live in `src/components/draft/boardStorage.js`:
 
 -----
 
+### Feature 11 — Manager Scouting (League › Managers)
+
+Behavioral trading profiles for every manager, built from **every season of
+league history** — the intel layer behind "who do I call?". Plus a report
+card on me: how am I actually doing, and what should I work on?
+
+**League history walking (`useLeagueHistory`):** every Sleeper league carries
+`previous_league_id` — the same league's prior season. The hook walks the
+renewal chain (capped at 8 hops), and for each past season fetches users,
+rosters, all 18 transaction buckets, and every draft with its full pick list.
+It also fetches the **current** league's drafts (with picks) so traded picks
+from completed rookie drafts resolve into players. Lazy (first consumer
+mount) + session-cached — past seasons are frozen, so one fetch per session.
+If the league was ever recreated instead of renewed, the chain just ends
+there and profiles cover fewer seasons.
+
+**Analysis (`utils/managerAnalysis.js`, composed via `useManagerProfiles`):**
+
+- **Identity:** managers are keyed by `owner_id` (stable across seasons) —
+  roster IDs are only resolved within their own season. Profiles exist for
+  current owners; departed owners still appear as named counterparties.
+- **Trade ledger:** every completed trade, recorded per participant from
+  their perspective (got / gave / net / win-loss-even at ±5% of trade size).
+- **Hindsight valuation:** everything is graded at *today's* FantasyCalc
+  prices — did the move age well? Traded picks whose draft has since
+  happened resolve to the actual player drafted at that slot
+  ("2026 1st → Player Name") via `slot_to_roster_id` + the draft's pick
+  list. Future picks use today's market pick value (`findPickValue`).
+  FAAB in trades displays but counts 0, same as League › Activity.
+- **Tendencies:** pick accumulator/shipper, buys youth/veterans (avg age of
+  players acquired vs given), position chasing, FAAB aggression vs league
+  average — rendered as chips.
+- **FAAB efficiency:** dollars spent vs today's value of waiver pickups
+  (value per $100), claims, FA move count.
+- **Rookie draft grades:** every rookie pick scored as slot vs the player's
+  current-value rank within that draft class (delta ≥ +5 = Steal, ≤ −5 =
+  Reach; value ≥ 1000 today = "hit"). Startup drafts (> 6 rounds) excluded.
+- **Head-to-head:** per-opponent trade count + my cumulative net vs them.
+
+**UI (League › Managers):**
+
+- **My Report Card** pinned on top: trade record / net value / rookie hits /
+  FAAB efficiency stat grid, then generated **"Your Edge"** (green) and
+  **"Work On"** (amber) coaching bullets from league-relative ranks.
+- **Scouting report cards** for all 9 opponents, sorted by trade activity:
+  activity label, record + net, tendency chips, head-to-head line.
+- Tap any card (or the report card's ledger button) → **scouting bottom
+  sheet** (`ManagerScoutingSheet`): stat grid, tendencies, head-to-head,
+  full rookie draft record with steal/reach badges, and the complete
+  multi-season trade ledger (paginated, player names open the
+  PlayerProfileDrawer, picks show what they became).
+- **Trade Partner Finder integration:** each partner card gets a one-line
+  behavioral read ("6 trades · 4W-1L · +2,140 · Accumulates picks", or
+  "Hasn't completed a trade — cold call"). Best-effort — renders only once
+  the lazy history fetch lands.
+
+**Trade-time value archive (best-effort second lens):**
+`scripts/snapshot-trade-values.mjs` runs in the same daily workflow as the
+values snapshot and permanently records asset values for any trade completed
+in the last 8 days into `trade-values.json` on the `values-history` branch
+(never pruned, never overwritten — trades are immutable). The publish step
+re-fetches the previous archive if the script fails, so a bad run can't
+erase it. The app loads it lazily via `useTradeTimeValues`; when a ledger
+trade has a complete archive entry, the scouting sheet shows an
+"At trade time: got X ⇄ gave Y" line under the hindsight numbers. Missing
+file/entries ⇒ the line simply hides — never an error or loading state.
+
+-----
+
 ### Trade deadline banner
 
 The Trade section shows a persistent banner under the sub-tabs during the
@@ -688,7 +764,7 @@ Side drawer sections:
 |1  |Roster |My Roster · All Teams · Free Agents                      |
 |2  |Trade  |Partners · Analyzer · Targets (+ deadline banner)        |
 |3  |Lineup |Lineup Optimizer + Season Review (lineup efficiency)     |
-|4  |League |Overview · Activity · Movers                             |
+|4  |League |Overview · Activity · Movers · Managers                  |
 |5  |Draft  |Rookie draft board · Draft pick tracker                  |
 
 Sections with multiple views use a sub-tab bar pinned under the app header.
@@ -900,10 +976,11 @@ dynastyedge/
 │   └── workflows/
 │       ├── deploy.yml          ← GitHub Actions auto-deploy
 │       ├── news.yml            ← twice-hourly news aggregation → news-data branch
-│       └── values-history.yml  ← daily value snapshot → values-history branch
+│       └── values-history.yml  ← daily value snapshot + trade archive → values-history branch
 ├── scripts/
 │   ├── fetch-news.mjs          ← multi-source news fetcher (runs in Actions)
-│   └── snapshot-values.mjs     ← daily FantasyCalc snapshot appender (runs in Actions)
+│   ├── snapshot-values.mjs     ← daily FantasyCalc snapshot appender (runs in Actions)
+│   └── snapshot-trade-values.mjs ← permanent trade-time value archiver (runs in Actions)
 ├── public/
 │   └── favicon.ico
 ├── src/
@@ -930,10 +1007,12 @@ dynastyedge/
 │   │   │   ├── StarterSlot.jsx
 │   │   │   └── FreeAgentDrawer.jsx
 │   │   ├── league/
-│   │   │   ├── LeagueLayout.jsx     ← sub-tabs: Overview / Activity / Movers
+│   │   │   ├── LeagueLayout.jsx     ← sub-tabs: Overview / Activity / Movers / Managers
 │   │   │   ├── LeagueOverview.jsx
 │   │   │   ├── LeagueActivity.jsx   ← transaction feed (trades, waivers, FAAB bids)
 │   │   │   ├── MarketMovers.jsx     ← risers/fallers, buy-low / sell-high
+│   │   │   ├── ManagersView.jsx     ← manager scouting: my report card + opponent profiles
+│   │   │   ├── ManagerScoutingSheet.jsx ← per-manager sheet: ledger, drafts, tendencies
 │   │   │   ├── TeamCard.jsx
 │   │   │   └── MatchupCard.jsx
 │   │   ├── draft/
@@ -958,6 +1037,9 @@ dynastyedge/
 │   │   ├── usePlayerDB.js       ← shared /players/nfl cache (one fetch/session)
 │   │   ├── useLeague.js         ← combined league state, player resolution
 │   │   ├── useTransactions.js   ← season-wide transaction feed
+│   │   ├── useLeagueHistory.js  ← walks previous_league_id chain: past seasons' tx/drafts
+│   │   ├── useManagerProfiles.js← composes history + current season into scouting profiles
+│   │   ├── useTradeTimeValues.js← trade-time value archive for the ledger (best-effort)
 │   │   ├── useLineupHistory.js  ← my past matchups for efficiency review
 │   │   ├── useLineupData.js     ← projections, statuses, schedule, def stats
 │   │   ├── useWatchlist.js      ← starred players (localStorage-backed store)
@@ -976,6 +1058,7 @@ dynastyedge/
 │   │   ├── tierColors.js        ← win-window tier colors (badge + banner chips)
 │   │   ├── rankColors.js        ← gold/silver/bronze medal colors for rank ordinals
 │   │   ├── tradeAnalysis.js     ← trade scoring, verdict logic
+│   │   ├── managerAnalysis.js   ← manager scouting: ledgers, tendencies, draft grades
 │   │   ├── rosterAnalysis.js    ← positional strength, win window tiers
 │   │   ├── pickCapital.js       ← pick ownership resolution logic
 │   │   ├── rookieAdp.js         ← derived rookie-class ADP for the Draft section

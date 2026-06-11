@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Target, CheckCircle2, Circle, AlertTriangle, Star } from 'lucide-react'
+import { Target, CheckCircle2, Circle, AlertTriangle, Star, History } from 'lucide-react'
 import { getTeamName } from '../../hooks/useLeague'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useWatchlist } from '../../hooks/useWatchlist'
+import { useManagerProfiles } from '../../hooks/useManagerProfiles'
 import { rankTradePartners } from '../../utils/rosterAnalysis'
 import { MY_ROSTER_ID } from '../../constants'
 import WinWindowBadge from '../shared/WinWindowBadge'
@@ -31,7 +32,37 @@ function PositionChip({ position, variant }) {
   return <span className={`${base} ${color}`}>{position}</span>
 }
 
-function TradePartnerCard({ partner, watchedNames, onClick }) {
+// One-line behavioral read from league history (manager scouting). Renders
+// nothing until the lazy history fetch lands — the card works without it.
+function ScoutingLine({ profile }) {
+  if (!profile) return null
+  if (profile.tradeCount === 0) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <History size={12} strokeWidth={2} className="text-text-tertiary dark:text-text-tertiary shrink-0" />
+        <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
+          Hasn't completed a trade — cold call
+        </span>
+      </div>
+    )
+  }
+  const net = profile.netValue
+  const netClass = net > 0 ? 'text-success' : net < 0 ? 'text-danger' : 'text-text-secondary dark:text-text-secondary'
+  return (
+    <div className="flex items-center gap-1.5 min-w-0">
+      <History size={12} strokeWidth={2} className="text-text-tertiary dark:text-text-tertiary shrink-0" />
+      <span className="font-body text-[11px] text-text-secondary dark:text-text-secondary truncate">
+        {profile.tradeCount} trade{profile.tradeCount === 1 ? '' : 's'} · {profile.tradeWins}W-{profile.tradeLosses}L ·{' '}
+        <span className={`font-mono font-semibold tabular-nums ${netClass}`}>
+          {net >= 0 ? '+' : '−'}{Math.abs(Math.round(net)).toLocaleString()}
+        </span>
+        {profile.tendencies[0] ? ` · ${profile.tendencies[0]}` : ''}
+      </span>
+    </div>
+  )
+}
+
+function TradePartnerCard({ partner, watchedNames, profile, onClick }) {
   const { owner, fitBadge, winWindowTier, mismatchWarning, theirNeeds, theirHaves, pickCapStatus } = partner
   const badge = FIT_BADGE[fitBadge] ?? FIT_BADGE['Poor Fit']
 
@@ -83,6 +114,9 @@ function TradePartnerCard({ partner, watchedNames, onClick }) {
         </span>
       </div>
 
+      {/* Behavioral scouting line from league history */}
+      <ScoutingLine profile={profile} />
+
       {/* Watched players on this roster */}
       {watchedNames?.length > 0 && (
         <div className="flex items-start gap-1.5">
@@ -107,8 +141,16 @@ function TradePartnerCard({ partner, watchedNames, onClick }) {
 export default function TradePartnerFinder() {
   const { league, loading, error, retry } = useLeagueContext()
   const { watchlist } = useWatchlist()
+  // Behavioral profiles arrive whenever the lazy history fetch finishes —
+  // the partner list renders immediately without them.
+  const { analysis: managerAnalysis } = useManagerProfiles()
   const [activeFilter, setActiveFilter] = useState('All')
   const navigate = useNavigate()
+
+  const profileByRoster = useMemo(() => {
+    if (!managerAnalysis) return {}
+    return Object.fromEntries(managerAnalysis.profiles.map(p => [p.rosterId, p]))
+  }, [managerAnalysis])
 
   const analysis = useMemo(() => {
     if (!league?.myRoster || !league?.allRosters?.length) return null
@@ -188,6 +230,7 @@ export default function TradePartnerFinder() {
               key={partner.rosterId}
               partner={partner}
               watchedNames={(watchedByRoster[partner.rosterId] ?? []).map(p => p.name)}
+              profile={profileByRoster[partner.rosterId] ?? null}
               onClick={() => navigate('/trade/analyze', { state: { opponentRosterId: partner.rosterId } })}
             />
           ))}

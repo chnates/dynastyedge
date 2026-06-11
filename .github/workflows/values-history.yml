@@ -18,13 +18,22 @@ jobs:
           node-version: 20
       - name: Append today's FantasyCalc snapshot
         run: node scripts/snapshot-values.mjs
-      - name: Publish values-history.json to the values-history branch
+      - name: Archive trade-time values
+        continue-on-error: true   # best-effort — publish step preserves the old archive
+        run: node scripts/snapshot-trade-values.mjs
+      - name: Publish snapshots to the values-history branch
         run: |
           mkdir -p /tmp/valuesrepo && cd /tmp/valuesrepo
           git init -b values-history .
           cp "$GITHUB_WORKSPACE/values-history.json" .
+          # Trade archive: use today's output, else re-fetch the existing file
+          # from the branch so a failed archive step never erases history.
+          cp "$GITHUB_WORKSPACE/trade-values.json" . 2>/dev/null \
+            || curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/values-history/trade-values.json" -o trade-values.json \
+            || true
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add values-history.json
+          if [ -f trade-values.json ]; then git add trade-values.json; fi
           git commit -m "Update values history"
           git push --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" values-history
