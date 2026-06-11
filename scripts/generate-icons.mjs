@@ -58,6 +58,8 @@ const fav32 = await png(faviconSvg, 32)
 const fav16 = await png(faviconSvg, 16)
 
 await writeFile(path.join(PUBLIC, 'apple-touch-icon.png'), appleTouch)
+await writeFile(path.join(PUBLIC, 'icon-192.png'), await png(iconSvg, 192))
+await writeFile(path.join(PUBLIC, 'icon-512.png'), await png(iconSvg, 512))
 await writeFile(path.join(PUBLIC, 'favicon-32x32.png'), fav32)
 await writeFile(path.join(PUBLIC, 'favicon-16x16.png'), fav16)
 await writeFile(path.join(PUBLIC, 'favicon.ico'), await pngToIco([fav32, fav16]))

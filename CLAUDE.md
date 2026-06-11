@@ -1126,6 +1126,14 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 1. **Safe areas:** The main scroll area and the side drawer must account for
    the iPhone home indicator and notch via `env(safe-area-inset-*)`.
    There is no bottom nav — do not add one.
+1. **Standalone web app (Add to Home Screen):** `index.html` declares
+   `apple-mobile-web-app-capable` + `black-translucent` status bar +
+   `manifest.webmanifest` (display standalone, icons 192/512) so iOS draws
+   the app edge-to-edge instead of letterboxing it with black bars. The
+   fixed header pads with `env(safe-area-inset-top)`; a dark light-mode-only
+   strip behind the status bar keeps iOS's always-white status text
+   readable. Changes to these metas only take effect after the user removes
+   and re-adds the home-screen app.
 1. **Bottom sheets:** The app's scroll container is `<main>` — the body never
    scrolls. Every bottom sheet (PlayerProfileDrawer, RosterAnalysisSheet,
    trade add sheet, and any future sheet) must: call `useScrollLock()` while
