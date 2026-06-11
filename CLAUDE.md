@@ -98,6 +98,8 @@ No authentication required. Read-only. Stay under 1,000 API calls per minute.
 |Weekly stats                   |`/stats/nfl/regular/{year}/{week}`               |
 |Season stats (player intel)    |`/stats/nfl/regular/{year}` (lazy, once per session)|
 |NFL schedule                   |`/schedule/nfl/regular/{year}`                   |
+|League drafts (rookie draft sync)|`/league/1313933520715907072/drafts`           |
+|Live draft picks / in-draft pick trades|`/draft/{draft_id}/picks` · `/draft/{draft_id}/traded_picks`|
 
 **Critical Sleeper note:** Roster endpoints return **numeric player IDs only** —
 not names. Player names are resolved by matching Sleeper IDs against FantasyCalc
@@ -618,6 +620,49 @@ every completed week.
 
 -----
 
+### Feature 10 — Draft (Draft › Board · Tracker)
+
+Rookie draft prep plus a live draft-day companion, synced with Sleeper's
+real draft.
+
+**Board:** the full rookie class (Sleeper `years_exp === 0`) enriched with
+FantasyCalc values, grouped in value tiers. Two modes — FantasyCalc order and
+**My Board** (drag-to-reorder, persisted). Per-prospect notes are shared with
+the Tracker. Search box + position chips. A pre-loaded FantasyPros CSV column
+plus user-uploaded CSV ranking columns (syncable across devices via
+`public/rankings.json`). When a synced Sleeper draft exists, drafted players
+grey out and amber badges show the latest of my remaining picks where each
+prospect is still projected available (by derived rookie ADP).
+
+**Tracker — synced via `useSleeperDraft`:** the 2026 rookie draft comes from
+`/league/{id}/drafts` → `/draft/{draft_id}/picks` + `/draft/{draft_id}/traded_picks`.
+Real draft order (`slot_to_roster_id` + in-draft pick trades), live pick feed,
+on-the-clock banner, "N picks until yours", a My Draft Capital card (real pick
+slots + FantasyCalc pick values + taxi usage), and an on-the-clock **Best
+Available** card (best overall + top prospect at each deficit position). The
+undrafted list has search, position chips, and a My Board / ADP sort toggle so
+board prep carries into draft day. Rows open the Player Profile drawer (with
+notes). When the draft completes: recap with per-team value drafted, biggest
+steals/reaches (pick slot vs rookie ADP), and full results.
+
+**Refresh model:** Board and Tracker share one session-cached fetch
+(`useSleeperDraft` module cache). A manual Refresh button refetches on demand;
+the hook also refetches when the tab regains focus (aggressively while the
+draft is live — exactly the flip-back-from-the-Sleeper-app moment — gently
+otherwise) and polls every 30s while status is `drafting` and the tab is
+visible.
+
+**Manual fallback:** until the league creates the rookie draft in Sleeper, the
+Tracker offers manual pick logging (slots provisionally assume roster-ID order
+— labelled as such) plus a "Check" button to re-poll for the draft. Manual log
+stored in `dynastyedge_draft_tracker_2026`.
+
+Draft-section storage keys live in `src/components/draft/boardStorage.js`:
+`dynastyedge_board_order` (My Board order) · `dynastyedge_prospect_notes`
+(notes, shared Board ↔ Tracker) · `dynastyedge_csv_rankings` (uploaded CSVs).
+
+-----
+
 ### Trade deadline banner
 
 The Trade section shows a persistent banner under the sub-tabs during the
@@ -788,8 +833,9 @@ dynastyedge/
 │   │   │   └── MatchupCard.jsx
 │   │   ├── draft/
 │   │   │   ├── DraftLayout.jsx
-│   │   │   ├── DraftBoard.jsx
-│   │   │   └── DraftTracker.jsx
+│   │   │   ├── DraftBoard.jsx       ← rookie board: tiers, My Board, CSV columns
+│   │   │   ├── DraftTracker.jsx     ← Sleeper-synced live tracker + manual fallback
+│   │   │   └── boardStorage.js      ← shared draft-section localStorage keys
 │   │   └── shared/
 │   │       ├── SideDrawer.jsx       ← the app's only navigation
 │   │       ├── ErrorState.jsx       ← THE error component — never duplicate it
@@ -815,6 +861,7 @@ dynastyedge/
 │   │   ├── useTheme.js          ← dark/light toggle
 │   │   ├── usePlayerNews.js     ← per-player injury status
 │   │   ├── useSleeperRookies.js ← rookie map derived from usePlayerDB
+│   │   ├── useSleeperDraft.js   ← live rookie draft sync (order, picks, refresh/polling)
 │   │   └── useRookieADP.js
 │   ├── utils/
 │   │   ├── fetchJSON.js         ← shared fetch wrapper with timeout — use everywhere
@@ -983,7 +1030,9 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 1. **localStorage / sessionStorage keys** (all prefixed `dynastyedge_`):
    `dynastyedge_theme` (theme) · `dynastyedge_watchlist_v1` (starred players) ·
    `dynastyedge_action_dismissals` (roster action items) ·
-   `dynastyedge_draft_*` (draft board state) ·
+   `dynastyedge_draft_*` (manual draft tracker) ·
+   `dynastyedge_board_order` / `dynastyedge_prospect_notes` /
+   `dynastyedge_csv_rankings` (draft board — see Feature 10) ·
    sessionStorage `dynastyedge_league_sort` / `dynastyedge_league_pos` /
    `dynastyedge_league_tier` (League tab filters, preserved across drill-downs) ·
    sessionStorage `dynastyedge_trade_draft` (in-progress trade).

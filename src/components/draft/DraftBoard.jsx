@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import {
   Upload, Save, ChevronUp, ChevronDown, AlertTriangle,
-  FileText, GripVertical, RotateCcw, Trash2,
+  FileText, GripVertical, RotateCcw, Trash2, Search, RefreshCw,
 } from 'lucide-react'
 import {
   DndContext, PointerSensor, TouchSensor, KeyboardSensor,
@@ -13,8 +13,11 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useRookieADP } from '../../hooks/useRookieADP'
-import { assignRookieAdp } from '../../utils/rookieAdp'
+import { buildRookieProspects } from '../../utils/rookieAdp'
+import { useSleeperDraft, buildDraftOrder } from '../../hooks/useSleeperDraft'
+import { MY_ROSTER_ID } from '../../constants'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
+import { BOARD_ORDER_KEY, NOTES_KEY, CSV_KEY } from './boardStorage'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 
@@ -46,12 +49,7 @@ const TIER_COLORS = {
   99: 'text-text-tertiary',
 }
 
-const SORT_COLS = ['value', 'adp', 'age', 'positionRank']
-const COL_LABELS = { value: 'Value', adp: 'Rk ADP', age: 'Age', positionRank: 'Pos Rk' }
-
-const BOARD_ORDER_KEY = 'dynastyedge_board_order'
-const NOTES_KEY       = 'dynastyedge_prospect_notes'
-const CSV_KEY         = 'dynastyedge_csv_rankings'
+const COL_LABELS = { value: 'Value', adp: 'Rk ADP' }
 
 // ── CSV parsing ──────────────────────────────────────────────────────────────
 
@@ -136,17 +134,6 @@ function splitFPNotes(notes) {
   }
 }
 
-// ── Pick slot display ─────────────────────────────────────────────────────────
-
-function getMyPickSlot(myRoster) {
-  const pick2026R1 = myRoster?.picks?.find(p => p.season === '2026' && p.round === 1)
-  if (pick2026R1) {
-    const slot = myRoster.rosterId
-    return { slot, label: `1.0${slot}` }
-  }
-  return null
-}
-
 // ── Subcomponents ─────────────────────────────────────────────────────────────
 
 function TierHeader({ tier }) {
@@ -183,10 +170,20 @@ function FillsNeedBadge() {
   )
 }
 
-function AvailableBadge() {
+// "Still available at your 2.06" — shows the latest of my remaining picks
+// where this prospect is projected available (by derived rookie ADP).
+function TargetBadge({ label }) {
   return (
-    <span className="font-body text-[9px] font-bold uppercase tracking-wider text-warning bg-warning/15 border border-warning/30 rounded px-1.5 py-0.5 flex-shrink-0 ml-1">
-      Avail
+    <span className="font-mono text-[9px] font-bold text-warning bg-warning/15 border border-warning/30 rounded px-1.5 py-0.5 flex-shrink-0 ml-1">
+      {label}
+    </span>
+  )
+}
+
+function DraftedChip() {
+  return (
+    <span className="font-body text-[9px] font-bold uppercase tracking-wider text-text-tertiary bg-bg-secondary border border-border-default rounded px-1.5 py-0.5 flex-shrink-0 ml-1">
+      Drafted
     </span>
   )
 }
@@ -261,7 +258,7 @@ function ResetBoardConfirm({ onConfirm, onCancel }) {
 
 function SortablePlayerRow({
   player, isDraggable, myRank, fcRank,
-  fillsNeed, avail, csvColumns, getLookupRank, hasNote, onSelect,
+  fillsNeed, targetLabel, drafted, csvColumns, getLookupRank, hasNote, onSelect,
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: player.sleeperId, disabled: !isDraggable })
@@ -298,14 +295,15 @@ function SortablePlayerRow({
 
       <button
         onClick={onSelect}
-        className="flex-1 text-left py-2.5 flex items-center gap-2 active:opacity-60 transition-opacity min-w-0"
+        className={`flex-1 text-left py-2.5 flex items-center gap-2 active:opacity-60 transition-opacity min-w-0 ${drafted ? 'opacity-50' : ''}`}
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center flex-wrap gap-x-1">
-            <span className="font-body text-sm font-medium text-text-primary leading-tight truncate">{player.name}</span>
+            <span className={`font-body text-sm font-medium leading-tight truncate ${drafted ? 'text-text-tertiary line-through' : 'text-text-primary'}`}>{player.name}</span>
             {hasNote && <FileText size={11} className="text-accent flex-shrink-0" strokeWidth={1.75} />}
-            {fillsNeed && <FillsNeedBadge />}
-            {avail && <AvailableBadge />}
+            {drafted && <DraftedChip />}
+            {!drafted && fillsNeed && <FillsNeedBadge />}
+            {!drafted && targetLabel && <TargetBadge label={targetLabel} />}
             {player.fpOnly && <FpOnlyBadge />}
             {!player.fpOnly && player.adpOnly && <AdpOnlyBadge />}
           </div>
@@ -340,10 +338,6 @@ function SortablePlayerRow({
             {(player.value ?? 0).toLocaleString()}
           </span>
         </div>
-
-        <span className="font-mono text-xs text-text-tertiary tabular-nums w-8 text-right flex-shrink-0">
-          {player.age != null ? Math.floor(player.age) : '—'}
-        </span>
       </button>
     </div>
   )
@@ -356,6 +350,7 @@ export default function DraftBoard() {
   const { rookieMap, loading: rookieLoading, error: rookieError, retry: rookieRetry } = useRookieADP()
 
   const [posFilter, setPosFilter]     = useState('ALL')
+  const [search, setSearch]           = useState('')
   const [sortCol, setSortCol]         = useState('adp')
   const [sortDir, setSortDir]         = useState('asc')
   const [csvColumns, setCsvColumns]   = useState([])
@@ -393,34 +388,33 @@ export default function DraftBoard() {
     return Object.entries(deltas).filter(([, d]) => d < 0).map(([p]) => p)
   }, [league])
 
-  // My 2026 round-1 pick slot
-  const myPickSlot = useMemo(() => {
-    if (!league?.myRoster) return null
-    return getMyPickSlot(league.myRoster)
-  }, [league])
-
-  // Name→FC entry for fallback matching
-  const nameToFCEntry = useMemo(() => {
-    if (!values?.playerMap) return {}
-    const map = {}
-    Object.values(values.playerMap).forEach(e => {
-      if (e.name) map[e.name.toLowerCase()] = e
-    })
-    return map
-  }, [values?.playerMap])
+  // Live Sleeper draft (session-cached, shared with the Tracker): drafted
+  // players grey out and "available at your pick" badges use the real order.
+  const sleeperDraft = useSleeperDraft()
+  const draftSync = useMemo(() => {
+    const draft = sleeperDraft.data?.draft
+    if (!draft) return null
+    const order = buildDraftOrder(draft, sleeperDraft.data.tradedPicks)
+    const picksMade = sleeperDraft.data.picks.length
+    const totalPicks = order?.length ?? 0
+    const complete = draft.status === 'complete' ||
+      (totalPicks > 0 && picksMade >= totalPicks)
+    return {
+      draft,
+      draftedIds: new Set(sleeperDraft.data.picks.map(p => String(p.player_id))),
+      myRemaining: order && !complete
+        ? order.slice(picksMade).filter(p => p.rosterId === MY_ROSTER_ID)
+        : [],
+      live: draft.status === 'drafting' || draft.status === 'paused',
+    }
+  }, [sleeperDraft.data])
 
   // Rookie prospects enriched from FantasyCalc, with adp = rank within the
   // rookie class (1..N by FantasyCalc overall rank — see utils/rookieAdp.js)
-  const rookies = useMemo(() => {
-    if (!rookieMap) return []
-    return assignRookieAdp(Object.values(rookieMap).map(rookieEntry => {
-      const mainEntry = values?.playerMap?.[rookieEntry.sleeperId]
-      if (mainEntry) return { ...mainEntry }
-      const nameMatch = nameToFCEntry[rookieEntry.name?.toLowerCase()]
-      if (nameMatch) return { ...nameMatch, sleeperId: rookieEntry.sleeperId }
-      return { ...rookieEntry, adpOnly: true }
-    }))
-  }, [rookieMap, values, nameToFCEntry])
+  const rookies = useMemo(
+    () => buildRookieProspects(rookieMap, values?.playerMap),
+    [rookieMap, values]
+  )
 
   // FantasyPros column, notes map, and FP-only players (matched against Sleeper rookies)
   const { fpColumn, fpNotesMap, fpOnlyPlayers } = useMemo(() => {
@@ -479,7 +473,11 @@ export default function DraftBoard() {
 
   // Filter + sort
   const sorted = useMemo(() => {
-    const list = posFilter === 'ALL' ? allProspects : allProspects.filter(p => p.position === posFilter)
+    const q = search.trim().toLowerCase()
+    const list = allProspects.filter(p =>
+      (posFilter === 'ALL' || p.position === posFilter) &&
+      (!q || p.name?.toLowerCase().includes(q))
+    )
 
     if (boardMode === 'My Board' && sortCol === 'myOrder') {
       return [...list].sort((a, b) =>
@@ -500,7 +498,7 @@ export default function DraftBoard() {
       const bv = b[sortCol] ?? (sortDir === 'asc' ? Infinity : -Infinity)
       return sortDir === 'asc' ? av - bv : bv - av
     })
-  }, [allProspects, posFilter, sortCol, sortDir, boardMode, rankMap, fpColumn])
+  }, [allProspects, posFilter, search, sortCol, sortDir, boardMode, rankMap, fpColumn])
 
   // Group by tier
   const byTier = useMemo(() => {
@@ -670,9 +668,15 @@ export default function DraftBoard() {
     URL.revokeObjectURL(url)
   }
 
-  function isLikelyAvailable(player) {
-    if (!myPickSlot) return false
-    return (player.adp ?? 999) > myPickSlot.slot
+  // Latest of my remaining picks where this prospect is still projected
+  // available (rookie ADP ≈ overall pick in a rookie-only draft).
+  function targetLabelFor(player) {
+    const myRemaining = draftSync?.myRemaining
+    if (!myRemaining?.length || player.adp == null) return null
+    for (let i = myRemaining.length - 1; i >= 0; i--) {
+      if (myRemaining[i].overall <= player.adp) return myRemaining[i].label
+    }
+    return null
   }
 
   function getLookupRank(player, col) {
@@ -691,7 +695,7 @@ export default function DraftBoard() {
     })
   }, [])
 
-  const isDragEnabled = boardMode === 'My Board' && posFilter === 'ALL' && sortCol === 'myOrder'
+  const isDragEnabled = boardMode === 'My Board' && posFilter === 'ALL' && !search.trim() && sortCol === 'myOrder'
   const activeTiers = (() => {
     if (sortCol === 'fp' && fpColumn?.tierData) {
       const tierNums = [...new Set(Object.values(fpColumn.tierData))].sort((a, b) => a - b)
@@ -717,7 +721,8 @@ export default function DraftBoard() {
                 myRank={boardMode === 'My Board' ? (rankMap[player.sleeperId] ?? null) : null}
                 fcRank={boardMode === 'My Board' ? (player.overallRank ?? null) : null}
                 fillsNeed={needPositions.includes(player.position)}
-                avail={isLikelyAvailable(player)}
+                targetLabel={targetLabelFor(player)}
+                drafted={draftSync?.draftedIds.has(player.sleeperId) ?? false}
                 csvColumns={allColumns}
                 getLookupRank={getLookupRank}
                 hasNote={!!prospectNotes[player.sleeperId]}
@@ -768,6 +773,11 @@ export default function DraftBoard() {
             </button>
           )}
         </div>
+        {boardMode === 'My Board' && !isDragEnabled && (
+          <p className="px-4 pb-2 font-body text-[10px] text-text-tertiary">
+            Drag-to-reorder is paused — clear search/position filters and sort by Rank to reorder.
+          </p>
+        )}
 
         {/* ── Position filter + actions ── */}
         <div className="px-4 pb-3 flex items-center gap-2">
@@ -809,13 +819,42 @@ export default function DraftBoard() {
           <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
         </div>
 
-        {/* ── My pick callout ── */}
-        {myPickSlot && (
-          <div className="mx-4 mb-3 px-3 py-2 rounded-lg bg-warning/10 border border-warning/30 flex items-center gap-2">
-            <span className="font-mono text-sm font-bold text-warning">{myPickSlot.label}</span>
-            <span className="font-body text-xs text-text-secondary">
-              Prospects marked <span className="text-warning font-semibold">Avail</span> are projected available at your pick based on ADP
-            </span>
+        {/* ── Search ── */}
+        <div className="px-4 pb-3">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" strokeWidth={1.75} />
+            <input
+              type="search"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search prospects"
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-bg-card border border-border-default font-body text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent"
+            />
+          </div>
+        </div>
+
+        {/* ── My picks callout (real slots from the synced Sleeper draft) ── */}
+        {draftSync && draftSync.myRemaining.length > 0 && (
+          <div className="mx-4 mb-3 px-3 py-2 rounded-lg bg-warning/10 border border-warning/30">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-body text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Your picks</span>
+              {draftSync.myRemaining.map(p => (
+                <span key={p.label} className="font-mono text-sm font-bold text-warning">{p.label}</span>
+              ))}
+              <span className="flex-1" />
+              {draftSync.live && (
+                <button
+                  onClick={sleeperDraft.refresh}
+                  aria-label="Refresh draft"
+                  className="text-text-tertiary active:opacity-60 transition-opacity"
+                >
+                  <RefreshCw size={13} strokeWidth={1.75} className={sleeperDraft.refreshing ? 'animate-spin' : ''} />
+                </button>
+              )}
+            </div>
+            <p className="font-body text-[10px] text-text-secondary mt-0.5">
+              Amber badges mark the latest of your picks each prospect should still be available at, by Rk ADP
+            </p>
           </div>
         )}
 
@@ -877,7 +916,6 @@ export default function DraftBoard() {
           )}
           <SortHeader col="adp"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort} extra="w-12 justify-end" />
           <SortHeader col="value" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} extra="w-12 justify-end" />
-          <SortHeader col="age"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort} extra="w-8 justify-end" />
         </div>
 
         {/* ── Tier groups ── */}

@@ -16,3 +16,23 @@ export function assignRookieAdp(prospects) {
   )
   return prospects.map(p => ({ ...p, adp: adpById.get(p.sleeperId) ?? null }))
 }
+
+// Shared prospect builder for the Draft section (Board + Tracker): enrich the
+// Sleeper rookie map with FantasyCalc data (by sleeperId, falling back to
+// name match) and assign derived rookie ADP.
+export function buildRookieProspects(rookieMap, playerMap) {
+  if (!rookieMap) return []
+  const nameToFC = {}
+  if (playerMap) {
+    Object.values(playerMap).forEach(e => {
+      if (e.name) nameToFC[e.name.toLowerCase()] = e
+    })
+  }
+  return assignRookieAdp(Object.values(rookieMap).map(rookieEntry => {
+    const mainEntry = playerMap?.[rookieEntry.sleeperId]
+    if (mainEntry) return { ...mainEntry }
+    const nameMatch = nameToFC[rookieEntry.name?.toLowerCase()]
+    if (nameMatch) return { ...nameMatch, sleeperId: rookieEntry.sleeperId }
+    return { ...rookieEntry, adpOnly: true }
+  }))
+}
