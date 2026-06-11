@@ -108,16 +108,6 @@ function AppShell({ leagueData }) {
         onToggleTheme={toggleTheme}
       />
 
-      {/* Standalone mode paints the page behind the iOS status bar, whose
-          text is always white (black-translucent). In dark mode the header
-          shows through and matches; in light mode this dark strip keeps the
-          clock/battery readable. Zero-height in regular Safari (env() = 0). */}
-      <div
-        className="fixed top-0 left-0 right-0 z-40 dark:hidden bg-[#0D0D0F]"
-        style={{ height: 'env(safe-area-inset-top)' }}
-        aria-hidden="true"
-      />
-
       <header
         className="fixed top-0 left-0 right-0 z-30 bg-bg-secondary/85 backdrop-blur-md border-b border-border-default"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}

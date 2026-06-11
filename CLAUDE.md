@@ -1127,13 +1127,17 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
    the iPhone home indicator and notch via `env(safe-area-inset-*)`.
    There is no bottom nav — do not add one.
 1. **Standalone web app (Add to Home Screen):** `index.html` declares
-   `apple-mobile-web-app-capable` + `black-translucent` status bar +
-   `manifest.webmanifest` (display standalone, icons 192/512) so iOS draws
-   the app edge-to-edge instead of letterboxing it with black bars. The
-   fixed header pads with `env(safe-area-inset-top)`; a dark light-mode-only
-   strip behind the status bar keeps iOS's always-white status text
-   readable. Changes to these metas only take effect after the user removes
-   and re-adds the home-screen app.
+   `apple-mobile-web-app-capable` + `manifest.webmanifest` (display
+   standalone, icons 192/512) so iOS draws the app edge-to-edge instead of
+   letterboxing it with black bars. **No `apple-mobile-web-app-status-bar-style`
+   meta** — modern iOS colors the standalone status bar from the
+   `theme-color` meta (synced to the app theme by `useTheme`) and picks
+   readable text automatically, so the bar matches the header in both
+   themes. The fixed header still pads with `env(safe-area-inset-top)` as a
+   harmless fallback. Changes to these metas only take effect after the
+   user removes and re-adds the home-screen app. Icon link tags carry a
+   `?v=N` query — bump it to bust Safari's per-site icon cache when the
+   logo changes.
 1. **Bottom sheets:** The app's scroll container is `<main>` — the body never
    scrolls. Every bottom sheet (PlayerProfileDrawer, RosterAnalysisSheet,
    trade add sheet, and any future sheet) must: call `useScrollLock()` while
