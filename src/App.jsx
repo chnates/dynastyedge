@@ -108,7 +108,10 @@ function AppShell({ leagueData }) {
         onToggleTheme={toggleTheme}
       />
 
-      <header className="fixed top-0 left-0 right-0 z-30 bg-bg-secondary/85 backdrop-blur-md border-b border-border-default">
+      <header
+        className="fixed top-0 left-0 right-0 z-30 bg-bg-secondary/85 backdrop-blur-md border-b border-border-default"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      >
         <div className="flex items-center h-12 px-1">
           <button
             onClick={() => setDrawerOpen(true)}
@@ -124,8 +127,11 @@ function AppShell({ leagueData }) {
       </header>
 
       <main
-        className="fixed left-0 right-0 top-12 overflow-y-auto"
-        style={{ bottom: 'env(safe-area-inset-bottom)' }}
+        className="fixed left-0 right-0 overflow-y-auto"
+        style={{
+          top: 'calc(3rem + env(safe-area-inset-top))',
+          bottom: 'env(safe-area-inset-bottom)',
+        }}
       >
         <Routes>
           <Route path="/" element={<Navigate to="/roster/my-team" replace />} />

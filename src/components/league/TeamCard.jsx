@@ -62,13 +62,13 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
       }`}
     >
       {/* Header row */}
-      <div className="flex items-start justify-between gap-2 mb-2">
+      <div className="flex items-center justify-between gap-2 mb-2">
         {rank != null && (
           <span className={`font-mono text-lg font-bold tabular-nums w-6 shrink-0 leading-tight ${rankClass(rank)}`}>
             {rank}
           </span>
         )}
-        <TeamAvatar owner={roster.owner} size={30} className="mt-0.5" />
+        <TeamAvatar owner={roster.owner} size={30} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <p className="font-body text-sm font-semibold text-text-primary dark:text-text-primary truncate leading-tight">
