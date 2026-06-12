@@ -156,7 +156,8 @@ export default function LeagueActivity() {
   const teamName = rosterId => getTeamName(league.userMap[rosterId])
   // Players keep their full FantasyCalc object so names can open the profile
   // drawer; unranked players fall back to the player DB with no value.
-  const resolveAsset = pid => {
+  const resolveAsset = rawPid => {
+    const pid = String(rawPid)
     const fc = values?.playerMap?.[pid]
     if (fc) return { label: fc.name, value: fc.value, player: fc }
     return { label: playerDB?.[pid]?.name ?? `Player #${pid}`, value: null, player: null }

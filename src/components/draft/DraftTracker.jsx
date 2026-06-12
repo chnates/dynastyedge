@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useCallback } from 'react'
 import {
-  RotateCcw, RefreshCw, ChevronDown, ChevronRight, AlertTriangle,
+  RotateCcw, RefreshCw, ChevronDown, ChevronRight,
   Search, FileText,
 } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
@@ -8,11 +8,13 @@ import { useRookieADP } from '../../hooks/useRookieADP'
 import { buildRookieProspects } from '../../utils/rookieAdp'
 import { useSleeperDraft, buildDraftOrder, DRAFT_SEASON } from '../../hooks/useSleeperDraft'
 import { useSheetDrag } from '../../hooks/useSheetDrag'
+import { useScrollLock } from '../../hooks/useScrollLock'
 import { getTeamName } from '../../hooks/useLeague'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { MY_ROSTER_ID } from '../../constants'
 import { BOARD_ORDER_KEY, NOTES_KEY, readJSON } from './boardStorage'
 import LoadingSpinner from '../shared/LoadingSpinner'
+import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
 
@@ -754,13 +756,18 @@ function findNextManualPick(draftOrder, drafted) {
 }
 
 function LogPickModal({ player, nextPickInfo, userMap, onSave, onClose }) {
+  useScrollLock()
   const { sheetRef } = useSheetDrag(onClose)
   const teamName = getTeamName(userMap[nextPickInfo?.currentOwner])
   const isMyPick = nextPickInfo?.currentOwner === MY_ROSTER_ID
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/60">
-      <div ref={sheetRef} className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default pb-8">
+      <div
+        ref={sheetRef}
+        className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default"
+        style={{ paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' }}
+      >
         <div className="flex justify-center pt-3 pb-1">
           <div className="w-10 h-1 rounded-full bg-border-default" />
         </div>
@@ -797,13 +804,18 @@ function LogPickModal({ player, nextPickInfo, userMap, onSave, onClose }) {
 }
 
 function EditPickModal({ pick, player, userMap, onDelete, onClose }) {
+  useScrollLock()
   const { sheetRef } = useSheetDrag(onClose)
   const teamName = getTeamName(userMap[pick.rosterId])
   const isMyPick = pick.rosterId === MY_ROSTER_ID
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/60">
-      <div ref={sheetRef} className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default pb-8">
+      <div
+        ref={sheetRef}
+        className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default"
+        style={{ paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' }}
+      >
         <div className="flex justify-center pt-3 pb-1">
           <div className="w-10 h-1 rounded-full bg-border-default" />
         </div>
@@ -1081,13 +1093,9 @@ export default function DraftTracker() {
   if (loading || rookieLoading || (sleeperDraft.loading && !sleeperDraft.data)) {
     return <LoadingSpinner message="Loading draft data…" />
   }
-  if (error || rookieError) return (
-    <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
-      <AlertTriangle size={24} className="text-warning" strokeWidth={1.75} />
-      <p className="text-text-secondary font-body text-sm">{error || rookieError}</p>
-      <button onClick={error ? retry : rookieRetry} className="px-4 py-2 rounded-lg bg-accent text-white font-body font-medium text-sm">Retry</button>
-    </div>
-  )
+  if (error || rookieError) {
+    return <ErrorState message={error || rookieError} onRetry={error ? retry : rookieRetry} />
+  }
 
   if (sleeperDraft.data?.draft) {
     return (
