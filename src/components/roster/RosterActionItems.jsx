@@ -52,16 +52,19 @@ export default function RosterActionItems({ myRoster, nflState }) {
     const playerMeta = getPlayerMetaMap()
     const result = []
 
-    // 1. Taxi squad deadline — 2nd-year players (years_exp === 1)
+    // 1. Taxi squad deadline — taxi duration is 2 years in this league:
+    // a player can spend their rookie and 2nd-year seasons on taxi, but
+    // anyone entering their 3rd NFL season (years_exp >= 2) must be
+    // activated before the regular season starts.
     if (Object.keys(playerMeta).length > 0) {
       myRoster.players
         .filter(p => p.isTaxi)
         .forEach(p => {
           const meta = playerMeta[p.sleeperId]
-          if (meta?.years_exp === 1) {
+          if (meta?.years_exp >= 2) {
             result.push({
               key: `taxi_${p.sleeperId}`,
-              conditionSnapshot: 1,
+              conditionSnapshot: meta.years_exp,
               urgency: 'red',
               message: `Activate ${p.name} from taxi squad before the season or lose eligibility`,
             })

@@ -67,7 +67,13 @@ lineup optimization with matchup context, and a full league-wide competitive lan
 ### Roster slots
 
 QB · RB · RB · WR · WR · TE · FLEX × 3 (RB/WR/TE) · Superflex (QB/WR/RB/TE) · DEF
-12 bench · 5 taxi (rookies/2nd-year only) · 2 IR
+12 bench · 5 taxi · 2 IR
+
+**Taxi rules (Sleeper settings):** only rookies can be *added*, but taxi
+duration is **2 years** — a player may stay through their rookie and 2nd-year
+seasons. Players entering their 3rd NFL season (`years_exp >= 2`) must be
+activated before the regular season starts (taxi deadline: start of regular
+season). Taxi action items flag `years_exp >= 2`, never 2nd-year players.
 
 **No kicker in this league.**
 
