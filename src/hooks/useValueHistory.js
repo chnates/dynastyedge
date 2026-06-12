@@ -32,6 +32,11 @@ function loadHistory() {
   return historyPromise
 }
 
+// Minimum snapshots before a sparkline is worth drawing. With fewer, the
+// "graph" is just a straight segment (the pipeline adds one point per day
+// from the day it shipped) — hide it until it has real shape.
+export const MIN_SPARKLINE_POINTS = 4
+
 export function useValueHistory() {
   const [history, setHistory] = useState(historyCache)
 
@@ -43,13 +48,13 @@ export function useValueHistory() {
     return () => { cancelled = true }
   }, [])
 
-  // Series for one player, nulls (missing days) removed. Needs ≥2 points
-  // to be drawable — callers get null otherwise.
+  // Series for one player, nulls (missing days) removed. Callers get null
+  // until MIN_SPARKLINE_POINTS snapshots exist.
   function getSeries(sleeperId) {
     const raw = history?.players?.[String(sleeperId)]
     if (!raw) return null
     const points = raw.filter(v => v != null)
-    return points.length >= 2 ? points : null
+    return points.length >= MIN_SPARKLINE_POINTS ? points : null
   }
 
   return { history, getSeries }
