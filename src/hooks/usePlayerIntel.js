@@ -107,6 +107,8 @@ function matchFeedItems(items, name, espnId) {
       story: item.story ?? '',
       published: item.published ?? null,
       source: item.source ?? null,
+      link: item.link ?? null,
+      athleteIds: item.athleteIds ?? [],
     }))
 }
 
@@ -120,6 +122,8 @@ function parseEspnItems(data) {
       story: stripHtml(item.story ?? item.description ?? ''),
       published: item.published ?? item.lastModified ?? null,
       source: 'ESPN',
+      link: typeof item.links?.web?.href === 'string' ? item.links.web.href : null,
+      athleteIds: [],
     }))
     .filter(n => n.headline)
 }

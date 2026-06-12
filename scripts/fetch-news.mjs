@@ -13,7 +13,7 @@ import { writeFileSync } from 'node:fs'
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15'
 const MAX_ITEMS = 100
-const MAX_STORY = 280
+const MAX_STORY = 600
 
 async function get(url, type = 'text') {
   const res = await fetch(url, {
@@ -49,6 +49,13 @@ function toIso(d) {
   return Number.isNaN(t) ? null : new Date(t).toISOString()
 }
 
+// Only keep real http(s) article URLs — the app renders these as
+// "Read full article" links, so a malformed value must become null.
+function cleanLink(u) {
+  const s = typeof u === 'string' ? u.trim() : ''
+  return /^https?:\/\//.test(s) ? s : null
+}
+
 function parseRss(xml, source) {
   const blocks = xml.match(/<item[\s>][\s\S]*?<\/item>/gi) ?? []
   return blocks
@@ -57,6 +64,7 @@ function parseRss(xml, source) {
       story: stripTags(decodeEntities(tag(b, 'description'))).slice(0, MAX_STORY),
       published: toIso(stripTags(tag(b, 'pubDate'))),
       source,
+      link: cleanLink(stripTags(decodeEntities(tag(b, 'link')))),
       athleteIds: [],
     }))
     .filter(i => i.headline)
@@ -72,6 +80,7 @@ async function espnApi() {
       story: stripTags(a.description ?? '').slice(0, MAX_STORY),
       published: toIso(a.published),
       source: 'ESPN',
+      link: cleanLink(a.links?.web?.href),
       athleteIds: (a.categories ?? [])
         .filter(c => c.type === 'athlete' && c.athleteId != null)
         .map(c => Number(c.athleteId)),

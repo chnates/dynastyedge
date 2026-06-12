@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef } from 'react'
-import { X, ArrowRight, Star } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { X, ArrowRight, Star, ChevronRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import TrendArrow from './TrendArrow'
+import NewsArticleSheet from './NewsArticleSheet'
 import { usePlayerNews } from '../../hooks/usePlayerNews'
 import { usePlayerIntel, relativeTime, TOUCH_LABEL } from '../../hooks/usePlayerIntel'
 import { getPeakStatus } from '../../utils/peakWindows'
@@ -147,6 +148,7 @@ export default function PlayerProfileDrawer({
   const peak = getPeakStatus(player.position, player.age)
   const { toggleWatch, isWatched } = useWatchlist()
   const watched = isWatched(player.sleeperId)
+  const [openArticle, setOpenArticle] = useState(null)
 
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
@@ -484,7 +486,11 @@ export default function PlayerProfileDrawer({
               </p>
               <div className="flex flex-col">
                 {intel.news.map((n, i) => (
-                  <div key={i} className={i < intel.news.length - 1 ? 'pb-2.5 mb-2.5 border-b border-border-default' : ''}>
+                  <button
+                    key={i}
+                    onClick={() => setOpenArticle(n)}
+                    className={`w-full text-left active:opacity-60 transition-opacity ${i < intel.news.length - 1 ? 'pb-2.5 mb-2.5 border-b border-border-default' : ''}`}
+                  >
                     <div className="flex items-baseline justify-between gap-2">
                       <p className="flex-1 font-body text-sm font-medium text-text-primary leading-snug">
                         {n.headline}
@@ -495,15 +501,18 @@ export default function PlayerProfileDrawer({
                         </span>
                       )}
                     </div>
-                    {n.story && (
-                      <p
-                        className="font-body text-xs text-text-secondary mt-1 leading-snug"
-                        style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
-                      >
-                        {n.story}
-                      </p>
-                    )}
-                  </div>
+                    <div className="flex items-end gap-1.5 mt-1">
+                      {n.story && (
+                        <p
+                          className="flex-1 font-body text-xs text-text-secondary leading-snug"
+                          style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                        >
+                          {n.story}
+                        </p>
+                      )}
+                      <ChevronRight size={13} strokeWidth={2} className="shrink-0 text-text-tertiary mb-0.5" />
+                    </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -771,6 +780,13 @@ export default function PlayerProfileDrawer({
         </div>
         </div>
       </div>
+
+      {openArticle && (
+        <NewsArticleSheet
+          article={{ ...openArticle, player }}
+          onClose={() => setOpenArticle(null)}
+        />
+      )}
     </div>
   )
 }

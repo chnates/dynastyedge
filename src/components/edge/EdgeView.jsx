@@ -25,6 +25,7 @@ import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import SectionHeader from '../shared/SectionHeader'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
+import NewsArticleSheet from '../shared/NewsArticleSheet'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import Sparkline from '../shared/Sparkline'
 import RosterActionItems from '../roster/RosterActionItems'
@@ -121,6 +122,7 @@ export default function EdgeView() {
   const lastVisit = useLastVisit()
   const navigate = useNavigate()
   const [selectedPlayer, setSelectedPlayer] = useState(null)
+  const [openArticle, setOpenArticle] = useState(null)
 
   const signals = useMemo(
     () => computeEdgeSignals({ league, values, watchlist }),
@@ -312,7 +314,7 @@ export default function EdgeView() {
               return (
                 <button
                   key={i}
-                  onClick={() => setSelectedPlayer(n.player)}
+                  onClick={() => setOpenArticle(n)}
                   className="w-full py-2.5 border-b border-border-default dark:border-border-default last:border-0 text-left active:opacity-60 transition-opacity"
                 >
                   <div className="flex items-center gap-1.5">
@@ -472,6 +474,17 @@ export default function EdgeView() {
         <PlayerProfileDrawer
           player={selectedPlayer}
           onClose={() => setSelectedPlayer(null)}
+        />
+      )}
+
+      {openArticle && (
+        <NewsArticleSheet
+          article={openArticle}
+          onClose={() => setOpenArticle(null)}
+          onViewPlayer={p => {
+            setOpenArticle(null)
+            setSelectedPlayer(p)
+          }}
         />
       )}
     </div>

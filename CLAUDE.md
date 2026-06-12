@@ -153,7 +153,9 @@ file — keeping the no-backend architecture:
   plus manual `workflow_dispatch`). It runs `scripts/fetch-news.mjs`, which
   tries five sources (ESPN news API, FantasyPros player-news RSS, Yahoo RSS,
   ESPN RSS, CBS RSS), merges + dedupes to ≤100 items, and **force-pushes a
-  single-commit `news-data` branch** containing `news.json`.
+  single-commit `news-data` branch** containing `news.json`. Each item
+  carries `headline`, `story` (≤600 chars), `published`, `source`,
+  `link` (validated http(s) article URL or null), and `athleteIds`.
 - Every source is best-effort; the script only fails (keeping the previous
   feed) when all sources return nothing.
 - The app fetches `NEWS_FEED_URL`
@@ -161,7 +163,17 @@ file — keeping the no-backend architecture:
   sends CORS `*`, ~5 min CDN cache) once per session in `usePlayerIntel`.
 - **Player matching:** ESPN API items carry `athleteIds` (matched against
   `espn_id` from the Sleeper player DB); all other items match by normalized
-  full player name in the headline.
+  full player name in the headline. ESPN tags roundup columns with *every*
+  athlete mentioned, so a multi-player article can surface on a player the
+  headline isn't about — by design (we'd rather show the buried blurb than
+  miss it). The article sheet flags this case explicitly.
+- **News items are tappable everywhere they appear** (profile drawer
+  "Latest News", The Edge "Headlines") → `NewsArticleSheet`, a bottom sheet
+  (z-60, layers above the profile drawer) with the full stored story, a
+  "Read full article" link when the item has one (opens the source site —
+  in-app Safari sheet on the home-screen app), a multi-player-roundup note
+  when `athleteIds.length > 2`, and (from The Edge) a "View profile" action.
+  Full articles are never embedded — sources block cross-origin framing.
 - If the feed has no items for a player, the client falls back to ESPN's
   unofficial per-player endpoints (`site.api.espn.com/apis/fantasy/v2/...`,
   `site.web.api.espn.com/apis/common/v3/...`) — these are CORS-blocked in
@@ -1099,6 +1111,7 @@ dynastyedge/
 │   │       ├── ErrorState.jsx       ← THE error component — never duplicate it
 │   │       ├── SectionHeader.jsx    ← THE section header — never duplicate it
 │   │       ├── PlayerProfileDrawer.jsx
+│   │       ├── NewsArticleSheet.jsx    ← tappable news reader bottom sheet
 │   │       ├── WinWindowBadge.jsx
 │   │       ├── TrendArrow.jsx
 │   │       ├── DynastyEdgeLogo.jsx

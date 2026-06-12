@@ -49,6 +49,8 @@ export function useLeagueNews(players) {
         story: item.story ?? '',
         published: item.published ?? null,
         source: item.source ?? null,
+        link: item.link ?? null,
+        athleteIds: item.athleteIds ?? [],
         player: hit.player,
       })
     })
