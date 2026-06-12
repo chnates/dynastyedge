@@ -1,28 +1,32 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, lazy, Suspense } from 'react'
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Menu } from 'lucide-react'
 import { useLeague } from './hooks/useLeague'
 import { useTheme } from './hooks/useTheme'
 import { LeagueContext } from './context/LeagueContext'
 import SideDrawer from './components/shared/SideDrawer'
+import LoadingSpinner from './components/shared/LoadingSpinner'
 import EdgeView from './components/edge/EdgeView'
-import RosterLayout from './components/roster/RosterLayout'
-import RosterView from './components/roster/RosterView'
-import AllTeamsView from './components/roster/AllTeamsView'
-import FreeAgentsView from './components/roster/FreeAgentsView'
-import TradeLayout from './components/trade/TradeLayout'
-import TradePartnerFinder from './components/trade/TradePartnerFinder'
-import TradeAnalyzer from './components/trade/TradeAnalyzer'
-import WhatsFair from './components/trade/WhatsFair'
-import LineupOptimizer from './components/lineup/LineupOptimizer'
-import LeagueLayout from './components/league/LeagueLayout'
-import LeagueOverview from './components/league/LeagueOverview'
-import LeagueActivity from './components/league/LeagueActivity'
-import MarketMovers from './components/league/MarketMovers'
-import ManagersView from './components/league/ManagersView'
-import DraftLayout from './components/draft/DraftLayout'
-import DraftBoard from './components/draft/DraftBoard'
-import DraftTracker from './components/draft/DraftTracker'
+
+// The Edge stays eager — it's the default route and must render without a
+// lazy-chunk flash. Every other section loads on first navigation.
+const RosterLayout      = lazy(() => import('./components/roster/RosterLayout'))
+const RosterView        = lazy(() => import('./components/roster/RosterView'))
+const AllTeamsView      = lazy(() => import('./components/roster/AllTeamsView'))
+const FreeAgentsView    = lazy(() => import('./components/roster/FreeAgentsView'))
+const TradeLayout       = lazy(() => import('./components/trade/TradeLayout'))
+const TradePartnerFinder = lazy(() => import('./components/trade/TradePartnerFinder'))
+const TradeAnalyzer     = lazy(() => import('./components/trade/TradeAnalyzer'))
+const WhatsFair         = lazy(() => import('./components/trade/WhatsFair'))
+const LineupOptimizer   = lazy(() => import('./components/lineup/LineupOptimizer'))
+const LeagueLayout      = lazy(() => import('./components/league/LeagueLayout'))
+const LeagueOverview    = lazy(() => import('./components/league/LeagueOverview'))
+const LeagueActivity    = lazy(() => import('./components/league/LeagueActivity'))
+const MarketMovers      = lazy(() => import('./components/league/MarketMovers'))
+const ManagersView      = lazy(() => import('./components/league/ManagersView'))
+const DraftLayout       = lazy(() => import('./components/draft/DraftLayout'))
+const DraftBoard        = lazy(() => import('./components/draft/DraftBoard'))
+const DraftTracker      = lazy(() => import('./components/draft/DraftTracker'))
 
 const SECTION_NAMES = {
   '/edge':   'The Edge',
@@ -140,34 +144,36 @@ function AppShell({ leagueData }) {
           paddingBottom: 'env(safe-area-inset-bottom)',
         }}
       >
-        <Routes>
-          <Route path="/" element={<Navigate to="/edge" replace />} />
-          <Route path="/edge" element={<EdgeView />} />
-          <Route path="/roster" element={<RosterLayout />}>
-            <Route index element={<Navigate to="my-team" replace />} />
-            <Route path="my-team" element={<RosterView />} />
-            <Route path="teams" element={<AllTeamsView />} />
-            <Route path="teams/:rosterId" element={<RosterView />} />
-            <Route path="free-agents" element={<FreeAgentsView />} />
-          </Route>
-          <Route path="/trade" element={<TradeLayout />}>
-            <Route index element={<TradePartnerFinder />} />
-            <Route path="analyze" element={<TradeAnalyzer />} />
-            <Route path="whats-fair" element={<WhatsFair />} />
-          </Route>
-          <Route path="/lineup" element={<LineupOptimizer />} />
-          <Route path="/league" element={<LeagueLayout />}>
-            <Route index element={<LeagueOverview />} />
-            <Route path="activity" element={<LeagueActivity />} />
-            <Route path="movers" element={<MarketMovers />} />
-            <Route path="managers" element={<ManagersView />} />
-          </Route>
-          <Route path="/draft" element={<DraftLayout />}>
-            <Route index element={<Navigate to="board" replace />} />
-            <Route path="board" element={<DraftBoard />} />
-            <Route path="tracker" element={<DraftTracker />} />
-          </Route>
-        </Routes>
+        <Suspense fallback={<LoadingSpinner message="Loading…" />}>
+          <Routes>
+            <Route path="/" element={<Navigate to="/edge" replace />} />
+            <Route path="/edge" element={<EdgeView />} />
+            <Route path="/roster" element={<RosterLayout />}>
+              <Route index element={<Navigate to="my-team" replace />} />
+              <Route path="my-team" element={<RosterView />} />
+              <Route path="teams" element={<AllTeamsView />} />
+              <Route path="teams/:rosterId" element={<RosterView />} />
+              <Route path="free-agents" element={<FreeAgentsView />} />
+            </Route>
+            <Route path="/trade" element={<TradeLayout />}>
+              <Route index element={<TradePartnerFinder />} />
+              <Route path="analyze" element={<TradeAnalyzer />} />
+              <Route path="whats-fair" element={<WhatsFair />} />
+            </Route>
+            <Route path="/lineup" element={<LineupOptimizer />} />
+            <Route path="/league" element={<LeagueLayout />}>
+              <Route index element={<LeagueOverview />} />
+              <Route path="activity" element={<LeagueActivity />} />
+              <Route path="movers" element={<MarketMovers />} />
+              <Route path="managers" element={<ManagersView />} />
+            </Route>
+            <Route path="/draft" element={<DraftLayout />}>
+              <Route index element={<Navigate to="board" replace />} />
+              <Route path="board" element={<DraftBoard />} />
+              <Route path="tracker" element={<DraftTracker />} />
+            </Route>
+          </Routes>
+        </Suspense>
       </main>
     </div>
   )
