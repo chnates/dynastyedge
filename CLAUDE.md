@@ -893,10 +893,10 @@ but organized, purposeful use of color, confident typography.
 
 |Role                                 |Value    |
 |-------------------------------------|---------|
-|Background primary                   |`#FFFFFF`|
-|Background secondary                 |`#F4F4F8`|
-|Background card                      |`#FAFAFA`|
-|Border                               |`#E4E4E8`|
+|Background primary                   |`#F2F4FA` (cool tint so white cards lift)|
+|Background secondary                 |`#E9ECF5`|
+|Background card                      |`#FFFFFF`|
+|Border                               |`#E0E4EE`|
 |Text primary                         |`#0D0D0F`|
 |Text secondary                       |`#55555F`|
 |Text tertiary                        |`#8A8A95`|
@@ -994,10 +994,28 @@ fallback on image error; never let a broken avatar break a card.
 ### Ambient background glow
 
 The app shell uses the `.app-bg` class (`index.css`): the flat background plus
-two faint radial glows at the top (accent blue left, violet right), stronger
-in dark mode. The fixed app header is translucent (`bg-bg-secondary/85
-backdrop-blur-md`) so the glow reads through it. Bottom sheets and drawers
-keep their opaque backgrounds.
+two radial glows at the top (accent blue left, violet right) and a fainter
+accent glow lower on the screen, all stronger in dark mode. The fixed app
+header is translucent (`bg-bg-secondary/85 backdrop-blur-md`) so the glow
+reads through it. Bottom sheets and drawers keep their opaque backgrounds.
+
+### The Edge hero card ("stadium lights" treatment)
+
+The Edge's hero is a **full brand-gradient card** (`.hero-card` in
+`index.css`): deep electric blue → violet base with a violet bloom (top-right)
+and a cyan hint (bottom-left), plus an accent glow shadow (stronger in dark
+mode). All hero content is white-on-gradient: white text at varying opacities,
+`bg-white/15 border-white/20` chips, the team value in white with a soft text
+glow (`.hero-value`), trend deltas as `bg-white/15` pills with
+emerald-200/rose-200 text, and the win-window tier as a white chip with a
+tier-colored dot (the standard tinted `TIER_BADGE` doesn't read on the
+gradient). Top-3 value rank shows in `text-amber-300` (medal gold).
+
+Elsewhere on The Edge: briefing items are individual cards with a 3px left
+edge bar + tinted icon medallion in their tone color, Edge section headers
+carry a brand-gradient tick (`SectionHeader`'s `accentBar` prop), trend chips
+render as filled tinted pills, "New"/"You" badges are solid accent with white
+text, and footer link buttons are accent-tinted.
 
 ### Section identity colors (side drawer)
 

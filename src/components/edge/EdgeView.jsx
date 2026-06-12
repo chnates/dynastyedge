@@ -20,13 +20,11 @@ import {
 import { MY_TEAM_NAME, MY_ROSTER_ID } from '../../constants'
 import { POS_TEXT } from '../../utils/positionColors'
 import { TIER_BADGE, TIER_TEXT } from '../../utils/tierColors'
-import { rankClass } from '../../utils/rankColors'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import SectionHeader from '../shared/SectionHeader'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import NewsArticleSheet from '../shared/NewsArticleSheet'
-import WinWindowBadge from '../shared/WinWindowBadge'
 import Sparkline from '../shared/Sparkline'
 import RosterActionItems from '../roster/RosterActionItems'
 
@@ -41,10 +39,21 @@ const BRIEFING_ICONS = {
 }
 
 const BRIEFING_TONES = {
-  accent:  { icon: 'text-accent',  bg: 'bg-accent/10' },
-  success: { icon: 'text-success', bg: 'bg-success/10' },
-  warning: { icon: 'text-warning', bg: 'bg-warning/10' },
+  accent:  { icon: 'text-accent',  bg: 'bg-accent/15',  bar: 'border-l-accent' },
+  success: { icon: 'text-success', bg: 'bg-success/15', bar: 'border-l-success' },
+  warning: { icon: 'text-warning', bg: 'bg-warning/15', bar: 'border-l-warning' },
 }
+
+// Win-window tier dot colors for the hero chip (white-on-gradient context —
+// the standard tinted TIER_BADGE doesn't read on the brand gradient).
+const TIER_DOT = {
+  Contending: 'bg-warning',
+  Middle:     'bg-cyan-400',
+  Rebuilding: 'bg-indigo-400',
+}
+
+// Brand-gradient tick for Edge section headers.
+const HEADER_TICK = 'bg-gradient-to-b from-accent to-pos-def'
 
 const TX_ICONS = {
   trade:        { Icon: ArrowLeftRight, color: 'text-accent' },
@@ -64,18 +73,20 @@ function greeting() {
 
 function NewBadge() {
   return (
-    <span className="shrink-0 font-body text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 bg-accent/15 text-accent">
+    <span className="shrink-0 font-body text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 bg-accent text-white">
       New
     </span>
   )
 }
 
-function TrendChip({ trend, value }) {
+function TrendChip({ trend, value, onHero = false }) {
   if (trend == null || trend === 0) return null
   const pct = trendPct(trend, value)
-  const color = trend > 0 ? 'text-success' : 'text-danger'
+  const color = onHero
+    ? `bg-white/15 ${trend > 0 ? 'text-emerald-200' : 'text-rose-200'}`
+    : trend > 0 ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'
   return (
-    <span className={`font-mono text-xs font-semibold tabular-nums ${color}`}>
+    <span className={`rounded-full px-1.5 py-0.5 font-mono text-[11px] font-semibold tabular-nums ${color}`}>
       {trend > 0 ? '+' : ''}{Math.round(trend)}
       {pct != null && pct !== 0 && (
         <span className="opacity-80"> ({pct > 0 ? '+' : ''}{pct}%)</span>
@@ -209,32 +220,30 @@ export default function EdgeView() {
   return (
     <div className="px-4 pb-6">
 
-      {/* ── Hero: greeting + franchise pulse ── */}
-      <div
-        {...rise('mt-4 rounded-xl px-4 pt-3.5 pb-3.5 bg-gradient-to-br from-accent/15 via-bg-card to-bg-card dark:from-accent/15 dark:via-bg-card dark:to-bg-card border border-accent/20')}
-      >
-        <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary">
+      {/* ── Hero: greeting + franchise pulse, full brand gradient ── */}
+      <div {...rise('hero-card mt-4 rounded-xl px-4 pt-3.5 pb-3.5')}>
+        <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-white/60">
           {dateline}
         </p>
-        <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-text-primary dark:text-text-primary mt-0.5 leading-tight">
+        <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-white mt-0.5 leading-tight">
           {greeting()}, {MY_TEAM_NAME}
         </h1>
-        <p className="font-body text-sm text-text-secondary dark:text-text-secondary mt-1 leading-snug">
+        <p className="font-body text-sm text-white/80 mt-1 leading-snug">
           {gmLine}
         </p>
 
         <button
           onClick={() => navigate('/roster/my-team')}
-          className="w-full flex items-end justify-between gap-3 mt-3 pt-3 border-t border-border-default dark:border-border-default text-left active:opacity-70 transition-opacity"
+          className="w-full flex items-end justify-between gap-3 mt-3 pt-3 border-t border-white/20 text-left active:opacity-70 transition-opacity"
         >
           <div>
             <div className="flex items-baseline gap-2">
-              <span className="font-mono text-3xl font-medium tabular-nums text-transparent bg-clip-text bg-gradient-to-r from-accent to-pos-def">
+              <span className="hero-value font-mono text-3xl font-medium tabular-nums text-white">
                 {myRoster.totalValue.toLocaleString()}
               </span>
-              <TrendChip trend={signals.teamTrend} value={signals.playerValue} />
+              <TrendChip trend={signals.teamTrend} value={signals.playerValue} onHero />
             </div>
-            <p className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary mt-0.5">
+            <p className="font-body text-[10px] text-white/55 mt-0.5">
               Team value · 30-day trend
             </p>
           </div>
@@ -244,23 +253,27 @@ export default function EdgeView() {
         <div className="flex items-center gap-1.5 mt-3 flex-wrap">
           <button
             onClick={() => navigate('/league')}
-            className="flex items-center gap-1 rounded-full border border-border-default dark:border-border-default bg-bg-secondary dark:bg-bg-secondary px-2.5 py-1 active:opacity-70 transition-opacity"
+            className="flex items-center gap-1 rounded-full bg-white/15 border border-white/20 px-2.5 py-1 active:opacity-70 transition-opacity"
           >
-            <span className={`font-mono text-xs font-bold tabular-nums ${rankClass(signals.valueRank)}`}>
+            <span className={`font-mono text-xs font-bold tabular-nums ${signals.valueRank <= 3 ? 'text-amber-300' : 'text-white'}`}>
               #{signals.valueRank}
             </span>
-            <span className="font-body text-[10px] text-text-secondary dark:text-text-secondary">in value</span>
+            <span className="font-body text-[10px] text-white/70">in value</span>
           </button>
-          <button onClick={() => navigate('/league')} className="active:opacity-70 transition-opacity">
-            <WinWindowBadge tier={signals.myTier} />
+          <button
+            onClick={() => navigate('/league')}
+            className="flex items-center gap-1.5 rounded-full bg-white/15 border border-white/20 px-2.5 py-1 font-body text-[10px] font-semibold uppercase tracking-wider text-white active:opacity-70 transition-opacity"
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${TIER_DOT[signals.myTier] ?? 'bg-cyan-400'}`} />
+            {signals.myTier}
           </button>
           {myRoster.hasRecord && (
-            <span className="rounded-full border border-border-default dark:border-border-default bg-bg-secondary dark:bg-bg-secondary px-2.5 py-1 font-mono text-xs tabular-nums text-text-primary dark:text-text-primary">
+            <span className="rounded-full bg-white/15 border border-white/20 px-2.5 py-1 font-mono text-xs tabular-nums text-white">
               {myRoster.record.wins}-{myRoster.record.losses}{myRoster.record.ties ? `-${myRoster.record.ties}` : ''}
             </span>
           )}
-          <span className="rounded-full border border-border-default dark:border-border-default bg-bg-secondary dark:bg-bg-secondary px-2.5 py-1 font-mono text-xs tabular-nums text-text-primary dark:text-text-primary">
-            ${myRoster.faabRemaining} <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">FAAB</span>
+          <span className="rounded-full bg-white/15 border border-white/20 px-2.5 py-1 font-mono text-xs tabular-nums text-white">
+            ${myRoster.faabRemaining} <span className="font-body text-[10px] text-white/60">FAAB</span>
           </span>
         </div>
       </div>
@@ -273,8 +286,8 @@ export default function EdgeView() {
       {/* ── Your Briefing — prioritized, every row goes somewhere ── */}
       {briefing.length > 0 && (
         <section {...rise()}>
-          <SectionHeader label="Your Briefing" count={briefing.length} />
-          <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+          <SectionHeader label="Your Briefing" count={briefing.length} accentBar={HEADER_TICK} />
+          <div className="flex flex-col gap-2">
             {briefing.map(item => {
               const Icon = BRIEFING_ICONS[item.icon] ?? ArrowLeftRight
               const tone = BRIEFING_TONES[item.tone] ?? BRIEFING_TONES.accent
@@ -282,10 +295,10 @@ export default function EdgeView() {
                 <button
                   key={item.id}
                   onClick={() => runAction(item.action)}
-                  className="w-full flex items-start gap-2.5 py-3 border-b border-border-default dark:border-border-default last:border-0 text-left active:opacity-60 transition-opacity"
+                  className={`w-full flex items-start gap-2.5 px-3 py-3 rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default border-l-[3px] ${tone.bar} text-left active:opacity-60 transition-opacity`}
                 >
-                  <span className={`shrink-0 mt-0.5 w-7 h-7 rounded-lg flex items-center justify-center ${tone.bg}`}>
-                    <Icon size={14} strokeWidth={2} className={tone.icon} />
+                  <span className={`shrink-0 mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center ${tone.bg}`}>
+                    <Icon size={15} strokeWidth={2} className={tone.icon} />
                   </span>
                   <span className="flex-1 min-w-0">
                     <span className="block font-body text-sm font-semibold text-text-primary dark:text-text-primary leading-snug">
@@ -306,7 +319,7 @@ export default function EdgeView() {
       {/* ── Headlines on my players + watchlist ── */}
       {newsItems.length > 0 && (
         <section {...rise()}>
-          <SectionHeader label="Headlines" count={newsItems.length} />
+          <SectionHeader label="Headlines" count={newsItems.length} accentBar={HEADER_TICK} />
           <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
             {newsItems.map((n, i) => {
               const isFresh = lastVisit && n.published &&
@@ -347,7 +360,7 @@ export default function EdgeView() {
 
       {/* ── Market radar: watchlist + my roster movers ── */}
       <section {...rise()}>
-        <SectionHeader label="Market Radar" count={radar.length || undefined} />
+        <SectionHeader label="Market Radar" count={radar.length || undefined} accentBar={HEADER_TICK} />
         {radar.length === 0 ? (
           <p className="font-body text-xs text-text-tertiary dark:text-text-tertiary px-1 pb-1">
             {watchlist.length === 0
@@ -390,7 +403,7 @@ export default function EdgeView() {
         )}
         <button
           onClick={() => navigate('/league/movers')}
-          className="mt-2 w-full py-2 rounded-xl border border-border-default dark:border-border-default font-body text-xs font-medium text-accent active:opacity-70 transition-opacity"
+          className="mt-2 w-full py-2 rounded-xl border border-accent/25 bg-accent/5 font-body text-xs font-semibold text-accent active:opacity-70 transition-opacity"
         >
           All market movers →
         </button>
@@ -402,6 +415,7 @@ export default function EdgeView() {
           <SectionHeader
             label="Around the League"
             count={freshTx.length > 0 ? `${freshTx.length} new` : undefined}
+            accentBar={HEADER_TICK}
           />
           <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
             {recentTx.map(tx => {
@@ -422,7 +436,7 @@ export default function EdgeView() {
                         {title}
                       </span>
                       {involvesMe && (
-                        <span className="shrink-0 font-body text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 bg-accent/15 text-accent">
+                        <span className="shrink-0 font-body text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 bg-accent text-white">
                           You
                         </span>
                       )}
@@ -443,7 +457,7 @@ export default function EdgeView() {
           </div>
           <button
             onClick={() => navigate('/league/activity')}
-            className="mt-2 w-full py-2 rounded-xl border border-border-default dark:border-border-default font-body text-xs font-medium text-accent active:opacity-70 transition-opacity"
+            className="mt-2 w-full py-2 rounded-xl border border-accent/25 bg-accent/5 font-body text-xs font-semibold text-accent active:opacity-70 transition-opacity"
           >
             Full activity feed →
           </button>
