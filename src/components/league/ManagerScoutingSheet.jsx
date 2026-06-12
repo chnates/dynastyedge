@@ -55,7 +55,7 @@ function AssetLine({ sign, asset, onSelectPlayer }) {
       <span className="font-mono text-[11px] text-text-secondary dark:text-text-secondary tabular-nums shrink-0">
         {asset.type === 'faab' || (asset.type === 'player' && !asset.ranked)
           ? '—'
-          : asset.value.toLocaleString()}
+          : `${asset.approx ? '≈' : ''}${asset.value.toLocaleString()}`}
       </span>
     </div>
   )
@@ -283,7 +283,8 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
 
             <p className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary mt-3">
               All values at today's prices (hindsight grading). Traded picks whose draft has
-              happened show the player they became.
+              happened show the player they became; past picks that can't be resolved use
+              today's typical value for that round (≈).
             </p>
           </div>
         </div>

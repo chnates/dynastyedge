@@ -77,28 +77,42 @@ function normalizeSeasons(history, currentLeague) {
 // ── Pick resolution ──────────────────────────────────────────────────────────
 
 // "season-round-originalRosterId" → the player actually drafted at that slot.
-// The draft order (slot_to_roster_id) is defined in the league that hosted
-// the draft, which is exactly the season the traded pick references.
+// The draft order is defined in the league that hosted the draft, which is
+// exactly the season the traded pick references. Built directly from the
+// pick list (no dependency on declared round counts); the slot → roster map
+// falls back to draft_order (user → slot) joined with that season's
+// user → roster mapping when Sleeper omits slot_to_roster_id, which is
+// common on older drafts.
 function buildPickIndex(seasons) {
   const idx = {}
   seasons.forEach(s => {
+    const ownerToRoster = {}
+    Object.entries(s.ownerByRoster).forEach(([rid, oid]) => { ownerToRoster[oid] = rid })
+
     s.drafts.forEach(({ draft, picks }) => {
-      const slotToRoster = draft?.slot_to_roster_id
-      if (!slotToRoster || !picks?.length) return
-      const bySlotRound = {}
+      if (!picks?.length) return
+
+      let slotToRoster = draft?.slot_to_roster_id
+      if (!slotToRoster || Object.keys(slotToRoster).length === 0) {
+        slotToRoster = {}
+        Object.entries(draft?.draft_order ?? {}).forEach(([userId, slot]) => {
+          const rid = ownerToRoster[userId]
+          if (rid != null) slotToRoster[slot] = rid
+        })
+      }
+      if (Object.keys(slotToRoster).length === 0) {
+        console.warn(`managerAnalysis: no draft order for ${draft?.season} draft — its picks can't resolve to players`)
+        return
+      }
+
       picks.forEach(p => {
-        if (p?.player_id) bySlotRound[`${p.round}-${p.draft_slot}`] = p
-      })
-      Object.entries(slotToRoster).forEach(([slot, rosterId]) => {
-        const rounds = draft.settings?.rounds ?? 0
-        for (let round = 1; round <= rounds; round++) {
-          const p = bySlotRound[`${round}-${slot}`]
-          if (!p) continue
-          idx[`${draft.season}-${round}-${rosterId}`] = {
-            playerId: String(p.player_id),
-            overall: p.pick_no,
-            slotLabel: `${round}.${String(slot).padStart(2, '0')}`,
-          }
+        if (!p?.player_id || p.draft_slot == null || p.round == null) return
+        const originalRoster = slotToRoster[p.draft_slot]
+        if (originalRoster == null) return
+        idx[`${draft.season}-${p.round}-${originalRoster}`] = {
+          playerId: String(p.player_id),
+          overall: p.pick_no,
+          slotLabel: `${p.round}.${String(p.draft_slot).padStart(2, '0')}`,
         }
       })
     })
@@ -108,7 +122,26 @@ function buildPickIndex(seasons) {
 
 // ── Asset resolution (today's prices) ────────────────────────────────────────
 
+// Median value per round across every pick FantasyCalc currently lists,
+// season-agnostic. FantasyCalc only prices FUTURE drafts, so a past-season
+// pick that can't be resolved to its drafted player would otherwise value at
+// 0 and badly skew trade grades — "a 2nd is a 2nd" is a far better estimate.
+function buildGenericRoundValues(pickEntries) {
+  const byRound = {}
+  for (let round = 1; round < ROUND_LABELS.length; round++) {
+    const suffix = ROUND_LABELS[round]
+    const matches = (pickEntries ?? [])
+      .filter(e => e.name.includes(suffix))
+      .sort((a, b) => a.value - b.value)
+    byRound[round] = matches.length
+      ? matches[Math.floor(matches.length / 2)].value
+      : 0
+  }
+  return byRound
+}
+
 function makeResolvers(playerMap, playerDB, pickEntries, pickIndex) {
+  const genericRoundValues = buildGenericRoundValues(pickEntries)
   function playerAsset(pid) {
     const id = String(pid)
     const fc = playerMap[id]
@@ -143,14 +176,20 @@ function makeResolvers(playerMap, playerDB, pickEntries, pickIndex) {
         player: became.player,
       }
     }
+    // Unresolved: FantasyCalc's market price for that exact pick (future
+    // drafts), else the generic round value (past drafts FantasyCalc no
+    // longer lists) — never 0 just because a draft year has passed.
+    const market = findPickValue({ season, round: pk.round }, pickEntries)
+    const value = market > 0 ? market : (genericRoundValues[pk.round] ?? 0)
     return {
       type: 'pick',
       resolved: false,
+      approx: market === 0 && value > 0,
       pickKey,
       label: `${season} ${roundLabel}`,
       position: null,
       age: null,
-      value: findPickValue({ season, round: pk.round }, pickEntries),
+      value,
       player: null,
     }
   }

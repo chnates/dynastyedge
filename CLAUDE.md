@@ -697,8 +697,12 @@ there and profiles cover fewer seasons.
   prices — did the move age well? Traded picks whose draft has since
   happened resolve to the actual player drafted at that slot
   ("2026 1st → Player Name") via `slot_to_roster_id` + the draft's pick
-  list. Future picks use today's market pick value (`findPickValue`).
-  FAAB in trades displays but counts 0, same as League › Activity.
+  list (falling back to `draft_order` + that season's user → roster map
+  when Sleeper omits `slot_to_roster_id`). Future picks use today's market
+  pick value (`findPickValue`); past picks that can't be resolved use the
+  median of that round across FantasyCalc's listed picks (shown with ≈) —
+  never 0 just because the draft year passed. FAAB in trades displays but
+  counts 0, same as League › Activity.
 - **Tendencies:** pick accumulator/shipper, buys youth/veterans (avg age of
   players acquired vs given), position chasing, FAAB aggression vs league
   average — rendered as chips.
