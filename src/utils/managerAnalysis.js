@@ -201,7 +201,11 @@ function makeResolvers(playerMap, playerDB, pickEntries, pickIndex) {
 
 // Every completed trade, recorded once per participating manager from that
 // manager's perspective: what they got, what they gave, net at today's
-// prices, and a win/loss/even call.
+// prices, and a win/loss/even call. Given assets carry the receiving
+// manager's owner ID so the UI can group "who got what" in multi-team
+// trades; assets re-traded by the same manager in a later deal are marked
+// `flipped` (the value washes out across the two trades — the cumulative
+// net keeps only the true profit/loss on the flip).
 function buildTradeLedgers(seasons, resolvers) {
   const byOwner = {}
 
@@ -220,16 +224,30 @@ function buildTradeLedgers(seasons, resolvers) {
             if (r === rid) got.push(resolvers.playerAsset(pid))
           })
           Object.entries(tx.drops ?? {}).forEach(([pid, r]) => {
-            if (r === rid) gave.push(resolvers.playerAsset(pid))
+            if (r !== rid) return
+            const receiverRoster = tx.adds?.[pid]
+            gave.push({
+              ...resolvers.playerAsset(pid),
+              receiverOwnerId: receiverRoster != null ? (s.ownerByRoster[receiverRoster] ?? null) : null,
+            })
           })
           ;(tx.draft_picks ?? []).forEach(pk => {
             if (pk.owner_id === rid) got.push(resolvers.pickAsset(pk))
-            else if (pk.previous_owner_id === rid) gave.push(resolvers.pickAsset(pk))
+            else if (pk.previous_owner_id === rid) gave.push({
+              ...resolvers.pickAsset(pk),
+              receiverOwnerId: s.ownerByRoster[pk.owner_id] ?? null,
+            })
           })
           ;(tx.waiver_budget ?? []).forEach(wb => {
-            const faab = { type: 'faab', label: `$${wb.amount} FAAB`, value: 0, player: null }
-            if (wb.receiver === rid) got.push(faab)
-            if (wb.sender === rid) gave.push(faab)
+            if (wb.receiver === rid) {
+              got.push({ type: 'faab', label: `$${wb.amount} FAAB`, value: 0, player: null })
+            }
+            if (wb.sender === rid) {
+              gave.push({
+                type: 'faab', label: `$${wb.amount} FAAB`, value: 0, player: null,
+                receiverOwnerId: s.ownerByRoster[wb.receiver] ?? null,
+              })
+            }
           })
           if (got.length === 0 && gave.length === 0) return
 
@@ -262,9 +280,23 @@ function buildTradeLedgers(seasons, resolvers) {
       })
   })
 
-  Object.values(byOwner).forEach(ledger =>
+  const assetKey = a =>
+    a.type === 'player' ? `p:${a.id}` : a.type === 'pick' ? `k:${a.pickKey}` : null
+
+  Object.values(byOwner).forEach(ledger => {
     ledger.sort((a, b) => (b.date ?? 0) - (a.date ?? 0))
-  )
+    // Mark acquired assets this manager traded away again in a later deal
+    ledger.forEach(trade => {
+      trade.got.forEach(a => {
+        const key = assetKey(a)
+        if (!key) return
+        a.flipped = ledger.some(t2 =>
+          (t2.date ?? 0) > (trade.date ?? 0) &&
+          t2.gave.some(g => assetKey(g) === key)
+        )
+      })
+    })
+  })
   return byOwner
 }
 

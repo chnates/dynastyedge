@@ -51,9 +51,14 @@ function AssetLine({ sign, asset, onSelectPlayer }) {
           {asset.label}
         </span>
       )}
+      {asset.flipped && (
+        <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary shrink-0">
+          ↪ flipped
+        </span>
+      )}
       <span className="flex-1" />
       <span className="font-mono text-[11px] text-text-secondary dark:text-text-secondary tabular-nums shrink-0">
-        {asset.type === 'faab' || (asset.type === 'player' && !asset.ranked)
+        {asset.type === 'faab' || asset.value === 0
           ? '—'
           : `${asset.approx ? '≈' : ''}${asset.value.toLocaleString()}`}
       </span>
@@ -61,24 +66,73 @@ function AssetLine({ sign, asset, onSelectPlayer }) {
   )
 }
 
-function TradeLedgerCard({ trade, partnerName, getTradeTimeTotals, onSelectPlayer }) {
+function TradeSideSection({ name, total, sign, assets, onSelectPlayer }) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-2 mb-0.5">
+        <p className="font-body text-[11px] font-semibold text-text-secondary dark:text-text-secondary truncate">
+          {name} got
+        </p>
+        {total > 0 && (
+          <span className="font-mono text-[11px] font-semibold text-text-secondary dark:text-text-secondary tabular-nums shrink-0">
+            {total.toLocaleString()}
+          </span>
+        )}
+      </div>
+      {assets.map((a, i) => (
+        <AssetLine key={i} sign={sign} asset={a} onSelectPlayer={onSelectPlayer} />
+      ))}
+    </div>
+  )
+}
+
+function TradeLedgerCard({ trade, profileName, nameFor, getTradeTimeTotals, onSelectPlayer }) {
   const thenTotals = getTradeTimeTotals(trade)
+
+  // What this manager sent out, grouped by the partner who received it —
+  // multi-team trades get one section per receiving team.
+  const gaveGroups = []
+  trade.gave.forEach(a => {
+    const ownerId = a.receiverOwnerId ?? trade.partnerOwnerIds[0] ?? null
+    let group = gaveGroups.find(g => g.ownerId === ownerId)
+    if (!group) {
+      group = { ownerId, assets: [], total: 0 }
+      gaveGroups.push(group)
+    }
+    group.assets.push(a)
+    group.total += a.value
+  })
+
   return (
     <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-3">
       <div className="flex items-center gap-1.5 mb-2">
         <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
           Wk {trade.week} · {trade.season}
         </span>
-        <span className="font-body text-[11px] text-text-secondary dark:text-text-secondary truncate">
-          vs {partnerName}
-        </span>
         <span className={`ml-auto shrink-0 font-mono text-[11px] font-bold rounded px-1.5 py-0.5 tabular-nums ${RESULT_STYLES[trade.result]}`}>
           {trade.result === 'even' ? 'Even' : fmtNet(trade.net)}
         </span>
       </div>
-      <div className="flex flex-col gap-0.5">
-        {trade.got.map((a, i) => <AssetLine key={`g${i}`} sign="+" asset={a} onSelectPlayer={onSelectPlayer} />)}
-        {trade.gave.map((a, i) => <AssetLine key={`v${i}`} sign="−" asset={a} onSelectPlayer={onSelectPlayer} />)}
+      <div className="flex flex-col gap-2">
+        {trade.got.length > 0 && (
+          <TradeSideSection
+            name={profileName}
+            total={trade.gotValue}
+            sign="+"
+            assets={trade.got}
+            onSelectPlayer={onSelectPlayer}
+          />
+        )}
+        {gaveGroups.map((group, i) => (
+          <TradeSideSection
+            key={i}
+            name={nameFor(group.ownerId)}
+            total={group.total}
+            sign="−"
+            assets={group.assets}
+            onSelectPlayer={onSelectPlayer}
+          />
+        ))}
       </div>
       {thenTotals && (
         <p className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary mt-1.5">
@@ -146,10 +200,9 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
     if (e.target === overlayRef.current) onClose()
   }
 
-  function partnerName(trade) {
-    const names = trade.partnerOwnerIds.map(oid => getTeamName(userById[oid]))
-    return names.length ? names.join(' + ') : 'Unknown'
-  }
+  const nameFor = ownerId =>
+    ownerId != null && userById[ownerId] ? getTeamName(userById[ownerId]) : 'Unknown team'
+  const profileName = getTeamName(profile.user)
 
   const { faab, draft } = profile
   const firstSeason = profile.seasonsActive[profile.seasonsActive.length - 1]
@@ -265,7 +318,8 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
                   <TradeLedgerCard
                     key={trade.txId}
                     trade={trade}
-                    partnerName={partnerName(trade)}
+                    profileName={profileName}
+                    nameFor={nameFor}
                     getTradeTimeTotals={getTradeTimeTotals}
                     onSelectPlayer={setSelectedPlayer}
                   />
@@ -284,7 +338,8 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
             <p className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary mt-3">
               All values at today's prices (hindsight grading). Traded picks whose draft has
               happened show the player they became; past picks that can't be resolved use
-              today's typical value for that round (≈).
+              today's typical value for that round (≈). ↪ flipped = re-traded in a later
+              deal, so its value washes out across the two trades.
             </p>
           </div>
         </div>

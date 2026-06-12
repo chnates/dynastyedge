@@ -724,7 +724,13 @@ there and profiles cover fewer seasons.
   sheet** (`ManagerScoutingSheet`): stat grid, tendencies, head-to-head,
   full rookie draft record with steal/reach badges, and the complete
   multi-season trade ledger (paginated, player names open the
-  PlayerProfileDrawer, picks show what they became).
+  PlayerProfileDrawer, picks show what they became). Each ledger card
+  groups assets by receiving team ("X got · total" sections, one per
+  partner in multi-team trades). Assets the manager re-traded in a later
+  deal carry an "↪ flipped" marker — the value washes out across the two
+  trades, leaving only the true profit/loss on the flip in the cumulative
+  net. Zero-value assets (FAAB, unranked players, unpriced 3rd/4th picks)
+  display `—`, never a raw 0.
 - **Trade Partner Finder integration:** each partner card gets a one-line
   behavioral read ("6 trades · 4W-1L · +2,140 · Accumulates picks", or
   "Hasn't completed a trade — cold call"). Best-effort — renders only once
