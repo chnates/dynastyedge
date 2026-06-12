@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
-  Users, ArrowLeftRight, LayoutList, Trophy, FileText,
+  Zap, Users, ArrowLeftRight, LayoutList, Trophy, FileText,
   RefreshCw, Sun, Moon,
 } from 'lucide-react'
 import DynastyEdgeLogo from './DynastyEdgeLogo'
@@ -12,6 +12,7 @@ import { getTeamName } from '../../hooks/useLeague'
 // Each section has an identity color — icons always wear it, the active
 // item gets a matching tinted background and edge bar.
 const NAV_ITEMS = [
+  { to: '/edge',   label: 'The Edge', Icon: Zap,          text: 'text-accent',  activeBg: 'bg-accent/10',  bar: 'bg-accent'  },
   { to: '/roster', label: 'Roster', Icon: Users,          text: 'text-pos-wr',  activeBg: 'bg-pos-wr/10',  bar: 'bg-pos-wr'  },
   { to: '/trade',  label: 'Trade',  Icon: ArrowLeftRight, text: 'text-success', activeBg: 'bg-success/10', bar: 'bg-success' },
   { to: '/lineup', label: 'Lineup', Icon: LayoutList,     text: 'text-pos-te',  activeBg: 'bg-pos-te/10',  bar: 'bg-pos-te'  },

@@ -5,6 +5,7 @@ import { useLeague } from './hooks/useLeague'
 import { useTheme } from './hooks/useTheme'
 import { LeagueContext } from './context/LeagueContext'
 import SideDrawer from './components/shared/SideDrawer'
+import EdgeView from './components/edge/EdgeView'
 import RosterLayout from './components/roster/RosterLayout'
 import RosterView from './components/roster/RosterView'
 import AllTeamsView from './components/roster/AllTeamsView'
@@ -24,6 +25,7 @@ import DraftBoard from './components/draft/DraftBoard'
 import DraftTracker from './components/draft/DraftTracker'
 
 const SECTION_NAMES = {
+  '/edge':   'The Edge',
   '/roster': 'Roster',
   '/trade':  'Trade',
   '/lineup': 'Lineup',
@@ -135,7 +137,8 @@ function AppShell({ leagueData }) {
         }}
       >
         <Routes>
-          <Route path="/" element={<Navigate to="/roster/my-team" replace />} />
+          <Route path="/" element={<Navigate to="/edge" replace />} />
+          <Route path="/edge" element={<EdgeView />} />
           <Route path="/roster" element={<RosterLayout />}>
             <Route index element={<Navigate to="my-team" replace />} />
             <Route path="my-team" element={<RosterView />} />

@@ -28,7 +28,7 @@ lineup optimization with matchup context, and a full league-wide competitive lan
 |----------|----------------|-----------------------------------|
 |Framework |React (via Vite)|Functional components + hooks only |
 |Styling   |Tailwind CSS    |Dark mode default, mobile-first    |
-|Navigation|React Router v7 |Side drawer menu, 5 sections       |
+|Navigation|React Router v7 |Side drawer menu, 6 sections       |
 |Build tool|Vite            |Outputs to `dist/` for GitHub Pages|
 |Deployment|GitHub Pages    |Auto-deploys via GitHub Actions    |
 |CI/CD     |GitHub Actions  |Triggers on every push to `main`   |
@@ -749,6 +749,60 @@ file/entries ⇒ the line simply hides — never an error or loading state.
 
 -----
 
+### Feature 12 — The Edge (home screen / daily briefing)
+
+**Purpose:** the assistant-GM landing page — "what happened since I last
+looked, and is there a move to make?" Synthesizes everything the app already
+caches into one prioritized, tappable morning briefing. **This is the app's
+default route** (`/` → `/edge`), useful in season and offseason alike.
+
+**Zero new data sources.** Everything composes existing session caches:
+league/FantasyCalc (LeagueContext), transactions (`useTransactions`), the
+news feed (`useLeagueNews`, same aggregated feed as the profile drawer),
+value history (`useValueHistory`), and draft sync (`useSleeperDraft`). Pure
+logic lives in `utils/edgeBriefing.js`.
+
+**Sections (top to bottom, staggered `edge-rise` entrance animation):**
+
+- **Hero (gradient card):** time-of-day greeting + dateline, a generated
+  assistant-GM summary line ("2 items on your desk · 3 new league moves"),
+  team value in the brand gradient with a 30-day trend (sum of player
+  `trend30Day`, % vs baseline) and a team-value sparkline (per-player history
+  rows summed with last-known-value carry-forward — best-effort, hides
+  without history). Chips: value rank (medal colors), win-window tier badge,
+  record (when it exists), FAAB. Value taps to My Roster; chips tap to League.
+- **Action Items:** the shared `RosterActionItems` component, reused as-is
+  (dismissals included).
+- **Your Briefing:** up to 5 prioritized items from `buildBriefing`, each
+  deep-linking somewhere: live/paused rookie draft → Tracker; trade deadline
+  ≤ 2 weeks → Trade; `pre_draft` rookie draft → Board; N league moves since
+  last visit → Activity; best buy-low (falling player at my deficit position,
+  rebuilding-owner note) → Analyzer pre-filled as a What's Fair target; best
+  sell-high (my riser at a surplus position) → Analyzer pre-loaded in You
+  Give; biggest watchlist mover → profile drawer; biggest underperforming
+  opponent (record rank trails value rank by ≥ 4, same gap as League
+  Overview) → their roster drill-down.
+- **Headlines:** news-feed items matched to my roster + watchlist players
+  (≤ 5), "New" badge when published after the last visit; tap opens the
+  player's profile drawer. Hides entirely when nothing matches — never an
+  error (standard news contract).
+- **Market Radar:** watchlist movers + my roster's movers (> ±50 trend),
+  deduped, ≤ 5 rows with sparklines; tap → profile drawer; footer link to
+  League › Movers. Empty state hints at starring players.
+- **Around the League:** compact one-line transaction summaries — moves since
+  the last visit, or the latest 3 — with "You"/"New" badges; everything links
+  to League › Activity.
+- **League pulse footer:** the three tier-count chips; tapping one writes
+  `dynastyedge_league_tier` and opens League Overview pre-filtered.
+
+**Last-visit model (`useLastVisit`):** localStorage key
+`dynastyedge_edge_last_visit`. The previous timestamp is read once per
+session (stable all session, so navigating away and back doesn't clear the
+diff) and the stored value is bumped to now on that first read. First-ever
+visit ⇒ no "New" badges, activity shows the latest moves instead.
+
+-----
+
 ### Trade deadline banner
 
 The Trade section shows a persistent banner under the sub-tabs during the
@@ -769,13 +823,14 @@ design decision — do not add a bottom nav.
 
 Side drawer sections:
 
-|#  |Section|Feature                                                  |
-|---|-------|---------------------------------------------------------|
-|1  |Roster |My Roster · All Teams · Free Agents                      |
-|2  |Trade  |Partners · Analyzer · Targets (+ deadline banner)        |
-|3  |Lineup |Lineup Optimizer + Season Review (lineup efficiency)     |
-|4  |League |Overview · Activity · Movers · Managers                  |
-|5  |Draft  |Rookie draft board · Draft pick tracker                  |
+|#  |Section |Feature                                                  |
+|---|--------|---------------------------------------------------------|
+|1  |The Edge|Daily briefing home screen (default route)               |
+|2  |Roster  |My Roster · All Teams · Free Agents                      |
+|3  |Trade   |Partners · Analyzer · Targets (+ deadline banner)        |
+|4  |Lineup  |Lineup Optimizer + Season Review (lineup efficiency)     |
+|5  |League  |Overview · Activity · Movers · Managers                  |
+|6  |Draft   |Rookie draft board · Draft pick tracker                  |
 
 Sections with multiple views use a sub-tab bar pinned under the app header.
 The drawer also holds: data freshness timestamp, manual Refresh, and the theme toggle.
@@ -929,7 +984,8 @@ keep their opaque backgrounds.
 ### Section identity colors (side drawer)
 
 Each nav section has an identity hue (defined inline in `SideDrawer.jsx`):
-Roster sky · Trade green · Lineup orange · League gold · Draft pink. Icons
+The Edge accent blue · Roster sky · Trade green · Lineup orange · League gold ·
+Draft pink. Icons
 always wear the section color; the active item gets the matching tinted
 background and edge bar. These are navigation identity only — they carry no
 status meaning.
@@ -995,6 +1051,8 @@ dynastyedge/
 │   └── favicon.ico
 ├── src/
 │   ├── components/
+│   │   ├── edge/
+│   │   │   └── EdgeView.jsx         ← The Edge: daily briefing home screen
 │   │   ├── roster/
 │   │   │   ├── RosterLayout.jsx     ← sub-tabs: My Roster / All Teams / Free Agents
 │   │   │   ├── RosterView.jsx       ← own roster + drill-down for any team
@@ -1053,6 +1111,8 @@ dynastyedge/
 │   │   ├── useLineupHistory.js  ← my past matchups for efficiency review
 │   │   ├── useLineupData.js     ← projections, statuses, schedule, def stats
 │   │   ├── useWatchlist.js      ← starred players (localStorage-backed store)
+│   │   ├── useLastVisit.js      ← The Edge's "since your last visit" anchor
+│   │   ├── useLeagueNews.js     ← news feed matched to my roster + watchlist
 │   │   ├── useValueHistory.js   ← daily value snapshots for sparklines (best-effort)
 │   │   ├── usePlayerIntel.js    ← production stats + depth chart + ESPN news
 │   │   ├── useScrollLock.js     ← freezes <main> while a bottom sheet is open
@@ -1068,6 +1128,7 @@ dynastyedge/
 │   │   ├── tierColors.js        ← win-window tier colors (badge + banner chips)
 │   │   ├── rankColors.js        ← gold/silver/bronze medal colors for rank ordinals
 │   │   ├── tradeAnalysis.js     ← trade scoring, verdict logic
+│   │   ├── edgeBriefing.js      ← The Edge: signals, briefing items, GM line
 │   │   ├── managerAnalysis.js   ← manager scouting: ledgers, tendencies, draft grades
 │   │   ├── rosterAnalysis.js    ← positional strength, win window tiers
 │   │   ├── pickCapital.js       ← pick ownership resolution logic
@@ -1245,6 +1306,7 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 1. **localStorage / sessionStorage keys** (all prefixed `dynastyedge_`):
    `dynastyedge_theme` (theme) · `dynastyedge_watchlist_v1` (starred players) ·
    `dynastyedge_action_dismissals` (roster action items) ·
+   `dynastyedge_edge_last_visit` (The Edge's last-visit timestamp) ·
    `dynastyedge_draft_*` (manual draft tracker) ·
    `dynastyedge_board_order` / `dynastyedge_prospect_notes` /
    `dynastyedge_csv_rankings` (draft board — see Feature 10) ·

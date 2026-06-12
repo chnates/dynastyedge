@@ -79,7 +79,7 @@ function stripHtml(s) {
 
 let newsFeedPromise = null
 
-function loadNewsFeed() {
+export function loadNewsFeed() {
   if (!newsFeedPromise) {
     newsFeedPromise = fetchJSON(NEWS_FEED_URL, { timeoutMs: 10000, label: 'News feed' })
       .then(data => (Array.isArray(data?.items) ? data.items : []))
@@ -88,7 +88,7 @@ function loadNewsFeed() {
   return newsFeedPromise
 }
 
-function normalizeName(s) {
+export function normalizeName(s) {
   return (s ?? '').toLowerCase().replace(/[.'’-]/g, '').replace(/\s+/g, ' ').trim()
 }
 
