@@ -66,7 +66,7 @@ function MyReportCard({ profile, tier, insights, onOpen }) {
             <p className="font-display text-base font-bold uppercase tracking-wide text-text-primary dark:text-text-primary truncate leading-tight">
               {getTeamName(profile.user)}
             </p>
-            <span className="font-body text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 bg-accent/15 text-accent shrink-0">
+            <span className="font-body text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 bg-accent text-white shrink-0">
               You
             </span>
           </div>
@@ -102,7 +102,7 @@ function MyReportCard({ profile, tier, insights, onOpen }) {
 
       <button
         onClick={onOpen}
-        className="w-full mt-3 py-2.5 rounded-xl border border-border-default dark:border-border-default font-body text-sm font-medium text-accent active:opacity-70 transition-opacity"
+        className="w-full mt-3 py-2.5 rounded-xl border border-accent/25 bg-accent/5 font-body text-sm font-semibold text-accent active:opacity-70 transition-opacity"
       >
         Full ledger & draft record
       </button>

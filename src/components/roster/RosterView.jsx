@@ -84,28 +84,28 @@ export default function RosterView() {
         </button>
       )}
 
-      {/* ── Header — gradient hero card ── */}
-      <div className={`${selectedRosterId ? 'mt-1' : 'mt-4'} rounded-xl px-4 pt-3 pb-3 bg-gradient-to-br from-accent/15 via-bg-card to-bg-card dark:from-accent/15 dark:via-bg-card dark:to-bg-card border border-accent/20`}>
-        <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-0.5">
+      {/* ── Header — brand-gradient hero card ── */}
+      <div className={`hero-card ${selectedRosterId ? 'mt-1' : 'mt-4'} rounded-xl px-4 pt-3 pb-3`}>
+        <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-white/60 mb-0.5">
           Dynasty Roster
         </p>
         <div className="flex items-center gap-2.5">
           <TeamAvatar owner={displayRoster.owner} size={36} />
-          <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-text-primary dark:text-text-primary leading-tight min-w-0 truncate">
+          <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-white leading-tight min-w-0 truncate">
             {teamName}
           </h1>
         </div>
         <div className="flex items-baseline gap-2 mt-1.5">
-          <span className="font-mono text-3xl font-medium tabular-nums text-transparent bg-clip-text bg-gradient-to-r from-accent to-pos-def">
+          <span className="hero-value font-mono text-3xl font-medium tabular-nums text-white">
             {displayRoster.totalValue.toLocaleString()}
           </span>
-          <span className="font-body text-xs text-text-secondary dark:text-text-secondary">
+          <span className="font-body text-xs text-white/70">
             dynasty pts
           </span>
         </div>
         <div className="flex items-center gap-1 mt-1.5">
-          <span className="block w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
-          <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">
+          <span className="block w-1.5 h-1.5 rounded-full bg-white/80 shrink-0" />
+          <span className="font-body text-[10px] text-white/55">
             = starting lineup · — = no market value yet
           </span>
         </div>
@@ -121,9 +121,11 @@ export default function RosterView() {
       {!selectedRosterId && (
         <button
           onClick={() => setAnalysisOpen(true)}
-          className="w-full mt-4 mb-1 flex items-center gap-2.5 px-3 py-3 rounded-xl bg-bg-card border border-border-default active:opacity-60 transition-opacity"
+          className="w-full mt-4 mb-1 flex items-center gap-2.5 px-3 py-3 rounded-xl bg-bg-card border border-border-default border-l-[3px] border-l-accent active:opacity-60 transition-opacity"
         >
-          <ScanSearch size={16} strokeWidth={1.75} className="text-accent flex-shrink-0" />
+          <span className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-accent/15">
+            <ScanSearch size={15} strokeWidth={2} className="text-accent" />
+          </span>
           <div className="flex-1 text-left">
             <p className="font-body text-sm font-semibold text-text-primary leading-tight">
               Roster Analysis
