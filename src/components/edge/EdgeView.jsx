@@ -39,9 +39,9 @@ const BRIEFING_ICONS = {
 }
 
 const BRIEFING_TONES = {
-  accent:  { icon: 'text-accent',  bg: 'bg-accent/15',  bar: 'border-l-accent' },
-  success: { icon: 'text-success', bg: 'bg-success/15', bar: 'border-l-success' },
-  warning: { icon: 'text-warning', bg: 'bg-warning/15', bar: 'border-l-warning' },
+  accent:  { icon: 'text-accent',  bg: 'bg-accent/15',  bar: 'border-l-accent tone-glow-accent' },
+  success: { icon: 'text-success', bg: 'bg-success/15', bar: 'border-l-success tone-glow-success' },
+  warning: { icon: 'text-warning', bg: 'bg-warning/15', bar: 'border-l-warning tone-glow-warning' },
 }
 
 // Win-window tier dot colors for the hero chip (white-on-gradient context —

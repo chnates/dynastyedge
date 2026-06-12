@@ -99,6 +99,15 @@ body {
   text-shadow: 0 0 18px rgb(255 255 255 / 0.35);
 }
 
+/* ── Briefing card edge glow (dark mode only) ─────────────────── */
+/* The 3px left edge bar reads as a neon glow at night: an inset    */
+/* shadow bleeding inward from the left edge in the tone color.     */
+/* No-op in light mode, where the bar already pops on white cards.  */
+
+.dark .tone-glow-accent  { box-shadow: inset 16px 0 24px -16px rgb(var(--accent)  / 0.55); }
+.dark .tone-glow-success { box-shadow: inset 16px 0 24px -16px rgb(var(--success) / 0.55); }
+.dark .tone-glow-warning { box-shadow: inset 16px 0 24px -16px rgb(var(--warning) / 0.55); }
+
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }
