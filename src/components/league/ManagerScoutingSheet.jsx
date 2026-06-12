@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { useScrollLock } from '../../hooks/useScrollLock'
+import { useSheetDrag } from '../../hooks/useSheetDrag'
 import { useTradeTimeValues } from '../../hooks/useTradeTimeValues'
 import { STEAL_DELTA } from '../../utils/managerAnalysis'
 import { getTeamName } from '../../hooks/useLeague'
@@ -184,6 +185,7 @@ function DraftPickRow({ row, onSelectPlayer }) {
 // multi-season trade ledger from their perspective.
 export default function ManagerScoutingSheet({ profile, tier, userById, onClose }) {
   const overlayRef = useRef(null)
+  const { sheetRef, scrollRef } = useSheetDrag(onClose)
   const [ledgerCount, setLedgerCount] = useState(LEDGER_PAGE)
   const [selectedPlayer, setSelectedPlayer] = useState(null)
   const { getTradeTimeTotals } = useTradeTimeValues()
@@ -214,8 +216,8 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
       onClick={handleOverlayClick}
       className="fixed inset-0 z-50 flex items-end bg-black/60"
     >
-      <div className="w-full bg-bg-secondary dark:bg-bg-secondary rounded-t-2xl border-t border-border-default dark:border-border-default">
-        <div className="max-h-[88vh] overflow-y-auto" style={{ overscrollBehavior: 'contain', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <div ref={sheetRef} className="w-full bg-bg-secondary dark:bg-bg-secondary rounded-t-2xl border-t border-border-default dark:border-border-default">
+        <div ref={scrollRef} className="max-h-[88vh] overflow-y-auto" style={{ overscrollBehavior: 'contain', paddingBottom: 'env(safe-area-inset-bottom)' }}>
 
           <div className="flex justify-center pt-3 pb-1">
             <div className="w-10 h-1 rounded-full bg-border-default" />

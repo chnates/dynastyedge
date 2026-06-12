@@ -4,6 +4,7 @@ import TrendArrow from '../shared/TrendArrow'
 import PickBadge from '../roster/PickBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { useScrollLock } from '../../hooks/useScrollLock'
+import { useSheetDrag } from '../../hooks/useSheetDrag'
 import { POS_CHIP_ACTIVE, POS_TAG as POS_TAGS } from '../../utils/positionColors'
 
 const FILTER_TABS = ['All', 'QB', 'RB', 'WR', 'TE', 'Picks']
@@ -168,6 +169,7 @@ function AddAssetSheet({
   isSelected, onTogglePlayer, onTogglePick, onInfo, onWhatsFair, onClose,
 }) {
   const overlayRef = useRef(null)
+  const { sheetRef, scrollRef } = useSheetDrag(onClose)
   const [searchQuery, setSearchQuery] = useState('')
   const [posFilter, setPosFilter]     = useState('All')
 
@@ -214,7 +216,7 @@ function AddAssetSheet({
       onClick={handleOverlayClick}
       className="fixed inset-0 z-50 flex items-end bg-black/60"
     >
-      <div className="w-full bg-bg-secondary dark:bg-bg-secondary rounded-t-2xl border-t border-border-default dark:border-border-default flex flex-col max-h-[88vh]">
+      <div ref={sheetRef} className="w-full bg-bg-secondary dark:bg-bg-secondary rounded-t-2xl border-t border-border-default dark:border-border-default flex flex-col max-h-[88vh]">
 
         {/* Handle bar */}
         <div className="flex justify-center pt-3 pb-1 shrink-0">
@@ -275,7 +277,7 @@ function AddAssetSheet({
         </div>
 
         {/* Player / pick rows */}
-        <div className="overflow-y-auto px-4" style={{ overscrollBehavior: 'contain', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
+        <div ref={scrollRef} className="overflow-y-auto px-4" style={{ overscrollBehavior: 'contain', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
           {visiblePlayers.length === 0 && visiblePicks.length === 0 ? (
             <p className="font-body text-sm text-text-tertiary dark:text-text-tertiary py-6 text-center">
               {searchQuery ? 'No players match your search.' : 'No players at this position.'}

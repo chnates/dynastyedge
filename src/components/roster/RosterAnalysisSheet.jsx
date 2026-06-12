@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { X, ChevronDown, ChevronUp } from 'lucide-react'
 import { PEAK_WINDOWS } from '../../utils/peakWindows'
 import { useScrollLock } from '../../hooks/useScrollLock'
+import { useSheetDrag } from '../../hooks/useSheetDrag'
 import { POS_SVG as POS_COLORS } from '../../utils/positionColors'
 
 const LANE_ORDER = ['QB', 'RB', 'WR', 'TE']
@@ -77,6 +78,7 @@ function StatCard({ label, value, valueClass = 'text-text-primary' }) {
 
 export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters, nflState, onClose }) {
   const overlayRef = useRef(null)
+  const { sheetRef, scrollRef } = useSheetDrag(onClose)
   const [posFilter, setPosFilter] = useState('ALL')
   const [selectedId, setSelectedId] = useState(null)
   const [howToOpen, setHowToOpen] = useState(false)
@@ -160,8 +162,8 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
       onClick={handleOverlayClick}
       className="fixed inset-0 z-50 flex items-end bg-black/60"
     >
-      <div className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default">
-        <div className="max-h-[85vh] overflow-y-auto" style={{ overscrollBehavior: 'contain', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <div ref={sheetRef} className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default">
+        <div ref={scrollRef} className="max-h-[85vh] overflow-y-auto" style={{ overscrollBehavior: 'contain', paddingBottom: 'env(safe-area-inset-bottom)' }}>
 
           {/* Handle bar */}
           <div className="flex justify-center pt-3 pb-1">

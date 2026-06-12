@@ -7,6 +7,7 @@ import { useLeagueContext } from '../../context/LeagueContext'
 import { useRookieADP } from '../../hooks/useRookieADP'
 import { buildRookieProspects } from '../../utils/rookieAdp'
 import { useSleeperDraft, buildDraftOrder, DRAFT_SEASON } from '../../hooks/useSleeperDraft'
+import { useSheetDrag } from '../../hooks/useSheetDrag'
 import { getTeamName } from '../../hooks/useLeague'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { MY_ROSTER_ID } from '../../constants'
@@ -753,12 +754,13 @@ function findNextManualPick(draftOrder, drafted) {
 }
 
 function LogPickModal({ player, nextPickInfo, userMap, onSave, onClose }) {
+  const { sheetRef } = useSheetDrag(onClose)
   const teamName = getTeamName(userMap[nextPickInfo?.currentOwner])
   const isMyPick = nextPickInfo?.currentOwner === MY_ROSTER_ID
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/60">
-      <div className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default pb-8">
+      <div ref={sheetRef} className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default pb-8">
         <div className="flex justify-center pt-3 pb-1">
           <div className="w-10 h-1 rounded-full bg-border-default" />
         </div>
@@ -795,12 +797,13 @@ function LogPickModal({ player, nextPickInfo, userMap, onSave, onClose }) {
 }
 
 function EditPickModal({ pick, player, userMap, onDelete, onClose }) {
+  const { sheetRef } = useSheetDrag(onClose)
   const teamName = getTeamName(userMap[pick.rosterId])
   const isMyPick = pick.rosterId === MY_ROSTER_ID
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/60">
-      <div className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default pb-8">
+      <div ref={sheetRef} className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default pb-8">
         <div className="flex justify-center pt-3 pb-1">
           <div className="w-10 h-1 rounded-full bg-border-default" />
         </div>

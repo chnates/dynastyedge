@@ -1,8 +1,12 @@
 import { useMemo, useEffect } from 'react'
+import { useScrollLock } from '../../hooks/useScrollLock'
+import { useSheetDrag } from '../../hooks/useSheetDrag'
 
 import { POS_TAG as POS_COLORS } from '../../utils/positionColors'
 
 export default function FreeAgentDrawer({ slot, projMap, allRosters, fcPlayerMap, onClose }) {
+  useScrollLock()
+  const { sheetRef, scrollRef } = useSheetDrag(onClose)
   // Lock body scroll while open
   useEffect(() => {
     document.body.style.overflow = 'hidden'
@@ -49,6 +53,7 @@ export default function FreeAgentDrawer({ slot, projMap, allRosters, fcPlayerMap
 
       {/* Drawer panel */}
       <div
+        ref={sheetRef}
         className="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl bg-bg-card dark:bg-bg-card border-t border-border-default dark:border-border-default"
         style={{ maxHeight: '75vh', display: 'flex', flexDirection: 'column' }}
       >
@@ -81,7 +86,11 @@ export default function FreeAgentDrawer({ slot, projMap, allRosters, fcPlayerMap
         </div>
 
         {/* FA list — scrollable */}
-        <div className="overflow-y-auto flex-1 px-4">
+        <div
+          ref={scrollRef}
+          className="overflow-y-auto flex-1 px-4"
+          style={{ overscrollBehavior: 'contain', paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
           {faList.length === 0 ? (
             <p className="text-text-tertiary dark:text-text-tertiary font-body text-sm py-6 text-center">
               No free agents with projections this week.

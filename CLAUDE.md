@@ -1163,6 +1163,7 @@ dynastyedge/
 │   │   ├── useValueHistory.js   ← daily value snapshots for sparklines (best-effort)
 │   │   ├── usePlayerIntel.js    ← production stats + depth chart + ESPN news
 │   │   ├── useScrollLock.js     ← freezes <main> while a bottom sheet is open
+│   │   ├── useSheetDrag.js      ← swipe-down-to-dismiss gesture for bottom sheets
 │   │   ├── useTheme.js          ← dark/light toggle
 │   │   ├── usePlayerNews.js     ← per-player injury status
 │   │   ├── useSleeperRookies.js ← rookie map derived from usePlayerDB
@@ -1346,8 +1347,12 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
    scrolls. Every bottom sheet (PlayerProfileDrawer, RosterAnalysisSheet,
    trade add sheet, and any future sheet) must: call `useScrollLock()` while
    mounted (prevents iOS scroll chaining to the page behind), set
-   `overscroll-behavior: contain` on its scroll container, and pad its bottom
-   with `env(safe-area-inset-bottom)`.
+   `overscroll-behavior: contain` on its scroll container, pad its bottom
+   with `env(safe-area-inset-bottom)`, and wire `useSheetDrag(onClose)`
+   (attach `sheetRef` to the sheet panel and `scrollRef` to its scroll
+   container) so swipe-down dismisses the sheet. The drag only arms when
+   the content is at scroll top — without it iOS rubber-bands the content
+   and the sheet won't close. Never duplicate the gesture logic locally.
 1. **Error states:** Every API call needs a loading state and an error state.
    Never show a blank screen. If an API call fails, show a message and a retry button.
 1. **Theme toggle:** Stored in `localStorage` key `dynastyedge_theme`.

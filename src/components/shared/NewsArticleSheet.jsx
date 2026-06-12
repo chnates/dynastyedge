@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { X, ExternalLink, User } from 'lucide-react'
 import { relativeTime } from '../../hooks/usePlayerIntel'
 import { useScrollLock } from '../../hooks/useScrollLock'
+import { useSheetDrag } from '../../hooks/useSheetDrag'
 import { POS_TEXT } from '../../utils/positionColors'
 
 // Bottom-sheet reader for a news item. Full articles can't be embedded
@@ -12,6 +13,7 @@ import { POS_TEXT } from '../../utils/positionColors'
 // PlayerProfileDrawer (z-50), so news inside a profile can open on top.
 export default function NewsArticleSheet({ article, onClose, onViewPlayer = null }) {
   const overlayRef = useRef(null)
+  const { sheetRef, scrollRef } = useSheetDrag(onClose)
 
   useScrollLock()
 
@@ -34,8 +36,9 @@ export default function NewsArticleSheet({ article, onClose, onViewPlayer = null
       onClick={handleOverlayClick}
       className="fixed inset-0 z-[60] flex items-end bg-black/60"
     >
-      <div className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default">
+      <div ref={sheetRef} className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default">
         <div
+          ref={scrollRef}
           className="max-h-[85vh] overflow-y-auto"
           style={{ overscrollBehavior: 'contain', paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
