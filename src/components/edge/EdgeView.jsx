@@ -52,9 +52,6 @@ const TIER_DOT = {
   Rebuilding: 'bg-indigo-400',
 }
 
-// Brand-gradient tick for Edge section headers.
-const HEADER_TICK = 'bg-gradient-to-b from-accent to-pos-def'
-
 const TX_ICONS = {
   trade:        { Icon: ArrowLeftRight, color: 'text-accent' },
   waiver:       { Icon: DollarSign,     color: 'text-warning' },
@@ -286,7 +283,7 @@ export default function EdgeView() {
       {/* ── Your Briefing — prioritized, every row goes somewhere ── */}
       {briefing.length > 0 && (
         <section {...rise()}>
-          <SectionHeader label="Your Briefing" count={briefing.length} accentBar={HEADER_TICK} />
+          <SectionHeader label="Your Briefing" count={briefing.length} />
           <div className="flex flex-col gap-2">
             {briefing.map(item => {
               const Icon = BRIEFING_ICONS[item.icon] ?? ArrowLeftRight
@@ -319,7 +316,7 @@ export default function EdgeView() {
       {/* ── Headlines on my players + watchlist ── */}
       {newsItems.length > 0 && (
         <section {...rise()}>
-          <SectionHeader label="Headlines" count={newsItems.length} accentBar={HEADER_TICK} />
+          <SectionHeader label="Headlines" count={newsItems.length} />
           <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
             {newsItems.map((n, i) => {
               const isFresh = lastVisit && n.published &&
@@ -360,7 +357,7 @@ export default function EdgeView() {
 
       {/* ── Market radar: watchlist + my roster movers ── */}
       <section {...rise()}>
-        <SectionHeader label="Market Radar" count={radar.length || undefined} accentBar={HEADER_TICK} />
+        <SectionHeader label="Market Radar" count={radar.length || undefined} />
         {radar.length === 0 ? (
           <p className="font-body text-xs text-text-tertiary dark:text-text-tertiary px-1 pb-1">
             {watchlist.length === 0
@@ -415,7 +412,6 @@ export default function EdgeView() {
           <SectionHeader
             label="Around the League"
             count={freshTx.length > 0 ? `${freshTx.length} new` : undefined}
-            accentBar={HEADER_TICK}
           />
           <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
             {recentTx.map(tx => {

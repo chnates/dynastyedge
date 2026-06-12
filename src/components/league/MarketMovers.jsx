@@ -30,10 +30,12 @@ function TrendChip({ trend, value }) {
   // on an 800 player than on a 7,500 one.
   const baseline = (value ?? 0) - trend
   const pct = baseline > 0 ? Math.round((trend / baseline) * 100) : null
-  const color = neutral ? 'text-text-tertiary' : positive ? 'text-success' : 'text-danger'
+  const color = neutral
+    ? 'text-text-tertiary'
+    : positive ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'
 
   return (
-    <span className={`shrink-0 w-14 text-right ${color}`}>
+    <span className={`shrink-0 w-14 text-right rounded-md px-1 py-0.5 ${color}`}>
       <span className="block font-mono text-xs font-semibold tabular-nums leading-tight">
         {positive ? '+' : ''}{Math.round(trend)}
       </span>
@@ -83,7 +85,7 @@ function MoverRow({ player, ownerLabel, note, series, onClick, onBuildTrade }) {
           <button
             onClick={e => { e.stopPropagation(); onBuildTrade() }}
             aria-label="Build trade"
-            className="shrink-0 ml-1 flex items-center gap-1 rounded-md border border-border-default dark:border-border-default px-1.5 py-0.5 text-accent active:opacity-60 transition-opacity"
+            className="shrink-0 ml-1 flex items-center gap-1 rounded-md border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-accent active:opacity-60 transition-opacity"
           >
             <ArrowLeftRight size={11} strokeWidth={2.25} />
             <span className="font-body text-[10px] font-semibold">Trade</span>

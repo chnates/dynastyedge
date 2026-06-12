@@ -66,7 +66,7 @@ function PositionRankCard({ roster, posFilter, tier, posStrength, posRank, onTap
             {teamName}
           </p>
           {isMyTeam && (
-            <span className="shrink-0 font-body text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 bg-accent/15 text-accent">
+            <span className="shrink-0 font-body text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 bg-accent text-white">
               You
             </span>
           )}

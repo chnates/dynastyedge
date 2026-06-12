@@ -225,7 +225,7 @@ export default function LeagueActivity() {
                     {meta.label}
                   </span>
                   {involvesMe && (
-                    <span className="font-body text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 bg-accent/15 text-accent">
+                    <span className="font-body text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 bg-accent text-white">
                       You
                     </span>
                   )}
@@ -243,7 +243,7 @@ export default function LeagueActivity() {
           {visibleCount < filtered.length && (
             <button
               onClick={() => setVisibleCount(c => c + PAGE_SIZE)}
-              className="mt-1 py-2.5 rounded-xl border border-border-default dark:border-border-default font-body text-sm font-medium text-accent active:opacity-70 transition-opacity"
+              className="mt-1 py-2.5 rounded-xl border border-accent/25 bg-accent/5 font-body text-sm font-semibold text-accent active:opacity-70 transition-opacity"
             >
               Show more
             </button>

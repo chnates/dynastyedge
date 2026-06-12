@@ -999,23 +999,33 @@ accent glow lower on the screen, all stronger in dark mode. The fixed app
 header is translucent (`bg-bg-secondary/85 backdrop-blur-md`) so the glow
 reads through it. Bottom sheets and drawers keep their opaque backgrounds.
 
-### The Edge hero card ("stadium lights" treatment)
+### Hero cards ("stadium lights" treatment)
 
-The Edge's hero is a **full brand-gradient card** (`.hero-card` in
-`index.css`): deep electric blue → violet base with a violet bloom (top-right)
-and a cyan hint (bottom-left), plus an accent glow shadow (stronger in dark
-mode). All hero content is white-on-gradient: white text at varying opacities,
-`bg-white/15 border-white/20` chips, the team value in white with a soft text
-glow (`.hero-value`), trend deltas as `bg-white/15` pills with
-emerald-200/rose-200 text, and the win-window tier as a white chip with a
-tier-colored dot (the standard tinted `TIER_BADGE` doesn't read on the
-gradient). Top-3 value rank shows in `text-amber-300` (medal gold).
+The Edge's hero and the Roster view's team header are **full brand-gradient
+cards** (`.hero-card` in `index.css`): deep electric blue → violet base with
+a violet bloom (top-right) and a cyan hint (bottom-left), plus an accent glow
+shadow (stronger in dark mode). All hero content is white-on-gradient: white
+text at varying opacities, `bg-white/15 border-white/20` chips, the marquee
+value in white with a soft text glow (`.hero-value`), trend deltas as
+`bg-white/15` pills with emerald-200/rose-200 text, and the win-window tier
+as a white chip with a tier-colored dot (the standard tinted `TIER_BADGE`
+doesn't read on the gradient). Top-3 value rank shows in `text-amber-300`
+(medal gold).
 
-Elsewhere on The Edge: briefing items are individual cards with a 3px left
-edge bar + tinted icon medallion in their tone color, Edge section headers
-carry a brand-gradient tick (`SectionHeader`'s `accentBar` prop), trend chips
-render as filled tinted pills, "New"/"You" badges are solid accent with white
-text, and footer link buttons are accent-tinted.
+The treatment rolls through the whole app:
+
+- **Section headers carry a brand-gradient tick by default** —
+  `SectionHeader`'s `accentBar` prop defaults to its exported `BRAND_TICK`;
+  pass a position/identity color class to override, or `null` for a bare
+  header.
+- Briefing items (The Edge) and the Roster Analysis button are cards with a
+  3px left edge bar + tinted icon medallion in their tone color.
+- Trend chips (The Edge, Market Movers) render as filled tinted pills, not
+  bare colored text.
+- "New"/"You" badges are solid accent with white text everywhere.
+- Footer/link buttons ("All market movers →", "Full activity feed →",
+  manager ledger buttons, the Movers row Trade button) are accent-tinted
+  (`border-accent/25 bg-accent/5`), not gray-bordered.
 
 ### Section identity colors (side drawer)
 
@@ -1031,7 +1041,7 @@ status meaning.
 The mark is a crown built from analytics: three ascending rounded bars
 (a rising chart) as the crown's prongs, a jewel dot floating above each tip,
 and a detached base band as the circlet. Brand gradient: `#4F7FFF → #A78BFA`
-(accent blue → violet, same as the roster hero number).
+(accent blue → violet, same as the hero cards).
 
 - **In-app lockup:** `src/components/shared/DynastyEdgeLogo.jsx` — gradient
   crown + "DYNASTY**EDGE**" wordmark in Barlow Condensed ("EDGE" in gradient

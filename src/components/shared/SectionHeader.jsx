@@ -1,4 +1,9 @@
-export default function SectionHeader({ label, count, accentBar, accentText }) {
+// Brand-gradient tick — the default accent bar on every section header.
+// Pass accentBar={null} to render a bare header, or a color class (e.g.
+// POS_BG[pos]) to override the identity color.
+export const BRAND_TICK = 'bg-gradient-to-b from-accent to-pos-def'
+
+export default function SectionHeader({ label, count, accentBar = BRAND_TICK, accentText }) {
   return (
     <div className="flex items-center justify-between pt-4 pb-1.5">
       <span className="flex items-center gap-1.5">

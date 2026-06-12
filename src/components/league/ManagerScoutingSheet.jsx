@@ -327,7 +327,7 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
                 {ledgerCount < profile.tradeCount && (
                   <button
                     onClick={() => setLedgerCount(c => c + LEDGER_PAGE)}
-                    className="py-2.5 rounded-xl border border-border-default dark:border-border-default font-body text-sm font-medium text-accent active:opacity-70 transition-opacity"
+                    className="py-2.5 rounded-xl border border-accent/25 bg-accent/5 font-body text-sm font-semibold text-accent active:opacity-70 transition-opacity"
                   >
                     Show more
                   </button>
