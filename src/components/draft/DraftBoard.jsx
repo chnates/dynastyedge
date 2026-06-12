@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import {
-  Upload, Save, ChevronUp, ChevronDown, AlertTriangle,
+  Upload, Save, ChevronUp, ChevronDown,
   FileText, GripVertical, RotateCcw, Trash2, Search, RefreshCw,
 } from 'lucide-react'
 import {
@@ -19,6 +19,7 @@ import { MY_ROSTER_ID } from '../../constants'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { BOARD_ORDER_KEY, NOTES_KEY, CSV_KEY } from './boardStorage'
 import LoadingSpinner from '../shared/LoadingSpinner'
+import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
 
@@ -737,13 +738,9 @@ export default function DraftBoard() {
   }
 
   if (loading || rookieLoading) return <LoadingSpinner message="Loading draft data…" />
-  if (error || rookieError) return (
-    <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
-      <AlertTriangle size={24} className="text-warning" strokeWidth={1.75} />
-      <p className="text-text-secondary font-body text-sm">{error || rookieError}</p>
-      <button onClick={error ? retry : rookieRetry} className="px-4 py-2 rounded-lg bg-accent text-white font-body font-medium text-sm">Retry</button>
-    </div>
-  )
+  if (error || rookieError) {
+    return <ErrorState message={error || rookieError} onRetry={error ? retry : rookieRetry} />
+  }
 
   return (
     <>
