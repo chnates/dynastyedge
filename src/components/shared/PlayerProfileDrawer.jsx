@@ -7,6 +7,7 @@ import { usePlayerNews } from '../../hooks/usePlayerNews'
 import { usePlayerIntel, relativeTime, TOUCH_LABEL } from '../../hooks/usePlayerIntel'
 import { getPeakStatus } from '../../utils/peakWindows'
 import { useScrollLock } from '../../hooks/useScrollLock'
+import { useSheetDrag } from '../../hooks/useSheetDrag'
 import { useWatchlist } from '../../hooks/useWatchlist'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
@@ -134,8 +135,7 @@ export default function PlayerProfileDrawer({
   fpNotesMap = {},
 }) {
   const overlayRef = useRef(null)
-  const sheetRef   = useRef(null)
-  const scrollRef  = useRef(null)
+  const { sheetRef, scrollRef } = useSheetDrag(onClose)
   const navigate = useNavigate()
   const ctx = useLeagueContext()
   const league = ctx?.league
@@ -154,70 +154,6 @@ export default function PlayerProfileDrawer({
     function onKey(e) { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
-
-  // Swipe-down-to-dismiss — native listeners so we can call preventDefault
-  useEffect(() => {
-    const el = sheetRef.current
-    if (!el) return
-
-    let startY = 0
-    let startTime = 0
-    let isDragging = false
-    let currentDragY = 0
-
-    function onTouchStart(e) {
-      startY = e.touches[0].clientY
-      startTime = Date.now()
-      isDragging = false
-      currentDragY = 0
-      el.style.transition = 'none'
-    }
-
-    function onTouchMove(e) {
-      const dy = e.touches[0].clientY - startY
-
-      if (isDragging) {
-        e.preventDefault()
-        currentDragY = Math.max(0, dy)
-        el.style.transform = `translateY(${currentDragY}px)`
-        return
-      }
-
-      // Start drag only when at scroll top and moving downward
-      const scrollTop = scrollRef.current?.scrollTop ?? 0
-      if (scrollTop === 0 && dy > 8) {
-        isDragging = true
-        e.preventDefault()
-        currentDragY = Math.max(0, dy)
-        el.style.transform = `translateY(${currentDragY}px)`
-      }
-    }
-
-    function onTouchEnd() {
-      if (!isDragging) return
-      const elapsed = Math.max(1, Date.now() - startTime)
-      const velocity = currentDragY / elapsed // px/ms
-
-      if (currentDragY > 120 || velocity > 0.4) {
-        onClose()
-      } else {
-        el.style.transition = 'transform 0.25s ease-out'
-        el.style.transform = 'translateY(0)'
-      }
-      isDragging = false
-      currentDragY = 0
-    }
-
-    el.addEventListener('touchstart', onTouchStart, { passive: true })
-    el.addEventListener('touchmove',  onTouchMove,  { passive: false })
-    el.addEventListener('touchend',   onTouchEnd,   { passive: true })
-
-    return () => {
-      el.removeEventListener('touchstart', onTouchStart)
-      el.removeEventListener('touchmove',  onTouchMove)
-      el.removeEventListener('touchend',   onTouchEnd)
-    }
   }, [onClose])
 
   // Determine player ownership
