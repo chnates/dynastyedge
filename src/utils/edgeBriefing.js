@@ -4,6 +4,7 @@ import {
   assignWinWindowTiers,
 } from './rosterAnalysis'
 import { getTeamName } from '../hooks/useLeague'
+import { MIN_SPARKLINE_POINTS } from '../hooks/useValueHistory'
 import { POSITIONS, MY_ROSTER_ID } from '../constants'
 
 // The Edge's assistant-GM logic: turn everything the app already caches into
@@ -313,7 +314,7 @@ export function buildGmLine({ briefingCount, newsCount, freshTxCount, isOffseaso
 // simply don't contribute. Null when there's nothing drawable.
 
 export function buildTeamValueSeries(history, roster) {
-  if (!history?.dates || history.dates.length < 2 || !roster) return null
+  if (!history?.dates || history.dates.length < MIN_SPARKLINE_POINTS || !roster) return null
   const rows = roster.players
     .map(p => history.players?.[String(p.sleeperId)])
     .filter(Array.isArray)

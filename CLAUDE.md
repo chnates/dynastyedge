@@ -203,7 +203,10 @@ architecture as the news pipeline:
   One column per UTC day; re-runs on the same day replace that column.
 - The app fetches `VALUES_HISTORY_URL` lazily (first consumer mount) once per
   session via `useValueHistory`. `getSeries(sleeperId)` returns the non-null
-  points, or `null` when fewer than 2 exist.
+  points, or `null` when fewer than `MIN_SPARKLINE_POINTS` (4) exist — with
+  fewer, the "graph" is a straight segment that reads as broken, so it hides
+  until the daily pipeline has accumulated enough shape. The team-value line
+  on The Edge (`buildTeamValueSeries`) uses the same threshold.
 - **Strictly best-effort:** history starts accumulating the day the pipeline
   ships. Missing branch / bad shape / fetch failure ⇒ sparklines simply hide.
   Never show an error or a loading state for history.
@@ -612,7 +615,7 @@ and free-agent moves, newest first.
   Trade Analyzer: an opponent's player arrives as a What's Fair target
   (opponent + fair package pre-filled); my own player arrives pre-loaded in
   You Give. Free agents get no button.
-- Rows show a **sparkline** when the values-history feed has ≥ 2 snapshots
+- Rows show a **sparkline** when the values-history feed has ≥ 4 snapshots
   for the player (see Value history pipeline).
 - Tap any row → Player Profile drawer
 - Zero extra API calls beyond the lazy once-per-session history fetch:
