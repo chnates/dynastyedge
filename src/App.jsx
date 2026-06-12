@@ -129,11 +129,15 @@ function AppShell({ leagueData }) {
         </div>
       </header>
 
+      {/* The scroll container runs to the physical bottom edge; the home-
+          indicator clearance lives INSIDE it as padding so content scrolls
+          edge-to-edge instead of clipping at a dead bar above the inset. */}
       <main
         className="fixed left-0 right-0 overflow-y-auto"
         style={{
           top: 'calc(3rem + env(safe-area-inset-top))',
-          bottom: 'env(safe-area-inset-bottom)',
+          bottom: 0,
+          paddingBottom: 'env(safe-area-inset-bottom)',
         }}
       >
         <Routes>

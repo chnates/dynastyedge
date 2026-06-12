@@ -1285,7 +1285,10 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
    unless explicitly designed as a swipeable horizontal list.
 1. **Safe areas:** The main scroll area and the side drawer must account for
    the iPhone home indicator and notch via `env(safe-area-inset-*)`.
-   There is no bottom nav — do not add one.
+   `<main>` extends to the physical bottom edge (`bottom: 0`) and carries the
+   home-indicator clearance as `padding-bottom` *inside* the scroll container —
+   never shorten `<main>` with a bottom offset; that clips content at a dead
+   bar above the home indicator. There is no bottom nav — do not add one.
 1. **Standalone web app (Add to Home Screen):** `index.html` declares
    `apple-mobile-web-app-capable` + `manifest.webmanifest` (display
    standalone, icons 192/512) so iOS draws the app edge-to-edge instead of
