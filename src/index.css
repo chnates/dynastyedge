@@ -7,17 +7,24 @@
 /* modifiers (e.g. bg-accent/10) continue to work.                 */
 
 :root {
-  --bg-primary:    255 255 255;   /* #FFFFFF */
-  --bg-secondary:  244 244 248;   /* #F4F4F8 */
-  --bg-card:       250 250 250;   /* #FAFAFA */
-  --border-default:228 228 232;   /* #E4E4E8 */
+  --bg-primary:    242 244 250;   /* #F2F4FA — cool tint so white cards lift */
+  --bg-secondary:  233 236 245;   /* #E9ECF5 */
+  --bg-card:       255 255 255;   /* #FFFFFF */
+  --border-default:224 228 238;   /* #E0E4EE */
   --text-primary:  13 13 15;      /* #0D0D0F */
   --text-secondary:85 85 95;      /* #55555F */
-  --text-tertiary: 85 85 95;      /* #55555F */
+  --text-tertiary: 138 138 149;   /* #8A8A95 */
   --accent:        59 111 239;    /* #3B6FEF */
   --success:       34 197 94;     /* #22C55E */
   --warning:       245 158 11;    /* #F59E0B */
   --danger:        239 68 68;     /* #EF4444 */
+
+  /* Position identity colors — darker shades for light backgrounds */
+  --pos-qb:        219 39 119;    /* #DB2777 pink */
+  --pos-rb:        13 148 136;    /* #0D9488 teal */
+  --pos-wr:        2 132 199;     /* #0284C7 sky */
+  --pos-te:        234 88 12;     /* #EA580C orange */
+  --pos-def:       124 58 237;    /* #7C3AED violet */
 }
 
 .dark {
@@ -32,12 +39,80 @@
   --success:       34 197 94;     /* #22C55E */
   --warning:       245 158 11;    /* #F59E0B */
   --danger:        239 68 68;     /* #EF4444 */
+
+  /* Position identity colors — brighter shades for dark backgrounds */
+  --pos-qb:        244 114 182;   /* #F472B6 pink */
+  --pos-rb:        45 212 191;    /* #2DD4BF teal */
+  --pos-wr:        56 189 248;    /* #38BDF8 sky */
+  --pos-te:        251 146 60;    /* #FB923C orange */
+  --pos-def:       167 139 250;   /* #A78BFA violet */
 }
 
 body {
   background-color: rgb(var(--bg-primary));
 }
 
+/* ── App background: ambient color glow at the top of the screen ── */
+/* Applied to the app shell div (App.jsx), not <body> — the shell     */
+/* paints over the body. Fixed at the top since the body never        */
+/* scrolls (<main> is the scroll container).                          */
+
+.app-bg {
+  background-color: rgb(var(--bg-primary));
+  background-image:
+    radial-gradient(600px 300px at 12% -4%, rgb(var(--accent) / 0.14), transparent 70%),
+    radial-gradient(520px 260px at 92% -6%, rgb(var(--pos-def) / 0.12), transparent 70%),
+    radial-gradient(560px 420px at 50% 82%, rgb(var(--accent) / 0.06), transparent 70%);
+  background-repeat: no-repeat;
+}
+
+.dark .app-bg {
+  background-image:
+    radial-gradient(600px 300px at 12% -4%, rgb(var(--accent) / 0.26), transparent 70%),
+    radial-gradient(520px 260px at 92% -6%, rgb(var(--pos-def) / 0.2), transparent 70%),
+    radial-gradient(560px 420px at 50% 82%, rgb(var(--accent) / 0.1), transparent 70%);
+}
+
+/* ── The Edge hero: full brand-gradient card, white text on top ── */
+/* Deep electric blue → violet with a violet bloom (top-right) and  */
+/* a cyan hint (bottom-left). Same treatment both themes; dark gets */
+/* a stronger ambient glow shadow so it reads neon at night.        */
+
+.hero-card {
+  background-image:
+    radial-gradient(130% 120% at 88% -12%, rgb(167 139 250 / 0.55), transparent 58%),
+    radial-gradient(100% 100% at -8% 112%, rgb(34 211 238 / 0.26), transparent 55%),
+    linear-gradient(135deg, #2843C8 0%, #3B6FEF 52%, #6B4DE6 100%);
+  box-shadow: 0 10px 30px -12px rgb(59 111 239 / 0.45);
+}
+
+.dark .hero-card {
+  background-image:
+    radial-gradient(130% 120% at 88% -12%, rgb(167 139 250 / 0.5), transparent 58%),
+    radial-gradient(100% 100% at -8% 112%, rgb(34 211 238 / 0.2), transparent 55%),
+    linear-gradient(135deg, #2336A8 0%, #3D63E8 52%, #5F3FD8 100%);
+  box-shadow: 0 12px 36px -14px rgb(79 127 255 / 0.55);
+}
+
+/* Soft glow on the hero's marquee number */
+.hero-value {
+  text-shadow: 0 0 18px rgb(255 255 255 / 0.35);
+}
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ── The Edge: staggered card entrance ───────────────────────── */
+
+@keyframes edge-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.edge-rise {
+  animation: edge-rise 0.35s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edge-rise { animation: none; }
 }

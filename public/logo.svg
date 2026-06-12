@@ -1,10 +1,18 @@
-<svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="DynastyEdge">
-  <!-- Card background -->
-  <rect width="100" height="100" rx="8" fill="#0B1120"/>
-  <!-- Card border -->
-  <rect x="1.5" y="1.5" width="97" height="97" rx="7" stroke="#1E3A5F" stroke-width="1.5" fill="none"/>
-  <!-- "01" — top left -->
-  <text x="9" y="17" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="300" fill="#C8D8EA">01</text>
-  <!-- "De" — dominant center element -->
-  <text x="50" y="64" font-family="system-ui, -apple-system, sans-serif" font-size="46" font-weight="200" fill="#4A90D9" text-anchor="middle">De</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <defs>
+  <linearGradient id="g" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#4F7FFF"/>
+    <stop offset="1" stop-color="#A78BFA"/>
+  </linearGradient></defs>
+  <rect width="96" height="96" rx="22" fill="url(#g)"/>
+  
+  <g fill="#FFFFFF">
+    <circle cx="28" cy="39" r="4.5"/>
+    <circle cx="48" cy="27" r="4.5"/>
+    <circle cx="68" cy="15" r="4.5"/>
+    <rect x="22" y="48" width="12" height="12" rx="5"/>
+    <rect x="42" y="36" width="12" height="24" rx="5"/>
+    <rect x="62" y="24" width="12" height="36" rx="5"/>
+    <rect x="20" y="66" width="56" height="10" rx="5"/>
+  </g>
 </svg>

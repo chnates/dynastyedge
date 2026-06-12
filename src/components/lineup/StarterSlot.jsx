@@ -1,3 +1,5 @@
+import { POS_TEXT } from '../../utils/positionColors'
+
 const MATCHUP_CONFIG = {
   Easy:    { label: 'Easy',    className: 'text-success bg-success/10' },
   Neutral: { label: 'Ntrl',   className: 'text-text-secondary bg-bg-secondary dark:bg-bg-secondary' },
@@ -35,8 +37,10 @@ export default function StarterSlot({ slotLabel, player, flag, projPts, matchupQ
     >
       {/* Main row */}
       <div className="flex items-center gap-2">
-        {/* Slot label */}
-        <span className="shrink-0 w-9 font-body text-[10px] font-semibold uppercase tracking-wider text-accent">
+        {/* Slot label — position slots use position colors, FLEX/SF keep accent */}
+        <span className={`shrink-0 w-9 font-body text-[10px] font-semibold uppercase tracking-wider ${
+          POS_TEXT[String(slotLabel ?? '').replace(/[0-9]/g, '')] ?? 'text-accent'
+        }`}>
           {slotLabel}
         </span>
 

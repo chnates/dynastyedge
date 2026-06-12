@@ -2,6 +2,10 @@ import { getTeamName } from '../../hooks/useLeague'
 import { getPositionalStrength } from '../../utils/rosterAnalysis'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import { POSITIONS, PICK_YEARS, MY_ROSTER_ID } from '../../constants'
+import { POS_TEXT, POS_BAR } from '../../utils/positionColors'
+import { ROUND_CLASSES, ROUND_TEXT, ROUND_LABELS } from '../../utils/roundColors'
+import { rankClass } from '../../utils/rankColors'
+import TeamAvatar from '../shared/TeamAvatar'
 
 const POSITION_DEPTH = { QB: 3, RB: 5, WR: 5, TE: 3 }
 
@@ -17,18 +21,21 @@ function getPositionalTrend(roster) {
   return result
 }
 
-const ROUND_CLASSES = {
-  1: { badge: 'bg-amber-100  dark:bg-[#3D2E00] text-amber-800  dark:text-amber-500', text: 'text-amber-800  dark:text-amber-500' },
-  2: { badge: 'bg-blue-100   dark:bg-[#0C2A4A] text-blue-800   dark:text-blue-400',  text: 'text-blue-800   dark:text-blue-400'  },
-  3: { badge: 'bg-violet-100 dark:bg-[#2A1A4A] text-violet-800 dark:text-violet-400', text: 'text-violet-800 dark:text-violet-400' },
-  4: { badge: 'bg-gray-100   dark:bg-[#1F1F25] text-gray-700   dark:text-gray-400',  text: 'text-gray-700   dark:text-gray-400'  },
+function formatRecord({ wins, losses, ties }) {
+  return ties > 0 ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`
 }
-const ROUND_LABELS = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th' }
 
-export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortMode = 'value', onTap }) {
+const DIVERGENCE_META = {
+  under: { label: 'Underperforming', cls: 'bg-warning/15 text-warning' },
+  over:  { label: 'Overachieving',   cls: 'bg-accent/15 text-accent' },
+}
+
+export default function TeamCard({ roster, rank, divergence, leagueAverages, winWindowTiers, sortMode = 'value', onTap }) {
   const teamName = getTeamName(roster.owner)
   const username = roster.owner?.username ?? ''
   const tier = winWindowTiers?.[roster.rosterId] ?? 'Middle'
+  const isMyTeam = roster.rosterId === MY_ROSTER_ID
+  const divergenceMeta = divergence ? DIVERGENCE_META[divergence] : null
 
   const totalPicks = roster.picks.length
 
@@ -50,21 +57,48 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
   return (
     <button
       onClick={() => onTap(roster.rosterId)}
-      className="w-full text-left rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-3 active:opacity-70 transition-opacity"
+      className={`w-full text-left rounded-xl bg-bg-card dark:bg-bg-card border px-3 py-3 active:opacity-70 transition-opacity ${
+        isMyTeam ? 'border-accent/60' : 'border-border-default dark:border-border-default'
+      }`}
     >
       {/* Header row */}
-      <div className="flex items-start justify-between gap-2 mb-2">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        {rank != null && (
+          <span className={`font-mono text-lg font-bold tabular-nums w-6 shrink-0 leading-tight ${rankClass(rank)}`}>
+            {rank}
+          </span>
+        )}
+        <TeamAvatar owner={roster.owner} size={30} />
         <div className="flex-1 min-w-0">
-          <p className="font-body text-sm font-semibold text-text-primary dark:text-text-primary truncate leading-tight">
-            {teamName}
-          </p>
-          {username && (
+          <div className="flex items-center gap-1.5">
+            <p className="font-body text-sm font-semibold text-text-primary dark:text-text-primary truncate leading-tight">
+              {teamName}
+            </p>
+            {isMyTeam && (
+              <span className="shrink-0 font-body text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 bg-accent/15 text-accent">
+                You
+              </span>
+            )}
+          </div>
+          {(username || roster.hasRecord) && (
             <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary truncate leading-tight mt-0.5">
-              @{username}
+              {username ? `@${username}` : ''}
+              {roster.hasRecord && (
+                <span className="font-mono tabular-nums">
+                  {username ? ' · ' : ''}{formatRecord(roster.record)}
+                </span>
+              )}
             </p>
           )}
         </div>
-        <WinWindowBadge tier={tier} />
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <WinWindowBadge tier={tier} />
+          {divergenceMeta && (
+            <span className={`font-body text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 ${divergenceMeta.cls}`}>
+              {divergenceMeta.label}
+            </span>
+          )}
+        </div>
       </div>
 
       {sortMode === 'picks' ? (
@@ -87,7 +121,8 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
             </div>
             {/* One row per active round */}
             {activeRounds.map(r => {
-              const { badge, text } = ROUND_CLASSES[r] ?? ROUND_CLASSES[4]
+              const badge = ROUND_CLASSES[r] ?? ROUND_CLASSES[4]
+              const text  = ROUND_TEXT[r] ?? ROUND_TEXT[4]
               return (
                 <div key={r} className="flex items-center">
                   <div className="w-10 shrink-0">
@@ -110,6 +145,31 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
             })}
           </div>
         </div>
+      ) : sortMode === 'record' ? (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-baseline gap-1.5">
+            <span className="font-mono text-xl font-semibold text-accent tabular-nums">
+              {roster.hasRecord ? formatRecord(roster.record) : '—'}
+            </span>
+            <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
+              record
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-baseline gap-1">
+              <span className="font-mono text-sm font-medium text-text-secondary dark:text-text-secondary tabular-nums">
+                {Math.round(roster.pointsFor).toLocaleString()}
+              </span>
+              <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">PF</span>
+            </div>
+            <div className="flex items-baseline gap-1">
+              <span className="font-mono text-sm font-medium text-text-secondary dark:text-text-secondary tabular-nums">
+                {Math.round(roster.pointsAgainst).toLocaleString()}
+              </span>
+              <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">PA</span>
+            </div>
+          </div>
+        </div>
       ) : sortMode === 'faab' ? (
         <div className="flex flex-col gap-2">
           <div className="flex items-baseline gap-1.5">
@@ -117,7 +177,7 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
               ${roster.faabRemaining}
             </span>
             <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
-              FAAB remaining
+              FAAB remaining · spent ${roster.faabSpent} of ${roster.faabBudget}
             </span>
           </div>
           <div className="flex items-center gap-3">
@@ -149,7 +209,6 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
           {/* Positional strength bars */}
           {(() => {
             const posTrend = getPositionalTrend(roster)
-            const isMyTeam = roster.rosterId === MY_ROSTER_ID
             return (
               <div className="flex gap-1.5 mb-2.5">
                 {POSITIONS.map(pos => {
@@ -168,11 +227,11 @@ export default function TeamCard({ roster, leagueAverages, winWindowTiers, sortM
                     <div key={pos} className="flex flex-col items-center gap-0.5">
                       <div className="h-1.5 w-8 rounded-full bg-border-default dark:bg-border-default overflow-hidden">
                         <div
-                          className={`h-full rounded-full ${above ? 'bg-accent' : 'bg-text-tertiary dark:bg-text-tertiary'}`}
+                          className={`h-full rounded-full ${above ? POS_BAR[pos] : 'bg-text-tertiary dark:bg-text-tertiary'}`}
                           style={{ width: `${fillPct}%` }}
                         />
                       </div>
-                      <span className={`font-body text-[9px] font-semibold uppercase tracking-wide ${above ? 'text-accent' : 'text-text-tertiary dark:text-text-tertiary'}`}>
+                      <span className={`font-body text-[9px] font-semibold uppercase tracking-wide ${above ? POS_TEXT[pos] : 'text-text-tertiary dark:text-text-tertiary'}`}>
                         {pos}
                       </span>
                       <span className={`font-body text-[8px] leading-none ${trendColor}`}>

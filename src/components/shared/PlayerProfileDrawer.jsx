@@ -1,11 +1,17 @@
-import { useEffect, useMemo, useRef } from 'react'
-import { X, ArrowRight } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { X, ArrowRight, Star, ChevronRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import TrendArrow from './TrendArrow'
+import NewsArticleSheet from './NewsArticleSheet'
 import { usePlayerNews } from '../../hooks/usePlayerNews'
+import { usePlayerIntel, relativeTime, TOUCH_LABEL } from '../../hooks/usePlayerIntel'
+import { getPeakStatus } from '../../utils/peakWindows'
+import { useScrollLock } from '../../hooks/useScrollLock'
+import { useWatchlist } from '../../hooks/useWatchlist'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { getTeamName } from '../../hooks/useLeague'
+import { POS_TEXT } from '../../utils/positionColors'
 
 // ── Opportunity grade ────────────────────────────────────────────────────────
 
@@ -135,7 +141,14 @@ export default function PlayerProfileDrawer({
   const league = ctx?.league
   const values = ctx?.values
 
+  useScrollLock()
+
   const { injuryFlag, injuryStatus, injuryDetail, injuryNotes, loading: newsLoading } = usePlayerNews(player.sleeperId)
+  const intel = usePlayerIntel(player.sleeperId, ctx?.nflState)
+  const peak = getPeakStatus(player.position, player.age)
+  const { toggleWatch, isWatched } = useWatchlist()
+  const watched = isWatched(player.sleeperId)
+  const [openArticle, setOpenArticle] = useState(null)
 
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
@@ -227,13 +240,13 @@ export default function PlayerProfileDrawer({
     return league.myRoster.players.find(p => p.sleeperId === player.sleeperId) ?? null
   }, [league, player.sleeperId, playerContext])
 
-  // Competitors at same position on my roster
+  // My full position group, viewed player included — shows where they rank
   const competitors = useMemo(() => {
     if (!league?.myRoster || !player.position || playerContext !== 'mine') return []
     return league.myRoster.players
-      .filter(p => p.position === player.position && p.sleeperId !== player.sleeperId)
+      .filter(p => p.position === player.position)
       .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
-  }, [league, player.position, player.sleeperId, playerContext])
+  }, [league, player.position, playerContext])
 
   // My roster players at same position (for FA context)
   const myPositionPlayers = useMemo(() => {
@@ -297,7 +310,11 @@ export default function PlayerProfileDrawer({
       className="fixed inset-0 z-50 flex items-end bg-black/60"
     >
       <div ref={sheetRef} className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default">
-        <div ref={scrollRef} className="max-h-[85vh] overflow-y-auto">
+        <div
+          ref={scrollRef}
+          className="max-h-[85vh] overflow-y-auto"
+          style={{ overscrollBehavior: 'contain', paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
 
         {/* Handle bar */}
         <div className="flex justify-center pt-3 pb-1">
@@ -312,7 +329,7 @@ export default function PlayerProfileDrawer({
                 {grade} — {GRADE_LABELS[grade]}
               </span>
               {player.position && (
-                <span className="font-body text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
+                <span className={`font-body text-[10px] font-semibold uppercase tracking-wider ${POS_TEXT[player.position] ?? 'text-text-tertiary'}`}>
                   {player.position}
                 </span>
               )}
@@ -330,12 +347,21 @@ export default function PlayerProfileDrawer({
               {player.team || 'FA'}{player.age != null ? ` · Age ${Math.floor(player.age)}` : ''}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="w-9 h-9 flex items-center justify-center rounded-lg text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex-shrink-0"
-          >
-            <X size={18} strokeWidth={1.75} />
-          </button>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={() => toggleWatch(player.sleeperId)}
+              aria-label={watched ? 'Remove from watchlist' : 'Add to watchlist'}
+              className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors hover:bg-black/5 dark:hover:bg-white/5 ${watched ? 'text-accent' : 'text-text-secondary hover:text-text-primary'}`}
+            >
+              <Star size={18} strokeWidth={1.75} className={watched ? 'fill-accent' : ''} />
+            </button>
+            <button
+              onClick={onClose}
+              className="w-9 h-9 flex items-center justify-center rounded-lg text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            >
+              <X size={18} strokeWidth={1.75} />
+            </button>
+          </div>
         </div>
 
         <div className="px-4 pb-6 pt-3 flex flex-col gap-4">
@@ -366,7 +392,131 @@ export default function PlayerProfileDrawer({
                 </div>
               </div>
             )}
+            {(intel.depthChart || peak) && (
+              <div className="mt-2.5 pt-2.5 border-t border-border-default flex flex-col gap-1">
+                {intel.depthChart && (
+                  <p className="font-body text-xs text-text-secondary">
+                    Depth chart:{' '}
+                    <span className="font-semibold text-text-primary">
+                      {intel.depthChart.slot}{intel.depthChart.order ?? ''}
+                    </span>
+                    {player.team ? ` · ${player.team}` : ''}
+                  </p>
+                )}
+                {peak && (
+                  <p className={`font-body text-xs ${
+                    peak.phase === 'ascending' ? 'text-success'
+                      : peak.phase === 'peak' ? 'text-warning'
+                      : 'text-danger'
+                  }`}>
+                    {peak.label}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
+
+          {/* Production — recent games in-season, last-season summary otherwise */}
+          {(intel.loading || intel.seasonSummary || intel.recentGames.some(g => g.pts != null)) && (
+            <div className="rounded-xl bg-bg-card border border-border-default px-3 py-3">
+              <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
+                Production
+              </p>
+              {intel.loading ? (
+                <div className="flex items-center gap-2 py-1">
+                  <div className="h-3 w-3 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+                  <span className="font-body text-xs text-text-tertiary">Loading stats…</span>
+                </div>
+              ) : (
+                <>
+                  {intel.seasonSummary && (
+                    <>
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-mono text-2xl font-semibold text-accent tabular-nums">
+                          {intel.seasonSummary.ppg ?? intel.seasonSummary.pts}
+                        </span>
+                        <span className="font-body text-[10px] text-text-tertiary">
+                          {intel.seasonSummary.ppg != null ? 'PPG' : 'PTS'} · {intel.seasonSummary.year} season
+                        </span>
+                      </div>
+                      <div className="flex gap-4 mt-2">
+                        {intel.seasonSummary.posRank != null && intel.position && (
+                          <div>
+                            <span className="font-mono text-sm text-text-primary tabular-nums">{intel.position}{intel.seasonSummary.posRank}</span>
+                            <span className="font-body text-[10px] text-text-tertiary ml-1">finish</span>
+                          </div>
+                        )}
+                        <div>
+                          <span className="font-mono text-sm text-text-primary tabular-nums">{intel.seasonSummary.pts.toLocaleString()}</span>
+                          <span className="font-body text-[10px] text-text-tertiary ml-1">pts</span>
+                        </div>
+                        {intel.seasonSummary.gp != null && (
+                          <div>
+                            <span className="font-mono text-sm text-text-primary tabular-nums">{intel.seasonSummary.gp}</span>
+                            <span className="font-body text-[10px] text-text-tertiary ml-1">games</span>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                  {intel.recentGames.length > 0 && (
+                    <div className={`flex flex-col gap-1 ${intel.seasonSummary ? 'mt-2.5 pt-2.5 border-t border-border-default' : ''}`}>
+                      {intel.recentGames.map(g => (
+                        <div key={g.week} className="flex items-center justify-between">
+                          <span className="font-body text-xs text-text-tertiary">Week {g.week}</span>
+                          <span className="font-mono text-xs text-text-primary tabular-nums">
+                            {g.pts != null
+                              ? `${g.pts.toFixed(1)} pts${g.touches != null ? ` · ${g.touches} ${TOUCH_LABEL[intel.position] ?? ''}` : ''}`
+                              : 'DNP'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Latest News (ESPN — unofficial, hidden when unavailable) */}
+          {intel.news.length > 0 && (
+            <div className="rounded-xl bg-bg-card border border-border-default px-3 py-3">
+              <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
+                Latest News
+              </p>
+              <div className="flex flex-col">
+                {intel.news.map((n, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setOpenArticle(n)}
+                    className={`w-full text-left active:opacity-60 transition-opacity ${i < intel.news.length - 1 ? 'pb-2.5 mb-2.5 border-b border-border-default' : ''}`}
+                  >
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="flex-1 font-body text-sm font-medium text-text-primary leading-snug">
+                        {n.headline}
+                      </p>
+                      {(n.source || relativeTime(n.published)) && (
+                        <span className="font-body text-[10px] text-text-tertiary shrink-0">
+                          {[n.source, relativeTime(n.published)].filter(Boolean).join(' · ')}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-end gap-1.5 mt-1">
+                      {n.story && (
+                        <p
+                          className="flex-1 font-body text-xs text-text-secondary leading-snug"
+                          style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                        >
+                          {n.story}
+                        </p>
+                      )}
+                      <ChevronRight size={13} strokeWidth={2} className="shrink-0 text-text-tertiary mb-0.5" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Dynasty value */}
           <div className="rounded-xl bg-bg-card border border-border-default px-3 py-3">
@@ -389,13 +539,13 @@ export default function PlayerProfileDrawer({
               {player.positionRank != null && (
                 <div>
                   <span className="font-mono text-sm text-text-primary tabular-nums">#{player.positionRank}</span>
-                  <span className="font-body text-[10px] text-text-tertiary ml-1">{player.position}</span>
+                  <span className={`font-body text-[10px] font-semibold ml-1 ${POS_TEXT[player.position] ?? 'text-text-tertiary'}`}>{player.position}</span>
                 </div>
               )}
-              {player.adp != null && (
+              {isDraftContext && player.adp != null && (
                 <div>
-                  <span className="font-mono text-sm text-text-primary tabular-nums">{Number(player.adp).toFixed(1)}</span>
-                  <span className="font-body text-[10px] text-text-tertiary ml-1">ADP</span>
+                  <span className="font-mono text-sm text-text-primary tabular-nums">{Number(player.adp).toFixed(0)}</span>
+                  <span className="font-body text-[10px] text-text-tertiary ml-1">Rookie ADP</span>
                 </div>
               )}
             </div>
@@ -518,17 +668,25 @@ export default function PlayerProfileDrawer({
                     <>
                       <p className="font-body text-[10px] text-text-tertiary mb-1.5">Position group</p>
                       <div className="flex flex-col gap-0">
-                        {competitors.map((comp, i) => (
-                          <div
-                            key={comp.sleeperId}
-                            className={`flex items-center justify-between py-1.5 ${i < competitors.length - 1 ? 'border-b border-border-default' : ''}`}
-                          >
-                            <p className="font-body text-xs text-text-primary truncate flex-1 min-w-0">{comp.name}</p>
-                            <span className="font-mono text-xs text-text-secondary tabular-nums ml-2 flex-shrink-0">
-                              {(comp.value ?? 0).toLocaleString()}
-                            </span>
-                          </div>
-                        ))}
+                        {competitors.map((comp, i) => {
+                          const isViewed = String(comp.sleeperId) === String(player.sleeperId)
+                          return (
+                            <div
+                              key={comp.sleeperId}
+                              className={`flex items-center justify-between py-1.5 ${i < competitors.length - 1 ? 'border-b border-border-default' : ''}`}
+                            >
+                              <span className="font-mono text-[10px] text-text-tertiary tabular-nums w-4 shrink-0">
+                                {i + 1}
+                              </span>
+                              <p className={`font-body text-xs truncate flex-1 min-w-0 ${isViewed ? 'font-semibold text-accent' : 'text-text-primary'}`}>
+                                {comp.name}
+                              </p>
+                              <span className={`font-mono text-xs tabular-nums ml-2 flex-shrink-0 ${isViewed ? 'font-semibold text-accent' : 'text-text-secondary'}`}>
+                                {(comp.value ?? 0).toLocaleString()}
+                              </span>
+                            </div>
+                          )
+                        })}
                       </div>
                     </>
                   )}
@@ -622,6 +780,13 @@ export default function PlayerProfileDrawer({
         </div>
         </div>
       </div>
+
+      {openArticle && (
+        <NewsArticleSheet
+          article={{ ...openArticle, player }}
+          onClose={() => setOpenArticle(null)}
+        />
+      )}
     </div>
   )
 }

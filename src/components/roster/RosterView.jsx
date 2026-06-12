@@ -1,54 +1,32 @@
 import { useMemo, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
-import { AlertTriangle } from 'lucide-react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { ChevronRight, ScanSearch } from 'lucide-react'
 import { getTeamName } from '../../hooks/useLeague'
 import { useLeagueContext } from '../../context/LeagueContext'
 import LoadingSpinner from '../shared/LoadingSpinner'
+import ErrorState from '../shared/ErrorState'
+import SectionHeader from '../shared/SectionHeader'
 import PlayerCard from './PlayerCard'
 import PickBadge from './PickBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
-import AgeCurveSection from './AgeCurveSection'
+import RosterAnalysisSheet from './RosterAnalysisSheet'
 import RosterActionItems from './RosterActionItems'
+import { POS_BG, POS_TEXT } from '../../utils/positionColors'
+import TeamAvatar from '../shared/TeamAvatar'
 
-const POSITION_ORDER = ['QB', 'RB', 'WR', 'TE']
-
-function SectionHeader({ label, count }) {
-  return (
-    <div className="flex items-center justify-between pt-4 pb-1.5">
-      <span className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary">
-        {label}
-      </span>
-      {count != null && (
-        <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
-          {count}
-        </span>
-      )}
-    </div>
-  )
-}
-
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
-      <AlertTriangle size={24} className="text-warning" strokeWidth={1.75} />
-      <p className="text-text-secondary dark:text-text-secondary font-body text-sm">{message}</p>
-      <button
-        onClick={onRetry}
-        className="mt-1 px-4 py-2 rounded-lg bg-accent text-white font-body font-medium text-sm"
-      >
-        Retry
-      </button>
-    </div>
-  )
-}
+const POSITION_ORDER = ['QB', 'RB', 'WR', 'TE', 'DEF']
 
 export default function RosterView() {
   const { league, loading, error, retry, nflState } = useLeagueContext()
   const location = useLocation()
   const navigate = useNavigate()
+  const params = useParams()
   const [selectedPlayer, setSelectedPlayer] = useState(null)
+  const [analysisOpen, setAnalysisOpen] = useState(false)
 
-  const selectedRosterId = location.state?.selectedRosterId
+  const selectedRosterId = params.rosterId
+    ? Number(params.rosterId)
+    : location.state?.selectedRosterId
 
   const displayRoster = useMemo(() => {
     if (!league) return null
@@ -80,10 +58,10 @@ export default function RosterView() {
     })
 
     return { byPosition, taxi, ir, picksByYear }
-  }, [league])
+  }, [displayRoster])
 
-  if (loading) return <LoadingSpinner message="Loading roster data…" />
-  if (error) return <ErrorState message={error} onRetry={retry} />
+  if (loading && !league) return <LoadingSpinner message="Loading roster data…" />
+  if (error && !league) return <ErrorState message={error} onRetry={retry} />
   if (!displayRoster) return <ErrorState message="Could not load roster." onRetry={retry} />
 
   const { userMap } = league
@@ -96,26 +74,29 @@ export default function RosterView() {
 
   return (
     <div className="px-4 pb-4">
-      {/* ── Back button (when drilling down from League tab) ── */}
+      {/* ── Back button (when drilling down from League / All Teams) ── */}
       {selectedRosterId && (
         <button
-          onClick={() => navigate('/league')}
+          onClick={() => navigate(-1)}
           className="flex items-center gap-1 pt-4 pb-1 text-accent font-body text-sm"
         >
-          ← League
+          ← Back
         </button>
       )}
 
-      {/* ── Header ── */}
-      <div className={`${selectedRosterId ? 'pt-1' : 'pt-4'} pb-3 border-b border-border-default dark:border-border-default`}>
+      {/* ── Header — gradient hero card ── */}
+      <div className={`${selectedRosterId ? 'mt-1' : 'mt-4'} rounded-xl px-4 pt-3 pb-3 bg-gradient-to-br from-accent/15 via-bg-card to-bg-card dark:from-accent/15 dark:via-bg-card dark:to-bg-card border border-accent/20`}>
         <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-0.5">
           Dynasty Roster
         </p>
-        <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-text-primary dark:text-text-primary leading-tight">
-          {teamName}
-        </h1>
+        <div className="flex items-center gap-2.5">
+          <TeamAvatar owner={displayRoster.owner} size={36} />
+          <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-text-primary dark:text-text-primary leading-tight min-w-0 truncate">
+            {teamName}
+          </h1>
+        </div>
         <div className="flex items-baseline gap-2 mt-1.5">
-          <span className="font-mono text-3xl font-medium text-accent tabular-nums">
+          <span className="font-mono text-3xl font-medium tabular-nums text-transparent bg-clip-text bg-gradient-to-r from-accent to-pos-def">
             {displayRoster.totalValue.toLocaleString()}
           </span>
           <span className="font-body text-xs text-text-secondary dark:text-text-secondary">
@@ -125,7 +106,7 @@ export default function RosterView() {
         <div className="flex items-center gap-1 mt-1.5">
           <span className="block w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
           <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">
-            = starting lineup
+            = starting lineup · — = no market value yet
           </span>
         </div>
 
@@ -136,13 +117,23 @@ export default function RosterView() {
         <RosterActionItems myRoster={league.myRoster} nflState={nflState} />
       )}
 
-      {/* ── Age Curve (own roster only) ── */}
+      {/* ── Roster Analysis (own roster only) ── */}
       {!selectedRosterId && (
-        <AgeCurveSection
-          players={displayRoster.players}
-          avgStarterAge={displayRoster.avgStarterAge}
-          allRosters={league.allRosters}
-        />
+        <button
+          onClick={() => setAnalysisOpen(true)}
+          className="w-full mt-4 mb-1 flex items-center gap-2.5 px-3 py-3 rounded-xl bg-bg-card border border-border-default active:opacity-60 transition-opacity"
+        >
+          <ScanSearch size={16} strokeWidth={1.75} className="text-accent flex-shrink-0" />
+          <div className="flex-1 text-left">
+            <p className="font-body text-sm font-semibold text-text-primary leading-tight">
+              Roster Analysis
+            </p>
+            <p className="font-body text-[10px] text-text-tertiary mt-0.5">
+              Age curve · win window · position breakdown
+            </p>
+          </div>
+          <ChevronRight size={16} strokeWidth={1.75} className="text-text-tertiary flex-shrink-0" />
+        </button>
       )}
 
       {/* ── Position groups ── */}
@@ -151,7 +142,7 @@ export default function RosterView() {
         if (!group?.length) return null
         return (
           <section key={pos}>
-            <SectionHeader label={pos} count={group.length} />
+            <SectionHeader label={pos} count={group.length} accentBar={POS_BG[pos]} accentText={POS_TEXT[pos]} />
             <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
               {group.map(player => (
                 <PlayerCard key={player.sleeperId} player={player} onClick={() => setSelectedPlayer(player)} />
@@ -228,6 +219,16 @@ export default function RosterView() {
         <PlayerProfileDrawer
           player={selectedPlayer}
           onClose={() => setSelectedPlayer(null)}
+        />
+      )}
+
+      {analysisOpen && (
+        <RosterAnalysisSheet
+          players={league.myRoster.players}
+          avgStarterAge={league.myRoster.avgStarterAge}
+          allRosters={league.allRosters}
+          nflState={nflState}
+          onClose={() => setAnalysisOpen(false)}
         />
       )}
     </div>

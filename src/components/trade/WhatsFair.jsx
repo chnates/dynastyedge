@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getTeamName } from '../../hooks/useLeague'
 import { getTopTradeTargets, assignWinWindowTiers } from '../../utils/rosterAnalysis'
@@ -8,31 +7,11 @@ import { suggestFairPackage } from '../../utils/tradeAnalysis'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import TrendArrow from '../shared/TrendArrow'
 import LoadingSpinner from '../shared/LoadingSpinner'
-
-const POS_TAGS = {
-  QB: 'bg-accent/20 text-accent',
-  RB: 'bg-success/20 text-success',
-  WR: 'bg-warning/20 text-warning',
-  TE: 'bg-danger/20 text-danger',
-}
+import ErrorState from '../shared/ErrorState'
+import { POS_CHIP_ACTIVE, POS_TAG as POS_TAGS } from '../../utils/positionColors'
 
 const POSITION_FILTERS = ['All', 'QB', 'RB', 'WR', 'TE']
 
-
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
-      <AlertTriangle size={24} className="text-warning" strokeWidth={1.75} />
-      <p className="text-text-secondary dark:text-text-secondary font-body text-sm">{message}</p>
-      <button
-        onClick={onRetry}
-        className="mt-1 px-4 py-2 rounded-lg bg-accent text-white font-body font-medium text-sm"
-      >
-        Retry
-      </button>
-    </div>
-  )
-}
 
 function TargetCard({ target, fairPackage, onTap }) {
   const posTag = POS_TAGS[target.position] ?? 'bg-bg-secondary text-text-secondary'
@@ -120,8 +99,8 @@ export default function WhatsFair() {
     return targets.filter(t => t.position === posFilter)
   }, [targets, posFilter])
 
-  if (loading) return <LoadingSpinner message="Finding trade targets…" />
-  if (error)   return <ErrorState message={error} onRetry={retry} />
+  if (loading && !league) return <LoadingSpinner message="Finding trade targets…" />
+  if (error && !league)   return <ErrorState message={error} onRetry={retry} />
   if (!league?.myRoster) return <ErrorState message="Could not load league data." onRetry={retry} />
 
   const myTeamName = getTeamName(league.myRoster.owner)
@@ -149,7 +128,7 @@ export default function WhatsFair() {
             onClick={() => setPosFilter(pos)}
             className={`shrink-0 px-3 py-1 rounded-full font-body text-xs font-semibold uppercase tracking-wider transition-colors
               ${posFilter === pos
-                ? 'bg-accent text-white'
+                ? POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-white'
                 : 'bg-bg-card dark:bg-bg-card text-text-secondary dark:text-text-secondary border border-border-default dark:border-border-default'
               }`}
           >

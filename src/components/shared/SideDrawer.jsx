@@ -1,19 +1,23 @@
 import { useEffect, useRef } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
-  Users, ArrowLeftRight, LayoutList, Trophy, FileText,
+  Zap, Users, ArrowLeftRight, LayoutList, Trophy, FileText,
   RefreshCw, Sun, Moon,
 } from 'lucide-react'
 import DynastyEdgeLogo from './DynastyEdgeLogo'
+import TeamAvatar from './TeamAvatar'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getTeamName } from '../../hooks/useLeague'
 
+// Each section has an identity color — icons always wear it, the active
+// item gets a matching tinted background and edge bar.
 const NAV_ITEMS = [
-  { to: '/roster', label: 'Roster', Icon: Users },
-  { to: '/trade',  label: 'Trade',  Icon: ArrowLeftRight },
-  { to: '/lineup', label: 'Lineup', Icon: LayoutList },
-  { to: '/league', label: 'League', Icon: Trophy },
-  { to: '/draft',  label: 'Draft',  Icon: FileText },
+  { to: '/edge',   label: 'The Edge', Icon: Zap,          text: 'text-accent',  activeBg: 'bg-accent/10',  bar: 'bg-accent'  },
+  { to: '/roster', label: 'Roster', Icon: Users,          text: 'text-pos-wr',  activeBg: 'bg-pos-wr/10',  bar: 'bg-pos-wr'  },
+  { to: '/trade',  label: 'Trade',  Icon: ArrowLeftRight, text: 'text-success', activeBg: 'bg-success/10', bar: 'bg-success' },
+  { to: '/lineup', label: 'Lineup', Icon: LayoutList,     text: 'text-pos-te',  activeBg: 'bg-pos-te/10',  bar: 'bg-pos-te'  },
+  { to: '/league', label: 'League', Icon: Trophy,         text: 'text-warning', activeBg: 'bg-warning/10', bar: 'bg-warning' },
+  { to: '/draft',  label: 'Draft',  Icon: FileText,       text: 'text-pos-qb',  activeBg: 'bg-pos-qb/10',  bar: 'bg-pos-qb'  },
 ]
 
 export default function SideDrawer({
@@ -26,7 +30,8 @@ export default function SideDrawer({
   onToggleTheme,
 }) {
   const { league } = useLeagueContext()
-  const myTeamName = league?.myRoster?.owner ? getTeamName(league.myRoster.owner) : null
+  const myOwner = league?.myRoster?.owner ?? null
+  const myTeamName = myOwner ? getTeamName(myOwner) : null
 
   const touchStartX = useRef(null)
 
@@ -79,15 +84,18 @@ export default function SideDrawer({
         <div className="px-5 pt-5 pb-4">
           <DynastyEdgeLogo theme={isDark ? 'dark' : 'light'} size={88} />
           {myTeamName && (
-            <p className="font-body text-[11px] text-text-tertiary mt-2 select-none">
-              {myTeamName}
-            </p>
+            <div className="flex items-center gap-1.5 mt-2 select-none">
+              <TeamAvatar owner={myOwner} size={18} />
+              <p className="font-body text-[11px] text-text-tertiary">
+                {myTeamName}
+              </p>
+            </div>
           )}
         </div>
 
         {/* Nav items */}
         <nav className="px-3">
-          {NAV_ITEMS.map(({ to, label, Icon }) => (
+          {NAV_ITEMS.map(({ to, label, Icon, text, activeBg, bar }) => (
             <NavLink
               key={to}
               to={to}
@@ -95,16 +103,16 @@ export default function SideDrawer({
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-3.5 rounded-lg mb-1 relative transition-colors duration-150 ` +
                 (isActive
-                  ? 'text-accent bg-accent/10'
+                  ? `${text} ${activeBg}`
                   : 'text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5')
               }
             >
               {({ isActive }) => (
                 <>
                   {isActive && (
-                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 bg-accent rounded-r-full" />
+                    <span className={`absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full ${bar}`} />
                   )}
-                  <Icon size={20} strokeWidth={1.75} />
+                  <Icon size={20} strokeWidth={1.75} className={text} />
                   <span className="font-body font-medium text-[15px]">{label}</span>
                 </>
               )}

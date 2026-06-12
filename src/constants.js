@@ -5,6 +5,23 @@ export const MY_TEAM_NAME = 'Nix Cage'
 
 export const SLEEPER_BASE = 'https://api.sleeper.app/v1'
 export const FANTASYCALC_BASE = 'https://api.fantasycalc.com'
+// Unofficial ESPN API — no auth; used only for per-player news, degrades silently
+export const ESPN_BASE = 'https://site.api.espn.com'
+export const ESPN_WEB_BASE = 'https://site.web.api.espn.com'
+
+// Aggregated news feed published by .github/workflows/news.yml to the
+// news-data branch (raw.githubusercontent.com sends CORS headers)
+export const NEWS_FEED_URL = 'https://raw.githubusercontent.com/chnates/dynastyedge/news-data/news.json'
+
+// Daily FantasyCalc value snapshots published by
+// .github/workflows/values-history.yml to the values-history branch —
+// powers sparklines. Best-effort: when missing, sparklines simply hide.
+export const VALUES_HISTORY_URL = 'https://raw.githubusercontent.com/chnates/dynastyedge/values-history/values-history.json'
+
+// Trade-time value archive published by the same workflow — records asset
+// values within ~a day of each trade, forever. Best-effort: when missing,
+// the scouting ledger's "at trade time" line simply hides.
+export const TRADE_VALUES_URL = 'https://raw.githubusercontent.com/chnates/dynastyedge/values-history/trade-values.json'
 
 export const FANTASYCALC_PARAMS = {
   isDynasty: true,

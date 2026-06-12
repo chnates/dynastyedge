@@ -1,11 +1,6 @@
 import { useMemo, useEffect } from 'react'
 
-const POS_COLORS = {
-  QB: 'text-accent bg-accent/10',
-  RB: 'text-success bg-success/10',
-  WR: 'text-warning bg-warning/10',
-  TE: 'text-danger bg-danger/10',
-}
+import { POS_TAG as POS_COLORS } from '../../utils/positionColors'
 
 export default function FreeAgentDrawer({ slot, projMap, allRosters, fcPlayerMap, onClose }) {
   // Lock body scroll while open

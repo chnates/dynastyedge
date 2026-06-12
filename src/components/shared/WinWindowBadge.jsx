@@ -1,11 +1,7 @@
-const TIER_STYLES = {
-  Contending: 'text-warning bg-warning/10 border-warning/30',
-  Middle:     'text-text-tertiary bg-bg-card border-border-default dark:border-border-default',
-  Rebuilding: 'text-text-secondary bg-bg-secondary border-border-default dark:border-border-default',
-}
+import { TIER_BADGE } from '../../utils/tierColors'
 
 export default function WinWindowBadge({ tier }) {
-  const styles = TIER_STYLES[tier] ?? TIER_STYLES.Middle
+  const styles = TIER_BADGE[tier] ?? TIER_BADGE.Middle
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-body text-[10px] font-semibold uppercase tracking-wider border ${styles}`}>
       {tier ?? 'Middle'}
