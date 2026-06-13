@@ -5,6 +5,7 @@ import { useLeagueContext } from '../../context/LeagueContext'
 import { getTeamName } from '../../hooks/useLeague'
 import { analyzeTrade, getTradeVerdict, suggestFairPackage, getCounterSuggestion, adjustVerdictForInjuries } from '../../utils/tradeAnalysis'
 import { rankTradePartners } from '../../utils/rosterAnalysis'
+import { buildAgeCurves, buildRosterTrajectory, getTrajectoryRead } from '../../utils/dynastyTrajectory'
 import { usePlayoffOdds } from '../../hooks/usePlayoffOdds'
 import { fetchPlayerNews } from '../../hooks/usePlayerNews'
 import { getPlayerIntel } from '../../hooks/usePlayerIntel'
@@ -134,7 +135,7 @@ function OpponentContextStrip({ partner }) {
 }
 
 export default function TradeAnalyzer() {
-  const { league, loading, error, retry, nflState } = useLeagueContext()
+  const { league, values, loading, error, retry, nflState } = useLeagueContext()
   // My live playoff odds feed Layer 3 (win-window fit). Null in the offseason
   // and until the sim has real games — Layer 3 falls back to the tier read.
   const { myOdds } = usePlayoffOdds()
@@ -186,9 +187,19 @@ export default function TradeAnalyzer() {
 
   const bothSides = giveAssets.length > 0 && getAssets.length > 0
 
+  // Opponent's multi-year value direction (Dynasty Trajectory) — feeds Layer 3
+  // so acquiring off a declining team reads as the buy window it is. No extra
+  // fetch; built from the cached FantasyCalc pool.
+  const opponentTrajectoryRead = useMemo(() => {
+    if (!opponentRoster || !values?.playerMap) return null
+    const { curves, generic } = buildAgeCurves(values.playerMap)
+    const season = Number(nflState?.season) || new Date().getFullYear()
+    return getTrajectoryRead(buildRosterTrajectory(opponentRoster, season, curves, generic))
+  }, [opponentRoster, values, nflState])
+
   const analysis = useMemo(
-    () => analyzeTrade(giveAssets, getAssets, league?.myRoster, opponentRoster, league?.allRosters, myOdds?.playoffPct ?? null),
-    [giveAssets, getAssets, league, opponentRoster, myOdds]
+    () => analyzeTrade(giveAssets, getAssets, league?.myRoster, opponentRoster, league?.allRosters, myOdds?.playoffPct ?? null, opponentTrajectoryRead),
+    [giveAssets, getAssets, league, opponentRoster, myOdds, opponentTrajectoryRead]
   )
 
   const verdict = useMemo(() => getTradeVerdict(analysis), [analysis])

@@ -432,6 +432,13 @@ Are you acquiring the right type of asset for where Nix Cage is now?
 - When live playoff odds exist (in-season), Layer 3 adds a real
   "Playoff odds: N% · Buyer/Seller — …" line (via `analyzeTrade`'s optional
   `myPlayoffPct` + `getDeadlineVerdict`); offseason falls back to the tier read.
+- When you're acquiring the partner's players, Layer 3 also adds a **partner
+  trajectory** line from the Dynasty Trajectory model (Feature 17, via
+  `analyzeTrade`'s optional `opponentTrajectoryRead`): a declining team reads
+  as a buy window ("their value slides through {year} — they may move win-now
+  talent"), an ascending team as a caution ("they're building — may resist
+  parting with youth"). Always available (no extra fetch); hidden for a
+  balanced-window partner.
 
 #### Verdict
 
@@ -828,8 +835,10 @@ logic lives in `utils/edgeBriefing.js`.
   sell-high (my riser at a surplus position) → Analyzer pre-loaded in You
   Give; biggest watchlist mover → profile drawer; biggest underperforming
   opponent (record rank trails value rank by ≥ 4, same gap as League
-  Overview) → their roster drill-down; playoff-odds standing (in-season,
-  "N% · Buyer/Seller" from `usePlayoffOdds`) → League › Playoffs.
+  Overview) → their roster drill-down; **closing-window opponent** (the most
+  valuable team whose Dynasty Trajectory is declining — likely to move win-now
+  talent) → their `/roster/trajectory/:rosterId`; playoff-odds standing
+  (in-season, "N% · Buyer/Seller" from `usePlayoffOdds`) → League › Playoffs.
 - **Headlines:** news-feed items matched to my roster + watchlist players
   (≤ 5), "New" badge when published after the last visit; tap opens the
   player's profile drawer. Hides entirely when nothing matches — never an
@@ -1057,11 +1066,17 @@ drill-down (`RosterView` for `:rosterId`) carries a "Dynasty Trajectory →" car
 that opens `/roster/trajectory/:rosterId`, so you can scout an opponent's window
 ("this contender's value slams shut after 2026 — they'll sell").
 
-**Trade Partner Finder integration:** each opponent card carries a one-line
-trajectory read via `getTrajectoryRead` — "Value peaks now, slides through {year}
-— selling vets" / "Value climbing toward {year} — building" / "Value holds near
-{year} — balanced window". Always available (no extra fetch) and distinct from
-the this-season playoff-odds buyer/seller flag.
+**Consumers (all via `getTrajectoryRead`, zero extra fetch):**
+- **Trade Partner Finder:** each opponent card carries a one-line trajectory
+  read — "Value peaks now, slides through {year} — selling vets" / "Value
+  climbing toward {year} — building" / "Value holds near {year} — balanced
+  window". Distinct from the this-season playoff-odds buyer/seller flag.
+- **Trade Analyzer Layer 3** (`analyzeTrade`'s optional `opponentTrajectoryRead`):
+  when acquiring the partner's players, a declining team reads as a buy window,
+  an ascending one as a caution (see Feature 3).
+- **The Edge:** a "closing-window opponent" briefing item — the most valuable
+  team whose trajectory is declining — deep-links to their
+  `/roster/trajectory/:rosterId` (see Feature 12).
 
 **The model (`utils/dynastyTrajectory.js`, pure):**
 

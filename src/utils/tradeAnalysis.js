@@ -8,7 +8,7 @@ function pickLabel(pick) {
   return `${pick.season} ${suffix}`
 }
 
-export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, allRosters, myPlayoffPct = null) {
+export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, allRosters, myPlayoffPct = null, opponentTrajectoryRead = null) {
   if (!myRoster || !opponentRoster || !allRosters?.length) return null
 
   const giveTotal = giveAssets.reduce((s, a) => s + (a.value || 0), 0)
@@ -101,11 +101,28 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
     oddsTone   = dv.tone ?? null
   }
 
+  // Partner's multi-year value direction (Dynasty Trajectory). Most relevant
+  // when you're acquiring their players: a declining team is motivated to sell
+  // win-now talent; an ascending team will resist parting with youth.
+  let partnerTrajectoryNote = null
+  let partnerTrajectoryTone = null
+  if (opponentTrajectoryRead && getPlayers.length > 0) {
+    const r = opponentTrajectoryRead
+    if (r.direction === 'declining') {
+      partnerTrajectoryNote = `Their roster value peaks now and slides through ${r.lastSeason} — they may be motivated to move win-now talent for picks or youth.`
+      partnerTrajectoryTone = 'success'
+    } else if (r.direction === 'ascending') {
+      partnerTrajectoryNote = `Their value is climbing toward ${r.peakSeason} — they're building and may resist parting with young assets.`
+      partnerTrajectoryTone = 'warning'
+    }
+  }
+
   return {
     giveTotal, getTotal, valueDiff, valuePct, valueWinner,
     filledNeeds, hurtStrengths, fitScore,
     myTier, windowScore, windowNote, myDeltas,
     playoffPct, oddsStance, oddsNote, oddsTone,
+    partnerTrajectoryNote, partnerTrajectoryTone,
   }
 }
 

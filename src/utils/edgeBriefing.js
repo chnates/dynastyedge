@@ -5,6 +5,7 @@ import {
 } from './rosterAnalysis'
 import { getTeamName } from '../hooks/useLeague'
 import { getDeadlineVerdict } from './playoffOdds'
+import { buildAgeCurves, buildRosterTrajectory, getTrajectoryRead } from './dynastyTrajectory'
 import { MIN_SPARKLINE_POINTS } from '../hooks/useValueHistory'
 import { POSITIONS, MY_ROSTER_ID } from '../constants'
 
@@ -24,7 +25,7 @@ export function trendPct(trend, value) {
 
 // ── Derived market / league signals ─────────────────────────────────────────
 
-export function computeEdgeSignals({ league, values, watchlist }) {
+export function computeEdgeSignals({ league, values, watchlist, nflState }) {
   if (!league?.myRoster || !values?.playerMap) return null
 
   const { allRosters, myRoster } = league
@@ -115,6 +116,22 @@ export function computeEdgeSignals({ league, values, watchlist }) {
     })
   }
 
+  // Closing-window opponent: a strong-now team whose projected value is sliding
+  // (Dynasty Trajectory model) — motivated to move win-now talent before it
+  // depreciates. Pick the most valuable such team, since they have the most to
+  // pry loose. Zero extra fetch — reuses the cached FantasyCalc pool.
+  let closingWindow = null
+  if (values?.playerMap) {
+    const { curves, generic } = buildAgeCurves(values.playerMap)
+    const season = Number(nflState?.season) || new Date().getFullYear()
+    const declining = allRosters
+      .filter(r => r.rosterId !== MY_ROSTER_ID)
+      .map(r => ({ roster: r, read: getTrajectoryRead(buildRosterTrajectory(r, season, curves, generic)) }))
+      .filter(x => x.read?.direction === 'declining')
+      .sort((a, b) => b.roster.totalValue - a.roster.totalValue)
+    closingWindow = declining[0] ?? null
+  }
+
   const playerValue = myRoster.players.reduce((s, p) => s + (p.value ?? 0), 0)
   const teamTrend = Math.round(
     myRoster.players.reduce((s, p) => s + (p.trend30Day ?? 0), 0)
@@ -134,6 +151,7 @@ export function computeEdgeSignals({ league, values, watchlist }) {
     sellHigh,
     radar,
     underperformer,
+    closingWindow,
     anyRecords,
     teamTrend,
     playerValue,
@@ -299,6 +317,20 @@ export function buildBriefing({
       title: `${getTeamName(r.owner)} is underperforming`,
       body: `Their record trails their roster talent (${r.record.wins}-${r.record.losses}) — a frustrated owner is a buy window.`,
       action: { type: 'route', to: `/roster/teams/${r.rosterId}` },
+    })
+  }
+
+  // 9. Closing-window opponent: a strong-now team whose multi-year value is
+  //    sliding — likely to move win-now talent. Deep-links to their trajectory.
+  if (signals.closingWindow) {
+    const { roster, read } = signals.closingWindow
+    items.push({
+      id: 'closing-window',
+      icon: 'trajectory',
+      tone: 'accent',
+      title: `${getTeamName(roster.owner)}'s window is closing`,
+      body: `Their projected value peaks now and slides through ${read.lastSeason} — they may move win-now talent for picks or youth. Good time to call.`,
+      action: { type: 'route', to: `/roster/trajectory/${roster.rosterId}` },
     })
   }
 

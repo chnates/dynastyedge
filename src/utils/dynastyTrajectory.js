@@ -257,12 +257,12 @@ export function getTrajectoryRead(trajectory) {
   const peakSeason = seasons[peakIdx]
 
   if (peakIdx === 0 && endPct < -0.08) {
-    return { direction: 'declining', pct: endPct, peakSeason, label: `Value peaks now, slides through ${lastSeason} — selling vets` }
+    return { direction: 'declining', pct: endPct, peakSeason, lastSeason, label: `Value peaks now, slides through ${lastSeason} — selling vets` }
   }
   if (peakIdx >= 2 || endPct > 0.05) {
-    return { direction: 'ascending', pct: endPct, peakSeason, label: `Value climbing toward ${peakSeason} — building` }
+    return { direction: 'ascending', pct: endPct, peakSeason, lastSeason, label: `Value climbing toward ${peakSeason} — building` }
   }
-  return { direction: 'stable', pct: endPct, peakSeason, label: `Value holds near ${peakSeason} — balanced window` }
+  return { direction: 'stable', pct: endPct, peakSeason, lastSeason, label: `Value holds near ${peakSeason} — balanced window` }
 }
 
 // Short peak-window tag for a single player's table row.

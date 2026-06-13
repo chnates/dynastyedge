@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ClipboardList, CalendarClock, ArrowLeftRight, TrendingDown, TrendingUp,
-  Star, Users, ChevronRight, DollarSign, UserPlus, Gavel, Trophy, ScanSearch,
+  Star, Users, ChevronRight, DollarSign, UserPlus, Gavel, Trophy, ScanSearch, LineChart,
 } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useTransactions } from '../../hooks/useTransactions'
@@ -39,6 +39,7 @@ const BRIEFING_ICONS = {
   watch: Star,
   team: Users,
   playoffs: Trophy,
+  trajectory: LineChart,
 }
 
 const BRIEFING_TONES = {
@@ -138,8 +139,8 @@ export default function EdgeView() {
   const [analysisOpen, setAnalysisOpen] = useState(false)
 
   const signals = useMemo(
-    () => computeEdgeSignals({ league, values, watchlist }),
-    [league, values, watchlist]
+    () => computeEdgeSignals({ league, values, watchlist, nflState }),
+    [league, values, watchlist, nflState]
   )
 
   // My roster + watchlist players — the set whose news matters to me.
