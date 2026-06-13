@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ClipboardList, CalendarClock, ArrowLeftRight, TrendingDown, TrendingUp,
-  Star, Users, ChevronRight, DollarSign, UserPlus, Gavel, Trophy,
+  Star, Users, ChevronRight, DollarSign, UserPlus, Gavel, Trophy, ScanSearch,
 } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useTransactions } from '../../hooks/useTransactions'
@@ -28,6 +28,7 @@ import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import NewsArticleSheet from '../shared/NewsArticleSheet'
 import Sparkline from '../shared/Sparkline'
 import RosterActionItems from '../roster/RosterActionItems'
+import RosterAnalysisSheet from '../roster/RosterAnalysisSheet'
 
 const BRIEFING_ICONS = {
   draft: ClipboardList,
@@ -134,6 +135,7 @@ export default function EdgeView() {
   const navigate = useNavigate()
   const [selectedPlayer, setSelectedPlayer] = useState(null)
   const [openArticle, setOpenArticle] = useState(null)
+  const [analysisOpen, setAnalysisOpen] = useState(false)
 
   const signals = useMemo(
     () => computeEdgeSignals({ league, values, watchlist }),
@@ -199,7 +201,21 @@ export default function EdgeView() {
     isOffseason,
   })
 
-  const radar = signals.radar.slice(0, 5)
+  // Market Radar is The Edge's primary entry to League › Movers, so keep it
+  // populated: lead with watchlist + roster movers over the ±50 threshold,
+  // then backfill with the roster's biggest remaining movers (any non-zero
+  // trend) so the section stays useful even with a thin watchlist.
+  const RADAR_MAX = 6
+  let radar = signals.radar.slice(0, RADAR_MAX)
+  if (radar.length < RADAR_MAX) {
+    const seen = new Set(radar.map(p => String(p.sleeperId)))
+    const fill = [...myRoster.players]
+      .filter(p => !p.unranked && (p.trend30Day ?? 0) !== 0 && !seen.has(String(p.sleeperId)))
+      .sort((a, b) => Math.abs(b.trend30Day ?? 0) - Math.abs(a.trend30Day ?? 0))
+      .slice(0, RADAR_MAX - radar.length)
+      .map(p => ({ ...p, ownerRoster: null, isWatched: false, isMine: true }))
+    radar = [...radar, ...fill]
+  }
 
   function runAction(action) {
     if (!action) return
@@ -283,6 +299,26 @@ export default function EdgeView() {
       <div {...rise()}>
         <RosterActionItems myRoster={myRoster} nflState={nflState} />
       </div>
+
+      {/* ── Roster Analysis shortcut (opens the same sheet as My Roster) ── */}
+      <button
+        {...rise()}
+        onClick={() => setAnalysisOpen(true)}
+        className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default border-l-[3px] border-l-accent active:opacity-60 transition-opacity"
+      >
+        <span className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-accent/15">
+          <ScanSearch size={15} strokeWidth={2} className="text-accent" />
+        </span>
+        <div className="flex-1 text-left">
+          <p className="font-body text-sm font-semibold text-text-primary dark:text-text-primary leading-tight">
+            Roster Analysis
+          </p>
+          <p className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary mt-0.5">
+            Age curve · win window · position breakdown
+          </p>
+        </div>
+        <ChevronRight size={16} strokeWidth={1.75} className="text-text-tertiary flex-shrink-0" />
+      </button>
 
       {/* ── Your Briefing — prioritized, every row goes somewhere ── */}
       {briefing.length > 0 && (
@@ -505,6 +541,16 @@ export default function EdgeView() {
             setOpenArticle(null)
             setSelectedPlayer(p)
           }}
+        />
+      )}
+
+      {analysisOpen && (
+        <RosterAnalysisSheet
+          players={myRoster.players}
+          avgStarterAge={myRoster.avgStarterAge}
+          allRosters={league.allRosters}
+          nflState={nflState}
+          onClose={() => setAnalysisOpen(false)}
         />
       )}
     </div>

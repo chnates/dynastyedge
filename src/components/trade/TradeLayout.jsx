@@ -3,9 +3,10 @@ import { CalendarClock } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 
 const SUB_TABS = [
-  { label: 'Partners',    to: '/trade',            end: true  },
-  { label: 'Analyzer',   to: '/trade/analyze',    end: false },
-  { label: 'Targets', to: '/trade/whats-fair', end: false },
+  { label: 'Partners', to: '/trade',            end: true  },
+  { label: 'Analyzer', to: '/trade/analyze',    end: false },
+  { label: 'Targets',  to: '/trade/whats-fair', end: false },
+  { label: 'Managers', to: '/trade/managers',   end: false },
 ]
 
 function DeadlineBanner() {

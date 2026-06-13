@@ -1,13 +1,11 @@
 import { NavLink, Outlet } from 'react-router-dom'
 
 const SUB_TABS = [
-  { label: 'Overview', to: '/league',          end: true  },
-  { label: 'Activity', to: '/league/activity', end: false },
-  { label: 'Movers',   to: '/league/movers',   end: false },
-  { label: 'Playoffs', to: '/league/playoffs', end: false },
+  { label: 'Optimizer',     to: '/lineup',               end: true  },
+  { label: 'Season Review', to: '/lineup/season-review', end: false },
 ]
 
-export default function LeagueLayout() {
+export default function LineupLayout() {
   return (
     <>
       <div className="sticky top-0 z-[5] flex bg-bg-secondary dark:bg-bg-secondary border-b border-border-default dark:border-border-default">

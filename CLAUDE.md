@@ -469,8 +469,13 @@ sessionStorage, but there is no multi-trade history — that lives in Sleeper.
 **Purpose:** Optimize the weekly starting lineup using live projections,
 injury status, bye weeks, and matchup quality.
 
+*The Optimizer is the default sub-tab under Lineup (`/lineup`, via
+`LineupLayout`), a sibling of Season Review (Feature 9).*
+
 *This feature is hidden entirely during the offseason.*
-*Detect via `/state/nfl` → `season_type !== 'regular'`.*
+*Detect via `/state/nfl` → `season_type !== 'regular'`. In the offseason the
+Optimizer tab shows a placeholder (biggest roster need, rookie draft capital,
+win window); Season Review remains available on its own tab.*
 
 #### Data sources for this feature
 
@@ -651,6 +656,9 @@ every completed week.
 - Per-week rows: actual, optimal, delta (green ✓ when optimal, amber/red otherwise)
 - Shows during the offseason too (it reviews the completed season)
 - Data: `/matchups/{week}` for completed weeks, cached per session
+- **Its own sub-tab** under Lineup (`/lineup/season-review`, via `LineupLayout`),
+  a sibling of the Optimizer — not stacked inside the Optimizer's scroll. It
+  renders as a standalone padded page with its own header.
 
 -----
 
@@ -697,11 +705,15 @@ Draft-section storage keys live in `src/components/draft/boardStorage.js`:
 
 -----
 
-### Feature 11 — Manager Scouting (League › Managers)
+### Feature 11 — Manager Scouting (Trade › Managers)
 
 Behavioral trading profiles for every manager, built from **every season of
 league history** — the intel layer behind "who do I call?". Plus a report
 card on me: how am I actually doing, and what should I work on?
+
+> **Location:** lives under **Trade › Managers** (`/trade/managers`) — it's
+> trade intel, so it sits with the trade tools. `/league/managers` redirects
+> here. The component files remain in `src/components/league/`.
 
 **League history walking (`useLeagueHistory`):** every Sleeper league carries
 `previous_league_id` — the same league's prior season. The hook walks the
@@ -800,6 +812,9 @@ logic lives in `utils/edgeBriefing.js`.
   record (when it exists), FAAB. Value taps to My Roster; chips tap to League.
 - **Action Items:** the shared `RosterActionItems` component, reused as-is
   (dismissals included).
+- **Roster Analysis shortcut:** a one-tap card (accent edge bar + `ScanSearch`
+  medallion) that opens the same `RosterAnalysisSheet` as My Roster — surfaced
+  here so the age-curve / win-window tool is discoverable from the home screen.
 - **Your Briefing:** up to 5 prioritized items from `buildBriefing`, each
   deep-linking somewhere: live/paused rookie draft → Tracker; trade deadline
   ≤ 2 weeks → Trade; `pre_draft` rookie draft → Board; N league moves since
@@ -814,9 +829,13 @@ logic lives in `utils/edgeBriefing.js`.
   (≤ 5), "New" badge when published after the last visit; tap opens the
   player's profile drawer. Hides entirely when nothing matches — never an
   error (standard news contract).
-- **Market Radar:** watchlist movers + my roster's movers (> ±50 trend),
-  deduped, ≤ 5 rows with sparklines; tap → profile drawer; footer link to
-  League › Movers. Empty state hints at starring players.
+- **Market Radar:** the primary daily entry point into League › Movers.
+  Watchlist movers + my roster's movers (> ±50 trend) lead, deduped, then the
+  list **backfills with my roster's biggest remaining movers** (any non-zero
+  trend) up to ≤ 6 rows — so the section stays useful even with a thin
+  watchlist. Rows carry sparklines; tap → profile drawer; prominent footer
+  link to League › Movers. Empty state (no roster movement at all) hints at
+  starring players.
 - **Around the League:** compact one-line transaction summaries — moves since
   the last visit, or the latest 3 — with "You"/"New" badges; everything links
   to League › Activity.
@@ -838,6 +857,11 @@ bring back?" Rookie-draft pick-swap planning for the weeks before and during
 the draft. Zero new data sources: composes LeagueContext (rosters, pick
 ownership, FantasyCalc pick entries) with `useSleeperDraft`'s draft order.
 Pure logic lives in `utils/pickTrades.js`.
+
+**Discoverability:** the Trade Partners view carries a footer button —
+"Planning a pick swap? Open the Pick Trade Calculator →" — that deep-links
+here, so the planner is reachable from the trade workflow, not only the Draft
+section.
 
 **Slot-level pricing:** FantasyCalc lists picks as "2026 Early 1st" /
 "Mid" / "Late". When Sleeper has set the draft order (`slot_to_roster_id`,
@@ -986,6 +1010,32 @@ footer link to `/news` (same treatment as "All market movers →").
 
 -----
 
+### Feature 16 — Global Player Search
+
+**Purpose:** find any player from anywhere in the app and jump straight to
+their profile, without first navigating to the section that happens to list
+them. The single global accelerant for a player-heavy app.
+
+- **Entry point:** a search icon in the **fixed app header** (top-right, every
+  screen) — always visible, so it works within the side-drawer paradigm
+  without a bottom nav. Lives in `App.jsx`'s `AppShell`.
+- **`PlayerSearchSheet`** (`components/shared/`): a standard bottom sheet
+  (`useScrollLock` + `useSheetDrag` + `overscroll-contain` + safe-area
+  bottom pad, same contract as every sheet). Auto-focuses the input on open.
+- **Zero new data sources.** Searches the cached FantasyCalc dataset
+  (`values.playerMap` from `LeagueContext`) by normalized name (≥ 2 chars),
+  ranked by `overallRank`, capped at 40 results. Each row shows name · team ·
+  position (identity color) · value · trend arrow.
+- **Tap a result → `PlayerProfileDrawer`**, rendered by the sheet itself at the
+  same `z-50` *after* the results in the DOM, so it paints on top (the same
+  stacking trick The Edge uses for its drawer + article sheet). Closing the
+  profile returns to the search results. Nested scroll-locks unwind correctly
+  via `useScrollLock`'s save/restore of the previous value.
+- Picks (named like "2026 Mid 1st", no `sleeperId`) aren't in `playerMap`, so
+  search covers players only — by design.
+
+-----
+
 ### Trade deadline banner
 
 The Trade section shows a persistent banner under the sub-tabs during the
@@ -1002,7 +1052,9 @@ regular season (deadline week comes from league settings — Week 13):
 
 **There is NO bottom tab bar.** Navigation is a side drawer (hamburger menu, top-left),
 opened by tap or by swiping right from the left screen edge. This is a deliberate
-design decision — do not add a bottom nav.
+design decision — do not add a bottom nav. (Re-evaluated in the usability review:
+the drawer stays; the wins were in fixing the information architecture *within*
+this paradigm, not replacing it.)
 
 Side drawer sections:
 
@@ -1010,15 +1062,26 @@ Side drawer sections:
 |---|--------|---------------------------------------------------------|
 |1  |The Edge|Daily briefing home screen (default route)               |
 |2  |Roster  |My Roster · All Teams · Free Agents                      |
-|3  |Trade   |Partners · Analyzer · Targets (+ deadline banner)        |
-|4  |Lineup  |Lineup Optimizer + Season Review (lineup efficiency)     |
-|5  |League  |Overview · Activity · Movers · Playoffs · Managers       |
+|3  |Trade   |Partners · Analyzer · Targets · Managers (+ deadline banner)|
+|4  |Lineup  |Optimizer · Season Review                                 |
+|5  |League  |Overview · Activity · Movers · Playoffs                   |
 |6  |News    |League-wide aggregated news feed (browsable + filterable) |
 |7  |Draft   |Rookie draft board · Draft pick tracker · Pick trade calculator|
 
 Sections with multiple views use a sub-tab bar pinned under the app header.
 The drawer also holds: data freshness timestamp, manual Refresh, and the theme toggle.
 The active section is highlighted in the drawer; the app header shows the section name.
+
+**Global player search** lives in the fixed app header (search icon, top-right,
+on every screen) — opens `PlayerSearchSheet`, a bottom sheet that searches the
+cached FantasyCalc dataset by name and opens the matched player's
+`PlayerProfileDrawer`. See Feature 16.
+
+**Manager Scouting moved from League to Trade** (it's trade intel — "who do I
+call?"). The old `/league/managers` path redirects to `/trade/managers` so saved
+deep-links and briefing items keep working. The component files still live in
+`src/components/league/` (`ManagersView.jsx`, `ManagerScoutingSheet.jsx`) — only
+the route changed.
 
 -----
 
@@ -1275,19 +1338,20 @@ dynastyedge/
 │   │   │   ├── PlayerCard.jsx
 │   │   │   └── PickBadge.jsx
 │   │   ├── trade/
-│   │   │   ├── TradeLayout.jsx      ← sub-tabs + trade deadline banner
+│   │   │   ├── TradeLayout.jsx      ← sub-tabs (Partners/Analyzer/Targets/Managers) + deadline banner
 │   │   │   ├── TradePartnerFinder.jsx
 │   │   │   ├── TradeAnalyzer.jsx
 │   │   │   ├── TradeBuilder.jsx
 │   │   │   ├── TradeVerdict.jsx
 │   │   │   └── WhatsFair.jsx
 │   │   ├── lineup/
+│   │   │   ├── LineupLayout.jsx     ← sub-tabs: Optimizer / Season Review
 │   │   │   ├── LineupOptimizer.jsx
-│   │   │   ├── LineupEfficiency.jsx ← season review: actual vs optimal points
+│   │   │   ├── LineupEfficiency.jsx ← Season Review tab: actual vs optimal points
 │   │   │   ├── StarterSlot.jsx
 │   │   │   └── FreeAgentDrawer.jsx
 │   │   ├── league/
-│   │   │   ├── LeagueLayout.jsx     ← sub-tabs: Overview / Activity / Movers / Playoffs / Managers
+│   │   │   ├── LeagueLayout.jsx     ← sub-tabs: Overview / Activity / Movers / Playoffs
 │   │   │   ├── LeagueOverview.jsx
 │   │   │   ├── LeagueActivity.jsx   ← transaction feed (trades, waivers, FAAB bids)
 │   │   │   ├── MarketMovers.jsx     ← risers/fallers, buy-low / sell-high
@@ -1310,6 +1374,7 @@ dynastyedge/
 │   │       ├── SectionHeader.jsx    ← THE section header — never duplicate it
 │   │       ├── PlayerProfileDrawer.jsx
 │   │       ├── NewsArticleSheet.jsx    ← tappable news reader bottom sheet
+│   │       ├── PlayerSearchSheet.jsx   ← global player search (header icon → profile)
 │   │       ├── WinWindowBadge.jsx
 │   │       ├── TrendArrow.jsx
 │   │       ├── DynastyEdgeLogo.jsx

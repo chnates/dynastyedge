@@ -23,7 +23,6 @@ import SectionHeader from '../shared/SectionHeader'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import StarterSlot from './StarterSlot'
 import FreeAgentDrawer from './FreeAgentDrawer'
-import LineupEfficiency from './LineupEfficiency'
 
 function OffseasonPlaceholder({ league }) {
   const myRoster = league?.myRoster
@@ -105,9 +104,6 @@ function OffseasonPlaceholder({ league }) {
           </div>
         </div>
       )}
-
-      {/* Last season's lineup efficiency — historical, so fine to show offseason */}
-      <LineupEfficiency />
     </div>
   )
 }
@@ -247,9 +243,6 @@ export default function LineupOptimizer() {
           </div>
         </section>
       )}
-
-      {/* Season-to-date efficiency review */}
-      <LineupEfficiency />
 
       {/* Free agent drawer */}
       {drawerState && fcValues?.playerMap && (

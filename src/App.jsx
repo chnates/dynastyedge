@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, lazy, Suspense } from 'react'
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { Menu } from 'lucide-react'
+import { Menu, Search } from 'lucide-react'
 import { useLeague } from './hooks/useLeague'
 import { useTheme } from './hooks/useTheme'
 import { LeagueContext } from './context/LeagueContext'
@@ -18,7 +18,9 @@ const TradeLayout       = lazy(() => import('./components/trade/TradeLayout'))
 const TradePartnerFinder = lazy(() => import('./components/trade/TradePartnerFinder'))
 const TradeAnalyzer     = lazy(() => import('./components/trade/TradeAnalyzer'))
 const WhatsFair         = lazy(() => import('./components/trade/WhatsFair'))
+const LineupLayout      = lazy(() => import('./components/lineup/LineupLayout'))
 const LineupOptimizer   = lazy(() => import('./components/lineup/LineupOptimizer'))
+const LineupEfficiency  = lazy(() => import('./components/lineup/LineupEfficiency'))
 const LeagueLayout      = lazy(() => import('./components/league/LeagueLayout'))
 const LeagueOverview    = lazy(() => import('./components/league/LeagueOverview'))
 const LeagueActivity    = lazy(() => import('./components/league/LeagueActivity'))
@@ -30,6 +32,7 @@ const DraftLayout       = lazy(() => import('./components/draft/DraftLayout'))
 const DraftBoard        = lazy(() => import('./components/draft/DraftBoard'))
 const DraftTracker      = lazy(() => import('./components/draft/DraftTracker'))
 const PickTradeCalculator = lazy(() => import('./components/draft/PickTradeCalculator'))
+const PlayerSearchSheet = lazy(() => import('./components/shared/PlayerSearchSheet'))
 
 const SECTION_NAMES = {
   '/edge':   'The Edge',
@@ -65,6 +68,7 @@ function formatTimestamp(ts) {
 function AppShell({ leagueData }) {
   const location = useLocation()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const { isDark, toggleTheme } = useTheme()
   const edgeTouchStartX = useRef(null)
 
@@ -134,8 +138,22 @@ function AppShell({ leagueData }) {
           <span className="font-body font-semibold text-[17px] text-text-primary ml-1">
             {getSectionName(location.pathname)}
           </span>
+          <span className="flex-1" />
+          <button
+            onClick={() => setSearchOpen(true)}
+            aria-label="Search players"
+            className="w-11 h-11 flex items-center justify-center rounded-lg text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex-shrink-0"
+          >
+            <Search size={20} strokeWidth={1.75} />
+          </button>
         </div>
       </header>
+
+      {searchOpen && (
+        <Suspense fallback={null}>
+          <PlayerSearchSheet onClose={() => setSearchOpen(false)} />
+        </Suspense>
+      )}
 
       {/* The scroll container runs to the physical bottom edge; the home-
           indicator clearance lives INSIDE it as padding so content scrolls
@@ -163,15 +181,20 @@ function AppShell({ leagueData }) {
               <Route index element={<TradePartnerFinder />} />
               <Route path="analyze" element={<TradeAnalyzer />} />
               <Route path="whats-fair" element={<WhatsFair />} />
+              <Route path="managers" element={<ManagersView />} />
             </Route>
-            <Route path="/lineup" element={<LineupOptimizer />} />
+            <Route path="/lineup" element={<LineupLayout />}>
+              <Route index element={<LineupOptimizer />} />
+              <Route path="season-review" element={<LineupEfficiency />} />
+            </Route>
             <Route path="/league" element={<LeagueLayout />}>
               <Route index element={<LeagueOverview />} />
               <Route path="activity" element={<LeagueActivity />} />
               <Route path="movers" element={<MarketMovers />} />
               <Route path="playoffs" element={<PlayoffOdds />} />
-              <Route path="managers" element={<ManagersView />} />
             </Route>
+            {/* Managers moved to Trade — redirect old deep-links */}
+            <Route path="/league/managers" element={<Navigate to="/trade/managers" replace />} />
             <Route path="/news" element={<NewsView />} />
             <Route path="/draft" element={<DraftLayout />}>
               <Route index element={<Navigate to="board" replace />} />
