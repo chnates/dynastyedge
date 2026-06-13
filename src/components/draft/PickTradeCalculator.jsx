@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useSleeperDraft, buildDraftOrder, DRAFT_SEASON } from '../../hooks/useSleeperDraft'
+import { useSleeperRookies } from '../../hooks/useSleeperRookies'
 import { getTeamName } from '../../hooks/useLeague'
 import {
-  buildPickMarket, buildPriceBoard, pickRoundLabel, suggestPickPackages,
+  buildPickMarket, buildPriceBoard, makePickPricer, pickRoundLabel, suggestPickPackages,
 } from '../../utils/pickTrades'
+import { buildRookieProspects } from '../../utils/rookieAdp'
 import { MY_ROSTER_ID } from '../../constants'
 import { ROUND_TEXT, ROUND_LABELS } from '../../utils/roundColors'
 import SectionHeader from '../shared/SectionHeader'
@@ -113,6 +115,7 @@ function PriceBoard({ board, slotLevel }) {
 export default function PickTradeCalculator() {
   const { league, values, loading, error, retry } = useLeagueContext()
   const sleeperDraft = useSleeperDraft()
+  const { sleeperRookieMap } = useSleeperRookies()
   const navigate = useNavigate()
   const [mode, setMode] = useState('up')
   const [expandedKey, setExpandedKey] = useState(null)
@@ -125,14 +128,25 @@ export default function PickTradeCalculator() {
     [sleeperDraft.data]
   )
 
+  // Rookie-class pricer: keeps current-season picks valued in the window
+  // between the NFL draft (generic pick entries retire) and the league's
+  // rookie draft (picks still live). Other seasons fall through to the
+  // generic FantasyCalc market price.
+  const priceFor = useMemo(() => {
+    const prospects = buildRookieProspects(sleeperRookieMap, values?.playerMap)
+    return makePickPricer({
+      pickEntries, prospects, draftSeason: DRAFT_SEASON, teams: allRosters.length || 10,
+    })
+  }, [pickEntries, sleeperRookieMap, values, allRosters.length])
+
   const market = useMemo(
-    () => buildPickMarket({ allRosters, draftOrder, pickEntries, season: DRAFT_SEASON }),
-    [allRosters, draftOrder, pickEntries]
+    () => buildPickMarket({ allRosters, draftOrder, priceFor, season: DRAFT_SEASON }),
+    [allRosters, draftOrder, priceFor]
   )
 
   const priceBoard = useMemo(
-    () => buildPriceBoard(pickEntries, DRAFT_SEASON),
-    [pickEntries]
+    () => buildPriceBoard(pickEntries, DRAFT_SEASON, 4, priceFor),
+    [pickEntries, priceFor]
   )
 
   // My package ammo: this season's picks at slot precision (from the market)
@@ -144,10 +158,10 @@ export default function PickTradeCalculator() {
       .map(p => ({
         season: p.season, round: p.round, slot: null, slotLabel: null,
         label: pickRoundLabel(p), ownerRosterId: MY_ROSTER_ID,
-        rosterPick: p, value: p.value ?? 0,
+        rosterPick: p, value: priceFor({ season: p.season, round: p.round }),
       }))
     return [...thisSeason, ...future]
-  }, [market, league])
+  }, [market, league, priceFor])
 
   // Same pool per opponent, for move-down return packages
   const candidatesFor = useMemo(() => {
@@ -161,12 +175,12 @@ export default function PickTradeCalculator() {
         .map(p => ({
           season: p.season, round: p.round, slot: null, slotLabel: null,
           label: pickRoundLabel(p), ownerRosterId: rosterId,
-          rosterPick: p, value: p.value ?? 0,
+          rosterPick: p, value: priceFor({ season: p.season, round: p.round }),
         }))
       cache[rosterId] = [...thisSeason, ...future]
       return cache[rosterId]
     }
-  }, [market, allRosters])
+  }, [market, allRosters, priceFor])
 
   if (loading && !league) return <LoadingSpinner message="Loading pick market…" />
   if (error && !league) return <ErrorState message={error} onRetry={retry} />
