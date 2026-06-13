@@ -1386,8 +1386,17 @@ Do not implement them until explicitly asked.
 - League-wide news feed page (per-player ESPN news is built into the
   Player Profile drawer; a browsable all-news feed is not)
 - FAAB bid recommender for waiver pickups
+- Playoff odds / rest-of-season simulator — **target: ship before Week 1.**
+  Client-side Monte Carlo over the remaining schedule (each team's weekly
+  scoring modeled from its season mean/variance, seeded from projections
+  early in the year) → playoff odds per team, projected seeding, and a
+  buyer/seller trade-deadline verdict. Feeds Trade Analyzer Layer 3 (real
+  probabilities behind win-window fit), Trade Partner Finder (odds-collapse
+  sell windows), and The Edge ("your playoff odds moved this week").
+  Subsumes the playoff strength-of-schedule view below — same schedule math.
 - Claude Design visual refresh
 - Playoff strength-of-schedule view (Weeks 15–17 matchup outlook for starters)
+  — likely folded into the playoff odds simulator above
 - Push notifications for trade offers (requires backend — out of scope for v1)
 
 ### Already built (formerly future features)
