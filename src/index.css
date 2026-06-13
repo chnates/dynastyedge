@@ -116,3 +116,19 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .edge-rise { animation: none; }
 }
+
+/* ── iOS focus-zoom guard ────────────────────────────────────── */
+/* Mobile Safari zooms the whole page when a focused form control's    */
+/* font-size is under 16px. Every input/select/textarea in the app     */
+/* renders at text-sm (14px), so tapping any of them — universal       */
+/* search, free agents, draft, trade, news — triggers the zoom. Force  */
+/* 16px on touch devices to kill the focus-zoom while leaving          */
+/* pinch-zoom intact (we never set maximum-scale). Desktop keeps the   */
+/* designed 14px. !important is required to win over the utility class. */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
