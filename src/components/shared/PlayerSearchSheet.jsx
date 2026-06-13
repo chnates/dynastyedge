@@ -80,7 +80,14 @@ export default function PlayerSearchSheet({ onClose }) {
       ref={overlayRef}
       onClick={handleOverlayClick}
       className="fixed left-0 right-0 z-50 flex items-end bg-black/60"
-      style={{ top: vp.offsetTop, height: vp.height }}
+      style={{
+        top: vp.offsetTop,
+        height: vp.height,
+        // The visual viewport reaches under the status bar in standalone mode;
+        // pad the top by the safe-area inset (+ a small gap) so a long list
+        // caps below the notch instead of sliding the header off-screen.
+        paddingTop: 'calc(env(safe-area-inset-top) + 8px)',
+      }}
     >
       <div
         ref={sheetRef}
