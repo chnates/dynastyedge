@@ -356,6 +356,12 @@ export default function EdgeView() {
               )
             })}
           </div>
+          <button
+            onClick={() => navigate('/news')}
+            className="mt-2 w-full py-2 rounded-xl border border-accent/25 bg-accent/5 font-body text-xs font-semibold text-accent active:opacity-70 transition-opacity"
+          >
+            All headlines →
+          </button>
         </section>
       )}
 

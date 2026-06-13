@@ -28,7 +28,7 @@ lineup optimization with matchup context, and a full league-wide competitive lan
 |----------|----------------|-----------------------------------|
 |Framework |React (via Vite)|Functional components + hooks only |
 |Styling   |Tailwind CSS    |Dark mode default, mobile-first    |
-|Navigation|React Router v7 |Side drawer menu, 6 sections       |
+|Navigation|React Router v7 |Side drawer menu, 7 sections       |
 |Build tool|Vite            |Outputs to `dist/` for GitHub Pages|
 |Deployment|GitHub Pages    |Auto-deploys via GitHub Actions    |
 |CI/CD     |GitHub Actions  |Triggers on every push to `main`   |
@@ -945,6 +945,47 @@ render, and Layer 3 falls back to the tier-only read).
 
 -----
 
+### Feature 15 — News (top-level drawer section)
+
+**Purpose:** a browsable, filterable view of the **entire** aggregated news
+feed — the "show me everything" companion to the per-player news in the
+Profile drawer and the roster-scoped Headlines slice on The Edge. Its own
+top-level drawer section (`/news`, violet identity), single view (no
+sub-tabs).
+
+**Zero new data sources.** It reads the same once-per-session aggregated feed
+(`loadNewsFeed` → the `news-data` branch's `news.json`, ≤100 items) used
+everywhere else — see the Player news pipeline.
+
+**`useNewsFeed` hook:** returns `{ items, loading }` — the *full* feed
+(newest-first), each item enriched with the best-matched FantasyCalc-ranked
+player (so a tap opens that player's profile) and an `isMine` flag. Matching
+builds two memoized indices from `values.playerMap` + `playerDB`:
+`espn_id → player` (primary, via the item's `athleteIds`) and a
+normalized-full-name → player fallback (sorted longest-first so a more
+specific name wins). Unlike `useLeagueNews` — which filters to a player set
+and drops the rest — this keeps unmatched general NFL items too (shown with
+an "NFL" tag). Same best-effort contract: any failure yields `[]`.
+
+**`NewsView` page:**
+- Search box (headline text + player name) + `All / My Players / Watchlist`
+  filter chips (My Players = roster ∪ watchlist; Watchlist = watchlisted
+  players only).
+- Light date grouping (Today / Yesterday / Earlier); rows show source · time,
+  the matched player + position color (or "NFL"), a "You" chip for my-roster
+  items, the headline, and a 2-line story snippet.
+- Tap a row → `NewsArticleSheet` (reused); its "View profile" →
+  `PlayerProfileDrawer` (reused).
+- **States:** standard loading spinner; a friendly empty state ("No news
+  right now") when the feed is empty/unreachable, or "No stories match your
+  filter" when filtered to nothing — never an error or retry-loop (a full
+  page can't silently hide like the inline news surfaces do).
+
+**The Edge integration:** the Headlines section gains an "All headlines →"
+footer link to `/news` (same treatment as "All market movers →").
+
+-----
+
 ### Trade deadline banner
 
 The Trade section shows a persistent banner under the sub-tabs during the
@@ -972,7 +1013,8 @@ Side drawer sections:
 |3  |Trade   |Partners · Analyzer · Targets (+ deadline banner)        |
 |4  |Lineup  |Lineup Optimizer + Season Review (lineup efficiency)     |
 |5  |League  |Overview · Activity · Movers · Playoffs · Managers       |
-|6  |Draft   |Rookie draft board · Draft pick tracker · Pick trade calculator|
+|6  |News    |League-wide aggregated news feed (browsable + filterable) |
+|7  |Draft   |Rookie draft board · Draft pick tracker · Pick trade calculator|
 
 Sections with multiple views use a sub-tab bar pinned under the app header.
 The drawer also holds: data freshness timestamp, manual Refresh, and the theme toggle.
@@ -1155,7 +1197,7 @@ The treatment rolls through the whole app:
 
 Each nav section has an identity hue (defined inline in `SideDrawer.jsx`):
 The Edge accent blue · Roster sky · Trade green · Lineup orange · League gold ·
-Draft pink. Icons
+News violet · Draft pink. Icons
 always wear the section color; the active item gets the matching tinted
 background and edge bar. These are navigation identity only — they carry no
 status meaning.
@@ -1254,6 +1296,8 @@ dynastyedge/
 │   │   │   ├── ManagerScoutingSheet.jsx ← per-manager sheet: ledger, drafts, tendencies
 │   │   │   ├── TeamCard.jsx
 │   │   │   └── MatchupCard.jsx
+│   │   ├── news/
+│   │   │   └── NewsView.jsx         ← League-wide aggregated news feed (browsable)
 │   │   ├── draft/
 │   │   │   ├── DraftLayout.jsx
 │   │   │   ├── DraftBoard.jsx       ← rookie board: tiers, My Board, CSV columns
@@ -1287,6 +1331,7 @@ dynastyedge/
 │   │   ├── useWatchlist.js      ← starred players (localStorage-backed store)
 │   │   ├── useLastVisit.js      ← The Edge's "since your last visit" anchor
 │   │   ├── useLeagueNews.js     ← news feed matched to my roster + watchlist
+│   │   ├── useNewsFeed.js       ← full aggregated feed for the News section
 │   │   ├── useValueHistory.js   ← daily value snapshots for sparklines (best-effort)
 │   │   ├── usePlayerIntel.js    ← production stats + depth chart + ESPN news
 │   │   ├── useScrollLock.js     ← freezes <main> while a bottom sheet is open
@@ -1509,8 +1554,6 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 These are noted so the codebase is structured to support them later.
 Do not implement them until explicitly asked.
 
-- League-wide news feed page (per-player ESPN news is built into the
-  Player Profile drawer; a browsable all-news feed is not)
 - FAAB bid recommender for waiver pickups
 - Claude Design visual refresh
 - Push notifications for trade offers (requires backend — out of scope for v1)
@@ -1529,3 +1572,4 @@ Do not implement them until explicitly asked.
   (Feature 14); strength-of-schedule outlook is subsumed by it. Odds feed
   Trade Analyzer Layer 3, Trade Partner Finder (buyer/seller flags), and The
   Edge (briefing item)
+- League-wide news feed page → News section (Feature 15)

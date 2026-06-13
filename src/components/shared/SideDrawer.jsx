@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
-  Zap, Users, ArrowLeftRight, LayoutList, Trophy, FileText,
+  Zap, Users, ArrowLeftRight, LayoutList, Trophy, FileText, Newspaper,
   RefreshCw, Sun, Moon,
 } from 'lucide-react'
 import DynastyEdgeLogo from './DynastyEdgeLogo'
@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { to: '/trade',  label: 'Trade',  Icon: ArrowLeftRight, text: 'text-success', activeBg: 'bg-success/10', bar: 'bg-success' },
   { to: '/lineup', label: 'Lineup', Icon: LayoutList,     text: 'text-pos-te',  activeBg: 'bg-pos-te/10',  bar: 'bg-pos-te'  },
   { to: '/league', label: 'League', Icon: Trophy,         text: 'text-warning', activeBg: 'bg-warning/10', bar: 'bg-warning' },
+  { to: '/news',   label: 'News',   Icon: Newspaper,      text: 'text-pos-def', activeBg: 'bg-pos-def/10', bar: 'bg-pos-def' },
   { to: '/draft',  label: 'Draft',  Icon: FileText,       text: 'text-pos-qb',  activeBg: 'bg-pos-qb/10',  bar: 'bg-pos-qb'  },
 ]
 
