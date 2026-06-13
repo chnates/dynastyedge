@@ -1036,6 +1036,65 @@ them. The single global accelerant for a player-heavy app.
 
 -----
 
+### Feature 17 — Dynasty Trajectory (Roster › Trajectory)
+
+**Purpose:** the app's one forward-looking lens. Everything else is a snapshot
+of *now* (current values, current odds, *historical* trade grades); a dynasty
+is a multi-*year* horizon. Trajectory turns a roster from a value snapshot into
+a value curve over the next few seasons and answers the core dynasty question:
+**"when does my window peak — am I a buy-now or a build team?"** Works in season
+and offseason alike. **Zero new data sources** — pure logic over caches
+`LeagueContext` already holds.
+
+**Location:** a new **Roster sub-tab** (My Roster · All Teams · Free Agents ·
+**Trajectory**, `/roster/trajectory`), and **roster-agnostic** — the team
+drill-down (`RosterView` for `:rosterId`) carries a "Dynasty Trajectory →" card
+that opens `/roster/trajectory/:rosterId`, so you can scout an opponent's window
+("this contender's value slams shut after 2026 — they'll sell"). Sets up a
+Trade Partner Finder tie-in later.
+
+**The model (`utils/dynastyTrajectory.js`, pure):**
+
+- **Market age curve per position (`buildAgeCurves`)** — for each position,
+  learn what the dynasty market pays at every age *straight from today's
+  FantasyCalc pool*: a Gaussian-kernel-smoothed (bandwidth 2.5y) weighted
+  *median* of value by age, blended toward a `peakWindows.js`-shaped prior
+  (pseudo-count 4) so thin age bins stay sane. No hardcoded decay rates — it
+  recalibrates every load as the market moves, matching the "never hardcode
+  values" rule.
+- **Projection** — a player's value `n` seasons out is
+  `currentValue × curve(age + n) / curve(age)`, clamped per year (0.55×–1.18×).
+  The talent residual cancels, so a stud and a scrub ride the same proportional
+  curve; a 27-yo RB sheds value faster than a 24-yo WR. Unranked / no-age
+  players hold flat (we never invent a curve the market hasn't priced) and
+  contribute 0, same contract as everywhere.
+- **Picks mature into rookies** — a pick holds at its current FantasyCalc value
+  until its draft year, then converts to a rookie-aged (22) young asset that
+  ages on a generic cross-position blended curve. So a 2027 first starts paying
+  into the +1/+2 outlook.
+- `buildRosterTrajectory` sums player + pick projections into a
+  current→+1→+2→+3 team series plus per-position sub-series.
+  `getTrajectoryVerdict` reads the peak year + 3-yr change into a plain-English
+  window call (ascending / balanced / declining); `seriesDirection` and
+  `peakStatusShort` drive the per-position and per-player tags.
+
+**UI (`components/roster/TrajectoryView.jsx`):**
+- **Window verdict card** (tone-colored edge bar) — "Window peaks {year}" + a
+  one-sentence buy/hold/sell read.
+- **Forward value chart** — inline SVG line of the team's current→+3 value with
+  a gradient area fill, peak year ringed + labeled, and a dashed
+  **league-average** line for context (built across all rosters).
+- **Stat cards:** value now, projected final year, peak season, 3-yr change %.
+- **By Position** rows: each position's now→+3 with a `Sparkline`, Rising /
+  Holding / Falling tag, and delta %.
+- **Player Projections** table: now→+3 per player with a sparkline, delta %, and
+  peak-window status; tap → `PlayerProfileDrawer`.
+- Collapsible **"How this works"** — states plainly it's a model/estimate, not a
+  forecast (can't know breakouts, injuries, trades) — read the *shape*.
+- Mobile-first at 390px; standard loading / `ErrorState` + retry.
+
+-----
+
 ### Trade deadline banner
 
 The Trade section shows a persistent banner under the sub-tabs during the
@@ -1061,7 +1120,7 @@ Side drawer sections:
 |#  |Section |Feature                                                  |
 |---|--------|---------------------------------------------------------|
 |1  |The Edge|Daily briefing home screen (default route)               |
-|2  |Roster  |My Roster · All Teams · Free Agents                      |
+|2  |Roster  |My Roster · All Teams · Free Agents · Trajectory          |
 |3  |Trade   |Partners · Analyzer · Targets · Managers (+ deadline banner)|
 |4  |Lineup  |Optimizer · Season Review                                 |
 |5  |League  |Overview · Activity · Movers · Playoffs                   |
@@ -1335,6 +1394,7 @@ dynastyedge/
 │   │   │   ├── FreeAgentsView.jsx
 │   │   │   ├── RosterActionItems.jsx
 │   │   │   ├── RosterAnalysisSheet.jsx  ← age-lane chart + win window bottom sheet
+│   │   │   ├── TrajectoryView.jsx   ← multi-year forward value projection (any team)
 │   │   │   ├── PlayerCard.jsx
 │   │   │   └── PickBadge.jsx
 │   │   ├── trade/
@@ -1416,6 +1476,7 @@ dynastyedge/
 │   │   ├── edgeBriefing.js      ← The Edge: signals, briefing items, GM line
 │   │   ├── managerAnalysis.js   ← manager scouting: ledgers, tendencies, draft grades
 │   │   ├── rosterAnalysis.js    ← positional strength, win window tiers
+│   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation
 │   │   ├── pickCapital.js       ← pick ownership resolution logic
 │   │   ├── rookieAdp.js         ← derived rookie-class ADP for the Draft section
 │   │   ├── pickTrades.js        ← pick trade calculator: slot pricing + packages

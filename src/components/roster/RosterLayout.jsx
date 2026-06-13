@@ -4,6 +4,7 @@ const SUB_TABS = [
   { label: 'My Roster',    to: '/roster/my-team',     end: false },
   { label: 'All Teams',    to: '/roster/teams',       end: false },
   { label: 'Free Agents',  to: '/roster/free-agents', end: false },
+  { label: 'Trajectory',   to: '/roster/trajectory',  end: false },
 ]
 
 export default function RosterLayout() {

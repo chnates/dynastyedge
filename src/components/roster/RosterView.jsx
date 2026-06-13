@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ChevronRight, ScanSearch } from 'lucide-react'
+import { ChevronRight, ScanSearch, TrendingUp } from 'lucide-react'
 import { getTeamName } from '../../hooks/useLeague'
 import { useLeagueContext } from '../../context/LeagueContext'
 import LoadingSpinner from '../shared/LoadingSpinner'
@@ -111,6 +111,27 @@ export default function RosterView() {
         </div>
 
       </div>
+
+      {/* ── Dynasty trajectory (scouting another team — not otherwise reachable) ── */}
+      {selectedRosterId && (
+        <button
+          onClick={() => navigate(`/roster/trajectory/${selectedRosterId}`)}
+          className="w-full mt-4 mb-1 flex items-center gap-2.5 px-3 py-3 rounded-xl bg-bg-card border border-border-default border-l-[3px] border-l-accent active:opacity-60 transition-opacity"
+        >
+          <span className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-accent/15">
+            <TrendingUp size={15} strokeWidth={2} className="text-accent" />
+          </span>
+          <div className="flex-1 text-left">
+            <p className="font-body text-sm font-semibold text-text-primary leading-tight">
+              Dynasty Trajectory
+            </p>
+            <p className="font-body text-[10px] text-text-tertiary mt-0.5">
+              Where this team's value is headed · when their window closes
+            </p>
+          </div>
+          <ChevronRight size={16} strokeWidth={1.75} className="text-text-tertiary flex-shrink-0" />
+        </button>
+      )}
 
       {/* ── Action Items banner (own roster only) ── */}
       {!selectedRosterId && (

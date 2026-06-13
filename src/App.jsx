@@ -14,6 +14,7 @@ const RosterLayout      = lazy(() => import('./components/roster/RosterLayout'))
 const RosterView        = lazy(() => import('./components/roster/RosterView'))
 const AllTeamsView      = lazy(() => import('./components/roster/AllTeamsView'))
 const FreeAgentsView    = lazy(() => import('./components/roster/FreeAgentsView'))
+const TrajectoryView    = lazy(() => import('./components/roster/TrajectoryView'))
 const TradeLayout       = lazy(() => import('./components/trade/TradeLayout'))
 const TradePartnerFinder = lazy(() => import('./components/trade/TradePartnerFinder'))
 const TradeAnalyzer     = lazy(() => import('./components/trade/TradeAnalyzer'))
@@ -176,6 +177,8 @@ function AppShell({ leagueData }) {
               <Route path="teams" element={<AllTeamsView />} />
               <Route path="teams/:rosterId" element={<RosterView />} />
               <Route path="free-agents" element={<FreeAgentsView />} />
+              <Route path="trajectory" element={<TrajectoryView />} />
+              <Route path="trajectory/:rosterId" element={<TrajectoryView />} />
             </Route>
             <Route path="/trade" element={<TradeLayout />}>
               <Route index element={<TradePartnerFinder />} />
