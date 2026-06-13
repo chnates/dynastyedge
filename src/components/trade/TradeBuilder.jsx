@@ -13,10 +13,12 @@ const ROUND_SUFFIXES = ['', '1st', '2nd', '3rd', '4th']
 
 function pickLabel(pick) {
   const suffix = ROUND_SUFFIXES[pick.round] ?? `R${pick.round}`
-  return `${pick.season} ${suffix}`
+  // Assets from the Pick Trade Calculator carry an exact slot (e.g. "1.02")
+  return pick.slotLabel ? `${pick.season} ${suffix} (${pick.slotLabel})` : `${pick.season} ${suffix}`
 }
 
 function pickShortLabel(pick) {
+  if (pick.slotLabel) return `'${String(pick.season).slice(2)} ${pick.slotLabel}`
   const suffix = ROUND_SUFFIXES[pick.round] ?? `R${pick.round}`
   return `'${String(pick.season).slice(2)} ${suffix}`
 }

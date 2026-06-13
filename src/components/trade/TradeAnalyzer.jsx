@@ -139,19 +139,26 @@ export default function TradeAnalyzer() {
   const initId        = location.state?.opponentRosterId
   const initTarget    = location.state?.whatsFairTarget
   const preloadGive   = location.state?.preloadGivePlayer
+  // Full two-sided pre-fill (Pick Trade Calculator): { opponentRosterId, give, get }
+  const initTrade     = location.state?.preloadTrade
 
   // Navigation state takes priority; otherwise restore the session draft so
   // hopping to another tab and back doesn't lose a half-built trade.
-  const hasNavState = (initId !== undefined && initId !== null) || !!initTarget || !!preloadGive
+  const hasNavState = (initId !== undefined && initId !== null) || !!initTarget || !!preloadGive || !!initTrade
   const draftRef = useRef(hasNavState ? null : loadDraft())
   const draft = draftRef.current
 
   const [selectedOpponentId, setSelectedOpponentId] = useState(() => {
-    if (hasNavState) return initId !== undefined && initId !== null ? Number(initId) : null
+    if (hasNavState) {
+      if (initTrade?.opponentRosterId != null) return Number(initTrade.opponentRosterId)
+      return initId !== undefined && initId !== null ? Number(initId) : null
+    }
     return draft?.opponentId ?? null
   })
-  const [giveAssets, setGiveAssets] = useState(() => draft?.giveAssets ?? [])
-  const [getAssets,  setGetAssets]  = useState(() => draft?.getAssets ?? [])
+  const [giveAssets, setGiveAssets] = useState(() =>
+    initTrade?.give?.map(a => makeAsset(a, a.type ?? 'pick')) ?? draft?.giveAssets ?? [])
+  const [getAssets,  setGetAssets]  = useState(() =>
+    initTrade?.get?.map(a => makeAsset(a, a.type ?? 'pick')) ?? draft?.getAssets ?? [])
   const [whatsFairTarget, setWhatsFairTarget] = useState(() => {
     if (initTarget) return { ...initTarget, type: 'player', id: String(initTarget.sleeperId) }
     return draft?.whatsFairTarget ?? null

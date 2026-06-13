@@ -27,6 +27,7 @@ const ManagersView      = lazy(() => import('./components/league/ManagersView'))
 const DraftLayout       = lazy(() => import('./components/draft/DraftLayout'))
 const DraftBoard        = lazy(() => import('./components/draft/DraftBoard'))
 const DraftTracker      = lazy(() => import('./components/draft/DraftTracker'))
+const PickTradeCalculator = lazy(() => import('./components/draft/PickTradeCalculator'))
 
 const SECTION_NAMES = {
   '/edge':   'The Edge',
@@ -171,6 +172,7 @@ function AppShell({ leagueData }) {
               <Route index element={<Navigate to="board" replace />} />
               <Route path="board" element={<DraftBoard />} />
               <Route path="tracker" element={<DraftTracker />} />
+              <Route path="trades" element={<PickTradeCalculator />} />
             </Route>
           </Routes>
         </Suspense>

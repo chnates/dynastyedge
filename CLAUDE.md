@@ -824,6 +824,48 @@ visit ⇒ no "New" badges, activity shows the latest moves instead.
 
 -----
 
+### Feature 13 — Pick Trade Calculator (Draft › Pick Trades)
+
+**Purpose:** "What does it cost to move up — and what should moving down
+bring back?" Rookie-draft pick-swap planning for the weeks before and during
+the draft. Zero new data sources: composes LeagueContext (rosters, pick
+ownership, FantasyCalc pick entries) with `useSleeperDraft`'s draft order.
+Pure logic lives in `utils/pickTrades.js`.
+
+**Slot-level pricing:** FantasyCalc lists picks as "2026 Early 1st" /
+"Mid" / "Late". When Sleeper has set the draft order (`slot_to_roster_id`,
+via `buildDraftOrder` — including in-draft pick trades), every pick maps to
+its exact slot (1.01–4.10) and is priced by its round's Early (slots 1–3) /
+Mid (4–7) / Late (8–10) tier entry. Before the order exists, the market
+falls back to round-level picks at round medians (`findPickValue`) with a
+note that prices upgrade automatically. A price-board card shows each
+round's E/M/L prices on top.
+
+**Move Up:** every opponent-owned pick of the draft season in draft order;
+tap one → up to 3 suggested packages from my pick inventory (this season's
+picks at slot prices + future-year picks at medians). Packages are 1–3
+picks, each strictly worth less than the target (equal value = a swap, not
+a move), totaling 80–145% of the target; undershoot is penalized 1.6× over
+overshoot (sellers don't take light offers; buyers may pay a premium).
+
+**Move Down:** my picks; tap one → the best return package from each
+opponent's inventory (top 4 partners by closeness).
+
+**Analyzer handoff:** every package has a "Build →" button →
+`navigate('/trade/analyze', { state: { preloadTrade: { opponentRosterId,
+give, get } } })`. Assets are the owner's actual roster pick objects (same
+id as the add sheet, so toggles dedupe) but priced at slot precision and
+carrying `slotLabel`, so the Analyzer's totals match the calculator's math
+and the builder displays "'26 1.02". `preloadTrade` joins the Analyzer's
+nav-state inputs (takes priority over the sessionStorage draft, like the
+others). Picks added later via the add sheet use round-median values —
+mixed precision is accepted.
+
+**Empty states:** no package reaches fair value → one-line hint ("add a
+player in the Analyzer to bridge the gap") — never silently empty.
+
+-----
+
 ### Trade deadline banner
 
 The Trade section shows a persistent banner under the sub-tabs during the
@@ -851,7 +893,7 @@ Side drawer sections:
 |3  |Trade   |Partners · Analyzer · Targets (+ deadline banner)        |
 |4  |Lineup  |Lineup Optimizer + Season Review (lineup efficiency)     |
 |5  |League  |Overview · Activity · Movers · Managers                  |
-|6  |Draft   |Rookie draft board · Draft pick tracker                  |
+|6  |Draft   |Rookie draft board · Draft pick tracker · Pick trade calculator|
 
 Sections with multiple views use a sub-tab bar pinned under the app header.
 The drawer also holds: data freshness timestamp, manual Refresh, and the theme toggle.
@@ -1136,6 +1178,7 @@ dynastyedge/
 │   │   │   ├── DraftLayout.jsx
 │   │   │   ├── DraftBoard.jsx       ← rookie board: tiers, My Board, CSV columns
 │   │   │   ├── DraftTracker.jsx     ← Sleeper-synced live tracker + manual fallback
+│   │   │   ├── PickTradeCalculator.jsx ← move-up/move-down pick package planner
 │   │   │   └── boardStorage.js      ← shared draft-section localStorage keys
 │   │   └── shared/
 │   │       ├── SideDrawer.jsx       ← the app's only navigation
@@ -1184,6 +1227,7 @@ dynastyedge/
 │   │   ├── rosterAnalysis.js    ← positional strength, win window tiers
 │   │   ├── pickCapital.js       ← pick ownership resolution logic
 │   │   ├── rookieAdp.js         ← derived rookie-class ADP for the Draft section
+│   │   ├── pickTrades.js        ← pick trade calculator: slot pricing + packages
 │   │   ├── peakWindows.js       ← position peak-age windows + status helper
 │   │   ├── lineupHistory.js     ← optimal-lineup math for efficiency review
 │   │   └── projections.js       ← lineup optimization, matchup quality
