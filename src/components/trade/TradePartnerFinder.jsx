@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Target, CheckCircle2, Circle, AlertTriangle, Star, History, TrendingDown, TrendingUp } from 'lucide-react'
+import { Target, CheckCircle2, Circle, AlertTriangle, Star, History, TrendingDown, TrendingUp, LineChart } from 'lucide-react'
 import { getTeamName } from '../../hooks/useLeague'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useWatchlist } from '../../hooks/useWatchlist'
 import { useManagerProfiles } from '../../hooks/useManagerProfiles'
 import { usePlayoffOdds } from '../../hooks/usePlayoffOdds'
 import { rankTradePartners } from '../../utils/rosterAnalysis'
+import { buildAgeCurves, buildRosterTrajectory, getTrajectoryRead } from '../../utils/dynastyTrajectory'
 import { MY_ROSTER_ID } from '../../constants'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import LoadingSpinner from '../shared/LoadingSpinner'
@@ -92,7 +93,27 @@ function OddsSignal({ odds }) {
   return null
 }
 
-function TradePartnerCard({ partner, watchedNames, profile, odds, onClick }) {
+// Multi-year value direction from the Dynasty Trajectory model. Always
+// available (no extra fetch) — complements the this-season OddsSignal.
+const TRAJ_STYLES = {
+  declining: 'text-danger',
+  ascending: 'text-success',
+  stable: 'text-text-tertiary dark:text-text-tertiary',
+}
+
+function TrajectorySignal({ read }) {
+  if (!read) return null
+  return (
+    <div className="flex items-center gap-1.5 min-w-0">
+      <LineChart size={12} strokeWidth={2} className={`shrink-0 ${TRAJ_STYLES[read.direction]}`} />
+      <span className="font-body text-[11px] text-text-secondary dark:text-text-secondary truncate">
+        {read.label}
+      </span>
+    </div>
+  )
+}
+
+function TradePartnerCard({ partner, watchedNames, profile, odds, trajectoryRead, onClick }) {
   const { owner, fitBadge, winWindowTier, mismatchWarning, theirNeeds, theirHaves, pickCapStatus } = partner
   const badge = FIT_BADGE[fitBadge] ?? FIT_BADGE['Poor Fit']
 
@@ -150,6 +171,9 @@ function TradePartnerCard({ partner, watchedNames, profile, odds, onClick }) {
       {/* Likely buyer/seller read from live playoff odds (in-season) */}
       <OddsSignal odds={odds} />
 
+      {/* Multi-year value direction from the Dynasty Trajectory model */}
+      <TrajectorySignal read={trajectoryRead} />
+
       {/* Watched players on this roster */}
       {watchedNames?.length > 0 && (
         <div className="flex items-start gap-1.5">
@@ -172,7 +196,7 @@ function TradePartnerCard({ partner, watchedNames, profile, odds, onClick }) {
 }
 
 export default function TradePartnerFinder() {
-  const { league, loading, error, retry } = useLeagueContext()
+  const { league, values, nflState, loading, error, retry } = useLeagueContext()
   const { watchlist } = useWatchlist()
   // Behavioral profiles arrive whenever the lazy history fetch finishes —
   // the partner list renders immediately without them.
@@ -192,6 +216,19 @@ export default function TradePartnerFinder() {
     if (!league?.myRoster || !league?.allRosters?.length) return null
     return rankTradePartners(league.myRoster, league.allRosters)
   }, [league])
+
+  // Multi-year value-direction read per roster (zero extra fetches — reuses
+  // the cached FantasyCalc pool through the Dynasty Trajectory model).
+  const trajectoryByRoster = useMemo(() => {
+    if (!league?.allRosters?.length || !values?.playerMap) return {}
+    const { curves, generic } = buildAgeCurves(values.playerMap)
+    const season = Number(nflState?.season) || new Date().getFullYear()
+    const out = {}
+    league.allRosters.forEach(r => {
+      out[r.rosterId] = getTrajectoryRead(buildRosterTrajectory(r, season, curves, generic))
+    })
+    return out
+  }, [league, values, nflState])
 
   // Watched players on opponent rosters, grouped by owning team.
   const watchedByRoster = useMemo(() => {
@@ -268,6 +305,7 @@ export default function TradePartnerFinder() {
               watchedNames={(watchedByRoster[partner.rosterId] ?? []).map(p => p.name)}
               profile={profileByRoster[partner.rosterId] ?? null}
               odds={oddsByRoster[partner.rosterId] ?? null}
+              trajectoryRead={trajectoryByRoster[partner.rosterId] ?? null}
               onClick={() => navigate('/trade/analyze', { state: { opponentRosterId: partner.rosterId } })}
             />
           ))}

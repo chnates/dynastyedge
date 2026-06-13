@@ -374,6 +374,11 @@ Each team card shows:
 - Buyer/seller read from live playoff odds (in-season): a long-shot opponent
   (< 35% odds) is flagged "likely seller", a near-lock (≥ 70%) "buying
   win-now". From `usePlayoffOdds`; hidden in the offseason.
+- Multi-year value-direction read from the Dynasty Trajectory model
+  (`getTrajectoryRead`, Feature 17): a team whose projected value is sliding
+  ("selling vets"), climbing ("building"), or holding ("balanced window") —
+  always available (zero extra fetch), and distinct from the this-season
+  playoff-odds flag.
 - **Tap → opens Trade Analyzer pre-loaded with this team selected**
 
 -----
@@ -1050,8 +1055,13 @@ and offseason alike. **Zero new data sources** — pure logic over caches
 **Trajectory**, `/roster/trajectory`), and **roster-agnostic** — the team
 drill-down (`RosterView` for `:rosterId`) carries a "Dynasty Trajectory →" card
 that opens `/roster/trajectory/:rosterId`, so you can scout an opponent's window
-("this contender's value slams shut after 2026 — they'll sell"). Sets up a
-Trade Partner Finder tie-in later.
+("this contender's value slams shut after 2026 — they'll sell").
+
+**Trade Partner Finder integration:** each opponent card carries a one-line
+trajectory read via `getTrajectoryRead` — "Value peaks now, slides through {year}
+— selling vets" / "Value climbing toward {year} — building" / "Value holds near
+{year} — balanced window". Always available (no extra fetch) and distinct from
+the this-season playoff-odds buyer/seller flag.
 
 **The model (`utils/dynastyTrajectory.js`, pure):**
 

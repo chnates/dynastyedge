@@ -241,6 +241,30 @@ export function getTrajectoryVerdict(trajectory) {
   }
 }
 
+// Compact one-line trajectory read for a roster — used on Trade Partner Finder
+// cards. Distinct from the playoff-odds buyer/seller flag (that's this-season
+// win-now); this is the multi-year value direction: a team whose value is
+// sliding tends to sell veterans, a team whose value is climbing is building.
+export function getTrajectoryRead(trajectory) {
+  const { totalByYear, seasons } = trajectory
+  const now = totalByYear[0]
+  if (!now) return null
+
+  let peakIdx = 0
+  totalByYear.forEach((v, i) => { if (v > totalByYear[peakIdx]) peakIdx = i })
+  const endPct = (totalByYear[totalByYear.length - 1] - now) / now
+  const lastSeason = seasons[seasons.length - 1]
+  const peakSeason = seasons[peakIdx]
+
+  if (peakIdx === 0 && endPct < -0.08) {
+    return { direction: 'declining', pct: endPct, peakSeason, label: `Value peaks now, slides through ${lastSeason} — selling vets` }
+  }
+  if (peakIdx >= 2 || endPct > 0.05) {
+    return { direction: 'ascending', pct: endPct, peakSeason, label: `Value climbing toward ${peakSeason} — building` }
+  }
+  return { direction: 'stable', pct: endPct, peakSeason, label: `Value holds near ${peakSeason} — balanced window` }
+}
+
 // Short peak-window tag for a single player's table row.
 export function peakStatusShort(position, age) {
   const status = getPeakStatus(position, age)
