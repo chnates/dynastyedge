@@ -27,8 +27,28 @@ export default function PlayerSearchSheet({ onClose }) {
   const { sheetRef, scrollRef } = useSheetDrag(onClose)
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(null)
+  // Track the visual viewport so the sheet stays within the area above the
+  // iOS keyboard. `fixed` + `vh` use the layout viewport, which doesn't shrink
+  // when the keyboard opens — without this the result list overflows off the
+  // top of the screen and the search header scrolls out of view.
+  const [vp, setVp] = useState(() => ({
+    height: window.visualViewport?.height ?? window.innerHeight,
+    offsetTop: window.visualViewport?.offsetTop ?? 0,
+  }))
 
   useScrollLock()
+
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return undefined
+    const sync = () => setVp({ height: vv.height, offsetTop: vv.offsetTop })
+    vv.addEventListener('resize', sync)
+    vv.addEventListener('scroll', sync)
+    return () => {
+      vv.removeEventListener('resize', sync)
+      vv.removeEventListener('scroll', sync)
+    }
+  }, [])
 
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
@@ -59,16 +79,20 @@ export default function PlayerSearchSheet({ onClose }) {
     <div
       ref={overlayRef}
       onClick={handleOverlayClick}
-      className="fixed inset-0 z-50 flex items-end bg-black/60"
+      className="fixed left-0 right-0 z-50 flex items-end bg-black/60"
+      style={{ top: vp.offsetTop, height: vp.height }}
     >
-      <div ref={sheetRef} className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default">
+      <div
+        ref={sheetRef}
+        className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default flex flex-col max-h-full min-h-0"
+      >
         {/* Handle bar */}
-        <div className="flex justify-center pt-3 pb-1">
+        <div className="flex justify-center pt-3 pb-1 shrink-0">
           <div className="w-10 h-1 rounded-full bg-border-default" />
         </div>
 
         {/* Search header (fixed; results scroll below it) */}
-        <div className="flex items-center gap-2 px-4 pt-1 pb-3 border-b border-border-default">
+        <div className="flex items-center gap-2 px-4 pt-1 pb-3 border-b border-border-default shrink-0">
           <div className="flex items-center gap-2 flex-1 min-w-0 rounded-lg bg-bg-card border border-border-default px-3 py-2">
             <Search size={16} strokeWidth={2} className="shrink-0 text-text-tertiary" />
             <input
@@ -94,7 +118,7 @@ export default function PlayerSearchSheet({ onClose }) {
         {/* Results */}
         <div
           ref={scrollRef}
-          className="max-h-[70vh] overflow-y-auto px-3"
+          className="flex-1 min-h-0 overflow-y-auto px-3"
           style={{ overscrollBehavior: 'contain', paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
           {normalize(query).length < 2 ? (
