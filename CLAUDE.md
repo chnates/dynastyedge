@@ -866,6 +866,68 @@ player in the Analyzer to bridge the gap") — never silently empty.
 
 -----
 
+### Feature 14 — Playoff Odds (League › Playoffs)
+
+**Purpose:** "Am I making the playoffs, and should I be buying or selling?"
+A rest-of-season Monte Carlo simulation turned into one plain-English page.
+Built to be correct and self-explanatory for someone who's never used playoff
+odds before — every number is defined on the page, no outside lookup needed.
+
+**One new data source, lazy + session-cached (`usePlayoffOdds`):** the only
+fetch is every regular-season week's matchups (weeks 1 … `playoff_week_start − 1`
+from league settings, in parallel, each `.catch(() => [])`). That single pass
+yields *both* the remaining schedule (future pairings, grouped by `matchup_id`)
+*and* every completed week's actual per-team score — no separate history call.
+A week counts as **complete** only when *every* team in it has scored, so a
+partially-played current week is simulated fresh instead of contaminating the
+model. Everything else (rosters, records, points-for, FantasyCalc values,
+win-window tiers) comes from `LeagueContext`.
+
+**The model + sim (`utils/playoffOdds.js`, pure):**
+
+- **Scoring model (`buildScoringModel`):** each team's weekly score is
+  `Normal(mean, std)`. The mean is a shrinkage blend (4-game pseudo-count) of
+  a **roster-strength prior** — the team's best-lineup FantasyCalc value mapped
+  onto a points scale around a league baseline — and its **actual** completed-week
+  scores. Early-season the prior dominates; as games pile up the empirical mean
+  (and, at ≥3 games, empirical std) takes over. This is the "seeded from
+  projections early, real data later" behavior.
+- **Monte Carlo (`simulatePlayoffs`):** plays the remaining schedule out 10,000
+  times with a **fixed-seed RNG** (mulberry32 + Box–Muller) so the page never
+  reshuffles its numbers across renders. Each iteration draws scores, decides
+  the real matchups, accumulates wins + points-for on top of current standings,
+  seeds the field by Sleeper's default tiebreaker (wins, then points-for), and
+  records who lands in the top `playoff_teams`. Returns per team: playoff %,
+  #1-seed %, average seed, full seed distribution, and projected final record.
+- **`getDeadlineVerdict(playoffPct, tier)`** → Buyer / On the bubble / Seller
+  with a one-sentence rationale. Exported for the planned Trade/Edge reuse.
+- **`buildStrengthPreview`** → the preseason fallback: projected seeding ranked
+  purely by roster strength (clearly labelled a preview, not odds).
+
+**Three page states (`PlayoffOdds.jsx`):**
+
+- **Preseason** (no games *and* no posted schedule — the deep-offseason case):
+  a clear "odds activate when the Week 1 schedule posts" hero plus the
+  strength-ranked projected seeding preview.
+- **Active** (games remain): my-team hero (big playoff %, projected record,
+  projected seed, Buyer/Seller verdict chip in the stadium-lights treatment),
+  a basis line ("Based on N completed weeks + M remaining games"), then every
+  team ranked by playoff % with a likelihood-colored odds bar, projected
+  record, average seed, and win-window badge.
+- **Complete** (all weeks played, none remaining): same layout, deterministic
+  100%/0% odds, with a "regular season complete" note.
+
+**Always explained:** a collapsible **"How this works"** panel defines playoff
+odds, seed, projected record, the early-season strength lean, and Buyer/Seller
+in plain language — plus inline one-liners under the key numbers. Standard
+loading / `ErrorState` + retry; mobile-first at 390px.
+
+**Not yet wired (deliberate follow-up):** Trade Analyzer Layer 3, Partner
+Finder sell-windows, and The Edge odds line — the engine exports
+`getDeadlineVerdict` for all three.
+
+-----
+
 ### Trade deadline banner
 
 The Trade section shows a persistent banner under the sub-tabs during the
@@ -892,7 +954,7 @@ Side drawer sections:
 |2  |Roster  |My Roster · All Teams · Free Agents                      |
 |3  |Trade   |Partners · Analyzer · Targets (+ deadline banner)        |
 |4  |Lineup  |Lineup Optimizer + Season Review (lineup efficiency)     |
-|5  |League  |Overview · Activity · Movers · Managers                  |
+|5  |League  |Overview · Activity · Movers · Playoffs · Managers       |
 |6  |Draft   |Rookie draft board · Draft pick tracker · Pick trade calculator|
 
 Sections with multiple views use a sub-tab bar pinned under the app header.
@@ -1166,10 +1228,11 @@ dynastyedge/
 │   │   │   ├── StarterSlot.jsx
 │   │   │   └── FreeAgentDrawer.jsx
 │   │   ├── league/
-│   │   │   ├── LeagueLayout.jsx     ← sub-tabs: Overview / Activity / Movers / Managers
+│   │   │   ├── LeagueLayout.jsx     ← sub-tabs: Overview / Activity / Movers / Playoffs / Managers
 │   │   │   ├── LeagueOverview.jsx
 │   │   │   ├── LeagueActivity.jsx   ← transaction feed (trades, waivers, FAAB bids)
 │   │   │   ├── MarketMovers.jsx     ← risers/fallers, buy-low / sell-high
+│   │   │   ├── PlayoffOdds.jsx      ← Monte Carlo rest-of-season playoff odds + seeding
 │   │   │   ├── ManagersView.jsx     ← manager scouting: my report card + opponent profiles
 │   │   │   ├── ManagerScoutingSheet.jsx ← per-manager sheet: ledger, drafts, tendencies
 │   │   │   ├── TeamCard.jsx
@@ -1202,6 +1265,7 @@ dynastyedge/
 │   │   ├── useManagerProfiles.js← composes history + current season into scouting profiles
 │   │   ├── useTradeTimeValues.js← trade-time value archive for the ledger (best-effort)
 │   │   ├── useLineupHistory.js  ← my past matchups for efficiency review
+│   │   ├── usePlayoffOdds.js    ← regular-season schedule fetch + Monte Carlo sim
 │   │   ├── useLineupData.js     ← projections, statuses, schedule, def stats
 │   │   ├── useWatchlist.js      ← starred players (localStorage-backed store)
 │   │   ├── useLastVisit.js      ← The Edge's "since your last visit" anchor
@@ -1230,6 +1294,7 @@ dynastyedge/
 │   │   ├── pickTrades.js        ← pick trade calculator: slot pricing + packages
 │   │   ├── peakWindows.js       ← position peak-age windows + status helper
 │   │   ├── lineupHistory.js     ← optimal-lineup math for efficiency review
+│   │   ├── playoffOdds.js       ← scoring model + Monte Carlo + deadline verdict
 │   │   └── projections.js       ← lineup optimization, matchup quality
 │   ├── context/
 │   │   └── LeagueContext.jsx
@@ -1430,17 +1495,13 @@ Do not implement them until explicitly asked.
 - League-wide news feed page (per-player ESPN news is built into the
   Player Profile drawer; a browsable all-news feed is not)
 - FAAB bid recommender for waiver pickups
-- Playoff odds / rest-of-season simulator — **target: ship before Week 1.**
-  Client-side Monte Carlo over the remaining schedule (each team's weekly
-  scoring modeled from its season mean/variance, seeded from projections
-  early in the year) → playoff odds per team, projected seeding, and a
-  buyer/seller trade-deadline verdict. Feeds Trade Analyzer Layer 3 (real
-  probabilities behind win-window fit), Trade Partner Finder (odds-collapse
-  sell windows), and The Edge ("your playoff odds moved this week").
-  Subsumes the playoff strength-of-schedule view below — same schedule math.
+- **Playoff odds integrations** (the simulator engine + page shipped — see
+  Feature 14). Still to wire, once the live odds are trusted in-season:
+  Trade Analyzer Layer 3 (real probabilities behind win-window fit),
+  Trade Partner Finder (odds-collapse sell windows), and The Edge ("your
+  playoff odds moved this week"). `getDeadlineVerdict` is already exported
+  from `utils/playoffOdds.js` for exactly this reuse.
 - Claude Design visual refresh
-- Playoff strength-of-schedule view (Weeks 15–17 matchup outlook for starters)
-  — likely folded into the playoff odds simulator above
 - Push notifications for trade offers (requires backend — out of scope for v1)
 
 ### Already built (formerly future features)
@@ -1453,3 +1514,5 @@ Do not implement them until explicitly asked.
 - Market movers / buy-low / sell-high → League › Movers
 - Watchlist (star players, surfaced in Trade Partners) → `useWatchlist`
 - Lineup efficiency season review → Lineup › Season Review
+- Playoff odds / rest-of-season simulator (engine + page) → League › Playoffs
+  (Feature 14); strength-of-schedule outlook is subsumed by it

@@ -23,6 +23,7 @@ const LeagueLayout      = lazy(() => import('./components/league/LeagueLayout'))
 const LeagueOverview    = lazy(() => import('./components/league/LeagueOverview'))
 const LeagueActivity    = lazy(() => import('./components/league/LeagueActivity'))
 const MarketMovers      = lazy(() => import('./components/league/MarketMovers'))
+const PlayoffOdds       = lazy(() => import('./components/league/PlayoffOdds'))
 const ManagersView      = lazy(() => import('./components/league/ManagersView'))
 const DraftLayout       = lazy(() => import('./components/draft/DraftLayout'))
 const DraftBoard        = lazy(() => import('./components/draft/DraftBoard'))
@@ -166,6 +167,7 @@ function AppShell({ leagueData }) {
               <Route index element={<LeagueOverview />} />
               <Route path="activity" element={<LeagueActivity />} />
               <Route path="movers" element={<MarketMovers />} />
+              <Route path="playoffs" element={<PlayoffOdds />} />
               <Route path="managers" element={<ManagersView />} />
             </Route>
             <Route path="/draft" element={<DraftLayout />}>
