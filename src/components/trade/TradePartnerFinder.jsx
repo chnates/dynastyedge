@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Target, CheckCircle2, Circle, AlertTriangle, Star, History } from 'lucide-react'
+import { Target, CheckCircle2, Circle, AlertTriangle, Star, History, TrendingDown, TrendingUp } from 'lucide-react'
 import { getTeamName } from '../../hooks/useLeague'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useWatchlist } from '../../hooks/useWatchlist'
 import { useManagerProfiles } from '../../hooks/useManagerProfiles'
+import { usePlayoffOdds } from '../../hooks/usePlayoffOdds'
 import { rankTradePartners } from '../../utils/rosterAnalysis'
 import { MY_ROSTER_ID } from '../../constants'
 import WinWindowBadge from '../shared/WinWindowBadge'
@@ -62,7 +63,36 @@ function ScoutingLine({ profile }) {
   )
 }
 
-function TradePartnerCard({ partner, watchedNames, profile, onClick }) {
+// Likely buyer/seller read from this opponent's live playoff odds. A long shot
+// tends to sell; a near-lock tends to buy. Only surfaces at the extremes
+// in-season — renders nothing in the offseason (no odds yet) or in the middle.
+function OddsSignal({ odds }) {
+  if (!odds) return null
+  const p = odds.playoffPct
+  if (p < 0.35) {
+    return (
+      <div className="flex items-center gap-1.5 min-w-0">
+        <TrendingDown size={12} strokeWidth={2} className="text-danger shrink-0" />
+        <span className="font-body text-[11px] text-text-secondary dark:text-text-secondary truncate">
+          <span className="font-mono font-semibold tabular-nums">{Math.round(p * 100)}%</span> playoff odds — likely seller
+        </span>
+      </div>
+    )
+  }
+  if (p >= 0.7) {
+    return (
+      <div className="flex items-center gap-1.5 min-w-0">
+        <TrendingUp size={12} strokeWidth={2} className="text-success shrink-0" />
+        <span className="font-body text-[11px] text-text-secondary dark:text-text-secondary truncate">
+          <span className="font-mono font-semibold tabular-nums">{Math.round(p * 100)}%</span> playoff odds — buying win-now
+        </span>
+      </div>
+    )
+  }
+  return null
+}
+
+function TradePartnerCard({ partner, watchedNames, profile, odds, onClick }) {
   const { owner, fitBadge, winWindowTier, mismatchWarning, theirNeeds, theirHaves, pickCapStatus } = partner
   const badge = FIT_BADGE[fitBadge] ?? FIT_BADGE['Poor Fit']
 
@@ -117,6 +147,9 @@ function TradePartnerCard({ partner, watchedNames, profile, onClick }) {
       {/* Behavioral scouting line from league history */}
       <ScoutingLine profile={profile} />
 
+      {/* Likely buyer/seller read from live playoff odds (in-season) */}
+      <OddsSignal odds={odds} />
+
       {/* Watched players on this roster */}
       {watchedNames?.length > 0 && (
         <div className="flex items-start gap-1.5">
@@ -144,6 +177,9 @@ export default function TradePartnerFinder() {
   // Behavioral profiles arrive whenever the lazy history fetch finishes —
   // the partner list renders immediately without them.
   const { analysis: managerAnalysis } = useManagerProfiles()
+  // Live playoff odds per opponent — used to flag likely buyers/sellers.
+  // Empty in the offseason; cards render fully without it.
+  const { oddsByRoster } = usePlayoffOdds()
   const [activeFilter, setActiveFilter] = useState('All')
   const navigate = useNavigate()
 
@@ -231,6 +267,7 @@ export default function TradePartnerFinder() {
               partner={partner}
               watchedNames={(watchedByRoster[partner.rosterId] ?? []).map(p => p.name)}
               profile={profileByRoster[partner.rosterId] ?? null}
+              odds={oddsByRoster[partner.rosterId] ?? null}
               onClick={() => navigate('/trade/analyze', { state: { opponentRosterId: partner.rosterId } })}
             />
           ))}

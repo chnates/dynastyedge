@@ -2,13 +2,14 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ClipboardList, CalendarClock, ArrowLeftRight, TrendingDown, TrendingUp,
-  Star, Users, ChevronRight, DollarSign, UserPlus, Gavel,
+  Star, Users, ChevronRight, DollarSign, UserPlus, Gavel, Trophy,
 } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useTransactions } from '../../hooks/useTransactions'
 import { useWatchlist } from '../../hooks/useWatchlist'
 import { useValueHistory } from '../../hooks/useValueHistory'
 import { useSleeperDraft } from '../../hooks/useSleeperDraft'
+import { usePlayoffOdds } from '../../hooks/usePlayoffOdds'
 import { useLastVisit } from '../../hooks/useLastVisit'
 import { useLeagueNews } from '../../hooks/useLeagueNews'
 import { usePlayerDB } from '../../hooks/usePlayerDB'
@@ -36,6 +37,7 @@ const BRIEFING_ICONS = {
   sell: TrendingUp,
   watch: Star,
   team: Users,
+  playoffs: Trophy,
 }
 
 const BRIEFING_TONES = {
@@ -126,6 +128,7 @@ export default function EdgeView() {
   const { watchlist } = useWatchlist()
   const { history, getSeries } = useValueHistory()
   const { data: draftData } = useSleeperDraft()
+  const { myOdds } = usePlayoffOdds()
   const { playerDB } = usePlayerDB()
   const lastVisit = useLastVisit()
   const navigate = useNavigate()
@@ -160,8 +163,9 @@ export default function EdgeView() {
       isOffseason,
       nflState,
       tradeDeadline,
+      myPlayoffPct: myOdds?.playoffPct ?? null,
     }),
-    [signals, transactions, lastVisit, draftData, isOffseason, nflState, tradeDeadline]
+    [signals, transactions, lastVisit, draftData, isOffseason, nflState, tradeDeadline, myOdds]
   )
 
   const teamSeries = useMemo(

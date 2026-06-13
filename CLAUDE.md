@@ -371,6 +371,9 @@ Each team card shows:
 - ⚠️ Win window mismatch warning if their tier differs from Nix Cage’s
   (e.g. *“They’re rebuilding — expect them to ask for picks, not players”*)
   Show the warning but still show the team — do not hide or deprioritize them.
+- Buyer/seller read from live playoff odds (in-season): a long-shot opponent
+  (< 35% odds) is flagged "likely seller", a near-lock (≥ 70%) "buying
+  win-now". From `usePlayoffOdds`; hidden in the offseason.
 - **Tap → opens Trade Analyzer pre-loaded with this team selected**
 
 -----
@@ -421,6 +424,9 @@ Are you acquiring the right type of asset for where Nix Cage is now?
 
 - Contending → favor proven players, not picks or unproven youth
 - Rebuilding → favor picks and young players, not aging veterans
+- When live playoff odds exist (in-season), Layer 3 adds a real
+  "Playoff odds: N% · Buyer/Seller — …" line (via `analyzeTrade`'s optional
+  `myPlayoffPct` + `getDeadlineVerdict`); offseason falls back to the tier read.
 
 #### Verdict
 
@@ -802,7 +808,8 @@ logic lives in `utils/edgeBriefing.js`.
   sell-high (my riser at a surplus position) → Analyzer pre-loaded in You
   Give; biggest watchlist mover → profile drawer; biggest underperforming
   opponent (record rank trails value rank by ≥ 4, same gap as League
-  Overview) → their roster drill-down.
+  Overview) → their roster drill-down; playoff-odds standing (in-season,
+  "N% · Buyer/Seller" from `usePlayoffOdds`) → League › Playoffs.
 - **Headlines:** news-feed items matched to my roster + watchlist players
   (≤ 5), "New" badge when published after the last visit; tap opens the
   player's profile drawer. Hides entirely when nothing matches — never an
@@ -922,9 +929,19 @@ odds, seed, projected record, the early-season strength lean, and Buyer/Seller
 in plain language — plus inline one-liners under the key numbers. Standard
 loading / `ErrorState` + retry; mobile-first at 390px.
 
-**Not yet wired (deliberate follow-up):** Trade Analyzer Layer 3, Partner
-Finder sell-windows, and The Edge odds line — the engine exports
-`getDeadlineVerdict` for all three.
+**Odds consumers (wired via `getDeadlineVerdict` + `usePlayoffOdds`):**
+
+- **Trade Analyzer Layer 3** (`analyzeTrade` takes an optional `myPlayoffPct`):
+  the Win Window layer shows a real "Playoff odds: N% · Buyer/Seller — …" line
+  under the tier read.
+- **Trade Partner Finder:** each opponent card flags a likely **seller**
+  (< 35% odds) or **buyer** (≥ 70% odds) from their live odds.
+- **The Edge:** a "Playoff odds: N% · stance" briefing item (Trophy icon) deep-
+  links to League › Playoffs.
+
+All three read `usePlayoffOdds`'s `oddsByRoster` / `myOdds` and **degrade
+silently in the offseason** (no odds yet → the line/flag/item simply doesn't
+render, and Layer 3 falls back to the tier-only read).
 
 -----
 
@@ -1495,12 +1512,6 @@ Do not implement them until explicitly asked.
 - League-wide news feed page (per-player ESPN news is built into the
   Player Profile drawer; a browsable all-news feed is not)
 - FAAB bid recommender for waiver pickups
-- **Playoff odds integrations** (the simulator engine + page shipped — see
-  Feature 14). Still to wire, once the live odds are trusted in-season:
-  Trade Analyzer Layer 3 (real probabilities behind win-window fit),
-  Trade Partner Finder (odds-collapse sell windows), and The Edge ("your
-  playoff odds moved this week"). `getDeadlineVerdict` is already exported
-  from `utils/playoffOdds.js` for exactly this reuse.
 - Claude Design visual refresh
 - Push notifications for trade offers (requires backend — out of scope for v1)
 
@@ -1515,4 +1526,6 @@ Do not implement them until explicitly asked.
 - Watchlist (star players, surfaced in Trade Partners) → `useWatchlist`
 - Lineup efficiency season review → Lineup › Season Review
 - Playoff odds / rest-of-season simulator (engine + page) → League › Playoffs
-  (Feature 14); strength-of-schedule outlook is subsumed by it
+  (Feature 14); strength-of-schedule outlook is subsumed by it. Odds feed
+  Trade Analyzer Layer 3, Trade Partner Finder (buyer/seller flags), and The
+  Edge (briefing item)

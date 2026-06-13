@@ -5,6 +5,7 @@ import { useLeagueContext } from '../../context/LeagueContext'
 import { getTeamName } from '../../hooks/useLeague'
 import { analyzeTrade, getTradeVerdict, suggestFairPackage, getCounterSuggestion, adjustVerdictForInjuries } from '../../utils/tradeAnalysis'
 import { rankTradePartners } from '../../utils/rosterAnalysis'
+import { usePlayoffOdds } from '../../hooks/usePlayoffOdds'
 import { fetchPlayerNews } from '../../hooks/usePlayerNews'
 import { getPlayerIntel } from '../../hooks/usePlayerIntel'
 import TradeBuilder from './TradeBuilder'
@@ -134,6 +135,9 @@ function OpponentContextStrip({ partner }) {
 
 export default function TradeAnalyzer() {
   const { league, loading, error, retry, nflState } = useLeagueContext()
+  // My live playoff odds feed Layer 3 (win-window fit). Null in the offseason
+  // and until the sim has real games — Layer 3 falls back to the tier read.
+  const { myOdds } = usePlayoffOdds()
   const location = useLocation()
 
   const initId        = location.state?.opponentRosterId
@@ -183,8 +187,8 @@ export default function TradeAnalyzer() {
   const bothSides = giveAssets.length > 0 && getAssets.length > 0
 
   const analysis = useMemo(
-    () => analyzeTrade(giveAssets, getAssets, league?.myRoster, opponentRoster, league?.allRosters),
-    [giveAssets, getAssets, league, opponentRoster]
+    () => analyzeTrade(giveAssets, getAssets, league?.myRoster, opponentRoster, league?.allRosters, myOdds?.playoffPct ?? null),
+    [giveAssets, getAssets, league, opponentRoster, myOdds]
   )
 
   const verdict = useMemo(() => getTradeVerdict(analysis), [analysis])

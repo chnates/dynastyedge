@@ -1,4 +1,5 @@
 import { computeLeagueAverages, getPositionalDeltas, assignWinWindowTiers } from './rosterAnalysis'
+import { getDeadlineVerdict } from './playoffOdds'
 
 const PICK_SUFFIXES = ['', '1st', '2nd', '3rd', '4th']
 
@@ -7,7 +8,7 @@ function pickLabel(pick) {
   return `${pick.season} ${suffix}`
 }
 
-export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, allRosters) {
+export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, allRosters, myPlayoffPct = null) {
   if (!myRoster || !opponentRoster || !allRosters?.length) return null
 
   const giveTotal = giveAssets.reduce((s, a) => s + (a.value || 0), 0)
@@ -86,10 +87,25 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
     }
   }
 
+  // Playoff-odds context (real probability behind the win-window read). Only
+  // present in-season once the simulation has live odds; null otherwise.
+  let playoffPct = null
+  let oddsStance = null
+  let oddsNote   = null
+  let oddsTone   = null
+  if (myPlayoffPct != null) {
+    const dv = getDeadlineVerdict(myPlayoffPct, myTier)
+    playoffPct = myPlayoffPct
+    oddsStance = dv.stance
+    oddsNote   = dv.text
+    oddsTone   = dv.tone ?? null
+  }
+
   return {
     giveTotal, getTotal, valueDiff, valuePct, valueWinner,
     filledNeeds, hurtStrengths, fitScore,
     myTier, windowScore, windowNote, myDeltas,
+    playoffPct, oddsStance, oddsNote, oddsTone,
   }
 }
 

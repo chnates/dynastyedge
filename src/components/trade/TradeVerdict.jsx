@@ -136,7 +136,9 @@ export default function TradeVerdict({
     )
   }
 
-  const { giveTotal, getTotal, filledNeeds, hurtStrengths, windowScore, windowNote, myTier } = analysis
+  const { giveTotal, getTotal, filledNeeds, hurtStrengths, windowScore, windowNote, myTier,
+    playoffPct, oddsStance, oddsNote, oddsTone } = analysis
+  const ODDS_TONE_TEXT = { success: 'text-success', warning: 'text-warning', danger: 'text-danger' }
   const bothSides = giveCount > 0 && getCount > 0
   const vs = verdict ? VERDICT_STYLES[verdict.verdict] : null
 
@@ -243,6 +245,15 @@ export default function TradeVerdict({
             }`} />
             {windowNote}
           </p>
+          {/* Real playoff odds behind the win-window read (in-season only) */}
+          {playoffPct != null && (
+            <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-relaxed mt-1.5">
+              Playoff odds: <span className="font-mono font-semibold tabular-nums text-text-primary dark:text-text-primary">{Math.round(playoffPct * 100)}%</span>
+              {' · '}
+              <span className={`font-semibold ${ODDS_TONE_TEXT[oddsTone] ?? 'text-text-secondary'}`}>{oddsStance}</span>
+              {oddsNote ? ` — ${oddsNote}` : ''}
+            </p>
+          )}
         </div>
 
         {/* Injury warning banners — surface above verdict when any player is Out */}

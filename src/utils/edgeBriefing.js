@@ -4,6 +4,7 @@ import {
   assignWinWindowTiers,
 } from './rosterAnalysis'
 import { getTeamName } from '../hooks/useLeague'
+import { getDeadlineVerdict } from './playoffOdds'
 import { MIN_SPARKLINE_POINTS } from '../hooks/useValueHistory'
 import { POSITIONS, MY_ROSTER_ID } from '../constants'
 
@@ -146,10 +147,13 @@ export function computeEdgeSignals({ league, values, watchlist }) {
 
 export function buildBriefing({
   signals, transactions, lastVisit, draft,
-  isOffseason, nflState, tradeDeadline,
+  isOffseason, nflState, tradeDeadline, myPlayoffPct = null,
 }) {
   if (!signals) return []
   const items = []
+
+  // Tone for The Edge's constrained palette (accent / success / warning).
+  const ODDS_BRIEFING_TONE = { Buyer: 'success', 'On the bubble': 'warning', Seller: 'warning' }
 
   // 1. Live rookie draft — nothing outranks being on the clock.
   const draftStatus = draft?.status ?? null
@@ -179,6 +183,20 @@ export function buildBriefing({
         action: { type: 'route', to: '/trade' },
       })
     }
+  }
+
+  // 2b. Playoff odds standing (in-season, once the sim has real odds). A
+  //     buyer/seller call sourced from the same engine as League › Playoffs.
+  if (myPlayoffPct != null) {
+    const dv = getDeadlineVerdict(myPlayoffPct, signals.myTier)
+    items.push({
+      id: 'playoff-odds',
+      icon: 'playoffs',
+      tone: ODDS_BRIEFING_TONE[dv.stance] ?? 'accent',
+      title: `Playoff odds: ${Math.round(myPlayoffPct * 100)}% · ${dv.stance}`,
+      body: dv.text,
+      action: { type: 'route', to: '/league/playoffs' },
+    })
   }
 
   // 3. Upcoming rookie draft exists in Sleeper — prep window.

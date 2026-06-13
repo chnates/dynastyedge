@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { SLEEPER_BASE, LEAGUE_ID } from '../constants'
+import { SLEEPER_BASE, LEAGUE_ID, MY_ROSTER_ID } from '../constants'
 import { fetchJSON } from '../utils/fetchJSON'
 import { useLeagueContext } from '../context/LeagueContext'
 import { buildScoringModel, simulatePlayoffs, buildStrengthPreview } from '../utils/playoffOdds'
@@ -124,9 +124,16 @@ export function usePlayoffOdds() {
       ? null
       : simulatePlayoffs({ allRosters: league.allRosters, model, remainingSchedule, playoffTeams })
 
+    // Keyed by roster for consumers (Trade Analyzer / Partner Finder / The Edge)
+    // that need one team's odds without re-running the sim.
+    const oddsByRoster = {}
+    ;(results ?? []).forEach(r => { oddsByRoster[r.rosterId] = r })
+
     return {
       status,
       results,
+      oddsByRoster,
+      myOdds: oddsByRoster[MY_ROSTER_ID] ?? null,
       model,
       completedWeeks,
       remainingWeeks: remainingSchedule.length,
@@ -151,6 +158,8 @@ export function usePlayoffOdds() {
     league,
     status: derived?.status ?? null,
     results: derived?.results ?? null,
+    oddsByRoster: derived?.oddsByRoster ?? {},
+    myOdds: derived?.myOdds ?? null,
     model: derived?.model ?? null,
     completedWeeks: derived?.completedWeeks ?? 0,
     remainingWeeks: derived?.remainingWeeks ?? 0,
