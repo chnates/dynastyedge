@@ -1,10 +1,12 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Search } from 'lucide-react'
+import { Search, Sparkles } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useSleeperRookies } from '../../hooks/useSleeperRookies'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
+import { recommendFreeAgents } from '../../utils/recommendations'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
+import SectionHeader from '../shared/SectionHeader'
 import TrendArrow from '../shared/TrendArrow'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
@@ -28,6 +30,52 @@ function RookieBadge() {
     <span className="font-body text-[9px] font-bold uppercase tracking-wider text-warning bg-warning/15 border border-warning/30 rounded px-1.5 py-0.5 flex-shrink-0">
       Rookie
     </span>
+  )
+}
+
+// Proactive "here's who to actually add" card — the assistant-GM read on the
+// free-agent pool, not just a filterable list.
+function RecommendedPickups({ recs, onSelect }) {
+  if (!recs.length) return null
+  return (
+    <div>
+      <SectionHeader label="Recommended Pickups" />
+      <div className="rounded-xl bg-bg-card border border-border-default overflow-hidden">
+        {recs.map((rec, i) => {
+          const p = rec.player
+          return (
+            <button
+              key={p.sleeperId}
+              onClick={() => onSelect(p)}
+              className={`w-full text-left px-3 py-2.5 flex flex-col gap-1.5 active:opacity-60 transition-opacity ${
+                i < recs.length - 1 ? 'border-b border-border-default' : ''
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles size={13} className="text-accent flex-shrink-0" strokeWidth={2} />
+                <span className="font-body text-sm font-medium text-text-primary flex-1 truncate leading-tight">
+                  {p.name}
+                </span>
+                <span className={`font-body text-[10px] font-semibold uppercase tracking-wide flex-shrink-0 ${POS_TEXT[p.position] ?? 'text-text-tertiary'}`}>
+                  {p.position}
+                </span>
+                <span className="font-mono text-sm font-medium text-accent tabular-nums flex-shrink-0">
+                  {(p.value ?? 0).toLocaleString()}
+                </span>
+                <TrendArrow trend={p.trend30Day ?? 0} />
+              </div>
+              <div className="flex flex-wrap gap-1 pl-[21px]">
+                {rec.reasons.slice(0, 2).map((reason, j) => (
+                  <span key={j} className="font-body text-[10px] text-text-secondary bg-bg-secondary rounded px-1.5 py-0.5">
+                    {reason}
+                  </span>
+                ))}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
@@ -104,6 +152,14 @@ export default function FreeAgentsView() {
       )
   }, [league, values])
 
+  // Proactive pickup recommendations — respects the position filter so it
+  // narrows with the list, but ignores search (it's advice, not a lookup).
+  const recommendations = useMemo(() => {
+    if (!league?.myRoster) return []
+    const recs = recommendFreeAgents(freeAgents, league.myRoster, league.allRosters, { limit: 6 })
+    return posFilter === 'ALL' ? recs : recs.filter(r => r.player.position === posFilter)
+  }, [freeAgents, league, posFilter])
+
   const filtered = useMemo(() => {
     let list = freeAgents
 
@@ -164,6 +220,13 @@ export default function FreeAgentsView() {
             </button>
           ))}
         </div>
+
+        {/* Recommended pickups — assistant-GM advice, hidden while searching */}
+        {!search.trim() && recommendations.length > 0 && (
+          <div className="mb-3">
+            <RecommendedPickups recs={recommendations.slice(0, 4)} onSelect={setSelected} />
+          </div>
+        )}
 
         {/* Filter toggles */}
         <div className="mb-3">

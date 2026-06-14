@@ -103,3 +103,75 @@ export function getDeficitPositions(roster, allRosters) {
   const deltas = getPositionalDeltas(roster, leagueAverages)
   return new Set(POSITIONS.filter(pos => deltas[pos] < 0))
 }
+
+// Proactive free-agent pickups — not a filter, an actual recommendation. Ranks
+// available players by what they'd do for MY roster: fill a deficit position,
+// upgrade my depth at a position, ride a rising trend, and fit my win window
+// (a rebuilder values young stashes; a contender values win-now depth). Returns
+// only players that genuinely move the needle, each with plain-English reasons.
+export function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 5, minValue = 600 } = {}) {
+  if (!freeAgents?.length || !myRoster) return []
+
+  const ctx = buildGivabilityContext(myRoster, allRosters)
+  const { myDeltas, myTier } = ctx
+
+  // Replacement level per position: the value a pickup must beat to be a real
+  // upgrade — my CORE_DEPTH-th best at that spot (or my worst if I'm shallow).
+  const replacement = {}
+  POSITIONS.forEach(pos => {
+    const mine = myRoster.players
+      .filter(p => p.position === pos && !p.isIR)
+      .map(p => p.value || 0)
+      .sort((a, b) => b - a)
+    const depth = CORE_DEPTH[pos] ?? 2
+    replacement[pos] = mine.length >= depth ? mine[depth - 1] : (mine[mine.length - 1] ?? 0)
+  })
+
+  const scored = freeAgents
+    .filter(p => (p.value ?? 0) >= minValue && POSITIONS.includes(p.position))
+    .map(p => {
+      const value = p.value ?? 0
+      const pos = p.position
+      const isNeed = (myDeltas[pos] ?? 0) < 0
+      const upgradeMargin = value - (replacement[pos] ?? 0)
+      const isUpgrade = upgradeMargin > 0
+      const trend = p.trend30Day ?? 0
+      const age = p.age ?? null
+
+      let score = value / 1000
+      const reasons = []
+
+      if (isNeed) {
+        score += 2.5
+        reasons.push(`Fills your ${pos} need`)
+      }
+      if (isUpgrade) {
+        score += Math.min(2, upgradeMargin / 600)
+        reasons.push(`+${Math.round(upgradeMargin).toLocaleString()} over your ${pos} depth`)
+      }
+      if (trend > 50) {
+        score += Math.min(1.5, trend / 400)
+        reasons.push('Trending up the last 30 days')
+      } else if (trend < -50) {
+        score -= 0.5
+      }
+      if (myTier === 'Rebuilding' && age != null && age <= 24) {
+        score += 1
+        reasons.push(`Young stash (age ${Math.floor(age)})`)
+      } else if (myTier === 'Contending' && age != null && age >= 26 && isUpgrade) {
+        score += 0.5
+        reasons.push('Win-now depth')
+      }
+
+      return { player: p, score, reasons, isNeed, isUpgrade, upgradeMargin, trend }
+    })
+    // Only surface players that actually do something — a need, an upgrade, or a
+    // genuine riser. Everything else is just available value, not a recommendation.
+    .filter(r => r.isNeed || r.isUpgrade || r.trend > 50)
+    .sort((a, b) => b.score - a.score)
+
+  return scored.slice(0, limit).map(r => ({
+    ...r,
+    primaryReason: r.reasons[0] ?? 'Available value',
+  }))
+}
