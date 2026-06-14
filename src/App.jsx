@@ -165,6 +165,8 @@ function AppShell({ leagueData }) {
           top: 'calc(3rem + env(safe-area-inset-top))',
           bottom: 0,
           paddingBottom: 'env(safe-area-inset-bottom)',
+          overscrollBehavior: 'contain',
+          WebkitOverflowScrolling: 'touch',
         }}
       >
         <Suspense fallback={<LoadingSpinner message="Loading…" />}>

@@ -52,6 +52,17 @@ body {
   background-color: rgb(var(--bg-primary));
 }
 
+/* The app's only scroller is <main> (App.jsx, position:fixed). Lock the    */
+/* document to the viewport so a drag the fixed scroller doesn't fully claim */
+/* can't scroll/rubber-band the body — which would slide the .app-bg        */
+/* gradient layer while the content stays put. Without this the page         */
+/* "scrolls the background" from regions where <main> is at a scroll edge.   */
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 /* ── App background: ambient color glow at the top of the screen ── */
 /* Applied to the app shell div (App.jsx), not <body> — the shell     */
 /* paints over the body. Fixed at the top since the body never        */
