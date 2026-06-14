@@ -50,18 +50,25 @@ function TargetCard({ target, fairPackage, onTap }) {
         </span>
       </div>
 
-      {/* Row 3: estimated package cost */}
+      {/* Row 3: estimated package cost + why these pieces */}
       {fairPackage && (
-        <div className="flex items-baseline gap-1.5 min-w-0">
-          <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary shrink-0">
-            Est. cost:
-          </span>
-          <span className="font-body text-xs text-text-primary dark:text-text-primary truncate min-w-0">
-            {fairPackage.assets.map(a => a.name).join(' + ')}
-          </span>
-          <span className="font-mono text-[10px] text-text-secondary dark:text-text-secondary shrink-0 tabular-nums">
-            (~{(fairPackage.totalValue || 0).toLocaleString()})
-          </span>
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <div className="flex items-baseline gap-1.5 min-w-0">
+            <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary shrink-0">
+              Est. cost:
+            </span>
+            <span className="font-body text-xs text-text-primary dark:text-text-primary truncate min-w-0">
+              {fairPackage.assets.map(a => a.name).join(' + ')}
+            </span>
+            <span className="font-mono text-[10px] text-text-secondary dark:text-text-secondary shrink-0 tabular-nums">
+              (~{(fairPackage.totalValue || 0).toLocaleString()})
+            </span>
+          </div>
+          {fairPackage.rationale && (
+            <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary truncate min-w-0">
+              {fairPackage.rationale}
+            </span>
+          )}
         </div>
       )}
     </button>
@@ -88,8 +95,11 @@ export default function WhatsFair() {
   const fairPackages = useMemo(() => {
     if (!league?.myRoster) return {}
     const map = {}
+    const rosterById = new Map(league.allRosters.map(r => [r.rosterId, r]))
     targets.forEach(t => {
-      map[t.sleeperId] = suggestFairPackage(t, league.myRoster)
+      map[t.sleeperId] = suggestFairPackage(
+        t, league.myRoster, league.allRosters, rosterById.get(t.ownerRosterId)
+      )
     })
     return map
   }, [targets, league])

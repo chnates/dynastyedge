@@ -1,5 +1,6 @@
 import { computeLeagueAverages, getPositionalDeltas, assignWinWindowTiers } from './rosterAnalysis'
 import { getDeadlineVerdict } from './playoffOdds'
+import { buildGivabilityContext, assetKeepScore, getDeficitPositions, joinAnd } from './recommendations'
 
 const PICK_SUFFIXES = ['', '1st', '2nd', '3rd', '4th']
 
@@ -281,16 +282,51 @@ export function adjustVerdictForInjuries(baseVerdict, liveIntelligence, giveAsse
   return { verdict, reasoning: updatedReasoning, adjustedByIntelligence: notes.length > 0 }
 }
 
-export function suggestFairPackage(targetPlayer, myRoster) {
+// Build a one-line, plain-English read of where a package's pieces come from —
+// so the UI can explain why these assets (and not your studs) were chosen.
+function packageRationale(assets, ctx) {
+  const playerPositions = [...new Set(
+    assets.filter(a => a.type === 'player').map(a => a.position).filter(Boolean)
+  )]
+  const surplusPos = playerPositions.filter(p => (ctx.myDeltas?.[p] ?? 0) > 0)
+  const hasPicks   = assets.some(a => a.type === 'pick')
+
+  const parts = []
+  if (surplusPos.length) parts.push(`your ${surplusPos.join('/')} surplus`)
+  if (hasPicks) parts.push(ctx.myTier === 'Contending' ? 'spare draft capital' : 'draft capital')
+  if (!parts.length && playerPositions.length) parts.push('your roster depth')
+
+  return parts.length
+    ? `Drawn from ${joinAnd(parts)} — protects your starters.`
+    : 'Protects your core starters.'
+}
+
+// Suggest a fair package from MY roster to acquire targetPlayer.
+//
+// Roster-aware ("balanced" posture): instead of grabbing the cheapest assets
+// that reach the value, it draws from positions of surplus and depth, protects
+// starters at thin positions, leans into my win window (a contender spends
+// picks/young fliers; a rebuilder keeps youth/picks and moves aging vets), and
+// — when the partner roster is known — prefers pieces at the partner's deficit
+// positions so the package is one they'd actually accept.
+//
+// allRosters + opponentRoster are optional; without them it degrades to a
+// depth-aware package (no surplus/window/partner lean).
+export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, opponentRoster = null) {
   if (!targetPlayer || !myRoster) return null
   const targetValue = targetPlayer.value || 0
   if (targetValue === 0) return null
 
-  // Ascending sort — cheapest first, so we can find minimum-cost packages
+  const ctx = buildGivabilityContext(myRoster, allRosters)
+  const opponentDeficits = getDeficitPositions(opponentRoster, allRosters)
+
   const available = [
     ...myRoster.players
       .filter(p => !p.isIR)
-      .map(p => ({ type: 'player', name: p.name, value: p.value, sleeperId: p.sleeperId })),
+      .map(p => ({
+        type: 'player', name: p.name, value: p.value,
+        sleeperId: p.sleeperId, position: p.position, age: p.age,
+      })),
     ...myRoster.picks
       .map(p => ({ type: 'pick', name: pickLabel(p), value: p.value ?? 0 })),
   ]
@@ -299,66 +335,69 @@ export function suggestFairPackage(targetPlayer, myRoster) {
 
   if (!available.length) return null
 
-  const FLOOR = targetValue * 0.9  // allow up to 10% undershoot
-  const CAP   = targetValue * 1.5  // avoid massive overpay
+  const FLOOR = targetValue * 0.9   // a lowball gets rejected
+  const CAP   = targetValue * 1.15  // a big overpay is its own way of gutting the roster
 
-  // Cheapest single asset that reaches FLOOR
-  const cheapestSingle = available.find(a => a.value >= FLOOR)
+  const keepCache = available.map(a => assetKeepScore(a, ctx))
 
-  // Minimum-sum two-asset pair within [FLOOR, CAP]
-  // For each i, the first j > i where sum >= FLOOR is the min sum for that i (ascending order)
-  let bestTwo = null, bestTwoSum = Infinity
-  for (let i = 0; i < available.length - 1; i++) {
-    for (let j = i + 1; j < available.length; j++) {
-      const s = available[i].value + available[j].value
-      if (s > CAP) break
-      if (s >= FLOOR && s < bestTwoSum) {
-        bestTwo    = [available[i], available[j]]
-        bestTwoSum = s
-        break  // further j only increases sum for this i
+  // Among packages whose value lands in [FLOOR, CAP], pick the one that hurts
+  // least: minimize total keep-pain, prefer fewer pieces, nudge toward the exact
+  // value and toward assets the partner needs.
+  let best = null
+  const consider = idxs => {
+    let total = 0, pain = 0
+    for (const i of idxs) {
+      total += available[i].value
+      pain  += keepCache[i]
+      if (opponentDeficits.has(available[i].position)) pain -= 0.08
+    }
+    if (total < FLOOR || total > CAP) return
+    pain += 0.2 * (idxs.length - 1)
+    pain += Math.abs(total - targetValue) / targetValue * 0.3
+    if (!best || pain < best.pain) best = { idxs, total, pain }
+  }
+
+  const n = available.length
+  for (let i = 0; i < n; i++) consider([i])
+  for (let i = 0; i < n - 1; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (available[i].value + available[j].value > CAP) break
+      consider([i, j])
+    }
+  }
+  for (let i = 0; i < n - 2; i++) {
+    for (let j = i + 1; j < n - 1; j++) {
+      if (available[i].value + available[j].value > CAP) break
+      for (let k = j + 1; k < n; k++) {
+        if (available[i].value + available[j].value + available[k].value > CAP) break
+        consider([i, j, k])
       }
     }
   }
 
-  // Three-asset minimum — only if neither single nor pair found
-  let bestThree = null, bestThreeSum = Infinity
-  if (!cheapestSingle && !bestTwo) {
-    outer: for (let i = 0; i < available.length - 2; i++) {
-      for (let j = i + 1; j < available.length - 1; j++) {
-        for (let k = j + 1; k < available.length; k++) {
-          const s = available[i].value + available[j].value + available[k].value
-          if (s > CAP) break
-          if (s >= FLOOR && s < bestThreeSum) {
-            bestThree    = [available[i], available[j], available[k]]
-            bestThreeSum = s
-            break outer
-          }
-        }
-      }
+  if (best) {
+    const assets = best.idxs.map(i => available[i])
+    const gapPct = Math.round(Math.abs(best.total - targetValue) / targetValue * 100)
+    return {
+      assets, totalValue: best.total, gapPct,
+      over: best.total >= targetValue,
+      rationale: packageRationale(assets, ctx),
     }
   }
 
-  // Collect valid candidates, pick the one with minimum total value
-  const options = []
-  if (cheapestSingle && cheapestSingle.value <= CAP)
-    options.push({ assets: [cheapestSingle], totalValue: cheapestSingle.value })
-  if (bestTwo)
-    options.push({ assets: bestTwo, totalValue: bestTwoSum })
-  if (bestThree)
-    options.push({ assets: bestThree, totalValue: bestThreeSum })
-
-  if (options.length > 0) {
-    options.sort((a, b) => a.totalValue - b.totalValue)
-    const best = options[0]
-    const gapPct = Math.round(Math.abs(best.totalValue - targetValue) / targetValue * 100)
-    return { assets: best.assets, totalValue: best.totalValue, gapPct, over: best.totalValue >= targetValue }
-  }
-
-  // Fallback: closest single asset regardless of CAP
-  const fallback = [...available].sort(
-    (a, b) => Math.abs(a.value - targetValue) - Math.abs(b.value - targetValue)
-  )[0]
+  // Fallback: nothing lands in range (target dwarfs or undercuts my whole
+  // inventory) — closest single asset, breaking ties toward the more expendable.
+  const fallback = [...available].sort((a, b) => {
+    const da = Math.abs(a.value - targetValue)
+    const db = Math.abs(b.value - targetValue)
+    if (da !== db) return da - db
+    return assetKeepScore(a, ctx) - assetKeepScore(b, ctx)
+  })[0]
   if (!fallback) return null
   const gapPct = Math.round(Math.abs(fallback.value - targetValue) / targetValue * 100)
-  return { assets: [fallback], totalValue: fallback.value, gapPct, over: fallback.value >= targetValue }
+  return {
+    assets: [fallback], totalValue: fallback.value, gapPct,
+    over: fallback.value >= targetValue,
+    rationale: packageRationale([fallback], ctx),
+  }
 }

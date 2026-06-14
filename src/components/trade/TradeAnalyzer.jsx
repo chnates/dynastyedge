@@ -216,8 +216,10 @@ export default function TradeAnalyzer() {
   }, [bothSides, adjustedVerdict, analysis, league, opponentRoster, giveAssets, getAssets])
 
   const fairPackage = useMemo(
-    () => whatsFairTarget ? suggestFairPackage(whatsFairTarget, league?.myRoster) : null,
-    [whatsFairTarget, league]
+    () => whatsFairTarget
+      ? suggestFairPackage(whatsFairTarget, league?.myRoster, league?.allRosters, opponentRoster)
+      : null,
+    [whatsFairTarget, league, opponentRoster]
   )
 
   // Persist the in-progress trade for the session
@@ -321,7 +323,7 @@ export default function TradeAnalyzer() {
     const target = makeAsset(player, 'player')
     setWhatsFairTarget(target)
     setGetAssets([target])
-    const pkg = suggestFairPackage(player, league.myRoster)
+    const pkg = suggestFairPackage(player, league.myRoster, league.allRosters, opponentRoster)
     setGiveAssets(mapPackageToAssets(pkg, league.myRoster))
   }
 
