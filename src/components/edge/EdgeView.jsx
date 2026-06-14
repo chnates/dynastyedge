@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   ClipboardList, CalendarClock, ArrowLeftRight, TrendingDown, TrendingUp,
   Star, Users, ChevronRight, DollarSign, UserPlus, Gavel, Trophy, ScanSearch, LineChart,
+  Sparkles,
 } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useTransactions } from '../../hooks/useTransactions'
@@ -36,6 +37,7 @@ const BRIEFING_ICONS = {
   activity: ArrowLeftRight,
   buy: TrendingDown,
   sell: TrendingUp,
+  pickup: Sparkles,
   watch: Star,
   team: Users,
   playoffs: Trophy,
@@ -298,7 +300,7 @@ export default function EdgeView() {
 
       {/* ── Roster action items (shared component, dismissible) ── */}
       <div {...rise()}>
-        <RosterActionItems myRoster={myRoster} nflState={nflState} />
+        <RosterActionItems myRoster={myRoster} nflState={nflState} allRosters={league.allRosters} />
       </div>
 
       {/* ── Roster Analysis shortcut (opens the same sheet as My Roster) ── */}

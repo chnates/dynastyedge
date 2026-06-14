@@ -10,6 +10,7 @@
 
 import { POSITIONS } from '../constants'
 import { computeLeagueAverages, getPositionalDeltas, assignWinWindowTiers } from './rosterAnalysis'
+import { getTeamName } from '../hooks/useLeague'
 
 // The starters we protect hardest at each position in this 10-team Superflex
 // Half-PPR league (QB doubles up via the Superflex slot; 3 FLEX spots make RB/WR
@@ -174,4 +175,72 @@ export function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 
     ...r,
     primaryReason: r.reasons[0] ?? 'Available value',
   }))
+}
+
+// Turn "you have a surplus you could convert" into the actual move: who to call
+// and what to ask for. Finds the partner who most needs `player`'s position
+// (or, if none are below average, the team weakest there), then — when they own
+// a comparable-value player at one of MY deficit positions — proposes a concrete
+// one-for-one swap. Otherwise it falls back to "shop them to <partner>".
+//
+// Returns nav-ready state for the Trade Analyzer's preloadTrade / preloadGivePlayer.
+export function suggestSellMove(player, myRoster, allRosters) {
+  if (!player || !myRoster || !allRosters?.length) return null
+  const pos = player.position
+  const targetVal = player.value || 0
+
+  const leagueAverages = computeLeagueAverages(allRosters)
+  const myDeltas = getPositionalDeltas(myRoster, leagueAverages)
+  const myDeficits = POSITIONS
+    .filter(p => (myDeltas[p] ?? 0) < 0)
+    .sort((a, b) => myDeltas[a] - myDeltas[b]) // deepest need first
+
+  const opponents = allRosters.filter(r => r.rosterId !== myRoster.rosterId)
+  if (!opponents.length) return null
+  const oppDeltas = new Map(opponents.map(o => [o.rosterId, getPositionalDeltas(o, leagueAverages)]))
+  const theirNeed = o => oppDeltas.get(o.rosterId)[pos] ?? 0
+
+  // Partners who need this position (most negative first); if none are below
+  // average, the teams weakest at it are still the likeliest buyers.
+  const needy = opponents.filter(o => theirNeed(o) < 0)
+  const ranked = (needy.length ? needy : [...opponents]).sort((a, b) => theirNeed(a) - theirNeed(b))
+  const partner = ranked[0]
+  if (!partner) return null
+  const partnerName = getTeamName(partner.owner)
+
+  const give = [{ ...player, type: 'player' }]
+
+  // Best return: a comparable-value player they own at one of my deficit spots.
+  let returnPlayer = null, deficitPos = null
+  for (const dPos of myDeficits) {
+    const cand = partner.players
+      .filter(p =>
+        p.position === dPos && !p.isIR &&
+        (p.value ?? 0) >= targetVal * 0.8 && (p.value ?? 0) <= targetVal * 1.25
+      )
+      .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))[0]
+    if (cand) { returnPlayer = cand; deficitPos = dPos; break }
+  }
+
+  if (returnPlayer) {
+    return {
+      opponentRosterId: partner.rosterId,
+      partnerName,
+      give,
+      get: [{ ...returnPlayer, type: 'player' }],
+      deficitPos,
+      ctaLabel: 'Build this trade',
+      summary: `Flip ${player.name} to ${partnerName} for ${returnPlayer.name} — fills your ${deficitPos}.`,
+    }
+  }
+
+  return {
+    opponentRosterId: partner.rosterId,
+    partnerName,
+    give,
+    get: null,
+    deficitPos: myDeficits[0] ?? null,
+    ctaLabel: `Shop to ${partnerName}`,
+    summary: `Shop ${player.name} to ${partnerName} — they're thin at ${pos}.`,
+  }
 }

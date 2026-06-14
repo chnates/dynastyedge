@@ -6,6 +6,7 @@ import {
 import { getTeamName } from '../hooks/useLeague'
 import { getDeadlineVerdict } from './playoffOdds'
 import { buildAgeCurves, buildRosterTrajectory, getTrajectoryRead } from './dynastyTrajectory'
+import { recommendFreeAgents } from './recommendations'
 import { MIN_SPARKLINE_POINTS } from '../hooks/useValueHistory'
 import { POSITIONS, MY_ROSTER_ID } from '../constants'
 
@@ -132,6 +133,19 @@ export function computeEdgeSignals({ league, values, watchlist, nflState }) {
     closingWindow = declining[0] ?? null
   }
 
+  // Best free-agent pickup: the top recommendation that actually moves my
+  // roster (fills a need / upgrades depth / rising), from the same engine the
+  // Free Agents tab uses. Zero extra fetch — the FA pool is the cached pool
+  // minus rostered players.
+  const rosteredIds = new Set()
+  allRosters.forEach(r => r.players.forEach(p => rosteredIds.add(String(p.sleeperId))))
+  const freeAgents = Object.values(values.playerMap).filter(p =>
+    !rosteredIds.has(String(p.sleeperId)) &&
+    POSITIONS.includes(p.position) &&
+    (p.value ?? 0) > 0
+  )
+  const topPickup = recommendFreeAgents(freeAgents, myRoster, allRosters, { limit: 1 })[0] ?? null
+
   const playerValue = myRoster.players.reduce((s, p) => s + (p.value ?? 0), 0)
   const teamTrend = Math.round(
     myRoster.players.reduce((s, p) => s + (p.trend30Day ?? 0), 0)
@@ -149,6 +163,7 @@ export function computeEdgeSignals({ league, values, watchlist, nflState }) {
     mySurpluses,
     buyLow,
     sellHigh,
+    topPickup,
     radar,
     underperformer,
     closingWindow,
@@ -287,6 +302,19 @@ export function buildBriefing({
         to: '/trade/analyze',
         state: { preloadGivePlayer: p },
       },
+    })
+  }
+
+  // 6b. Best free-agent pickup — a move you can make without a trade partner.
+  if (signals.topPickup) {
+    const { player, reasons } = signals.topPickup
+    items.push({
+      id: 'pickup',
+      icon: 'pickup',
+      tone: 'success',
+      title: `Free-agent target: ${player.name}`,
+      body: `${reasons.slice(0, 2).join(' · ')}. Available on the wire now.`,
+      action: { type: 'route', to: '/roster/free-agents' },
     })
   }
 
