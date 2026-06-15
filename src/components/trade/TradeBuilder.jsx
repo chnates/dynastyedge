@@ -23,22 +23,42 @@ function pickShortLabel(pick) {
   return `'${String(pick.season).slice(2)} ${suffix}`
 }
 
-function AssetChip({ asset, onRemove }) {
+function AssetChip({ asset, onRemove, onTap }) {
   const isPick      = asset.type === 'pick'
   const displayName = isPick
     ? pickShortLabel(asset)
     : (asset.name?.split(' ').slice(1).join(' ') || asset.name || '—')
+  const posTag   = POS_TAGS[asset.position] ?? 'bg-bg-secondary text-text-secondary'
+  const tappable = !isPick && !!onTap
 
-  return (
-    <div className="flex items-center gap-1 py-1 min-w-0">
+  const inner = (
+    <>
       {!isPick && asset.position && (
-        <span className={`shrink-0 text-[8px] font-bold font-body px-1 py-0.5 rounded leading-none ${POS_TAGS[asset.position] ?? 'bg-bg-secondary text-text-secondary'}`}>
+        <span className={`shrink-0 text-[8px] font-bold font-body px-1 py-0.5 rounded leading-none ${posTag}`}>
           {asset.position}
         </span>
       )}
-      <span className="flex-1 font-body text-xs text-text-primary dark:text-text-primary truncate min-w-0 leading-tight">
+      <span className={`flex-1 font-body text-xs text-text-primary dark:text-text-primary truncate min-w-0 leading-tight ${
+        tappable ? 'underline decoration-dotted decoration-text-tertiary/60 underline-offset-2' : ''
+      }`}>
         {displayName}
       </span>
+    </>
+  )
+
+  return (
+    <div className="flex items-center gap-1 py-1 min-w-0">
+      {tappable ? (
+        <button
+          onClick={onTap}
+          aria-label={`View ${asset.name} profile`}
+          className="flex-1 flex items-center gap-1 min-w-0 text-left active:opacity-60 transition-opacity"
+        >
+          {inner}
+        </button>
+      ) : (
+        <div className="flex-1 flex items-center gap-1 min-w-0">{inner}</div>
+      )}
       <span className="font-mono text-[10px] text-text-secondary dark:text-text-secondary shrink-0 tabular-nums">
         {(asset.value || 0).toLocaleString()}
       </span>
@@ -53,7 +73,7 @@ function AssetChip({ asset, onRemove }) {
   )
 }
 
-function TradeColumn({ label, assets, total, onRemove, onAdd, addLabel }) {
+function TradeColumn({ label, assets, total, onRemove, onAdd, addLabel, onTapPlayer }) {
   return (
     <div className="flex-1 min-w-0">
       <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-1">
@@ -69,7 +89,12 @@ function TradeColumn({ label, assets, total, onRemove, onAdd, addLabel }) {
           </p>
         ) : (
           assets.map(a => (
-            <AssetChip key={a.id} asset={a} onRemove={() => onRemove(a)} />
+            <AssetChip
+              key={a.id}
+              asset={a}
+              onRemove={() => onRemove(a)}
+              onTap={a.type === 'player' ? () => onTapPlayer(a) : undefined}
+            />
           ))
         )}
       </div>
@@ -364,6 +389,7 @@ export default function TradeBuilder({
           onRemove={a => onToggleGive(a, a.type)}
           onAdd={() => setSheetSide('give')}
           addLabel="Add from mine"
+          onTapPlayer={setSheetPlayer}
         />
         <div className="w-px bg-border-default dark:bg-border-default shrink-0" />
         <TradeColumn
@@ -373,6 +399,7 @@ export default function TradeBuilder({
           onRemove={a => onToggleGet(a, a.type)}
           onAdd={() => setSheetSide('get')}
           addLabel="Add from theirs"
+          onTapPlayer={setSheetPlayer}
         />
       </div>
 
