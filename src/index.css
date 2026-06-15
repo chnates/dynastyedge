@@ -52,15 +52,21 @@ body {
   background-color: rgb(var(--bg-primary));
 }
 
-/* The app's only scroller is <main> (App.jsx, position:fixed). Lock the    */
-/* document to the viewport so a drag the fixed scroller doesn't fully claim */
-/* can't scroll/rubber-band the body — which would slide the .app-bg        */
-/* gradient layer while the content stays put. Without this the page         */
-/* "scrolls the background" from regions where <main> is at a scroll edge.   */
+/* The app's only scroller is <main> (App.jsx, position:fixed). Lock the     */
+/* document to the viewport so a drag the fixed scroller doesn't fully claim  */
+/* can't scroll/rubber-band the body — which would slide the .app-bg          */
+/* gradient layer while the content stays put.                                */
+/* iOS quirk: overflow:hidden on the ROOT elements (html/#root) clips         */
+/* position:fixed descendants above the bottom safe-area inset, leaving a     */
+/* black bar over the home indicator. So lock scrolling on <body> only and    */
+/* leave html/#root unclipped — the fixed header/main/drawer then reach the   */
+/* physical bottom edge. overscroll-behavior:none everywhere kills rubber-band.*/
 html, body, #root {
   height: 100%;
-  overflow: hidden;
   overscroll-behavior: none;
+}
+body {
+  overflow: hidden;
 }
 
 /* ── App background: ambient color glow at the top of the screen ── */
