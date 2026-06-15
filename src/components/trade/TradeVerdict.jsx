@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { CheckCircle2, XCircle, RefreshCw, CheckCircle, XCircle as XCircleSmall, Circle, AlertTriangle, LineChart } from 'lucide-react'
 import WinWindowBadge from '../shared/WinWindowBadge'
+import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { relativeTime } from '../../hooks/usePlayerIntel'
 
 const VERDICT_STYLES = {
@@ -49,7 +51,7 @@ function ValueSummary({ giveTotal, getTotal, bothSides }) {
   )
 }
 
-function PlayerNewsCard({ intel }) {
+function PlayerNewsCard({ intel, onTap }) {
   const flag = intel.injuryFlag ?? 'green'
   const statusLabel = intel.injuryStatus
     ? intel.injuryDetail ? `${intel.injuryStatus} — ${intel.injuryDetail}` : intel.injuryStatus
@@ -59,12 +61,23 @@ function PlayerNewsCard({ intel }) {
   const summary = extra?.seasonSummary
   const recent  = (extra?.recentGames ?? []).filter(g => g.pts != null)
   const topNews = extra?.news?.[0]
+  const tappable = !!onTap
 
   return (
     <div className="px-4 py-3 border-b border-border-default dark:border-border-default last:border-b-0">
       <div className="flex items-center justify-between mb-1">
         <p className="font-body text-xs font-semibold text-text-primary dark:text-text-primary">
-          {intel.playerName}
+          {tappable ? (
+            <button
+              onClick={onTap}
+              aria-label={`View ${intel.playerName} profile`}
+              className="text-text-primary dark:text-text-primary underline decoration-dotted decoration-text-tertiary/60 underline-offset-2 active:opacity-60 transition-opacity"
+            >
+              {intel.playerName}
+            </button>
+          ) : (
+            intel.playerName
+          )}
           <span className="ml-1.5 font-normal text-[10px] uppercase tracking-wide text-text-tertiary dark:text-text-tertiary">
             {intel.side === 'give' ? 'giving' : 'getting'}
           </span>
@@ -126,6 +139,8 @@ export default function TradeVerdict({
   liveIntelligence,
   intelligenceLoading,
 }) {
+  const [selectedPlayer, setSelectedPlayer] = useState(null)
+
   if (!analysis || (giveCount === 0 && getCount === 0)) {
     return (
       <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-4 py-8 text-center mb-4">
@@ -333,9 +348,20 @@ export default function TradeVerdict({
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
           </div>
           {liveIntelligence.map(intel => (
-            <PlayerNewsCard key={intel.playerName} intel={intel} />
+            <PlayerNewsCard
+              key={intel.playerName}
+              intel={intel}
+              onTap={intel.player?.sleeperId ? () => setSelectedPlayer(intel.player) : undefined}
+            />
           ))}
         </div>
+      )}
+
+      {selectedPlayer && (
+        <PlayerProfileDrawer
+          player={selectedPlayer}
+          onClose={() => setSelectedPlayer(null)}
+        />
       )}
     </div>
   )

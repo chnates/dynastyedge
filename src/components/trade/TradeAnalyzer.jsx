@@ -269,7 +269,7 @@ export default function TradeAnalyzer() {
         Promise.all([
           fetchPlayerNews(p.sleeperId),
           getPlayerIntel(p.sleeperId, nflState).catch(() => null),
-        ]).then(([news, intel]) => ({ ...news, intel, playerName: p.name, side: p.side }))
+        ]).then(([news, intel]) => ({ ...news, intel, playerName: p.name, side: p.side, player: p }))
       )
     )
       .then(results => {
