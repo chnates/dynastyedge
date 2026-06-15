@@ -1,6 +1,6 @@
 import { computeLeagueAverages, getPositionalDeltas, assignWinWindowTiers } from './rosterAnalysis'
 import { getDeadlineVerdict } from './playoffOdds'
-import { buildGivabilityContext, assetKeepScore, getDeficitPositions, joinAnd } from './recommendations'
+import { buildGivabilityContext, assetKeepScore, getDeficitPositions, joinAnd, PROTECT_THRESHOLD } from './recommendations'
 
 const PICK_SUFFIXES = ['', '1st', '2nd', '3rd', '4th']
 
@@ -320,7 +320,10 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
   const ctx = buildGivabilityContext(myRoster, allRosters)
   const opponentDeficits = getDeficitPositions(opponentRoster, allRosters)
 
-  const available = [
+  // Build the candidate pool, then drop anything core/irreplaceable (an elite
+  // backup-less starter like a top-1 TE) — the package builder never reaches for
+  // those just to hit a value. The user can still add them manually.
+  const allAssets = [
     ...myRoster.players
       .filter(p => !p.isIR)
       .map(p => ({
@@ -329,8 +332,10 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
       })),
     ...myRoster.picks
       .map(p => ({ type: 'pick', name: pickLabel(p), value: p.value ?? 0 })),
-  ]
-    .filter(a => a.value > 0)
+  ].filter(a => a.value > 0)
+
+  const available = allAssets
+    .filter(a => assetKeepScore(a, ctx) < PROTECT_THRESHOLD)
     .sort((a, b) => a.value - b.value)
 
   if (!available.length) return null
@@ -342,8 +347,11 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
 
   // Among packages whose value lands in [FLOOR, CAP], pick the one that hurts
   // least: minimize total keep-pain, prefer fewer pieces, nudge toward the exact
-  // value and toward assets the partner needs.
+  // value and toward assets the partner needs. bestUnder tracks the closest
+  // package that still undershoots — used only when nothing reaches fair value,
+  // so we surface an honest "covers ~X%, add a piece" instead of a stud.
   let best = null
+  let bestUnder = null
   const consider = idxs => {
     let total = 0, pain = 0
     for (const i of idxs) {
@@ -351,7 +359,11 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
       pain  += keepCache[i]
       if (opponentDeficits.has(available[i].position)) pain -= 0.08
     }
-    if (total < FLOOR || total > CAP) return
+    if (total > CAP) return
+    if (total < FLOOR) {
+      if (!bestUnder || total > bestUnder.total) bestUnder = { idxs, total }
+      return
+    }
     pain += 0.2 * (idxs.length - 1)
     pain += Math.abs(total - targetValue) / targetValue * 0.3
     if (!best || pain < best.pain) best = { idxs, total, pain }
@@ -385,19 +397,17 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
     }
   }
 
-  // Fallback: nothing lands in range (target dwarfs or undercuts my whole
-  // inventory) — closest single asset, breaking ties toward the more expendable.
-  const fallback = [...available].sort((a, b) => {
-    const da = Math.abs(a.value - targetValue)
-    const db = Math.abs(b.value - targetValue)
-    if (da !== db) return da - db
-    return assetKeepScore(a, ctx) - assetKeepScore(b, ctx)
-  })[0]
-  if (!fallback) return null
-  const gapPct = Math.round(Math.abs(fallback.value - targetValue) / targetValue * 100)
-  return {
-    assets: [fallback], totalValue: fallback.value, gapPct,
-    over: fallback.value >= targetValue,
-    rationale: packageRationale([fallback], ctx),
+  // Nothing fair from depth alone — this target costs more than I can pay
+  // without touching a core piece. Show the closest honest package and say so,
+  // rather than suggesting I gut a position.
+  if (bestUnder) {
+    const assets = bestUnder.idxs.map(i => available[i])
+    const gapPct = Math.round((targetValue - bestUnder.total) / targetValue * 100)
+    return {
+      assets, totalValue: bestUnder.total, gapPct, over: false, short: true,
+      rationale: `${packageRationale(assets, ctx)} Covers ~${100 - gapPct}% — add a piece to reach fair value without dealing a core starter.`,
+    }
   }
+
+  return null
 }

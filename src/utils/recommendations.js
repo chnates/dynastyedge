@@ -38,14 +38,16 @@ export function buildGivabilityContext(myRoster, allRosters) {
     : 'Middle'
 
   const posRank = new Map()
+  const posValues = {}
   POSITIONS.forEach(pos => {
-    myRoster.players
+    const mine = myRoster.players
       .filter(p => p.position === pos && !p.isIR)
       .sort((a, b) => (b.value || 0) - (a.value || 0))
-      .forEach((p, i) => posRank.set(String(p.sleeperId), i))
+    mine.forEach((p, i) => posRank.set(String(p.sleeperId), i))
+    posValues[pos] = mine.map(p => p.value || 0)
   })
 
-  return { myDeltas, myTier, posRank, leagueAverages }
+  return { myDeltas, myTier, posRank, posValues, leagueAverages }
 }
 
 // How much we want to KEEP an asset: 0 = very expendable, 1 = untouchable core.
@@ -54,7 +56,7 @@ export function buildGivabilityContext(myRoster, allRosters) {
 // window (a contender cashes picks/young fliers; a rebuilder hoards youth/picks
 // and sells aging vets).
 export function assetKeepScore(asset, ctx) {
-  const { myDeltas, myTier, posRank } = ctx
+  const { myDeltas, myTier, posRank, posValues } = ctx
 
   if (asset.type === 'pick') {
     let keep = 0.5
@@ -73,10 +75,25 @@ export function assetKeepScore(asset, ctx) {
     ? 0.85
     : Math.max(0.2, 0.55 - (rank - coreN) * 0.12)
 
-  // Positional surplus/deficit: protect where I'm thin, open up where I'm deep.
+  // Positional surplus/deficit. A deficit protects everyone at the position.
+  // A surplus only opens up the DEPTH pieces (rank >= coreN) — it must NEVER
+  // discount a core starter, because one elite player (e.g. a top-1 TE with no
+  // backup) inflates the position's summed value and makes a thin spot read as
+  // a surplus. We don't trade the stud just because he makes the bin look deep.
   const delta = myDeltas?.[pos] ?? 0
   if (delta < 0) keep += 0.22
-  else if (delta > 0) keep -= 0.18
+  else if (delta > 0 && rank >= coreN) keep -= 0.18
+
+  // Cliff protection: my best at a position with a steep drop to the next-best
+  // is irreplaceable depth-wise — protect hard regardless of how the summed
+  // positional value reads. This is what keeps an elite, backup-less starter
+  // out of auto-suggested packages.
+  if (rank === 0) {
+    const vals = posValues?.[pos] ?? []
+    const top = vals[0] ?? 0
+    const next = vals[1] ?? 0
+    if (top > 0 && next / top < 0.5) keep = Math.max(keep, 0.95)
+  }
 
   // Win-window lean on age.
   const age = asset.age ?? null
@@ -90,6 +107,10 @@ export function assetKeepScore(asset, ctx) {
 
   return clamp(keep)
 }
+
+// Assets at or above this keep-score are never auto-included in a suggested
+// package — they're core/irreplaceable. The user can still add them manually.
+export const PROTECT_THRESHOLD = 0.9
 
 // Inverse of keep — higher = more willing to include in a package / move on from.
 export function assetGivability(asset, ctx) {
