@@ -1169,6 +1169,103 @@ the route changed.
 
 -----
 
+## Navigation Refactor (Planned — phased, not yet built)
+
+> **Status:** approved direction, **awaiting review of this plan before any
+> code.** This section is the spec; the live Navigation section above still
+> describes the *current* app and gets updated phase-by-phase as each step
+> lands (so the doc never describes a state that doesn't exist yet).
+
+**Why:** the app grew to 17 features behind a 7-label drawer that hides ~21
+real destinations one level down. Sub-tabs only render *after* you've entered a
+section, so substantial features (Trajectory, Managers, Pick Trades, Movers,
+Playoffs) are invisible from the only map the app has. The felt problems:
+every non-home view is 2–3 taps behind a context-wiping overlay; you can't tell
+where a feature lives; and two workflows are split across sections (the trade
+workflow, and duplicated team-list views).
+
+**The drawer stays — no bottom nav.** The fix is making the drawer a complete,
+legible map and regrouping the IA around jobs-to-be-done, not replacing the
+paradigm. The *visual* refresh is explicitly a separate, later job (Phase 3) —
+it repaints the settled structure; it does not restructure.
+
+### Target information architecture
+
+|Group     |Sub-views                                                   |
+|----------|------------------------------------------------------------|
+|The Edge  |*(home — leaf)*                                             |
+|My Team   |My Roster · Lineup · Season Review · Trajectory             |
+|Trade     |Partners · Analyzer · Targets · Managers · Pick Trades      |
+|League    |Overview *(fused with All Teams)* · Free Agents · Activity · Movers · Playoffs|
+|Draft     |Board · Tracker                                            |
+|News      |*(feed — leaf)*                                            |
+
+Principle: **My Team = my squad · Trade = only things that help build a trade ·
+League = everyone else / the market.** Moves vs. today: Lineup + Trajectory →
+My Team; Pick Trades → Trade; All Teams (fused into Overview) + Free Agents +
+Movers → League. Movers stays *out* of Trade deliberately — it's market intel,
+not a trade-builder (its per-row "Trade" deep-link into the Analyzer is a
+cross-link, not a reason to rehouse it).
+
+### Phase 1 — Consolidation (feature work; small, independently verifiable steps)
+
+- **Fuse Overview + All Teams into one League view.** They're redundant today
+  (both list all 10 teams, both drill into the same roster view). Collapse into
+  a single team list + drill-down living under League. Remove the All Teams tab
+  from Roster.
+- **Stand up "My Team" as a grouped section** with My Roster · Lineup · Season
+  Review · Trajectory as **sibling sub-tabs** — *not* a fused screen. (Roster
+  and the weekly Optimizer are different jobs; the Optimizer is offseason-hidden
+  and would break a shared scroll.) The standalone Lineup section disappears as
+  its views land here.
+
+These two steps inherently *begin* the regroup (removing All Teams from Roster,
+removing the Lineup section), so Phase 1 and Phase 2 are intentionally
+entangled — land the heavier feature work first, in isolation, before the
+mechanical nav rewrite.
+
+### Phase 2 — Navigation (mechanical)
+
+- **Rebuild `SideDrawer` as an always-expanded hierarchical map.** Pattern:
+  docs-sidebar / IDE-tree, *not* Material subheader+divider (parents here are
+  themselves destinations).
+  - **Parent row** = group anchor *and* destination: section icon in its
+    identity color + label, tappable → section default view.
+  - **Children** indented beneath, text-aligned past the icon, tied to the
+    parent by a thin vertical guide rail in the section color; no per-child
+    icons; muted until active. Active child keeps the full color + tinted
+    background + edge bar already in use.
+  - Leaf sections (The Edge, News) render as plain single rows — no children,
+    no rail. Whitespace separates groups (no heavy dividers).
+- **Route redirects for everything that moved/renamed** — same pattern as the
+  existing `/league/managers` → `/trade/managers` redirect — so saved
+  deep-links and The Edge's briefing/deep-link items keep working. (Notably:
+  old `/roster/teams`, `/roster/teams/:id`, `/roster/free-agents`,
+  `/roster/trajectory`, `/lineup*`, `/league/movers`, `/draft/trades` all get
+  redirects to their new homes.)
+- **Extend the header search sheet to jump to sections/features** by name
+  (start with feature/section names only — no verb/keyword synonym map yet).
+  Reuses `PlayerSearchSheet`'s sheet contract; results list features above/below
+  player matches.
+
+### Phase 3 — Design refresh (separate, later)
+
+The "Claude Design visual refresh" already listed under Future Features. It
+repaints the now-correct structure — kept out of Phases 1–2 so we don't
+restructure and restyle at once (and don't do the migration twice).
+
+### Doc upkeep during the refactor
+
+As **each phase lands**, update: the live **Navigation** section (table + the
+sub-tab/section notes), the **Features** entries whose location changed
+(Feature 1 Roster, Feature 4 Lineup, Feature 5 League Overview, Feature 7
+Movers, Feature 9 Season Review, Feature 13 Pick Trades, Feature 17
+Trajectory), the **File Structure** if components move, and this section's
+status line. The component files may keep their existing folders (as Manager
+Scouting did) — note any route-only moves explicitly.
+
+-----
+
 ## Design System
 
 ### Theme
@@ -1706,8 +1803,11 @@ These are noted so the codebase is structured to support them later.
 Do not implement them until explicitly asked.
 
 - FAAB bid recommender for waiver pickups
-- Claude Design visual refresh
-- Push notifications for trade offers (requires backend — out of scope for v1)
+- Claude Design visual refresh — see **Navigation Refactor** above; this is its
+  Phase 3 (repaint the settled structure, after the IA regroup lands)
+- Push notifications for trade offers (requires backend — out of scope for v1;
+  note Sleeper's API is read-only and may not even expose *pending* trade
+  offers, so this is blocked on data availability, not just architecture)
 
 ### Already built (formerly future features)
 
