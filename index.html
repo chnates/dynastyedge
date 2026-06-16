@@ -7,12 +7,15 @@
          Kept in sync with the theme toggle by useTheme. -->
     <meta name="theme-color" content="#16161A" />
     <!-- Standalone (Add to Home Screen) mode: draw edge-to-edge instead of
-         iOS letterboxing the app with black bars. No status-bar-style meta:
-         modern iOS colors the standalone status bar from theme-color above
-         (kept in sync with the app theme by useTheme) and picks readable
-         text automatically — so the bar matches the header in both themes.
-         Changing these requires removing + re-adding the home-screen app. -->
+         iOS letterboxing the app with black bars. black-translucent makes the
+         status bar TRANSPARENT so the app content + ambient glow paint under
+         it seamlessly (no solid colored band). iOS forces white status text;
+         in dark mode the dark header/glow shows through, and in light mode a
+         dark strip (App.jsx, light-mode-only) sits behind the bar to keep the
+         clock/battery readable. Changing these requires removing + re-adding
+         the home-screen app. -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="DynastyEdge" />
     <link rel="manifest" href="manifest.webmanifest" />
     <title>DynastyEdge</title>

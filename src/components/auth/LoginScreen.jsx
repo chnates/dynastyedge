@@ -76,6 +76,13 @@ export default function LoginScreen() {
         paddingBottom: 'calc(env(safe-area-inset-bottom) + 2rem)',
       }}
     >
+      {/* Light-mode-only strip behind the always-white (black-translucent)
+          iOS status text — same treatment as the app shell. */}
+      <div
+        className="fixed top-0 left-0 right-0 z-10 dark:hidden bg-[#0D0D0F]"
+        style={{ height: 'env(safe-area-inset-top)' }}
+        aria-hidden="true"
+      />
       <div className="max-w-[460px] mx-auto px-4">
         {/* Branding */}
         <div className="hero-card login-hero rounded-3xl px-6 py-9 mb-6 text-white text-center relative overflow-hidden">
