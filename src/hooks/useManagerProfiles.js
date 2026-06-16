@@ -4,7 +4,7 @@ import { useTransactions } from './useTransactions'
 import { useLeagueHistory } from './useLeagueHistory'
 import { usePlayerDB } from './usePlayerDB'
 import { buildManagerProfiles } from '../utils/managerAnalysis'
-import { MY_ROSTER_ID } from '../constants'
+import { useIdentity } from './useIdentity'
 
 // Manager scouting profiles: combines current-season league state (context),
 // the current-season transaction log (useTransactions cache), and every past
@@ -15,10 +15,11 @@ export function useManagerProfiles() {
   const { transactions, loading: txLoading, error: txError, retry: txRetry } = useTransactions()
   const { history, loading: historyLoading, error: historyError, retry: historyRetry } = useLeagueHistory()
   const { playerDB } = usePlayerDB()
+  const { rosterId: myRosterId } = useIdentity()
 
   const analysis = useMemo(() => {
     if (!league?.allRosters?.length || !values?.playerMap || !transactions || !history) return null
-    const myOwnerId = league.allRosters.find(r => r.rosterId === MY_ROSTER_ID)?.owner?.user_id ?? null
+    const myOwnerId = league.allRosters.find(r => r.rosterId === myRosterId)?.owner?.user_id ?? null
     return buildManagerProfiles({
       history,
       currentLeague: {
@@ -31,7 +32,7 @@ export function useManagerProfiles() {
       playerDB,
       myOwnerId,
     })
-  }, [league, values, leagueInfo, transactions, history, playerDB])
+  }, [league, values, leagueInfo, transactions, history, playerDB, myRosterId])
 
   const loading = (leagueLoading && !league) || (txLoading && !transactions) || (historyLoading && !history)
   const error = leagueError ?? txError ?? historyError ?? null

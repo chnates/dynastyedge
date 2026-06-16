@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { SLEEPER_BASE, LEAGUE_ID, MY_ROSTER_ID } from '../constants'
+import { SLEEPER_BASE, LEAGUE_ID } from '../constants'
 import { fetchJSON } from '../utils/fetchJSON'
 import { useLeagueContext } from '../context/LeagueContext'
 import { buildScoringModel, simulatePlayoffs, buildStrengthPreview } from '../utils/playoffOdds'
@@ -75,7 +75,7 @@ function processWeeks(perWeek) {
 
 export function usePlayoffOdds() {
   const {
-    league, leagueInfo, nflState,
+    league, leagueInfo, nflState, myRosterId,
     loading: leagueLoading, error: leagueError, retry: leagueRetry,
   } = useLeagueContext()
 
@@ -133,7 +133,7 @@ export function usePlayoffOdds() {
       status,
       results,
       oddsByRoster,
-      myOdds: oddsByRoster[MY_ROSTER_ID] ?? null,
+      myOdds: oddsByRoster[myRosterId] ?? null,
       model,
       completedWeeks,
       remainingWeeks: remainingSchedule.length,
@@ -142,7 +142,7 @@ export function usePlayoffOdds() {
       playoffTeams,
       firstPlayoffWeek,
     }
-  }, [league, perWeek, playoffTeams, firstPlayoffWeek])
+  }, [league, perWeek, playoffTeams, firstPlayoffWeek, myRosterId])
 
   function retry() {
     scheduleCache = null
@@ -156,6 +156,7 @@ export function usePlayoffOdds() {
     error: schedError ?? ((leagueError && !league) ? leagueError : null),
     retry,
     league,
+    myRosterId,
     status: derived?.status ?? null,
     results: derived?.results ?? null,
     oddsByRoster: derived?.oddsByRoster ?? {},

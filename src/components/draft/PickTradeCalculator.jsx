@@ -9,7 +9,6 @@ import {
   buildPickMarket, buildPriceBoard, makePickPricer, pickRoundLabel, suggestPickPackages,
 } from '../../utils/pickTrades'
 import { buildRookieProspects } from '../../utils/rookieAdp'
-import { MY_ROSTER_ID } from '../../constants'
 import { ROUND_TEXT, ROUND_LABELS } from '../../utils/roundColors'
 import SectionHeader from '../shared/SectionHeader'
 import LoadingSpinner from '../shared/LoadingSpinner'
@@ -113,7 +112,7 @@ function PriceBoard({ board, slotLevel }) {
 }
 
 export default function PickTradeCalculator() {
-  const { league, values, loading, error, retry } = useLeagueContext()
+  const { league, values, loading, error, retry, myRosterId } = useLeagueContext()
   const sleeperDraft = useSleeperDraft()
   const { sleeperRookieMap } = useSleeperRookies()
   const navigate = useNavigate()
@@ -152,12 +151,12 @@ export default function PickTradeCalculator() {
   // My package ammo: this season's picks at slot precision (from the market)
   // plus future-year picks at round medians — common sweeteners.
   const myCandidates = useMemo(() => {
-    const thisSeason = market.picks.filter(p => p.ownerRosterId === MY_ROSTER_ID)
+    const thisSeason = market.picks.filter(p => p.ownerRosterId === myRosterId)
     const future = (league?.myRoster?.picks ?? [])
       .filter(p => p.season !== DRAFT_SEASON)
       .map(p => ({
         season: p.season, round: p.round, slot: null, slotLabel: null,
-        label: pickRoundLabel(p), ownerRosterId: MY_ROSTER_ID,
+        label: pickRoundLabel(p), ownerRosterId: myRosterId,
         rosterPick: p, value: priceFor({ season: p.season, round: p.round }),
       }))
     return [...thisSeason, ...future]
@@ -194,8 +193,8 @@ export default function PickTradeCalculator() {
     })
   }
 
-  const theirPicks = market.picks.filter(p => p.ownerRosterId !== MY_ROSTER_ID)
-  const myPicks    = market.picks.filter(p => p.ownerRosterId === MY_ROSTER_ID)
+  const theirPicks = market.picks.filter(p => p.ownerRosterId !== myRosterId)
+  const myPicks    = market.picks.filter(p => p.ownerRosterId === myRosterId)
 
   return (
     <div className="px-4 pb-4">
@@ -292,7 +291,7 @@ export default function PickTradeCalculator() {
             // Best return package from each opponent, closest matches first
             const offers = expanded
               ? allRosters
-                  .filter(r => r.rosterId !== MY_ROSTER_ID)
+                  .filter(r => r.rosterId !== myRosterId)
                   .map(r => ({
                     rosterId: r.rosterId,
                     pkg: suggestPickPackages(pick.value, candidatesFor(r.rosterId), { count: 1 })[0] ?? null,

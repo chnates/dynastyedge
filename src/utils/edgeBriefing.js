@@ -8,7 +8,7 @@ import { getDeadlineVerdict } from './playoffOdds'
 import { buildAgeCurves, buildRosterTrajectory, getTrajectoryRead } from './dynastyTrajectory'
 import { recommendFreeAgents } from './recommendations'
 import { MIN_SPARKLINE_POINTS } from '../hooks/useValueHistory'
-import { POSITIONS, MY_ROSTER_ID } from '../constants'
+import { POSITIONS } from '../constants'
 
 // The Edge's assistant-GM logic: turn everything the app already caches into
 // a small set of prioritized, actionable briefing items. Pure functions —
@@ -26,7 +26,7 @@ export function trendPct(trend, value) {
 
 // ── Derived market / league signals ─────────────────────────────────────────
 
-export function computeEdgeSignals({ league, values, watchlist, nflState }) {
+export function computeEdgeSignals({ league, values, watchlist, nflState, myRosterId }) {
   if (!league?.myRoster || !values?.playerMap) return null
 
   const { allRosters, myRoster } = league
@@ -38,7 +38,7 @@ export function computeEdgeSignals({ league, values, watchlist, nflState }) {
   const mySurpluses = POSITIONS.filter(pos => (myDeltas[pos] ?? 0) > 0)
 
   const byValue = [...allRosters].sort((a, b) => b.totalValue - a.totalValue)
-  const valueRank = byValue.findIndex(r => r.rosterId === MY_ROSTER_ID) + 1
+  const valueRank = byValue.findIndex(r => r.rosterId === myRosterId) + 1
 
   const ownerByPlayer = {}
   allRosters.forEach(r => {
@@ -52,7 +52,7 @@ export function computeEdgeSignals({ league, values, watchlist, nflState }) {
       p.trend30Day < -TREND_THRESHOLD &&
       p.value >= MIN_TARGET_VALUE &&
       myDeficits.includes(p.position) &&
-      ownerByPlayer[p.sleeperId]?.rosterId !== MY_ROSTER_ID
+      ownerByPlayer[p.sleeperId]?.rosterId !== myRosterId
     )
     .map(p => ({
       ...p,
@@ -110,7 +110,7 @@ export function computeEdgeSignals({ league, values, watchlist, nflState }) {
     let biggestGap = 3
     byValue.forEach((r, valueIdx) => {
       const gap = recordRank[r.rosterId] - valueIdx
-      if (r.rosterId !== MY_ROSTER_ID && gap > biggestGap) {
+      if (r.rosterId !== myRosterId && gap > biggestGap) {
         biggestGap = gap
         underperformer = r
       }
@@ -126,7 +126,7 @@ export function computeEdgeSignals({ league, values, watchlist, nflState }) {
     const { curves, generic } = buildAgeCurves(values.playerMap)
     const season = Number(nflState?.season) || new Date().getFullYear()
     const declining = allRosters
-      .filter(r => r.rosterId !== MY_ROSTER_ID)
+      .filter(r => r.rosterId !== myRosterId)
       .map(r => ({ roster: r, read: getTrajectoryRead(buildRosterTrajectory(r, season, curves, generic)) }))
       .filter(x => x.read?.direction === 'declining')
       .sort((a, b) => b.roster.totalValue - a.roster.totalValue)
@@ -156,7 +156,7 @@ export function computeEdgeSignals({ league, values, watchlist, nflState }) {
 
   return {
     tiers,
-    myTier: tiers[MY_ROSTER_ID] ?? 'Middle',
+    myTier: tiers[myRosterId] ?? 'Middle',
     tierCounts,
     valueRank,
     myDeficits,

@@ -1,4 +1,10 @@
 export const LEAGUE_ID = '1313933520715907072'
+
+// Identity is now runtime state, not a constant: the signed-in roster comes
+// from the `useIdentity` store (set on the login screen, persisted in
+// localStorage). These remain only as the league's original-owner reference —
+// nothing reads them as the source of truth anymore. "Am I this team?" checks
+// use `myRosterId` from LeagueContext / useIdentity.
 export const MY_ROSTER_ID = 6
 export const MY_USERNAME = 'chnates'
 export const MY_TEAM_NAME = 'Nix Cage'

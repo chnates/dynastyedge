@@ -5,7 +5,6 @@ import { useTransactions } from '../../hooks/useTransactions'
 import { usePlayerDB } from '../../hooks/usePlayerDB'
 import { getTeamName } from '../../hooks/useLeague'
 import { findPickValue } from '../../utils/pickCapital'
-import { MY_ROSTER_ID } from '../../constants'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
@@ -128,7 +127,7 @@ function PickupCard({ tx, teamName, resolveAsset, onSelectPlayer }) {
 }
 
 export default function LeagueActivity() {
-  const { league, values, loading: leagueLoading, error: leagueError, retry: leagueRetry } = useLeagueContext()
+  const { league, values, loading: leagueLoading, error: leagueError, retry: leagueRetry, myRosterId } = useLeagueContext()
   const { transactions, loading: txLoading, error: txError, retry: txRetry } = useTransactions()
   const { playerDB } = usePlayerDB()
   const [filter, setFilterState] = useState('all')
@@ -143,7 +142,7 @@ export default function LeagueActivity() {
   const filtered = useMemo(() => {
     if (!transactions) return null
     if (filter === 'all') return transactions
-    if (filter === 'mine') return transactions.filter(tx => (tx.roster_ids ?? []).includes(MY_ROSTER_ID))
+    if (filter === 'mine') return transactions.filter(tx => (tx.roster_ids ?? []).includes(myRosterId))
     return transactions.filter(tx => tx.type === filter)
   }, [transactions, filter])
 
@@ -210,7 +209,7 @@ export default function LeagueActivity() {
         <div className="flex flex-col gap-2">
           {visible.map(tx => {
             const meta = TYPE_META[tx.type] ?? TYPE_META.commissioner
-            const involvesMe = (tx.roster_ids ?? []).includes(MY_ROSTER_ID)
+            const involvesMe = (tx.roster_ids ?? []).includes(myRosterId)
             return (
               <div
                 key={tx.transaction_id}

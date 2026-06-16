@@ -3,9 +3,13 @@ import { useSleeper } from './useSleeper'
 import { useFantasyCalc } from './useFantasyCalc'
 import { usePlayerDB } from './usePlayerDB'
 import { resolvePickOwnership, findPickValue, computePickCapitalScore } from '../utils/pickCapital'
-import { MY_ROSTER_ID, PICK_YEARS } from '../constants'
+import { PICK_YEARS } from '../constants'
+import { useIdentity } from './useIdentity'
 
 export function useLeague() {
+  // The logged-in roster is now runtime state, not a constant — "me" is
+  // whichever team the user signed in as.
+  const { rosterId: myRosterId } = useIdentity()
   const { data: sleeperData, loading: sleeperLoading, error: sleeperError, retry: sleeperRetry, fetchedAt: sleeperFetchedAt } = useSleeper()
   const { values: fcValues, loading: fcLoading, error: fcError, retry: fcRetry, fetchedAt: fcFetchedAt } = useFantasyCalc()
   // Player DB resolves names for rostered players FantasyCalc doesn't rank
@@ -128,10 +132,12 @@ export function useLeague() {
     }
 
     const allRosters = rosters.map(resolveRoster)
-    const myRoster = allRosters.find(r => r.rosterId === MY_ROSTER_ID) ?? null
+    const myRoster = myRosterId != null
+      ? allRosters.find(r => r.rosterId === myRosterId) ?? null
+      : null
 
     return { allRosters, myRoster, userMap, leagueInfo }
-  }, [sleeperData, fcValues, playerDB])
+  }, [sleeperData, fcValues, playerDB, myRosterId])
 
   const nflState = sleeperData?.nflState ?? null
   const isOffseason = nflState?.season_type !== 'regular'
@@ -166,6 +172,7 @@ export function useLeague() {
 
   return {
     league, nflState, matchups, isOffseason, leagueInfo, tradeDeadline,
+    myRosterId,
     loading, error, retry, sleeperFetchedAt, fcFetchedAt, values: fcValues,
   }
 }

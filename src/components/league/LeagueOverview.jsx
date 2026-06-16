@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { assignWinWindowTiers, computeLeagueAverages, getPositionalStrength } from '../../utils/rosterAnalysis'
 import { getTeamName } from '../../hooks/useLeague'
-import { POSITIONS, MY_ROSTER_ID } from '../../constants'
+import { POSITIONS } from '../../constants'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import SectionHeader from '../shared/SectionHeader'
@@ -45,9 +45,9 @@ function writeSession(key, value) {
   }
 }
 
-function PositionRankCard({ roster, posFilter, tier, posStrength, posRank, onTap }) {
+function PositionRankCard({ roster, posFilter, tier, posStrength, posRank, onTap, myRosterId }) {
   const teamName = getTeamName(roster.owner)
-  const isMyTeam = roster.rosterId === MY_ROSTER_ID
+  const isMyTeam = roster.rosterId === myRosterId
 
   return (
     <button
@@ -88,7 +88,7 @@ function PositionRankCard({ roster, posFilter, tier, posStrength, posRank, onTap
 }
 
 export default function LeagueOverview() {
-  const { league, nflState, matchups, isOffseason, loading, error, retry } = useLeagueContext()
+  const { league, nflState, matchups, isOffseason, loading, error, retry, myRosterId } = useLeagueContext()
   const navigate = useNavigate()
 
   const [sortMode, setSortModeState] = useState(() => readSession(SORT_KEY, 'value'))
@@ -172,7 +172,7 @@ export default function LeagueOverview() {
         }))
     }
 
-    const myTier = winWindowTiers[MY_ROSTER_ID] ?? 'Middle'
+    const myTier = winWindowTiers[myRosterId] ?? 'Middle'
 
     return {
       winWindowTiers, leagueAverages, tierCounts, sortedRosters,
@@ -321,6 +321,7 @@ export default function LeagueOverview() {
                 posStrength={posStrength}
                 posRank={posRank}
                 onTap={handleTeamTap}
+                myRosterId={myRosterId}
               />
             ))}
           </div>

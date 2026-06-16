@@ -8,7 +8,6 @@ import { useManagerProfiles } from '../../hooks/useManagerProfiles'
 import { usePlayoffOdds } from '../../hooks/usePlayoffOdds'
 import { rankTradePartners } from '../../utils/rosterAnalysis'
 import { buildAgeCurves, buildRosterTrajectory, getTrajectoryRead } from '../../utils/dynastyTrajectory'
-import { MY_ROSTER_ID } from '../../constants'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
@@ -196,7 +195,7 @@ function TradePartnerCard({ partner, watchedNames, profile, odds, trajectoryRead
 }
 
 export default function TradePartnerFinder() {
-  const { league, values, nflState, loading, error, retry } = useLeagueContext()
+  const { league, values, nflState, loading, error, retry, myRosterId } = useLeagueContext()
   const { watchlist } = useWatchlist()
   // Behavioral profiles arrive whenever the lazy history fetch finishes —
   // the partner list renders immediately without them.
@@ -235,7 +234,7 @@ export default function TradePartnerFinder() {
     if (!league?.allRosters || watchlist.length === 0) return {}
     const byRoster = {}
     league.allRosters.forEach(r => {
-      if (r.rosterId === MY_ROSTER_ID) return
+      if (r.rosterId === myRosterId) return
       r.players.forEach(p => {
         if (!watchlist.includes(p.sleeperId)) return
         if (!byRoster[r.rosterId]) byRoster[r.rosterId] = []

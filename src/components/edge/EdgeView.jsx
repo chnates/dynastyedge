@@ -19,7 +19,6 @@ import { getTeamName } from '../../hooks/useLeague'
 import {
   computeEdgeSignals, buildBriefing, buildGmLine, buildTeamValueSeries, trendPct,
 } from '../../utils/edgeBriefing'
-import { MY_TEAM_NAME, MY_ROSTER_ID } from '../../constants'
 import { POS_TEXT } from '../../utils/positionColors'
 import { TIER_BADGE, TIER_TEXT } from '../../utils/tierColors'
 import LoadingSpinner from '../shared/LoadingSpinner'
@@ -126,7 +125,7 @@ function txSummary(tx, teamName, resolveName) {
 
 export default function EdgeView() {
   const {
-    league, values, nflState, isOffseason, tradeDeadline, loading, error, retry,
+    league, values, nflState, isOffseason, tradeDeadline, myRosterId, loading, error, retry,
   } = useLeagueContext()
   const { transactions } = useTransactions()
   const { watchlist } = useWatchlist()
@@ -141,8 +140,8 @@ export default function EdgeView() {
   const [analysisOpen, setAnalysisOpen] = useState(false)
 
   const signals = useMemo(
-    () => computeEdgeSignals({ league, values, watchlist, nflState }),
-    [league, values, watchlist, nflState]
+    () => computeEdgeSignals({ league, values, watchlist, nflState, myRosterId }),
+    [league, values, watchlist, nflState, myRosterId]
   )
 
   // My roster + watchlist players — the set whose news matters to me.
@@ -183,6 +182,7 @@ export default function EdgeView() {
   if (!league?.myRoster || !signals) return <ErrorState message="Could not load your briefing." onRetry={retry} />
 
   const myRoster = league.myRoster
+  const myTeamName = myRoster ? getTeamName(myRoster.owner) : 'Manager'
   const teamName = rosterId => getTeamName(league.userMap[rosterId])
   const resolveName = pid =>
     values?.playerMap?.[pid]?.name ?? playerDB?.[pid]?.name ?? `Player #${pid}`
@@ -246,7 +246,7 @@ export default function EdgeView() {
           {dateline}
         </p>
         <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-white mt-0.5 leading-tight">
-          {greeting()}, {MY_TEAM_NAME}
+          {greeting()}, {myTeamName}
         </h1>
         <p className="font-body text-sm text-white/80 mt-1 leading-snug">
           {gmLine}
@@ -466,7 +466,7 @@ export default function EdgeView() {
             {recentTx.map(tx => {
               const { Icon, color } = TX_ICONS[tx.type] ?? TX_ICONS.commissioner
               const { title, detail } = txSummary(tx, teamName, resolveName)
-              const involvesMe = (tx.roster_ids ?? []).includes(MY_ROSTER_ID)
+              const involvesMe = (tx.roster_ids ?? []).includes(myRosterId)
               const isFresh = lastVisit && (tx.status_updated ?? 0) > lastVisit
               return (
                 <button

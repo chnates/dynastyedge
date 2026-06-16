@@ -15,7 +15,6 @@ import { useLeagueContext } from '../../context/LeagueContext'
 import { useRookieADP } from '../../hooks/useRookieADP'
 import { buildRookieProspects } from '../../utils/rookieAdp'
 import { useSleeperDraft, buildDraftOrder } from '../../hooks/useSleeperDraft'
-import { MY_ROSTER_ID } from '../../constants'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { BOARD_ORDER_KEY, NOTES_KEY, CSV_KEY } from './boardStorage'
 import LoadingSpinner from '../shared/LoadingSpinner'
@@ -348,7 +347,7 @@ function SortablePlayerRow({
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function DraftBoard() {
-  const { league, loading, error, retry, values } = useLeagueContext()
+  const { league, loading, error, retry, values, myRosterId } = useLeagueContext()
   const { rookieMap, loading: rookieLoading, error: rookieError, retry: rookieRetry } = useRookieADP()
 
   const [posFilter, setPosFilter]     = useState('ALL')
@@ -405,7 +404,7 @@ export default function DraftBoard() {
       draft,
       draftedIds: new Set(sleeperDraft.data.picks.map(p => String(p.player_id))),
       myRemaining: order && !complete
-        ? order.slice(picksMade).filter(p => p.rosterId === MY_ROSTER_ID)
+        ? order.slice(picksMade).filter(p => p.rosterId === myRosterId)
         : [],
       live: draft.status === 'drafting' || draft.status === 'paused',
     }

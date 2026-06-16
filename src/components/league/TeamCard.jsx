@@ -1,7 +1,8 @@
 import { getTeamName } from '../../hooks/useLeague'
+import { useLeagueContext } from '../../context/LeagueContext'
 import { getPositionalStrength } from '../../utils/rosterAnalysis'
 import WinWindowBadge from '../shared/WinWindowBadge'
-import { POSITIONS, PICK_YEARS, MY_ROSTER_ID } from '../../constants'
+import { POSITIONS, PICK_YEARS } from '../../constants'
 import { POS_TEXT, POS_BAR } from '../../utils/positionColors'
 import { ROUND_CLASSES, ROUND_TEXT, ROUND_LABELS } from '../../utils/roundColors'
 import { rankClass } from '../../utils/rankColors'
@@ -31,10 +32,11 @@ const DIVERGENCE_META = {
 }
 
 export default function TeamCard({ roster, rank, divergence, leagueAverages, winWindowTiers, sortMode = 'value', onTap }) {
+  const { myRosterId } = useLeagueContext()
   const teamName = getTeamName(roster.owner)
   const username = roster.owner?.username ?? ''
   const tier = winWindowTiers?.[roster.rosterId] ?? 'Middle'
-  const isMyTeam = roster.rosterId === MY_ROSTER_ID
+  const isMyTeam = roster.rosterId === myRosterId
   const divergenceMeta = divergence ? DIVERGENCE_META[divergence] : null
 
   const totalPicks = roster.picks.length

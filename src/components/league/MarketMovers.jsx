@@ -8,7 +8,7 @@ import {
   getPositionalDeltas,
   assignWinWindowTiers,
 } from '../../utils/rosterAnalysis'
-import { POSITIONS, MY_ROSTER_ID } from '../../constants'
+import { POSITIONS } from '../../constants'
 import { useWatchlist } from '../../hooks/useWatchlist'
 import { useValueHistory } from '../../hooks/useValueHistory'
 import { POS_TEXT } from '../../utils/positionColors'
@@ -125,7 +125,7 @@ function MoverSection({ label, players, emptyHint, getOwnerLabel, getNote, getSe
 }
 
 export default function MarketMovers() {
-  const { league, values, loading, error, retry } = useLeagueContext()
+  const { league, values, loading, error, retry, myRosterId } = useLeagueContext()
   const { watchlist } = useWatchlist()
   const { getSeries } = useValueHistory()
   const navigate = useNavigate()
@@ -175,7 +175,7 @@ export default function MarketMovers() {
         p.trend30Day < -TREND_THRESHOLD &&
         p.value >= MIN_TARGET_VALUE &&
         myDeficits.includes(p.position) &&
-        p.ownerRoster?.rosterId !== MY_ROSTER_ID
+        p.ownerRoster?.rosterId !== myRosterId
       )
       .sort((a, b) => a.trend30Day - b.trend30Day)
       .slice(0, 8)
@@ -204,7 +204,7 @@ export default function MarketMovers() {
 
   const ownerLabel = p => {
     if (!p.ownerRoster) return 'Free agent'
-    if (p.ownerRoster.rosterId === MY_ROSTER_ID) return 'Your roster'
+    if (p.ownerRoster.rosterId === myRosterId) return 'Your roster'
     return getTeamName(p.ownerRoster.owner)
   }
 
@@ -212,7 +212,7 @@ export default function MarketMovers() {
   // package (same flow as Targets); my player → pre-loaded in You Give.
   const buildTrade = p => {
     if (!p.ownerRoster) return
-    if (p.ownerRoster.rosterId === MY_ROSTER_ID) {
+    if (p.ownerRoster.rosterId === myRosterId) {
       navigate('/trade/analyze', { state: { preloadGivePlayer: p } })
     } else {
       navigate('/trade/analyze', {

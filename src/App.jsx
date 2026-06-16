@@ -3,10 +3,12 @@ import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-d
 import { Menu, Search } from 'lucide-react'
 import { useLeague } from './hooks/useLeague'
 import { useTheme } from './hooks/useTheme'
+import { useIdentity } from './hooks/useIdentity'
 import { LeagueContext } from './context/LeagueContext'
 import SideDrawer from './components/shared/SideDrawer'
 import LoadingSpinner from './components/shared/LoadingSpinner'
 import EdgeView from './components/edge/EdgeView'
+import LoginScreen from './components/auth/LoginScreen'
 
 // The Edge stays eager — it's the default route and must render without a
 // lazy-chunk flash. Every other section loads on first navigation.
@@ -216,11 +218,16 @@ function AppShell({ leagueData }) {
 
 export default function App() {
   const leagueData = useLeague()
+  const { rosterId } = useIdentity()
   return (
     <LeagueContext.Provider value={leagueData}>
-      <HashRouter>
-        <AppShell leagueData={leagueData} />
-      </HashRouter>
+      {rosterId == null ? (
+        <LoginScreen />
+      ) : (
+        <HashRouter>
+          <AppShell leagueData={leagueData} />
+        </HashRouter>
+      )}
     </LeagueContext.Provider>
   )
 }

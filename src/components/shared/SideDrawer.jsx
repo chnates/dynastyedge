@@ -2,11 +2,12 @@ import { useEffect, useRef } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   Zap, Users, ArrowLeftRight, LayoutList, Trophy, FileText, Newspaper,
-  RefreshCw, Sun, Moon,
+  RefreshCw, Sun, Moon, LogOut,
 } from 'lucide-react'
 import DynastyEdgeLogo from './DynastyEdgeLogo'
 import TeamAvatar from './TeamAvatar'
 import { useLeagueContext } from '../../context/LeagueContext'
+import { useIdentity } from '../../hooks/useIdentity'
 import { getTeamName } from '../../hooks/useLeague'
 
 // Each section has an identity color — icons always wear it, the active
@@ -31,6 +32,7 @@ export default function SideDrawer({
   onToggleTheme,
 }) {
   const { league } = useLeagueContext()
+  const { clearIdentity } = useIdentity()
   const myOwner = league?.myRoster?.owner ?? null
   const myTeamName = myOwner ? getTeamName(myOwner) : null
 
@@ -147,6 +149,16 @@ export default function SideDrawer({
             {isDark ? <Sun size={18} strokeWidth={1.75} /> : <Moon size={18} strokeWidth={1.75} />}
             <span className="font-body font-medium text-[14px]">
               {isDark ? 'Light mode' : 'Dark mode'}
+            </span>
+          </button>
+
+          <button
+            onClick={() => { onClose(); clearIdentity() }}
+            className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+          >
+            <LogOut size={18} strokeWidth={1.75} />
+            <span className="font-body font-medium text-[14px]">
+              {myTeamName ? 'Switch team' : 'Sign out'}
             </span>
           </button>
         </div>

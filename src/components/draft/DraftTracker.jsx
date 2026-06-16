@@ -11,7 +11,6 @@ import { useSheetDrag } from '../../hooks/useSheetDrag'
 import { useScrollLock } from '../../hooks/useScrollLock'
 import { getTeamName } from '../../hooks/useLeague'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
-import { MY_ROSTER_ID } from '../../constants'
 import { BOARD_ORDER_KEY, NOTES_KEY, readJSON } from './boardStorage'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
@@ -342,7 +341,7 @@ function PickRow({ pick, player, teamName, isMine, label, delta, isLast, onSelec
 
 // ── Synced tracker (Sleeper draft exists) ─────────────────────────────────────
 
-function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects }) {
+function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects, myRosterId }) {
   const { data, fetchedAt, refreshing, error: syncError, refresh } = sleeperDraft
   const { draft, picks, tradedPicks } = data
   const userMap = league?.userMap ?? {}
@@ -383,9 +382,9 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects }) 
     (totalPicks > 0 && sortedPicks.length >= totalPicks)
   const isLive = draft.status === 'drafting' || draft.status === 'paused'
   const nextPick = !isComplete && orderKnown ? order[sortedPicks.length] ?? null : null
-  const isOnClock = isLive && nextPick?.rosterId === MY_ROSTER_ID
+  const isOnClock = isLive && nextPick?.rosterId === myRosterId
   const myUpcoming = orderKnown
-    ? order.slice(sortedPicks.length).filter(p => p.rosterId === MY_ROSTER_ID)
+    ? order.slice(sortedPicks.length).filter(p => p.rosterId === myRosterId)
     : []
   const picksUntilMine = myUpcoming.length > 0
     ? myUpcoming[0].overall - sortedPicks.length - 1
@@ -433,7 +432,7 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects }) 
     const leaguePicks = (league?.myRoster?.picks ?? []).filter(p => p.season === DRAFT_SEASON)
     if (orderKnown) {
       return order
-        .filter(p => p.rosterId === MY_ROSTER_ID)
+        .filter(p => p.rosterId === myRosterId)
         .map(p => ({
           key: p.label,
           label: p.label,
@@ -557,7 +556,7 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects }) 
             </p>
             <div className="rounded-xl bg-bg-card border border-border-default px-3 mb-4">
               {recap.teamTotals.map((t, i) => {
-                const isMine = t.rosterId === MY_ROSTER_ID
+                const isMine = t.rosterId === myRosterId
                 return (
                   <div
                     key={t.rosterId}
@@ -592,7 +591,7 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects }) 
                           pick={e.pick}
                           player={e.player}
                           teamName={getTeamName(userMap[e.pick.roster_id])}
-                          isMine={e.pick.roster_id === MY_ROSTER_ID}
+                          isMine={e.pick.roster_id === myRosterId}
                           label={pickSlotLabel(e.pick, teams)}
                           delta={e.delta}
                           isLast={i === recap.steals.length - 1}
@@ -614,7 +613,7 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects }) 
                           pick={e.pick}
                           player={e.player}
                           teamName={getTeamName(userMap[e.pick.roster_id])}
-                          isMine={e.pick.roster_id === MY_ROSTER_ID}
+                          isMine={e.pick.roster_id === myRosterId}
                           label={pickSlotLabel(e.pick, teams)}
                           delta={e.delta}
                           isLast={i === recap.reaches.length - 1}
@@ -637,7 +636,7 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects }) 
                   pick={e.pick}
                   player={e.player}
                   teamName={getTeamName(userMap[e.pick.roster_id])}
-                  isMine={e.pick.roster_id === MY_ROSTER_ID}
+                  isMine={e.pick.roster_id === myRosterId}
                   label={pickSlotLabel(e.pick, teams)}
                   delta={e.delta}
                   isLast={i === recap.entries.length - 1}
@@ -680,7 +679,7 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects }) 
                         pick={pick}
                         player={player}
                         teamName={getTeamName(userMap[pick.roster_id])}
-                        isMine={pick.roster_id === MY_ROSTER_ID}
+                        isMine={pick.roster_id === myRosterId}
                         label={pickSlotLabel(pick, teams)}
                         delta={adp != null ? pick.pick_no - adp : null}
                         isLast={i === arr.length - 1}
@@ -755,11 +754,11 @@ function findNextManualPick(draftOrder, drafted) {
   return draftOrder.find(p => !draftedOveralls.has(p.overall)) ?? null
 }
 
-function LogPickModal({ player, nextPickInfo, userMap, onSave, onClose }) {
+function LogPickModal({ player, nextPickInfo, userMap, onSave, onClose, myRosterId }) {
   useScrollLock()
   const { sheetRef } = useSheetDrag(onClose)
   const teamName = getTeamName(userMap[nextPickInfo?.currentOwner])
-  const isMyPick = nextPickInfo?.currentOwner === MY_ROSTER_ID
+  const isMyPick = nextPickInfo?.currentOwner === myRosterId
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/60">
@@ -803,11 +802,11 @@ function LogPickModal({ player, nextPickInfo, userMap, onSave, onClose }) {
   )
 }
 
-function EditPickModal({ pick, player, userMap, onDelete, onClose }) {
+function EditPickModal({ pick, player, userMap, onDelete, onClose, myRosterId }) {
   useScrollLock()
   const { sheetRef } = useSheetDrag(onClose)
   const teamName = getTeamName(userMap[pick.rosterId])
-  const isMyPick = pick.rosterId === MY_ROSTER_ID
+  const isMyPick = pick.rosterId === myRosterId
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/60">
@@ -873,7 +872,7 @@ function ResetConfirm({ onConfirm, onCancel }) {
   )
 }
 
-function ManualTracker({ league, values, prospects, syncError, onCheckAgain, checking }) {
+function ManualTracker({ league, values, prospects, syncError, onCheckAgain, checking, myRosterId }) {
   const [drafted, setDrafted] = useState(() => {
     try { return JSON.parse(localStorage.getItem(MANUAL_STORAGE_KEY) ?? '[]') }
     catch { return [] }
@@ -1007,7 +1006,7 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
                 {draftedSorted.map((pick, i) => {
                   const player = values?.playerMap?.[pick.sleeperId]
                   const team = getTeamName(userMap[pick.rosterId])
-                  const isMine = pick.rosterId === MY_ROSTER_ID
+                  const isMine = pick.rosterId === myRosterId
                   return (
                     <button
                       key={pick.sleeperId}
@@ -1054,6 +1053,7 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
           userMap={userMap}
           onSave={() => logPick(logModal)}
           onClose={() => setLogModal(null)}
+          myRosterId={myRosterId}
         />
       )}
       {editModal && (
@@ -1061,6 +1061,7 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
           pick={editModal.pick}
           player={editModal.player}
           userMap={userMap}
+          myRosterId={myRosterId}
           onDelete={() => {
             setDrafted(prev => prev.filter(d => d.sleeperId !== editModal.pick.sleeperId))
             setEditModal(null)
@@ -1081,7 +1082,7 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function DraftTracker() {
-  const { league, loading, error, retry, values, leagueInfo } = useLeagueContext()
+  const { league, loading, error, retry, values, leagueInfo, myRosterId } = useLeagueContext()
   const { rookieMap, loading: rookieLoading, error: rookieError, retry: rookieRetry } = useRookieADP()
   const sleeperDraft = useSleeperDraft()
 
@@ -1105,6 +1106,7 @@ export default function DraftTracker() {
         leagueInfo={leagueInfo}
         values={values}
         prospects={prospects}
+        myRosterId={myRosterId}
       />
     )
   }
@@ -1117,6 +1119,7 @@ export default function DraftTracker() {
       syncError={sleeperDraft.error}
       onCheckAgain={sleeperDraft.refresh}
       checking={sleeperDraft.refreshing || sleeperDraft.loading}
+      myRosterId={myRosterId}
     />
   )
 }

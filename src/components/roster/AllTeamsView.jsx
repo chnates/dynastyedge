@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { getTeamName } from '../../hooks/useLeague'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { assignWinWindowTiers } from '../../utils/rosterAnalysis'
-import { MY_ROSTER_ID } from '../../constants'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import WinWindowBadge from '../shared/WinWindowBadge'
@@ -15,7 +14,7 @@ function formatRecord({ wins, losses, ties }) {
 }
 
 export default function AllTeamsView() {
-  const { league, loading, error, retry } = useLeagueContext()
+  const { league, loading, error, retry, myRosterId } = useLeagueContext()
   const navigate = useNavigate()
 
   const teams = useMemo(() => {
@@ -56,7 +55,7 @@ export default function AllTeamsView() {
               <div className="flex-1 min-w-0">
                 <p className="font-body text-sm font-semibold text-text-primary dark:text-text-primary truncate leading-tight">
                   {getTeamName(roster.owner)}
-                  {roster.rosterId === MY_ROSTER_ID && (
+                  {roster.rosterId === myRosterId && (
                     <span className="ml-1.5 font-body text-[10px] font-bold text-accent uppercase">You</span>
                   )}
                 </p>

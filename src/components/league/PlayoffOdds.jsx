@@ -4,7 +4,6 @@ import { usePlayoffOdds } from '../../hooks/usePlayoffOdds'
 import { getDeadlineVerdict } from '../../utils/playoffOdds'
 import { assignWinWindowTiers } from '../../utils/rosterAnalysis'
 import { getTeamName } from '../../hooks/useLeague'
-import { MY_ROSTER_ID } from '../../constants'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import SectionHeader from '../shared/SectionHeader'
@@ -179,7 +178,7 @@ function HowToRead({ playoffTeams }) {
 
 export default function PlayoffOdds() {
   const {
-    loading, error, retry, league,
+    loading, error, retry, league, myRosterId,
     status, results, strengthPreview, playoffTeams,
     completedWeeks, remainingWeeks, remainingGames, firstPlayoffWeek,
   } = usePlayoffOdds()
@@ -206,7 +205,7 @@ export default function PlayoffOdds() {
   if (error) return <ErrorState message={error} onRetry={retry} />
   if (!league || !status) return <ErrorState message="Could not load playoff odds." onRetry={retry} />
 
-  const myTier = tiers[MY_ROSTER_ID] ?? 'Middle'
+  const myTier = tiers[myRosterId] ?? 'Middle'
 
   // ── Preseason: no games and no posted schedule yet ──
   if (status === 'preseason') {
@@ -233,7 +232,7 @@ export default function PlayoffOdds() {
             <StrengthPreviewRow
               key={row.rosterId}
               row={row}
-              isMine={row.rosterId === MY_ROSTER_ID}
+              isMine={row.rosterId === myRosterId}
             />
           ))}
         </div>
@@ -244,7 +243,7 @@ export default function PlayoffOdds() {
   }
 
   // ── Active or complete: real simulation ──
-  const myResult = results?.find(r => r.rosterId === MY_ROSTER_ID) ?? null
+  const myResult = results?.find(r => r.rosterId === myRosterId) ?? null
   const verdict = getDeadlineVerdict(myResult?.playoffPct, myTier)
   const seasonComplete = status === 'complete'
 
@@ -307,7 +306,7 @@ export default function PlayoffOdds() {
               roster={roster}
               result={result}
               tier={tiers[result.rosterId] ?? 'Middle'}
-              isMine={result.rosterId === MY_ROSTER_ID}
+              isMine={result.rosterId === myRosterId}
             />
           )
         })}
