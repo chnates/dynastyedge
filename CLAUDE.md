@@ -297,12 +297,13 @@ across future seasons.
 
 #### League-wide view
 
-- Lives in the Roster section sub-tabs: **My Roster · Free Agents**
-  (the all-10-teams list now lives in **League › Overview** — see Feature 5 —
-  which fused in the old "All Teams" view)
-- Free Agents: search + position filter + **Upgrades Only** and **Hide Rookies**
-  toggles (both default off; rookie detection = Sleeper `years_exp === 0` with
-  the age≤25 fallback, same logic as the Rookie badge)
+- **My Roster** lives in the **My Team** section sub-tabs (My Roster · Lineup ·
+  Season Review · Trajectory). The all-10-teams list lives in **League ›
+  Overview** — see Feature 5 — which fused in the old "All Teams" view.
+- **Free Agents** now lives under **League** (League › Free Agents): search +
+  position filter + **Upgrades Only** and **Hide Rookies** toggles (both default
+  off; rookie detection = Sleeper `years_exp === 0` with the age≤25 fallback,
+  same logic as the Rookie badge)
 - Tap any team card → full roster + picks drill-down (`/roster/teams/:rosterId`)
 - League › Overview team cards also drill into the same view; the back button
   returns to wherever you came from with filters preserved
@@ -482,8 +483,9 @@ sessionStorage, but there is no multi-trade history — that lives in Sleeper.
 **Purpose:** Optimize the weekly starting lineup using live projections,
 injury status, bye weeks, and matchup quality.
 
-*The Optimizer is the default sub-tab under Lineup (`/lineup`, via
-`LineupLayout`), a sibling of Season Review (Feature 9).*
+*The Optimizer is the **Lineup** sub-tab under **My Team** (`/roster/lineup`),
+a sibling of My Roster, Season Review (Feature 9), and Trajectory. The
+standalone Lineup section is gone — `/lineup` redirects here.*
 
 *This feature is hidden entirely during the offseason.*
 *Detect via `/state/nfl` → `season_type !== 'regular'`. In the offseason the
@@ -672,9 +674,10 @@ every completed week.
 - Per-week rows: actual, optimal, delta (green ✓ when optimal, amber/red otherwise)
 - Shows during the offseason too (it reviews the completed season)
 - Data: `/matchups/{week}` for completed weeks, cached per session
-- **Its own sub-tab** under Lineup (`/lineup/season-review`, via `LineupLayout`),
-  a sibling of the Optimizer — not stacked inside the Optimizer's scroll. It
-  renders as a standalone padded page with its own header.
+- **Its own sub-tab** under **My Team** (`/roster/season-review`), a sibling of
+  My Roster, the Optimizer, and Trajectory — not stacked inside the Optimizer's
+  scroll. It renders as a standalone padded page with its own header.
+  (`/lineup/season-review` redirects here.)
 
 -----
 
@@ -1064,7 +1067,7 @@ a value curve over the next few seasons and answers the core dynasty question:
 and offseason alike. **Zero new data sources** — pure logic over caches
 `LeagueContext` already holds.
 
-**Location:** a **Roster sub-tab** (My Roster · Free Agents ·
+**Location:** a **My Team sub-tab** (My Roster · Lineup · Season Review ·
 **Trajectory**, `/roster/trajectory`), and **roster-agnostic** — the team
 drill-down (`RosterView` for `:rosterId`) carries a "Dynasty Trajectory →" card
 that opens `/roster/trajectory/:rosterId`, so you can scout an opponent's window
@@ -1149,16 +1152,22 @@ Side drawer sections:
 |#  |Section |Feature                                                  |
 |---|--------|---------------------------------------------------------|
 |1  |The Edge|Daily briefing home screen (default route)               |
-|2  |Roster  |My Roster · Free Agents · Trajectory                      |
+|2  |My Team |My Roster · Lineup · Season Review · Trajectory          |
 |3  |Trade   |Partners · Analyzer · Targets · Managers (+ deadline banner)|
-|4  |Lineup  |Optimizer · Season Review                                 |
-|5  |League  |Overview · Activity · Movers · Playoffs                   |
-|6  |News    |League-wide aggregated news feed (browsable + filterable) |
-|7  |Draft   |Rookie draft board · Draft pick tracker · Pick trade calculator|
+|4  |League  |Overview · Free Agents · Activity · Movers · Playoffs    |
+|5  |News    |League-wide aggregated news feed (browsable + filterable) |
+|6  |Draft   |Rookie draft board · Draft pick tracker · Pick trade calculator|
 
 Sections with multiple views use a sub-tab bar pinned under the app header.
 The drawer also holds: data freshness timestamp, manual Refresh, and the theme toggle.
 The active section is highlighted in the drawer; the app header shows the section name.
+
+**My Team** groups my-squad views as sibling sub-tabs (My Roster · Lineup ·
+Season Review · Trajectory); the standalone Lineup section is gone (its
+Optimizer + Season Review folded in here, with `/lineup*` redirecting). **Free
+Agents** moved to **League** (it's market intel). These are still served from
+`/roster/*` and `/league/free-agents` paths; the `/roster` → `/my-team` URL
+rename plus the full redirect set is Phase 2 (see Navigation Refactor below).
 
 **Global player search** lives in the fixed app header (search icon, top-right,
 on every screen) — opens `PlayerSearchSheet`, a bottom sheet that searches the
@@ -1175,12 +1184,16 @@ the route changed.
 
 ## Navigation Refactor (Planned — phased, not yet built)
 
-> **Status:** Phase 1 in progress. **Done:** step 1 — Overview + All Teams
-> fused (the redundant `AllTeamsView` and its Roster tab are gone; `/roster/teams`
-> redirects to `/league`; the `/roster/teams/:rosterId` drill-down stays).
-> **Next:** step 2 — stand up the grouped "My Team" section. This section is the
-> spec; the live Navigation section above is updated phase-by-phase as each step
-> lands (so the doc never describes a state that doesn't exist yet).
+> **Status:** Phase 1 complete. **Done:** step 1 — Overview + All Teams fused
+> (`AllTeamsView` + its Roster tab gone; `/roster/teams` → `/league`; the
+> `/roster/teams/:rosterId` drill-down stays). step 2 — "My Team" stood up as a
+> grouped section (My Roster · Lineup · Season Review · Trajectory sibling
+> sub-tabs); standalone Lineup section dissolved (`LineupLayout` gone, `/lineup*`
+> redirects into My Team); Free Agents moved to League. All still served from
+> `/roster/*` + `/league/*` paths. **Next:** Phase 2 — the mechanical nav rewrite
+> (hierarchical drawer, the `/roster` → `/my-team` URL rename + full redirect
+> set, feature-name search). This section is the spec; the live Navigation
+> section above is updated phase-by-phase as each step lands.
 
 **Why:** the app grew to 17 features behind a 7-label drawer that hides ~21
 real destinations one level down. Sub-tabs only render *after* you've entered a
@@ -1516,9 +1529,9 @@ dynastyedge/
 │   │   ├── edge/
 │   │   │   └── EdgeView.jsx         ← The Edge: daily briefing home screen
 │   │   ├── roster/
-│   │   │   ├── RosterLayout.jsx     ← sub-tabs: My Roster / Free Agents / Trajectory
+│   │   │   ├── RosterLayout.jsx     ← "My Team" sub-tabs: My Roster / Lineup / Season Review / Trajectory (renders ../lineup views)
 │   │   │   ├── RosterView.jsx       ← own roster + drill-down for any team
-│   │   │   ├── FreeAgentsView.jsx
+│   │   │   ├── FreeAgentsView.jsx   ← now routed under League (file stays here)
 │   │   │   ├── RosterActionItems.jsx
 │   │   │   ├── RosterAnalysisSheet.jsx  ← age-lane chart + win window bottom sheet
 │   │   │   ├── TrajectoryView.jsx   ← multi-year forward value projection (any team)
@@ -1531,14 +1544,13 @@ dynastyedge/
 │   │   │   ├── TradeBuilder.jsx
 │   │   │   ├── TradeVerdict.jsx
 │   │   │   └── WhatsFair.jsx
-│   │   ├── lineup/
-│   │   │   ├── LineupLayout.jsx     ← sub-tabs: Optimizer / Season Review
-│   │   │   ├── LineupOptimizer.jsx
-│   │   │   ├── LineupEfficiency.jsx ← Season Review tab: actual vs optimal points
+│   │   ├── lineup/                  ← rendered as "My Team" sub-tabs (no own layout)
+│   │   │   ├── LineupOptimizer.jsx  ← My Team › Lineup
+│   │   │   ├── LineupEfficiency.jsx ← My Team › Season Review: actual vs optimal points
 │   │   │   ├── StarterSlot.jsx
 │   │   │   └── FreeAgentDrawer.jsx
 │   │   ├── league/
-│   │   │   ├── LeagueLayout.jsx     ← sub-tabs: Overview / Activity / Movers / Playoffs
+│   │   │   ├── LeagueLayout.jsx     ← sub-tabs: Overview / Free Agents / Activity / Movers / Playoffs
 │   │   │   ├── LeagueOverview.jsx
 │   │   │   ├── LeagueActivity.jsx   ← transaction feed (trades, waivers, FAAB bids)
 │   │   │   ├── MarketMovers.jsx     ← risers/fallers, buy-low / sell-high

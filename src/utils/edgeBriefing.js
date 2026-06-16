@@ -314,7 +314,7 @@ export function buildBriefing({
       tone: 'success',
       title: `Free-agent target: ${player.name}`,
       body: `${reasons.slice(0, 2).join(' · ')}. Available on the wire now.`,
-      action: { type: 'route', to: '/roster/free-agents' },
+      action: { type: 'route', to: '/league/free-agents' },
     })
   }
 

@@ -1,9 +1,10 @@
 import { NavLink, Outlet } from 'react-router-dom'
 
 const SUB_TABS = [
-  { label: 'My Roster',    to: '/roster/my-team',     end: false },
-  { label: 'Free Agents',  to: '/roster/free-agents', end: false },
-  { label: 'Trajectory',   to: '/roster/trajectory',  end: false },
+  { label: 'My Roster',     to: '/roster/my-team',       end: false },
+  { label: 'Lineup',        to: '/roster/lineup',        end: false },
+  { label: 'Season Review', to: '/roster/season-review', end: false },
+  { label: 'Trajectory',    to: '/roster/trajectory',    end: false },
 ]
 
 export default function RosterLayout() {

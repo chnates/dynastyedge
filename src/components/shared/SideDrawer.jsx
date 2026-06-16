@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
-  Zap, Users, ArrowLeftRight, LayoutList, Trophy, FileText, Newspaper,
+  Zap, Users, ArrowLeftRight, Trophy, FileText, Newspaper,
   RefreshCw, Sun, Moon, LogOut,
 } from 'lucide-react'
 import DynastyEdgeLogo from './DynastyEdgeLogo'
@@ -14,9 +14,8 @@ import { getTeamName } from '../../hooks/useLeague'
 // item gets a matching tinted background and edge bar.
 const NAV_ITEMS = [
   { to: '/edge',   label: 'The Edge', Icon: Zap,          text: 'text-accent',  activeBg: 'bg-accent/10',  bar: 'bg-accent'  },
-  { to: '/roster', label: 'Roster', Icon: Users,          text: 'text-pos-wr',  activeBg: 'bg-pos-wr/10',  bar: 'bg-pos-wr'  },
+  { to: '/roster', label: 'My Team', Icon: Users,         text: 'text-pos-wr',  activeBg: 'bg-pos-wr/10',  bar: 'bg-pos-wr'  },
   { to: '/trade',  label: 'Trade',  Icon: ArrowLeftRight, text: 'text-success', activeBg: 'bg-success/10', bar: 'bg-success' },
-  { to: '/lineup', label: 'Lineup', Icon: LayoutList,     text: 'text-pos-te',  activeBg: 'bg-pos-te/10',  bar: 'bg-pos-te'  },
   { to: '/league', label: 'League', Icon: Trophy,         text: 'text-warning', activeBg: 'bg-warning/10', bar: 'bg-warning' },
   { to: '/news',   label: 'News',   Icon: Newspaper,      text: 'text-pos-def', activeBg: 'bg-pos-def/10', bar: 'bg-pos-def' },
   { to: '/draft',  label: 'Draft',  Icon: FileText,       text: 'text-pos-qb',  activeBg: 'bg-pos-qb/10',  bar: 'bg-pos-qb'  },
