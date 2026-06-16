@@ -297,8 +297,9 @@ across future seasons.
 
 #### League-wide view
 
-- Lives in the Roster section sub-tabs: **My Roster · All Teams · Free Agents**
-- All Teams: all 10 teams ranked by total value, with record and win-window badge
+- Lives in the Roster section sub-tabs: **My Roster · Free Agents**
+  (the all-10-teams list now lives in **League › Overview** — see Feature 5 —
+  which fused in the old "All Teams" view)
 - Free Agents: search + position filter + **Upgrades Only** and **Hide Rookies**
   toggles (both default off; rookie detection = Sleeper `years_exp === 0` with
   the age≤25 fallback, same logic as the Rookie badge)
@@ -539,7 +540,10 @@ Update when the user manually refreshes or opens the Lineup tab.
 ### Feature 5 — League-Wide Overview
 
 **Purpose:** State-of-the-league dashboard. Understand the full competitive
-landscape before making any move.
+landscape before making any move. **This is the single all-10-teams list** —
+the old Roster › All Teams view was fused in here (it was a strict subset of
+this richer dashboard); its `/roster/teams` list route now redirects to
+`/league`, while the `/roster/teams/:rosterId` drill-down stays.
 
 #### Top section — Current matchups *(in-season only)*
 
@@ -1060,7 +1064,7 @@ a value curve over the next few seasons and answers the core dynasty question:
 and offseason alike. **Zero new data sources** — pure logic over caches
 `LeagueContext` already holds.
 
-**Location:** a new **Roster sub-tab** (My Roster · All Teams · Free Agents ·
+**Location:** a **Roster sub-tab** (My Roster · Free Agents ·
 **Trajectory**, `/roster/trajectory`), and **roster-agnostic** — the team
 drill-down (`RosterView` for `:rosterId`) carries a "Dynasty Trajectory →" card
 that opens `/roster/trajectory/:rosterId`, so you can scout an opponent's window
@@ -1145,7 +1149,7 @@ Side drawer sections:
 |#  |Section |Feature                                                  |
 |---|--------|---------------------------------------------------------|
 |1  |The Edge|Daily briefing home screen (default route)               |
-|2  |Roster  |My Roster · All Teams · Free Agents · Trajectory          |
+|2  |Roster  |My Roster · Free Agents · Trajectory                      |
 |3  |Trade   |Partners · Analyzer · Targets · Managers (+ deadline banner)|
 |4  |Lineup  |Optimizer · Season Review                                 |
 |5  |League  |Overview · Activity · Movers · Playoffs                   |
@@ -1171,9 +1175,11 @@ the route changed.
 
 ## Navigation Refactor (Planned — phased, not yet built)
 
-> **Status:** approved direction, **awaiting review of this plan before any
-> code.** This section is the spec; the live Navigation section above still
-> describes the *current* app and gets updated phase-by-phase as each step
+> **Status:** Phase 1 in progress. **Done:** step 1 — Overview + All Teams
+> fused (the redundant `AllTeamsView` and its Roster tab are gone; `/roster/teams`
+> redirects to `/league`; the `/roster/teams/:rosterId` drill-down stays).
+> **Next:** step 2 — stand up the grouped "My Team" section. This section is the
+> spec; the live Navigation section above is updated phase-by-phase as each step
 > lands (so the doc never describes a state that doesn't exist yet).
 
 **Why:** the app grew to 17 features behind a 7-label drawer that hides ~21
@@ -1386,15 +1392,15 @@ banner chips. Never redefine locally.
 
 ### Rank medals
 
-Ranking ordinals (league value rank, position rank cards, All Teams) color the
-top 3 as medals — gold/silver/bronze — via `rankClass(rank)` in
+Ranking ordinals (league value rank, position rank cards, the League team
+list) color the top 3 as medals — gold/silver/bronze — via `rankClass(rank)` in
 `src/utils/rankColors.js`. Everyone else stays text-tertiary.
 
 ### Team avatars
 
 `src/components/shared/TeamAvatar.jsx` shows the owner's Sleeper avatar
-everywhere teams appear (team cards, position rankings, All Teams, matchups,
-roster hero header, side drawer). Sources, in order: custom team avatar URL
+everywhere teams appear (team cards, position rankings, the League team list,
+matchups, roster hero header, side drawer). Sources, in order: custom team avatar URL
 (`user.metadata.avatar`), Sleeper CDN thumb
 (`https://sleepercdn.com/avatars/thumbs/{user.avatar}`), then a deterministic
 gradient initial circle (hash of team name). Static `<img>` tags only — this
@@ -1510,9 +1516,8 @@ dynastyedge/
 │   │   ├── edge/
 │   │   │   └── EdgeView.jsx         ← The Edge: daily briefing home screen
 │   │   ├── roster/
-│   │   │   ├── RosterLayout.jsx     ← sub-tabs: My Roster / All Teams / Free Agents
+│   │   │   ├── RosterLayout.jsx     ← sub-tabs: My Roster / Free Agents / Trajectory
 │   │   │   ├── RosterView.jsx       ← own roster + drill-down for any team
-│   │   │   ├── AllTeamsView.jsx     ← all 10 teams, tap → roster drill-down
 │   │   │   ├── FreeAgentsView.jsx
 │   │   │   ├── RosterActionItems.jsx
 │   │   │   ├── RosterAnalysisSheet.jsx  ← age-lane chart + win window bottom sheet

@@ -14,7 +14,6 @@ import LoginScreen from './components/auth/LoginScreen'
 // lazy-chunk flash. Every other section loads on first navigation.
 const RosterLayout      = lazy(() => import('./components/roster/RosterLayout'))
 const RosterView        = lazy(() => import('./components/roster/RosterView'))
-const AllTeamsView      = lazy(() => import('./components/roster/AllTeamsView'))
 const FreeAgentsView    = lazy(() => import('./components/roster/FreeAgentsView'))
 const TrajectoryView    = lazy(() => import('./components/roster/TrajectoryView'))
 const TradeLayout       = lazy(() => import('./components/trade/TradeLayout'))
@@ -189,7 +188,9 @@ function AppShell({ leagueData }) {
             <Route path="/roster" element={<RosterLayout />}>
               <Route index element={<Navigate to="my-team" replace />} />
               <Route path="my-team" element={<RosterView />} />
-              <Route path="teams" element={<AllTeamsView />} />
+              {/* All Teams fused into League Overview — list redirects there;
+                  the team drill-down stays (Overview + Edge link to it). */}
+              <Route path="teams" element={<Navigate to="/league" replace />} />
               <Route path="teams/:rosterId" element={<RosterView />} />
               <Route path="free-agents" element={<FreeAgentsView />} />
               <Route path="trajectory" element={<TrajectoryView />} />

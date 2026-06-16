@@ -74,7 +74,7 @@ export default function RosterView() {
 
   return (
     <div className="px-4 pb-4">
-      {/* ── Back button (when drilling down from League / All Teams) ── */}
+      {/* ── Back button (when drilling down from League / The Edge) ── */}
       {selectedRosterId && (
         <button
           onClick={() => navigate(-1)}
