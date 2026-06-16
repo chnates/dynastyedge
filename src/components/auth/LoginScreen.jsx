@@ -10,6 +10,13 @@ import TeamAvatar from '../shared/TeamAvatar'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 
+// Neon edge-bar palette cycled across the team picker rows so the list reads
+// colorful, not monochrome. Uses the app's identity tokens (never status-as-id).
+const EDGE_BARS = [
+  'bg-accent', 'bg-pos-def', 'bg-pos-wr', 'bg-pos-rb',
+  'bg-pos-qb', 'bg-pos-te', 'bg-success', 'bg-warning',
+]
+
 // Gated sign-in: resolve a Sleeper username to a roster in this league (the
 // real path we'll generalize later), with a tap-to-pick team list as the
 // fallback. "Login" is read-only identity resolution against a public Sleeper
@@ -58,22 +65,27 @@ export default function LoginScreen() {
 
   return (
     <div
-      className="min-h-screen app-bg text-text-primary font-body overflow-y-auto"
+      // Own fixed full-viewport scroller — the document body never scrolls
+      // (index.css locks it), so this screen must scroll itself or the team
+      // list gets clipped below the fold.
+      className="fixed inset-0 overflow-y-auto login-bg text-text-primary font-body"
       style={{
-        paddingTop: 'env(safe-area-inset-top)',
-        paddingBottom: 'env(safe-area-inset-bottom)',
+        overscrollBehavior: 'contain',
+        WebkitOverflowScrolling: 'touch',
+        paddingTop: 'calc(env(safe-area-inset-top) + 1.5rem)',
+        paddingBottom: 'calc(env(safe-area-inset-bottom) + 2rem)',
       }}
     >
-      <div className="max-w-[460px] mx-auto px-4 pt-8 pb-10">
+      <div className="max-w-[460px] mx-auto px-4">
         {/* Branding */}
-        <div className="hero-card rounded-2xl px-6 py-8 mb-6 text-white text-center">
+        <div className="hero-card login-hero rounded-3xl px-6 py-9 mb-6 text-white text-center relative overflow-hidden">
           <div className="flex justify-center">
-            <DynastyEdgeLogo theme="dark" size={120} />
+            <DynastyEdgeLogo theme="dark" size={132} />
           </div>
-          <p className="font-body text-[15px] text-white/80 mt-3">
-            Your dynasty command center.
+          <p className="font-display font-bold uppercase tracking-[0.14em] text-[13px] text-white/90 mt-4 hero-value">
+            Your dynasty command center
           </p>
-          <p className="font-body text-[13px] text-white/60 mt-1">
+          <p className="font-body text-[13px] text-white/70 mt-1.5">
             Sign in with your Sleeper username to load your team.
           </p>
         </div>
@@ -85,8 +97,11 @@ export default function LoginScreen() {
         ) : (
           <>
             {/* Username sign-in */}
-            <form onSubmit={submitUsername} className="bg-bg-card border border-border-default rounded-xl p-4">
-              <label htmlFor="sleeper-username" className="block font-display font-bold uppercase text-[11px] tracking-[0.08em] text-text-secondary mb-2">
+            <form
+              onSubmit={submitUsername}
+              className="bg-bg-card/80 backdrop-blur-sm border border-accent/30 rounded-2xl p-4 shadow-[0_0_30px_-10px_rgb(79_127_255_/_0.5)]"
+            >
+              <label htmlFor="sleeper-username" className="block font-display font-bold uppercase text-[11px] tracking-[0.08em] text-accent mb-2">
                 Sleeper username
               </label>
               <div className="flex gap-2">
@@ -100,14 +115,14 @@ export default function LoginScreen() {
                   value={username}
                   onChange={e => { setUsername(e.target.value); setErr(null) }}
                   placeholder="e.g. chnates"
-                  className="flex-1 min-w-0 bg-bg-secondary border border-border-default rounded-lg px-3 py-2.5 font-body text-[15px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent"
+                  className="flex-1 min-w-0 bg-bg-secondary border border-border-default rounded-xl px-3 py-2.5 font-body text-[15px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/40 transition-shadow"
                 />
                 <button
                   type="submit"
                   disabled={busy || !username.trim()}
-                  className="shrink-0 px-4 rounded-lg bg-accent text-white font-body font-semibold text-[14px] disabled:opacity-40 flex items-center gap-1"
+                  className="neon-cta shrink-0 px-5 rounded-xl text-white font-body font-bold text-[14px] disabled:opacity-40 disabled:shadow-none flex items-center gap-1 transition-opacity"
                 >
-                  {busy ? '…' : <>Go <ChevronRight size={16} strokeWidth={2.25} /></>}
+                  {busy ? '…' : <>Go <ChevronRight size={16} strokeWidth={2.5} /></>}
                 </button>
               </div>
               {err && (
@@ -117,23 +132,24 @@ export default function LoginScreen() {
 
             {/* Team picker fallback */}
             <div className="flex items-center gap-3 my-5">
-              <span className="flex-1 h-px bg-border-default" />
-              <span className="font-body text-[12px] text-text-tertiary">or pick your team</span>
-              <span className="flex-1 h-px bg-border-default" />
+              <span className="flex-1 h-px bg-gradient-to-r from-transparent to-accent/40" />
+              <span className="font-display font-bold uppercase tracking-[0.1em] text-[11px] text-text-secondary">or pick your team</span>
+              <span className="flex-1 h-px bg-gradient-to-l from-transparent to-pos-def/40" />
             </div>
 
-            <div className="bg-bg-card border border-border-default rounded-xl overflow-hidden">
+            <div className="bg-bg-card/80 backdrop-blur-sm border border-border-default rounded-2xl overflow-hidden">
               {rosters.map((roster, i) => (
                 <button
                   key={roster.rosterId}
                   onClick={() => pick(roster)}
-                  className={`flex items-center gap-3 w-full px-4 py-3 text-left hover:bg-black/5 dark:hover:bg-white/5 transition-colors ${
+                  className={`flex items-center gap-3 w-full pl-3 pr-4 py-3 text-left relative hover:bg-white/5 active:bg-white/10 transition-colors ${
                     i > 0 ? 'border-t border-border-default' : ''
                   }`}
                 >
-                  <TeamAvatar owner={roster.owner} size={32} />
+                  <span className={`absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full ${EDGE_BARS[i % EDGE_BARS.length]}`} />
+                  <TeamAvatar owner={roster.owner} size={34} className="ring-2 ring-white/10" />
                   <span className="flex-1 min-w-0">
-                    <span className="block font-body font-medium text-[15px] text-text-primary truncate">
+                    <span className="block font-body font-semibold text-[15px] text-text-primary truncate">
                       {getTeamName(roster.owner)}
                     </span>
                     {roster.owner?.username && (
@@ -143,13 +159,13 @@ export default function LoginScreen() {
                       </span>
                     )}
                   </span>
-                  <ChevronRight size={18} strokeWidth={1.75} className="text-text-tertiary shrink-0" />
+                  <ChevronRight size={18} strokeWidth={2} className="text-accent shrink-0" />
                 </button>
               ))}
             </div>
 
             <div className="flex items-center justify-center gap-1.5 mt-5 px-4">
-              <ShieldCheck size={14} strokeWidth={1.75} className="text-text-tertiary shrink-0" />
+              <ShieldCheck size={14} strokeWidth={1.75} className="text-success shrink-0" />
               <p className="font-body text-[12px] text-text-tertiary text-center">
                 Read-only. We never post to or change your Sleeper account.
               </p>
