@@ -3,7 +3,6 @@ import { NavLink, Outlet } from 'react-router-dom'
 const SUB_TABS = [
   { label: 'Board',   to: '/draft/board',   end: false },
   { label: 'Tracker', to: '/draft/tracker', end: false },
-  { label: 'Pick Trades', to: '/draft/trades', end: false },
 ]
 
 export default function DraftLayout() {

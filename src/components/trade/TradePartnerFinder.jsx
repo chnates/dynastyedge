@@ -311,9 +311,9 @@ export default function TradePartnerFinder() {
         </div>
       )}
 
-      {/* Discoverability hook into the pick-swap planner (lives in Draft) */}
+      {/* Discoverability hook into the pick-swap planner (Trade › Pick Trades) */}
       <button
-        onClick={() => navigate('/draft/trades')}
+        onClick={() => navigate('/trade/pick-trades')}
         className="mt-3 w-full py-2.5 rounded-xl border border-accent/25 bg-accent/5 font-body text-xs font-semibold text-accent active:opacity-70 transition-opacity"
       >
         Planning a pick swap? Open the Pick Trade Calculator →

@@ -253,7 +253,7 @@ export default function EdgeView() {
         </p>
 
         <button
-          onClick={() => navigate('/roster/my-team')}
+          onClick={() => navigate('/my-team')}
           className="w-full flex items-end justify-between gap-3 mt-3 pt-3 border-t border-white/20 text-left active:opacity-70 transition-opacity"
         >
           <div>

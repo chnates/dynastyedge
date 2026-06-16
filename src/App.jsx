@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, lazy, Suspense } from 'react'
-import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
 import { Menu, Search } from 'lucide-react'
 import { useLeague } from './hooks/useLeague'
 import { useTheme } from './hooks/useTheme'
@@ -36,12 +36,19 @@ const PickTradeCalculator = lazy(() => import('./components/draft/PickTradeCalcu
 const PlayerSearchSheet = lazy(() => import('./components/shared/PlayerSearchSheet'))
 
 const SECTION_NAMES = {
-  '/edge':   'The Edge',
-  '/roster': 'My Team',
-  '/trade':  'Trade',
-  '/league': 'League',
-  '/news':   'News',
-  '/draft':  'Draft',
+  '/edge':    'The Edge',
+  '/my-team': 'My Team',
+  '/trade':   'Trade',
+  '/league':  'League',
+  '/news':    'News',
+  '/draft':   'Draft',
+}
+
+// Param-aware redirect for moved routes that carry a path param (e.g. the
+// team drill-downs). Keeps old deep-links working through the regroup.
+function RedirectParam({ build }) {
+  const params = useParams()
+  return <Navigate to={build(params)} replace />
 }
 
 // Refetch league + value data when the app regains focus with stale data.
@@ -183,28 +190,19 @@ function AppShell({ leagueData }) {
           <Routes>
             <Route path="/" element={<Navigate to="/edge" replace />} />
             <Route path="/edge" element={<EdgeView />} />
-            {/* My Team — my squad: roster, lineup, season review, trajectory.
-                (Still served from /roster paths; the /roster → /my-team URL
-                rename + redirects are Phase 2.) */}
-            <Route path="/roster" element={<RosterLayout />}>
-              <Route index element={<Navigate to="my-team" replace />} />
-              <Route path="my-team" element={<RosterView />} />
+            {/* My Team — my squad: roster, lineup, season review, trajectory */}
+            <Route path="/my-team" element={<RosterLayout />}>
+              <Route index element={<RosterView />} />
               <Route path="lineup" element={<LineupOptimizer />} />
               <Route path="season-review" element={<LineupEfficiency />} />
               <Route path="trajectory" element={<TrajectoryView />} />
-              <Route path="trajectory/:rosterId" element={<TrajectoryView />} />
-              {/* Team drill-down (reached from League / The Edge) — stays here
-                  until the Phase 2 route rename. */}
-              <Route path="teams" element={<Navigate to="/league" replace />} />
-              <Route path="teams/:rosterId" element={<RosterView />} />
-              {/* Free Agents moved to League */}
-              <Route path="free-agents" element={<Navigate to="/league/free-agents" replace />} />
             </Route>
             <Route path="/trade" element={<TradeLayout />}>
               <Route index element={<TradePartnerFinder />} />
               <Route path="analyze" element={<TradeAnalyzer />} />
               <Route path="whats-fair" element={<WhatsFair />} />
               <Route path="managers" element={<ManagersView />} />
+              <Route path="pick-trades" element={<PickTradeCalculator />} />
             </Route>
             <Route path="/league" element={<LeagueLayout />}>
               <Route index element={<LeagueOverview />} />
@@ -213,18 +211,37 @@ function AppShell({ leagueData }) {
               <Route path="movers" element={<MarketMovers />} />
               <Route path="playoffs" element={<PlayoffOdds />} />
             </Route>
-            {/* Managers moved to Trade — redirect old deep-links */}
-            <Route path="/league/managers" element={<Navigate to="/trade/managers" replace />} />
-            {/* Lineup folded into My Team — redirect old deep-links */}
-            <Route path="/lineup/season-review" element={<Navigate to="/roster/season-review" replace />} />
-            <Route path="/lineup" element={<Navigate to="/roster/lineup" replace />} />
+            {/* Team scouting drill-downs (reached from League / The Edge) —
+                standalone, no sub-tab bar; header reads "League". */}
+            <Route path="/league/teams/:rosterId" element={<RosterView />} />
+            <Route path="/league/trajectory/:rosterId" element={<TrajectoryView />} />
             <Route path="/news" element={<NewsView />} />
             <Route path="/draft" element={<DraftLayout />}>
               <Route index element={<Navigate to="board" replace />} />
               <Route path="board" element={<DraftBoard />} />
               <Route path="tracker" element={<DraftTracker />} />
-              <Route path="trades" element={<PickTradeCalculator />} />
             </Route>
+
+            {/* ── Redirects for everything that moved/renamed in the nav
+                   refactor — keep saved deep-links + Edge briefing items alive ── */}
+            {/* Manager Scouting: League → Trade */}
+            <Route path="/league/managers" element={<Navigate to="/trade/managers" replace />} />
+            {/* Pick Trades: Draft → Trade */}
+            <Route path="/draft/trades" element={<Navigate to="/trade/pick-trades" replace />} />
+            {/* Roster section renamed → My Team */}
+            <Route path="/roster" element={<Navigate to="/my-team" replace />} />
+            <Route path="/roster/my-team" element={<Navigate to="/my-team" replace />} />
+            <Route path="/roster/lineup" element={<Navigate to="/my-team/lineup" replace />} />
+            <Route path="/roster/season-review" element={<Navigate to="/my-team/season-review" replace />} />
+            <Route path="/roster/trajectory" element={<Navigate to="/my-team/trajectory" replace />} />
+            <Route path="/roster/trajectory/:rosterId" element={<RedirectParam build={p => `/league/trajectory/${p.rosterId}`} />} />
+            {/* Team list fused into League Overview; drill-down + Free Agents → League */}
+            <Route path="/roster/teams" element={<Navigate to="/league" replace />} />
+            <Route path="/roster/teams/:rosterId" element={<RedirectParam build={p => `/league/teams/${p.rosterId}`} />} />
+            <Route path="/roster/free-agents" element={<Navigate to="/league/free-agents" replace />} />
+            {/* Lineup folded into My Team */}
+            <Route path="/lineup/season-review" element={<Navigate to="/my-team/season-review" replace />} />
+            <Route path="/lineup" element={<Navigate to="/my-team/lineup" replace />} />
           </Routes>
         </Suspense>
       </main>

@@ -344,7 +344,7 @@ export function buildBriefing({
       tone: 'accent',
       title: `${getTeamName(r.owner)} is underperforming`,
       body: `Their record trails their roster talent (${r.record.wins}-${r.record.losses}) — a frustrated owner is a buy window.`,
-      action: { type: 'route', to: `/roster/teams/${r.rosterId}` },
+      action: { type: 'route', to: `/league/teams/${r.rosterId}` },
     })
   }
 
@@ -358,7 +358,7 @@ export function buildBriefing({
       tone: 'accent',
       title: `${getTeamName(roster.owner)}'s window is closing`,
       body: `Their projected value peaks now and slides through ${read.lastSeason} — they may move win-now talent for picks or youth. Good time to call.`,
-      action: { type: 'route', to: `/roster/trajectory/${roster.rosterId}` },
+      action: { type: 'route', to: `/league/trajectory/${roster.rosterId}` },
     })
   }
 

@@ -871,7 +871,13 @@ visit ⇒ no "New" badges, activity shows the latest moves instead.
 
 -----
 
-### Feature 13 — Pick Trade Calculator (Draft › Pick Trades)
+### Feature 13 — Pick Trade Calculator (Trade › Pick Trades)
+
+> **Location:** lives under **Trade › Pick Trades** (`/trade/pick-trades`) — it
+> builds a trade, so it belongs with the trade tools. `/draft/trades` redirects
+> here. The component file remains in `src/components/draft/`
+> (`PickTradeCalculator.jsx`) — route-only move.
+
 
 **Purpose:** "What does it cost to move up — and what should moving down
 bring back?" Rookie-draft pick-swap planning for the weeks before and during
@@ -881,8 +887,8 @@ Pure logic lives in `utils/pickTrades.js`.
 
 **Discoverability:** the Trade Partners view carries a footer button —
 "Planning a pick swap? Open the Pick Trade Calculator →" — that deep-links
-here, so the planner is reachable from the trade workflow, not only the Draft
-section.
+here (a sibling Trade sub-tab), so the planner is reachable from the start of
+the trade workflow, not just its own tab.
 
 **Slot-level pricing:** FantasyCalc lists picks as "2026 Early 1st" /
 "Mid" / "Late". When Sleeper has set the draft order (`slot_to_roster_id`,
@@ -1147,27 +1153,42 @@ design decision — do not add a bottom nav. (Re-evaluated in the usability revi
 the drawer stays; the wins were in fixing the information architecture *within*
 this paradigm, not replacing it.)
 
+The drawer is an **always-expanded hierarchical map** (docs-sidebar pattern, see
+`SideDrawer.jsx`'s `NAV_TREE`): every destination is visible and one tap away.
+Parent rows are both the group anchor and a destination (tap → the section's
+default view), rendered with the section's identity-color icon + label;
+children sit indented beneath on a thin section-colored guide rail, muted until
+active (active child = section color + tinted background + edge bar). Leaf
+sections (The Edge, News) are plain single rows with no children/rail.
+
 Side drawer sections:
 
-|#  |Section |Feature                                                  |
+|#  |Section |Sub-views                                                |
 |---|--------|---------------------------------------------------------|
-|1  |The Edge|Daily briefing home screen (default route)               |
+|1  |The Edge|Daily briefing home screen (default route — leaf)        |
 |2  |My Team |My Roster · Lineup · Season Review · Trajectory          |
-|3  |Trade   |Partners · Analyzer · Targets · Managers (+ deadline banner)|
+|3  |Trade   |Partners · Analyzer · Targets · Managers · Pick Trades (+ deadline banner)|
 |4  |League  |Overview · Free Agents · Activity · Movers · Playoffs    |
-|5  |News    |League-wide aggregated news feed (browsable + filterable) |
-|6  |Draft   |Rookie draft board · Draft pick tracker · Pick trade calculator|
+|5  |Draft   |Board · Tracker                                          |
+|6  |News    |League-wide aggregated news feed (browsable — leaf)      |
 
 Sections with multiple views use a sub-tab bar pinned under the app header.
 The drawer also holds: data freshness timestamp, manual Refresh, and the theme toggle.
-The active section is highlighted in the drawer; the app header shows the section name.
+The app header shows the active section name.
 
-**My Team** groups my-squad views as sibling sub-tabs (My Roster · Lineup ·
-Season Review · Trajectory); the standalone Lineup section is gone (its
-Optimizer + Season Review folded in here, with `/lineup*` redirecting). **Free
-Agents** moved to **League** (it's market intel). These are still served from
-`/roster/*` and `/league/free-agents` paths; the `/roster` → `/my-team` URL
-rename plus the full redirect set is Phase 2 (see Navigation Refactor below).
+**Route map (post-refactor).** My-squad views live under `/my-team`
+(`/my-team` = My Roster, `/my-team/lineup`, `/my-team/season-review`,
+`/my-team/trajectory`). The market / everyone-else views live under `/league`
+(`/league` = Overview, `/league/free-agents`, `/league/activity`,
+`/league/movers`, `/league/playoffs`). Team **scouting drill-downs** are
+standalone routes (no sub-tab bar; header reads "League"):
+`/league/teams/:rosterId` (any roster) and `/league/trajectory/:rosterId` (any
+team's trajectory). Trade adds `/trade/pick-trades`; Draft is just
+`/draft/board` + `/draft/tracker`. Every moved/renamed path keeps a redirect
+(see Navigation Refactor below) so saved deep-links and Edge briefing items
+keep working: `/roster*` → `/my-team*` (or `/league*` for the team list /
+drill-downs / free agents), `/lineup*` → `/my-team/*`, `/draft/trades` →
+`/trade/pick-trades`, `/league/managers` → `/trade/managers`.
 
 **Global player search** lives in the fixed app header (search icon, top-right,
 on every screen) — opens `PlayerSearchSheet`, a bottom sheet that searches the
@@ -1190,9 +1211,12 @@ the route changed.
 > grouped section (My Roster · Lineup · Season Review · Trajectory sibling
 > sub-tabs); standalone Lineup section dissolved (`LineupLayout` gone, `/lineup*`
 > redirects into My Team); Free Agents moved to League. All still served from
-> `/roster/*` + `/league/*` paths. **Next:** Phase 2 — the mechanical nav rewrite
-> (hierarchical drawer, the `/roster` → `/my-team` URL rename + full redirect
-> set, feature-name search). This section is the spec; the live Navigation
+> `/roster/*` + `/league/*` paths. **Phase 2 in progress** — done: the
+> `/roster` → `/my-team` URL rename + full redirect set; Pick Trades moved to
+> `/trade/pick-trades` (Draft → Trade); scouting drill-downs are standalone
+> `/league/teams/:id` + `/league/trajectory/:id` routes (header "League"); and
+> the `SideDrawer` is now the always-expanded hierarchical map. **Next:** the
+> feature-name search extension. This section is the spec; the live Navigation
 > section above is updated phase-by-phase as each step lands.
 
 **Why:** the app grew to 17 features behind a 7-label drawer that hides ~21
@@ -1259,9 +1283,9 @@ mechanical nav rewrite.
 - **Route redirects for everything that moved/renamed** — same pattern as the
   existing `/league/managers` → `/trade/managers` redirect — so saved
   deep-links and The Edge's briefing/deep-link items keep working. (Notably:
-  old `/roster/teams`, `/roster/teams/:id`, `/roster/free-agents`,
-  `/roster/trajectory`, `/lineup*`, `/league/movers`, `/draft/trades` all get
-  redirects to their new homes.)
+  old `/roster*`, `/roster/teams/:id`, `/roster/free-agents`,
+  `/roster/trajectory/:id`, `/lineup*`, `/draft/trades` all get redirects to
+  their new homes. Movers stays in League, so `/league/movers` is unchanged.)
 - **Extend the header search sheet to jump to sections/features** by name
   (start with feature/section names only — no verb/keyword synonym map yet).
   Reuses `PlayerSearchSheet`'s sheet contract; results list features above/below
@@ -1272,6 +1296,25 @@ mechanical nav rewrite.
 The "Claude Design visual refresh" already listed under Future Features. It
 repaints the now-correct structure — kept out of Phases 1–2 so we don't
 restructure and restyle at once (and don't do the migration twice).
+
+**Watch-items carried over from Phases 1–2** (structural decisions deferred to
+the visual pass — surface these when doing the refresh):
+
+- **Sub-tab bar crowding at 390px.** The shared sub-tab bar (`flex-1` cells,
+  `text-xs` uppercase) now carries up to 5 tabs with two-word labels — **Trade**
+  (Partners · Analyzer · Targets · Managers · Pick Trades), **League** (Overview
+  · Free Agents · Activity · Movers · Playoffs), **My Team** (My Roster · Lineup
+  · Season Review · Trajectory). Labels like "Season Review" / "Free Agents" /
+  "Pick Trades" can wrap to two lines, making one cell taller than its
+  neighbors. Phase 1–2 left this as-is (didn't want to restyle the shared
+  component mid-consolidation). The refresh should solve it deliberately —
+  horizontal-scroll tab strip, shorter labels, an icon+label treatment, or a
+  different sub-nav pattern. This is the single most visible rough edge from the
+  regroup.
+- **Always-expanded drawer length.** The hierarchical drawer (Phase 2) shows all
+  ~18 destinations at once. It fits, but the visual pass should make the group
+  hierarchy read instantly (rail weight, indentation, parent vs. child type
+  scale) and confirm it doesn't feel long on a 390px screen.
 
 ### Doc upkeep during the refactor
 
@@ -1562,10 +1605,10 @@ dynastyedge/
 │   │   ├── news/
 │   │   │   └── NewsView.jsx         ← League-wide aggregated news feed (browsable)
 │   │   ├── draft/
-│   │   │   ├── DraftLayout.jsx
+│   │   │   ├── DraftLayout.jsx      ← sub-tabs: Board / Tracker
 │   │   │   ├── DraftBoard.jsx       ← rookie board: tiers, My Board, CSV columns
 │   │   │   ├── DraftTracker.jsx     ← Sleeper-synced live tracker + manual fallback
-│   │   │   ├── PickTradeCalculator.jsx ← move-up/move-down pick package planner
+│   │   │   ├── PickTradeCalculator.jsx ← move-up/move-down pick package planner (routed under Trade › Pick Trades; file stays here)
 │   │   │   └── boardStorage.js      ← shared draft-section localStorage keys
 │   │   └── shared/
 │   │       ├── SideDrawer.jsx       ← the app's only navigation

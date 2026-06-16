@@ -115,7 +115,7 @@ export default function RosterView() {
       {/* ── Dynasty trajectory (scouting another team — not otherwise reachable) ── */}
       {selectedRosterId && (
         <button
-          onClick={() => navigate(`/roster/trajectory/${selectedRosterId}`)}
+          onClick={() => navigate(`/league/trajectory/${selectedRosterId}`)}
           className="w-full mt-4 mb-1 flex items-center gap-2.5 px-3 py-3 rounded-xl bg-bg-card border border-border-default border-l-[3px] border-l-accent active:opacity-60 transition-opacity"
         >
           <span className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-accent/15">

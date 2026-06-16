@@ -190,7 +190,7 @@ export default function LeagueOverview() {
   } = derived
 
   function handleTeamTap(rosterId) {
-    navigate(`/roster/teams/${rosterId}`)
+    navigate(`/league/teams/${rosterId}`)
   }
 
   const currentWeek = nflState?.week
