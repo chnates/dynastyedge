@@ -1037,11 +1037,11 @@ footer link to `/news` (same treatment as "All market movers →").
 
 -----
 
-### Feature 16 — Global Player Search
+### Feature 16 — Global Player & Feature Search
 
-**Purpose:** find any player from anywhere in the app and jump straight to
-their profile, without first navigating to the section that happens to list
-them. The single global accelerant for a player-heavy app.
+**Purpose:** find any player — or any section/feature — from anywhere in the
+app and jump straight to it, without first navigating to the section that
+happens to list it. The single global accelerant for a feature-dense app.
 
 - **Entry point:** a search icon in the **fixed app header** (top-right, every
   screen) — always visible, so it works within the side-drawer paradigm
@@ -1053,13 +1053,20 @@ them. The single global accelerant for a player-heavy app.
   (`values.playerMap` from `LeagueContext`) by normalized name (≥ 2 chars),
   ranked by `overallRank`, capped at 40 results. Each row shows name · team ·
   position (identity color) · value · trend arrow.
-- **Tap a result → `PlayerProfileDrawer`**, rendered by the sheet itself at the
-  same `z-50` *after* the results in the DOM, so it paints on top (the same
-  stacking trick The Edge uses for its drawer + article sheet). Closing the
+- **Feature jump (`DESTINATIONS`):** the same query is matched against a static
+  list of every navigable section/feature by recognizable name (label +
+  section, so typing "league" surfaces its views) — **names only, no
+  verb/keyword synonym map yet**. Matches render in a **"Jump to"** group
+  *above* the player results (capped at 8), each with a section-colored dot and
+  its section name; tap → `navigate(to)` + close. When both groups have
+  results a "Players" subheading separates them.
+- **Tap a player result → `PlayerProfileDrawer`**, rendered by the sheet itself
+  at the same `z-50` *after* the results in the DOM, so it paints on top (the
+  same stacking trick The Edge uses for its drawer + article sheet). Closing the
   profile returns to the search results. Nested scroll-locks unwind correctly
   via `useScrollLock`'s save/restore of the previous value.
 - Picks (named like "2026 Mid 1st", no `sleeperId`) aren't in `playerMap`, so
-  search covers players only — by design.
+  player search covers players only — by design.
 
 -----
 
@@ -1190,10 +1197,11 @@ keep working: `/roster*` → `/my-team*` (or `/league*` for the team list /
 drill-downs / free agents), `/lineup*` → `/my-team/*`, `/draft/trades` →
 `/trade/pick-trades`, `/league/managers` → `/trade/managers`.
 
-**Global player search** lives in the fixed app header (search icon, top-right,
-on every screen) — opens `PlayerSearchSheet`, a bottom sheet that searches the
-cached FantasyCalc dataset by name and opens the matched player's
-`PlayerProfileDrawer`. See Feature 16.
+**Global search** lives in the fixed app header (search icon, top-right, on
+every screen) — opens `PlayerSearchSheet`, a bottom sheet that searches the
+cached FantasyCalc dataset by name (opening the matched player's
+`PlayerProfileDrawer`) *and* matches section/feature names, surfacing a
+"Jump to" group that deep-links to any view. See Feature 16.
 
 **Manager Scouting moved from League to Trade** (it's trade intel — "who do I
 call?"). The old `/league/managers` path redirects to `/trade/managers` so saved
@@ -1211,13 +1219,15 @@ the route changed.
 > grouped section (My Roster · Lineup · Season Review · Trajectory sibling
 > sub-tabs); standalone Lineup section dissolved (`LineupLayout` gone, `/lineup*`
 > redirects into My Team); Free Agents moved to League. All still served from
-> `/roster/*` + `/league/*` paths. **Phase 2 in progress** — done: the
-> `/roster` → `/my-team` URL rename + full redirect set; Pick Trades moved to
+> `/roster/*` + `/league/*` paths. **Phase 2 complete** — the `/roster` →
+> `/my-team` URL rename + full redirect set; Pick Trades moved to
 > `/trade/pick-trades` (Draft → Trade); scouting drill-downs are standalone
-> `/league/teams/:id` + `/league/trajectory/:id` routes (header "League"); and
-> the `SideDrawer` is now the always-expanded hierarchical map. **Next:** the
-> feature-name search extension. This section is the spec; the live Navigation
-> section above is updated phase-by-phase as each step lands.
+> `/league/teams/:id` + `/league/trajectory/:id` routes (header "League"); the
+> `SideDrawer` is now the always-expanded hierarchical map; and global search
+> jumps to sections/features as well as players. **Next:** Phase 3 — the visual
+> design refresh (separate job; see watch-items below). This section is the
+> spec; the live Navigation section above is updated phase-by-phase as each step
+> lands.
 
 **Why:** the app grew to 17 features behind a 7-label drawer that hides ~21
 real destinations one level down. Sub-tabs only render *after* you've entered a
@@ -1501,11 +1511,11 @@ The treatment rolls through the whole app:
 
 ### Section identity colors (side drawer)
 
-Each nav section has an identity hue (defined inline in `SideDrawer.jsx`):
-The Edge accent blue · Roster sky · Trade green · Lineup orange · League gold ·
-News violet · Draft pink. Icons
-always wear the section color; the active item gets the matching tinted
-background and edge bar. These are navigation identity only — they carry no
+Each nav section has an identity hue (defined inline in `SideDrawer.jsx`'s
+`NAV_TREE`): The Edge accent blue · My Team sky · Trade green · League gold ·
+Draft pink · News violet. Icons always wear the section color; the active child
+gets the matching tinted background and edge bar, and children hang off a
+section-colored guide rail. These are navigation identity only — they carry no
 status meaning.
 
 ### Logo — the Crown Crest

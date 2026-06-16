@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { X, Search } from 'lucide-react'
 import { useScrollLock } from '../../hooks/useScrollLock'
 import { useSheetDrag } from '../../hooks/useSheetDrag'
@@ -8,6 +9,41 @@ import TrendArrow from './TrendArrow'
 import PlayerProfileDrawer from './PlayerProfileDrawer'
 
 const MAX_RESULTS = 40
+const MAX_DESTINATIONS = 8
+
+// Every navigable section/feature, by recognizable name (no verb/keyword
+// synonym map yet — names only). Matched against label + section so typing a
+// section word ("league") surfaces its views too. The dot wears the section's
+// identity color, same hues as the side drawer.
+const SECTION_DOT = {
+  'The Edge': 'bg-accent',
+  'My Team': 'bg-pos-wr',
+  Trade: 'bg-success',
+  League: 'bg-warning',
+  Draft: 'bg-pos-qb',
+  News: 'bg-pos-def',
+}
+
+const DESTINATIONS = [
+  { label: 'The Edge', section: 'The Edge', to: '/edge' },
+  { label: 'My Roster', section: 'My Team', to: '/my-team' },
+  { label: 'Lineup Optimizer', section: 'My Team', to: '/my-team/lineup' },
+  { label: 'Season Review', section: 'My Team', to: '/my-team/season-review' },
+  { label: 'Dynasty Trajectory', section: 'My Team', to: '/my-team/trajectory' },
+  { label: 'Trade Partners', section: 'Trade', to: '/trade' },
+  { label: 'Trade Analyzer', section: 'Trade', to: '/trade/analyze' },
+  { label: 'Trade Targets', section: 'Trade', to: '/trade/whats-fair' },
+  { label: 'Manager Scouting', section: 'Trade', to: '/trade/managers' },
+  { label: 'Pick Trade Calculator', section: 'Trade', to: '/trade/pick-trades' },
+  { label: 'League Overview', section: 'League', to: '/league' },
+  { label: 'Free Agents', section: 'League', to: '/league/free-agents' },
+  { label: 'League Activity', section: 'League', to: '/league/activity' },
+  { label: 'Market Movers', section: 'League', to: '/league/movers' },
+  { label: 'Playoff Odds', section: 'League', to: '/league/playoffs' },
+  { label: 'Draft Board', section: 'Draft', to: '/draft/board' },
+  { label: 'Draft Tracker', section: 'Draft', to: '/draft/tracker' },
+  { label: 'News', section: 'News', to: '/news' },
+]
 
 const normalize = s =>
   (s ?? '')
@@ -16,12 +52,18 @@ const normalize = s =>
     .replace(/[^a-z0-9 ]/g, '')
     .trim()
 
+const DESTINATION_INDEX = DESTINATIONS.map(d => ({
+  ...d,
+  haystack: normalize(`${d.label} ${d.section}`),
+}))
+
 // Global player search — reachable from the app header on every screen.
 // Searches the cached FantasyCalc dataset by name and opens the matched
 // player's profile. Self-contained: spawns the PlayerProfileDrawer on top
 // (same z-50, rendered after, so it paints over the search results).
 export default function PlayerSearchSheet({ onClose }) {
   const { values } = useLeagueContext()
+  const navigate = useNavigate()
   const overlayRef = useRef(null)
   const inputRef = useRef(null)
   const { sheetRef, scrollRef } = useSheetDrag(onClose)
@@ -62,6 +104,12 @@ export default function PlayerSearchSheet({ onClose }) {
     return () => clearTimeout(t)
   }, [])
 
+  const destinations = useMemo(() => {
+    const q = normalize(query)
+    if (q.length < 2) return []
+    return DESTINATION_INDEX.filter(d => d.haystack.includes(q)).slice(0, MAX_DESTINATIONS)
+  }, [query])
+
   const results = useMemo(() => {
     const q = normalize(query)
     if (q.length < 2 || !values?.playerMap) return []
@@ -73,6 +121,11 @@ export default function PlayerSearchSheet({ onClose }) {
 
   function handleOverlayClick(e) {
     if (e.target === overlayRef.current) onClose()
+  }
+
+  function goTo(to) {
+    navigate(to)
+    onClose()
   }
 
   return (
@@ -106,7 +159,7 @@ export default function PlayerSearchSheet({ onClose }) {
               ref={inputRef}
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Search any player…"
+              placeholder="Search players & features…"
               autoComplete="off"
               autoCorrect="off"
               spellCheck={false}
@@ -130,14 +183,44 @@ export default function PlayerSearchSheet({ onClose }) {
         >
           {normalize(query).length < 2 ? (
             <p className="font-body text-sm text-text-tertiary py-6 text-center">
-              Type a name to search every player.
+              Search any player, section, or feature.
             </p>
-          ) : results.length === 0 ? (
+          ) : destinations.length === 0 && results.length === 0 ? (
             <p className="font-body text-sm text-text-tertiary py-6 text-center">
-              No players match “{query.trim()}”.
+              No matches for “{query.trim()}”.
             </p>
           ) : (
-            results.map(p => (
+          <>
+            {destinations.length > 0 && (
+              <div className="pt-2">
+                <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary px-1 pb-1">
+                  Jump to
+                </p>
+                {destinations.map(d => (
+                  <button
+                    key={d.to}
+                    onClick={() => goTo(d.to)}
+                    className="w-full py-2.5 border-b border-border-default last:border-0 text-left active:opacity-60 transition-opacity flex items-center gap-2.5"
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${SECTION_DOT[d.section] ?? 'bg-text-tertiary'}`} />
+                    <span className="flex-1 font-body font-medium text-sm text-text-primary truncate min-w-0">
+                      {d.label}
+                    </span>
+                    <span className="font-body text-[11px] text-text-tertiary shrink-0 uppercase tracking-wide">
+                      {d.section}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {results.length > 0 && (
+              <div className="pt-2">
+                {destinations.length > 0 && (
+                  <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary px-1 pb-1">
+                    Players
+                  </p>
+                )}
+                {results.map(p => (
               <button
                 key={p.sleeperId}
                 onClick={() => setSelected(p)}
@@ -161,7 +244,10 @@ export default function PlayerSearchSheet({ onClose }) {
                   </span>
                 </div>
               </button>
-            ))
+                ))}
+              </div>
+            )}
+          </>
           )}
         </div>
       </div>
