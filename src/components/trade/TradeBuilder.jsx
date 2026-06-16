@@ -199,8 +199,27 @@ function AddAssetSheet({
   const { sheetRef, scrollRef } = useSheetDrag(onClose)
   const [searchQuery, setSearchQuery] = useState('')
   const [posFilter, setPosFilter]     = useState('All')
+  // Track the visual viewport so the sheet stays within the area above the iOS
+  // keyboard. `fixed` + `vh` use the layout viewport, which doesn't shrink when
+  // the keyboard opens — without this the result list runs behind the keyboard.
+  const [vp, setVp] = useState(() => ({
+    height: window.visualViewport?.height ?? window.innerHeight,
+    offsetTop: window.visualViewport?.offsetTop ?? 0,
+  }))
 
   useScrollLock()
+
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return undefined
+    const sync = () => setVp({ height: vv.height, offsetTop: vv.offsetTop })
+    vv.addEventListener('resize', sync)
+    vv.addEventListener('scroll', sync)
+    return () => {
+      vv.removeEventListener('resize', sync)
+      vv.removeEventListener('scroll', sync)
+    }
+  }, [])
 
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
@@ -241,9 +260,17 @@ function AddAssetSheet({
     <div
       ref={overlayRef}
       onClick={handleOverlayClick}
-      className="fixed inset-0 z-50 flex items-end bg-black/60"
+      className="fixed left-0 right-0 z-50 flex items-end bg-black/60"
+      style={{
+        top: vp.offsetTop,
+        height: vp.height,
+        // The visual viewport reaches under the status bar in standalone mode;
+        // pad the top by the safe-area inset (+ a small gap) so a long list
+        // caps below the notch instead of sliding the header off-screen.
+        paddingTop: 'calc(env(safe-area-inset-top) + 8px)',
+      }}
     >
-      <div ref={sheetRef} className="w-full bg-bg-secondary dark:bg-bg-secondary rounded-t-2xl border-t border-border-default dark:border-border-default flex flex-col max-h-[88vh]">
+      <div ref={sheetRef} className="w-full bg-bg-secondary dark:bg-bg-secondary rounded-t-2xl border-t border-border-default dark:border-border-default flex flex-col max-h-full min-h-0">
 
         {/* Handle bar */}
         <div className="flex justify-center pt-3 pb-1 shrink-0">
@@ -304,7 +331,7 @@ function AddAssetSheet({
         </div>
 
         {/* Player / pick rows */}
-        <div ref={scrollRef} className="overflow-y-auto px-4" style={{ overscrollBehavior: 'contain', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
+        <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4" style={{ overscrollBehavior: 'contain', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
           {visiblePlayers.length === 0 && visiblePicks.length === 0 ? (
             <p className="font-body text-sm text-text-tertiary dark:text-text-tertiary py-6 text-center">
               {searchQuery ? 'No players match your search.' : 'No players at this position.'}
