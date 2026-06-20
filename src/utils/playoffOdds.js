@@ -57,8 +57,10 @@ export function teamStartingStrength(roster) {
 // Build each team's weekly scoring model: a blend of its roster-strength prior
 // and its actual results so far. Early in the year the prior dominates; as games
 // accumulate the real scores take over (shrinkage with a 4-game pseudo-count).
-export function buildScoringModel(allRosters, completedScores) {
-  const strengths = allRosters.map(teamStartingStrength)
+// `strengths` may be passed in precomputed so callers that also need the
+// strength preview don't run computeOptimalPoints over every roster twice.
+export function buildScoringModel(allRosters, completedScores, strengths) {
+  strengths = strengths ?? allRosters.map(teamStartingStrength)
   const meanStrength = strengths.reduce((s, v) => s + v, 0) / (strengths.length || 1)
 
   const model = {}
@@ -91,18 +93,17 @@ export function buildScoringModel(allRosters, completedScores) {
   return model
 }
 
-function countRemainingGames(remainingSchedule, rosterId) {
-  let n = 0
-  remainingSchedule.forEach(week => {
-    week.matchups.forEach(([a, b]) => {
-      if (a === rosterId || b === rosterId) n += 1
-    })
-  })
-  return n
-}
-
 // The simulation. Returns one result object per roster with playoff odds,
 // projected seed, projected final record, and the full seed distribution.
+//
+// Performance note: this is the single heaviest compute path in the app
+// (10k iterations × every remaining game × two normal draws, plus a re-seed
+// each iteration). The hot loop is written against dense integer-indexed flat
+// arrays rather than rosterId-keyed objects so it does no per-iteration
+// allocation and no string-key hashing. The exact RNG draw order (week order,
+// then matchup order, sample A then B) is preserved, so results stay
+// bit-identical to the previous object-keyed version — the deterministic-seed
+// contract is intact.
 export function simulatePlayoffs({
   allRosters,
   model,
@@ -112,88 +113,109 @@ export function simulatePlayoffs({
   seed = 0x5eed,
 }) {
   const rng = mulberry32(seed)
-  const ids = allRosters.map(r => r.rosterId)
-  const n = ids.length
+  const n = allRosters.length
 
-  const base = {}
-  allRosters.forEach(r => {
-    base[r.rosterId] = {
-      wins: r.record?.wins ?? 0,
-      losses: r.record?.losses ?? 0,
-      ties: r.record?.ties ?? 0,
-      pf: r.pointsFor ?? 0,
-    }
+  // rosterId → dense index, so the hot loop touches plain arrays only.
+  const indexById = new Map()
+  allRosters.forEach((r, i) => indexById.set(r.rosterId, i))
+
+  // Per-team model + base standings as flat arrays indexed by team index.
+  const meanArr = new Float64Array(n)
+  const stdArr = new Float64Array(n)
+  const baseWins = new Float64Array(n)
+  const basePf = new Float64Array(n)
+  allRosters.forEach((r, i) => {
+    const m = model[r.rosterId]
+    meanArr[i] = m.mean
+    stdArr[i] = m.std
+    baseWins[i] = r.record?.wins ?? 0
+    basePf[i] = r.pointsFor ?? 0
   })
 
-  const made = {}
-  const seedSum = {}
-  const topSeed = {}
-  const winSum = {}
-  const seedCounts = {}
-  ids.forEach(id => {
-    made[id] = 0
-    seedSum[id] = 0
-    topSeed[id] = 0
-    winSum[id] = 0
-    seedCounts[id] = new Array(n).fill(0)
+  // Flatten the remaining schedule into a single index-pair list once. The
+  // per-week grouping only mattered for fetching; the sim just needs every
+  // game, in order. Stored as a flat [a0,b0,a1,b1,…] buffer.
+  const games = []
+  remainingSchedule.forEach(week => {
+    week.matchups.forEach(([a, b]) => {
+      games.push(indexById.get(a), indexById.get(b))
+    })
   })
+  const gameCount = games.length >> 1
+
+  // Remaining games per team (replaces the old O(n × schedule) post-pass).
+  const remGames = new Int32Array(n)
+  for (let k = 0; k < games.length; k++) remGames[games[k]] += 1
+
+  // Accumulators.
+  const made = new Float64Array(n)
+  const seedSum = new Float64Array(n)
+  const topSeed = new Float64Array(n)
+  const winSum = new Float64Array(n)
+  const seedCounts = Array.from({ length: n }, () => new Int32Array(n))
+
+  // Buffers reused across every iteration — zero per-iteration allocation.
+  const w = new Float64Array(n)
+  const pf = new Float64Array(n)
+  const order = new Array(n)
+  // Sleeper's default tiebreaker: wins, then total points-for.
+  const cmp = (x, y) => (w[y] - w[x]) || (pf[y] - pf[x])
 
   for (let it = 0; it < iterations; it++) {
-    const w = {}
-    const pf = {}
-    ids.forEach(id => {
-      w[id] = base[id].wins
-      pf[id] = base[id].pf
-    })
+    w.set(baseWins)
+    pf.set(basePf)
 
-    remainingSchedule.forEach(week => {
-      week.matchups.forEach(([a, b]) => {
-        const sa = Math.max(0, normalSample(rng, model[a].mean, model[a].std))
-        const sb = Math.max(0, normalSample(rng, model[b].mean, model[b].std))
-        pf[a] += sa
-        pf[b] += sb
-        if (sa > sb) w[a] += 1
-        else if (sb > sa) w[b] += 1
-        else { w[a] += 0.5; w[b] += 0.5 }
-      })
-    })
+    for (let g = 0; g < gameCount; g++) {
+      const a = games[g * 2]
+      const b = games[g * 2 + 1]
+      const sa = Math.max(0, normalSample(rng, meanArr[a], stdArr[a]))
+      const sb = Math.max(0, normalSample(rng, meanArr[b], stdArr[b]))
+      pf[a] += sa
+      pf[b] += sb
+      if (sa > sb) w[a] += 1
+      else if (sb > sa) w[b] += 1
+      else { w[a] += 0.5; w[b] += 0.5 }
+    }
 
-    // Sleeper's default tiebreaker: wins, then total points-for.
-    const ranked = [...ids].sort((x, y) => (w[y] - w[x]) || (pf[y] - pf[x]))
-    ranked.forEach((id, idx) => {
+    for (let i = 0; i < n; i++) order[i] = i
+    // Array.prototype.sort is stable (ES2019+), so ties keep roster order —
+    // identical tie-breaking to the previous [...ids].sort() version.
+    order.sort(cmp)
+
+    for (let idx = 0; idx < n; idx++) {
+      const i = order[idx]
       const place = idx + 1
-      seedSum[id] += place
-      seedCounts[id][idx] += 1
-      winSum[id] += w[id]
-      if (place <= playoffTeams) made[id] += 1
-      if (place === 1) topSeed[id] += 1
-    })
+      seedSum[i] += place
+      seedCounts[i][idx] += 1
+      winSum[i] += w[i]
+      if (place <= playoffTeams) made[i] += 1
+      if (place === 1) topSeed[i] += 1
+    }
   }
 
-  return allRosters.map(r => {
-    const id = r.rosterId
-    const remGames = countRemainingGames(remainingSchedule, id)
-    const basePlayed = base[id].wins + base[id].losses + base[id].ties
-    const projWins = winSum[id] / iterations
-    const projLosses = Math.max(0, basePlayed + remGames - projWins)
+  return allRosters.map((r, i) => {
+    const basePlayed = baseWins[i] + (r.record?.losses ?? 0) + (r.record?.ties ?? 0)
+    const projWins = winSum[i] / iterations
+    const projLosses = Math.max(0, basePlayed + remGames[i] - projWins)
     return {
-      rosterId: id,
-      playoffPct: made[id] / iterations,
-      topSeedPct: topSeed[id] / iterations,
-      avgSeed: seedSum[id] / iterations,
-      seedDist: seedCounts[id].map(c => c / iterations),
+      rosterId: r.rosterId,
+      playoffPct: made[i] / iterations,
+      topSeedPct: topSeed[i] / iterations,
+      avgSeed: seedSum[i] / iterations,
+      seedDist: Array.from(seedCounts[i], c => c / iterations),
       projWins,
       projLosses,
-      remGames,
+      remGames: remGames[i],
     }
   })
 }
 
 // Preseason / no-schedule fallback: a projected seeding ranked purely by roster
 // strength. Explicitly a *preview*, not odds — there are no games to simulate.
-export function buildStrengthPreview(allRosters, playoffTeams) {
-  return [...allRosters]
-    .map(r => ({ rosterId: r.rosterId, owner: r.owner, strength: teamStartingStrength(r) }))
+export function buildStrengthPreview(allRosters, playoffTeams, strengths) {
+  strengths = strengths ?? allRosters.map(teamStartingStrength)
+  return allRosters
+    .map((r, i) => ({ rosterId: r.rosterId, owner: r.owner, strength: strengths[i] }))
     .sort((a, b) => b.strength - a.strength)
     .map((r, i) => ({ ...r, projSeed: i + 1, projectedIn: i < playoffTeams }))
 }

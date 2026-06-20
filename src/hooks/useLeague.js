@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useCallback } from 'react'
 import { useSleeper } from './useSleeper'
 import { useFantasyCalc } from './useFantasyCalc'
 import { usePlayerDB } from './usePlayerDB'
@@ -188,18 +188,26 @@ export function useLeague() {
       )
   }, [sleeperData, league])
 
-  function retry() {
+  const retry = useCallback(() => {
     sleeperRetry()
     fcRetry()
-  }
+  }, [sleeperRetry, fcRetry])
 
-  return {
+  // This object is the LeagueContext value — every consumer in the app reads
+  // it. Returning a fresh literal each render would change the provider value's
+  // identity on every App render and cascade re-renders through every consumer,
+  // so memoize it on its actual inputs.
+  return useMemo(() => ({
     league, nflState, matchups, isOffseason, leagueInfo, tradeDeadline,
     myRosterId,
     loading, error, retry, sleeperFetchedAt, fcFetchedAt, values: fcValues,
     // Sleeper-scoped sign-in inputs (independent of FantasyCalc).
     signInRosters, sleeperLoading, sleeperError, sleeperRetry,
-  }
+  }), [
+    league, nflState, matchups, isOffseason, leagueInfo, tradeDeadline,
+    myRosterId, loading, error, retry, sleeperFetchedAt, fcFetchedAt, fcValues,
+    signInRosters, sleeperLoading, sleeperError, sleeperRetry,
+  ])
 }
 
 function toTitleCase(str) {

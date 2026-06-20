@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { SLEEPER_BASE, LEAGUE_ID } from '../constants'
 import { fetchJSON } from '../utils/fetchJSON'
 import { useLeagueContext } from '../context/LeagueContext'
-import { buildScoringModel, simulatePlayoffs, buildStrengthPreview } from '../utils/playoffOdds'
+import { buildScoringModel, simulatePlayoffs, buildStrengthPreview, teamStartingStrength } from '../utils/playoffOdds'
 
 // The one new fetch this feature needs: every regular-season week's matchups.
 // A single pass gives us BOTH the remaining schedule (who still plays whom) and
@@ -112,7 +112,11 @@ export function usePlayoffOdds() {
     if (!league?.allRosters?.length || !perWeek) return null
 
     const { completedScores, remainingSchedule, completedWeeks } = processWeeks(perWeek)
-    const model = buildScoringModel(league.allRosters, completedScores)
+    // Roster strength is the costliest piece of the model (an optimal-lineup
+    // solve per team). Compute it once and feed both the scoring model and the
+    // preseason preview, instead of solving every roster twice.
+    const strengths = league.allRosters.map(teamStartingStrength)
+    const model = buildScoringModel(league.allRosters, completedScores, strengths)
     const remainingGames = remainingSchedule.reduce((s, w) => s + w.matchups.length, 0)
 
     let status
@@ -138,7 +142,11 @@ export function usePlayoffOdds() {
       completedWeeks,
       remainingWeeks: remainingSchedule.length,
       remainingGames,
-      strengthPreview: buildStrengthPreview(league.allRosters, playoffTeams),
+      // Only the preseason page consumes this — don't solve seeding when the
+      // real simulation already ran.
+      strengthPreview: status === 'preseason'
+        ? buildStrengthPreview(league.allRosters, playoffTeams, strengths)
+        : null,
       playoffTeams,
       firstPlayoffWeek,
     }
