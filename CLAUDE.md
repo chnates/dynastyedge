@@ -392,7 +392,11 @@ Each team card shows:
 #### Setup
 
 - Nix Cage always pre-loaded as “Your team”
-- Other team: selected from dropdown, OR pre-loaded when tapping from Trade Partner Finder
+- Other team: selected from dropdown, OR pre-loaded when tapping from Trade
+  Partner Finder. The dropdown isn't a blind list of names — options are
+  grouped by trade fit (Priority / Good Fit / Poor Fit, from `rankTradePartners`)
+  and each carries the team's win-window tier + record, so "who do I call?" is
+  answerable in the picker itself.
 - A context strip under the selector carries the partner intelligence into the
   build: their needs / surpluses, pick capital status, win-window tier, and the
   mismatch warning (all from `rankTradePartners`)
@@ -508,6 +512,12 @@ win window); Season Review remains available on its own tab.*
 - Bench displayed with projected points per player
 - The gap between starter and best bench option is visible at a glance
 - Slots sorted by: starters first, then bench by projected points
+- An inline **legend** spells out the matchup pills (Easy / Tough) and status
+  dots (set / review / must start) — the `title` tooltips alone aren't legible
+  on touch
+- When no slot needs action the header shows a positive **"Lineup is optimal —
+  no changes needed"** confirmation, so "nothing to do" reads differently from
+  "didn't load"
 
 #### Status flags — shown on every player
 
@@ -1179,7 +1189,13 @@ Side drawer sections:
 |5  |Draft   |Board · Tracker                                          |
 |6  |News    |League-wide aggregated news feed (browsable — leaf)      |
 
-Sections with multiple views use a sub-tab bar pinned under the app header.
+Sections with multiple views use a sub-tab bar pinned under the app header —
+the shared `SubTabBar` component (`src/components/shared/SubTabBar.jsx`), never
+a hand-rolled row. It's an adaptive horizontal strip: tabs are `flex-1
+min-w-max`, so the row fills the width when the tabs fit and scrolls
+horizontally when they don't (long labels never wrap to a second line). The
+active tab scrolls into view on navigation, and a right-edge fade appears only
+while the row overflows.
 The drawer also holds: data freshness timestamp, manual Refresh, and the theme toggle.
 The app header shows the active section name.
 
@@ -1310,17 +1326,16 @@ restructure and restyle at once (and don't do the migration twice).
 **Watch-items carried over from Phases 1–2** (structural decisions deferred to
 the visual pass — surface these when doing the refresh):
 
-- **Sub-tab bar crowding at 390px.** The shared sub-tab bar (`flex-1` cells,
-  `text-xs` uppercase) now carries up to 5 tabs with two-word labels — **Trade**
-  (Partners · Analyzer · Targets · Managers · Pick Trades), **League** (Overview
-  · Free Agents · Activity · Movers · Playoffs), **My Team** (My Roster · Lineup
-  · Season Review · Trajectory). Labels like "Season Review" / "Free Agents" /
-  "Pick Trades" can wrap to two lines, making one cell taller than its
-  neighbors. Phase 1–2 left this as-is (didn't want to restyle the shared
-  component mid-consolidation). The refresh should solve it deliberately —
-  horizontal-scroll tab strip, shorter labels, an icon+label treatment, or a
-  different sub-nav pattern. This is the single most visible rough edge from the
-  regroup.
+- **Sub-tab bar crowding at 390px — RESOLVED (UX audit).** The hand-rolled
+  `flex-1` sub-tab rows wrapped long two-word labels ("Season Review", "Free
+  Agents", "Pick Trades") onto a second line, making one cell taller than its
+  neighbors. Replaced by the shared `SubTabBar` (`components/shared/`): an
+  adaptive `flex-1 min-w-max` strip that fills the width when tabs fit and
+  scrolls horizontally when they don't, never wraps, scrolls the active tab
+  into view, and shows a right-edge fade only while overflowing. All four
+  multi-view sections (My Team · Trade · League · Draft) use it. The Phase 3
+  visual pass can still restyle it (icon+label, etc.), but the structural rough
+  edge is gone.
 - **Always-expanded drawer length.** The hierarchical drawer (Phase 2) shows all
   ~18 destinations at once. It fits, but the visual pass should make the group
   hierarchy read instantly (rail weight, indentation, parent vs. child type
@@ -1579,6 +1594,8 @@ dynastyedge/
 │   └── favicon.ico
 ├── src/
 │   ├── components/
+│   │   ├── auth/
+│   │   │   └── LoginScreen.jsx      ← Sleeper-username sign-in + team-picker fallback (gates the app)
 │   │   ├── edge/
 │   │   │   └── EdgeView.jsx         ← The Edge: daily briefing home screen
 │   │   ├── roster/
@@ -1622,6 +1639,7 @@ dynastyedge/
 │   │   │   └── boardStorage.js      ← shared draft-section localStorage keys
 │   │   └── shared/
 │   │       ├── SideDrawer.jsx       ← the app's only navigation
+│   │       ├── SubTabBar.jsx        ← THE section sub-nav (adaptive scroll strip) — never duplicate it
 │   │       ├── ErrorState.jsx       ← THE error component — never duplicate it
 │   │       ├── SectionHeader.jsx    ← THE section header — never duplicate it
 │   │       ├── PlayerProfileDrawer.jsx
@@ -1637,7 +1655,8 @@ dynastyedge/
 │   │   ├── useSleeper.js        ← league/rosters/users/picks/state fetch
 │   │   ├── useFantasyCalc.js    ← FantasyCalc fetch + module cache
 │   │   ├── usePlayerDB.js       ← shared /players/nfl cache (one fetch/session)
-│   │   ├── useLeague.js         ← combined league state, player resolution
+│   │   ├── useLeague.js         ← combined league state, player resolution (+ Sleeper-only `signInRosters` for login)
+│   │   ├── useIdentity.js       ← logged-in roster identity (localStorage store); wipes roster-scoped keys on switch
 │   │   ├── useTransactions.js   ← season-wide transaction feed
 │   │   ├── useLeagueHistory.js  ← walks previous_league_id chain: past seasons' tx/drafts
 │   │   ├── useManagerProfiles.js← composes history + current season into scouting profiles
@@ -1790,6 +1809,9 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
    Never fetch inside a component that renders repeatedly.
    Auto-refresh on tab focus when data is >30 min old — silently, keeping
    cached data on screen while the refetch runs (stale-while-revalidate).
+   **Sign-in must never depend on FantasyCalc.** Identity selection (the
+   `LoginScreen` team list) reads `useLeague`'s Sleeper-only `signInRosters`,
+   so a FantasyCalc outage can't lock the user out of their own app.
 1. **Fetch timeouts:** Every network call goes through `src/utils/fetchJSON.js`
    (AbortController timeout). Never call raw `fetch()` directly.
 1. **Player DB:** `/players/nfl` is fetched once per session via `usePlayerDB`.
@@ -1860,8 +1882,10 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
    sessionStorage `dynastyedge_league_sort` / `dynastyedge_league_pos` /
    `dynastyedge_league_tier` (League tab filters, preserved across drill-downs) ·
    sessionStorage `dynastyedge_trade_draft` (in-progress trade).
-1. **Shared components:** `ErrorState` and `SectionHeader` live in
-   `src/components/shared/` — import them, never redefine them locally.
+1. **Shared components:** `ErrorState`, `SectionHeader`, and `SubTabBar` live in
+   `src/components/shared/` — import them, never redefine them locally. Section
+   sub-navigation is always `SubTabBar` (pass it a `tabs` array); never
+   hand-roll a sub-tab row.
 1. **The app name is DynastyEdge.** Use it in the page `<title>`,
    the header, and any loading/splash screen.
 
