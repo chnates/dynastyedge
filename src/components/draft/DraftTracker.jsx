@@ -7,9 +7,8 @@ import { useLeagueContext } from '../../context/LeagueContext'
 import { useRookieADP } from '../../hooks/useRookieADP'
 import { buildRookieProspects } from '../../utils/rookieAdp'
 import { useSleeperDraft, buildDraftOrder, DRAFT_SEASON } from '../../hooks/useSleeperDraft'
-import { useSheetDrag } from '../../hooks/useSheetDrag'
-import { useScrollLock } from '../../hooks/useScrollLock'
 import { getTeamName } from '../../hooks/useLeague'
+import { Sheet, Modal, Button } from '../ui'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { BOARD_ORDER_KEY, NOTES_KEY, readJSON } from './boardStorage'
 import LoadingSpinner from '../shared/LoadingSpinner'
@@ -755,120 +754,83 @@ function findNextManualPick(draftOrder, drafted) {
 }
 
 function LogPickModal({ player, nextPickInfo, userMap, onSave, onClose, myRosterId }) {
-  useScrollLock()
-  const { sheetRef } = useSheetDrag(onClose)
   const teamName = getTeamName(userMap[nextPickInfo?.currentOwner])
   const isMyPick = nextPickInfo?.currentOwner === myRosterId
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-black/60">
-      <div
-        ref={sheetRef}
-        className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default"
-        style={{ paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' }}
-      >
-        <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1 rounded-full bg-border-default" />
+    <Sheet onClose={onClose} label="Log pick">
+      <div className="px-4 pt-2 pb-8">
+        <h3 className="font-display text-lg font-bold uppercase text-text-primary leading-tight">
+          Log Pick
+        </h3>
+        <p className="font-body text-sm text-text-secondary mt-0.5 mb-4">{player.name}</p>
+
+        <div className="rounded-lg bg-bg-card border border-border-default px-3 py-2.5 flex items-center gap-3">
+          <span className="font-mono text-xl font-bold text-accent tabular-nums">
+            {nextPickInfo?.slotStr}
+          </span>
+          <div>
+            <p className="font-body text-sm text-text-primary leading-tight">{teamName}</p>
+            {isMyPick && (
+              <p className="font-body text-[10px] text-accent">Your pick</p>
+            )}
+          </div>
         </div>
-        <div className="px-4 pt-2 pb-4">
-          <h3 className="font-display text-lg font-bold uppercase text-text-primary leading-tight">
-            Log Pick
-          </h3>
-          <p className="font-body text-sm text-text-secondary mt-0.5 mb-4">{player.name}</p>
 
-          <div className="rounded-lg bg-bg-card border border-border-default px-3 py-2.5 flex items-center gap-3">
-            <span className="font-mono text-xl font-bold text-accent tabular-nums">
-              {nextPickInfo?.slotStr}
-            </span>
-            <div>
-              <p className="font-body text-sm text-text-primary leading-tight">{teamName}</p>
-              {isMyPick && (
-                <p className="font-body text-[10px] text-accent">Your pick</p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex gap-2 mt-4">
-            <button onClick={onClose} className="flex-1 py-2.5 rounded-lg border border-border-default font-body text-sm text-text-secondary">
-              Cancel
-            </button>
-            <button onClick={onSave} className="flex-1 py-2.5 rounded-lg bg-accent text-white font-body text-sm font-medium">
-              Log Pick
-            </button>
-          </div>
+        <div className="flex gap-2 mt-4">
+          <Button variant="secondary" fullWidth className="py-2.5" onClick={onClose}>Cancel</Button>
+          <Button fullWidth className="py-2.5" onClick={onSave}>Log Pick</Button>
         </div>
       </div>
-    </div>
+    </Sheet>
   )
 }
 
 function EditPickModal({ pick, player, userMap, onDelete, onClose, myRosterId }) {
-  useScrollLock()
-  const { sheetRef } = useSheetDrag(onClose)
   const teamName = getTeamName(userMap[pick.rosterId])
   const isMyPick = pick.rosterId === myRosterId
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-black/60">
-      <div
-        ref={sheetRef}
-        className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default"
-        style={{ paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' }}
-      >
-        <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1 rounded-full bg-border-default" />
+    <Sheet onClose={onClose} label="Edit pick">
+      <div className="px-4 pt-2 pb-8">
+        <h3 className="font-display text-lg font-bold uppercase text-text-primary leading-tight">
+          Edit Pick
+        </h3>
+        <p className="font-body text-sm text-text-secondary mt-0.5 mb-4">{player?.name}</p>
+
+        <div className="rounded-lg bg-bg-card border border-border-default px-3 py-2.5 flex items-center gap-3 mb-4">
+          <span className="font-mono text-xl font-bold text-text-primary tabular-nums">
+            {pick.slot}
+          </span>
+          <div>
+            <p className="font-body text-sm text-text-primary leading-tight">{teamName}</p>
+            {isMyPick && (
+              <p className="font-body text-[10px] text-accent">Your pick</p>
+            )}
+          </div>
         </div>
-        <div className="px-4 pt-2 pb-4">
-          <h3 className="font-display text-lg font-bold uppercase text-text-primary leading-tight">
-            Edit Pick
-          </h3>
-          <p className="font-body text-sm text-text-secondary mt-0.5 mb-4">{player?.name}</p>
 
-          <div className="rounded-lg bg-bg-card border border-border-default px-3 py-2.5 flex items-center gap-3 mb-4">
-            <span className="font-mono text-xl font-bold text-text-primary tabular-nums">
-              {pick.slot}
-            </span>
-            <div>
-              <p className="font-body text-sm text-text-primary leading-tight">{teamName}</p>
-              {isMyPick && (
-                <p className="font-body text-[10px] text-accent">Your pick</p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={onDelete}
-              className="flex-1 py-2.5 rounded-lg border border-danger/50 font-body text-sm text-danger"
-            >
-              Undo Pick
-            </button>
-            <button onClick={onClose} className="flex-1 py-2.5 rounded-lg border border-border-default font-body text-sm text-text-secondary">
-              Close
-            </button>
-          </div>
+        <div className="flex gap-2">
+          <Button variant="secondary" fullWidth className="py-2.5 border-danger/50 text-danger" onClick={onDelete}>
+            Undo Pick
+          </Button>
+          <Button variant="secondary" fullWidth className="py-2.5" onClick={onClose}>Close</Button>
         </div>
       </div>
-    </div>
+    </Sheet>
   )
 }
 
 function ResetConfirm({ onConfirm, onCancel }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-      <div className="w-full max-w-xs bg-bg-secondary rounded-2xl border border-border-default p-5 text-center">
-        <h3 className="font-display text-lg font-bold uppercase text-text-primary mb-2">Reset tracker?</h3>
-        <p className="font-body text-sm text-text-secondary mb-5">This clears all logged picks and cannot be undone.</p>
-        <div className="flex gap-2">
-          <button onClick={onCancel} className="flex-1 py-2.5 rounded-lg border border-border-default font-body text-sm text-text-secondary">
-            Cancel
-          </button>
-          <button onClick={onConfirm} className="flex-1 py-2.5 rounded-lg bg-danger text-white font-body text-sm font-medium">
-            Reset
-          </button>
-        </div>
+    <Modal onClose={onCancel} label="Reset tracker" className="p-5 text-center">
+      <h3 className="font-display text-lg font-bold uppercase text-text-primary mb-2">Reset tracker?</h3>
+      <p className="font-body text-sm text-text-secondary mb-5">This clears all logged picks and cannot be undone.</p>
+      <div className="flex gap-2">
+        <Button variant="secondary" fullWidth className="py-2.5" onClick={onCancel}>Cancel</Button>
+        <Button variant="danger" fullWidth className="py-2.5" onClick={onConfirm}>Reset</Button>
       </div>
-    </div>
+    </Modal>
   )
 }
 

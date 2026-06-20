@@ -1355,6 +1355,40 @@ Scouting did) — note any route-only moves explicitly.
 
 ## Design System
 
+### Design System Component Library
+
+All UI routes through the shared library at **`src/components/ui`** (barrel
+`index.js`). **Never hand-roll a button, card, bottom sheet, filter chip,
+badge, or input inline** — extend a primitive instead. Class strings inside the
+primitives are kept literal (no runtime color interpolation) so Tailwind's
+content scan always picks them up. The `/design-review` skill audits every diff
+for bypasses and is the enforcement mechanism — run it before committing
+component work.
+
+Import everything from the one barrel: `import { Button, Card, Sheet } from '../ui'`
+(path relative to the importing file).
+
+**Core primitives (new in the design system):**
+
+|Primitive|What it is|
+|---------|----------|
+|`Button`|THE button. Variants `primary` (solid accent CTA) · `secondary` (bordered) · `tinted` (accent-tinted footer/link) · `ghost` (quiet) · `danger`; sizes `sm`/`md`/`lg`; `fullWidth`, `icon`/`iconRight`, polymorphic `as`/`href` (renders `<a>`).|
+|`IconButton`|THE icon-only control — the close/affordance button in every sheet/drawer header (`w-9 h-9 rounded-lg … hover:bg-black/5`). Always pass `label` (→ aria-label); sizes `sm`/`md`.|
+|`Card`|THE surface container (`rounded-xl bg-bg-card border border-border-default`). Optional `accent` color class renders the left **edge bar** (stadium-lights treatment); `padding` `none`/`sm`/`md` or a raw class; `interactive`/`onClick` makes it a button.|
+|`Sheet` + `SheetHeader`|THE bottom sheet. Owns the whole sheet contract (`useScrollLock`, `useSheetDrag` swipe-to-dismiss, `overscroll-contain`, safe-area bottom pad, Escape + overlay-tap close, drag handle); `zIndex` is a Tailwind z class so sheets stack. `SheetHeader` adds eyebrow/title/subtitle + the `IconButton` close. **Exception:** a *keyboard-aware* sheet driven by `window.visualViewport` (PlayerSearchSheet, TradeBuilder's add sheet) can't use `Sheet` (which is sized to the layout viewport) — those two are the sanctioned hand-rolled overlays.|
+|`Modal`|THE centered dialog — confirm prompts and small forms that sit mid-screen rather than docking to the bottom (draft "Reset?" confirms, the CSV-name dialog). Owns overlay, `useScrollLock`, Escape + overlay-tap close; `maxWidth`/`surface` props. The bottom-docked counterpart is `Sheet`.|
+|`Chip`|THE filter chip — the QB/RB/WR/TE/All/Picks toggle pill. Inactive is quiet; `active` defaults to solid accent; pass `activeClass={POS_CHIP_ACTIVE[pos]}` for position-tinted active states. Sizes `sm`/`md`.|
+|`Badge`|THE small status/label badge — solid "New"/"You" accent labels plus `tone` (accent/success/warning/danger/neutral) and `soft` tinted variants; `pill` for rounded. (Win-window tiers use `WinWindowBadge`; position tags use `POS_TAG`.)|
+|`Input` / `SearchInput`|THE text field + search-box variant. Consistent field styling across all search/filter boxes; `SearchInput` adds the leading magnifier. Both `forwardRef`. Keep at `text-sm` (iOS focus-zoom is handled globally).|
+|`cn`|The one styling primitive — a tiny `className` joiner that drops falsy values. Never pull in a heavier classnames dep.|
+
+**Adopted shared primitives** are re-exported from the same barrel so the
+library is the single import surface (the files stay in `src/components/shared/`):
+`ErrorState`, `Spinner` (LoadingSpinner), `SectionHeader` + `BRAND_TICK`,
+`SubTabBar`, `TrendArrow`, `WinWindowBadge`, `Sparkline`, `TeamAvatar`. Import
+these from `'../ui'` going forward. `NewsArticleSheet.jsx` is the canonical
+"migrated to the library" example (`Sheet` + `SheetHeader` + `Button`).
+
 ### Theme
 
 - **Default:** Dark mode
@@ -1594,6 +1628,17 @@ dynastyedge/
 │   └── favicon.ico
 ├── src/
 │   ├── components/
+│   │   ├── ui/                      ← Design System library — route ALL UI through it (barrel index.js)
+│   │   │   ├── index.js             ← the single import surface (re-exports every primitive)
+│   │   │   ├── Button.jsx           ← THE button (primary/secondary/tinted/ghost/danger · sm/md/lg)
+│   │   │   ├── IconButton.jsx       ← THE icon-only/close control (pass `label`)
+│   │   │   ├── Card.jsx             ← THE surface container (+ optional accent edge bar)
+│   │   │   ├── Sheet.jsx            ← THE bottom sheet + SheetHeader (owns scroll-lock/drag/safe-area)
+│   │   │   ├── Modal.jsx            ← THE centered dialog (confirms / small forms)
+│   │   │   ├── Chip.jsx             ← THE filter chip (toggle pill, position-tinted active)
+│   │   │   ├── Badge.jsx            ← THE small status/label badge (New/You, tone/soft)
+│   │   │   ├── Input.jsx            ← THE text field + SearchInput variant
+│   │   │   └── cn.js                ← tiny className joiner (the one styling primitive)
 │   │   ├── auth/
 │   │   │   └── LoginScreen.jsx      ← Sleeper-username sign-in + team-picker fallback (gates the app)
 │   │   ├── edge/
@@ -1886,6 +1931,12 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
    `src/components/shared/` — import them, never redefine them locally. Section
    sub-navigation is always `SubTabBar` (pass it a `tabs` array); never
    hand-roll a sub-tab row.
+1. **Design System library:** All new UI comes from `src/components/ui`
+   (`Button`, `IconButton`, `Card`, `Sheet`/`SheetHeader`, `Chip`, `Badge`,
+   `Input`/`SearchInput`, `cn`, plus the re-exported shared primitives) — import
+   from the `'../ui'` barrel. Never reintroduce a hand-rolled button, card,
+   bottom sheet, filter chip, badge, or input inline; extend a primitive
+   instead. Run `/design-review` before committing component work.
 1. **The app name is DynastyEdge.** Use it in the page `<title>`,
    the header, and any loading/splash screen.
 

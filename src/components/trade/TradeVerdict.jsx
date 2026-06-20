@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { CheckCircle2, XCircle, RefreshCw, CheckCircle, XCircle as XCircleSmall, Circle, AlertTriangle, LineChart } from 'lucide-react'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
+import { Card, Button } from '../ui'
 import { relativeTime } from '../../hooks/usePlayerIntel'
 
 const VERDICT_STYLES = {
@@ -143,11 +144,11 @@ export default function TradeVerdict({
 
   if (!analysis || (giveCount === 0 && getCount === 0)) {
     return (
-      <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-4 py-8 text-center mb-4">
+      <Card padding="none" className="px-4 py-8 text-center mb-4">
         <p className="font-body text-sm text-text-tertiary dark:text-text-tertiary">
           Add players from both rosters to see analysis.
         </p>
-      </div>
+      </Card>
     )
   }
 
@@ -193,7 +194,7 @@ export default function TradeVerdict({
         </div>
       )}
 
-      <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default overflow-hidden mb-4">
+      <Card padding="none" className="mb-4">
         {/* Section label */}
         <div className="px-4 py-2.5 border-b border-border-default dark:border-border-default">
           <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary">
@@ -310,12 +311,13 @@ export default function TradeVerdict({
                 <p className="flex-1 font-body text-xs text-text-secondary dark:text-text-secondary leading-relaxed">
                   Counter: {counterSuggestion.text}
                 </p>
-                <button
+                <Button
+                  size="sm"
                   onClick={() => onApplyCounter?.(counterSuggestion)}
-                  className="shrink-0 px-2.5 py-1 rounded-lg bg-accent text-white font-body text-[11px] font-semibold active:opacity-80 transition-opacity"
+                  className="shrink-0 px-2.5 py-1 text-[11px]"
                 >
                   Apply
-                </button>
+                </Button>
               </div>
             )}
           </div>
@@ -326,21 +328,21 @@ export default function TradeVerdict({
             </p>
           </div>
         )}
-      </div>
+      </Card>
 
       {/* Live Intelligence loading state — shown while agents run, non-blocking */}
       {intelligenceLoading && (
-        <div className="flex items-center justify-center gap-2 py-3 mb-4 rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default">
+        <Card padding="none" className="flex items-center justify-center gap-2 py-3 mb-4">
           <div className="h-3.5 w-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin" />
           <span className="font-body text-xs text-text-secondary dark:text-text-secondary">
             Loading player news…
           </span>
-        </div>
+        </Card>
       )}
 
       {/* Live Intelligence section */}
       {liveIntelligence && liveIntelligence.length > 0 && (
-        <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default overflow-hidden mb-4">
+        <Card padding="none" className="mb-4">
           <div className="px-4 py-2.5 border-b border-border-default dark:border-border-default flex items-center gap-2">
             <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary">
               Live Intelligence
@@ -354,7 +356,7 @@ export default function TradeVerdict({
               onTap={intel.player?.sleeperId ? () => setSelectedPlayer(intel.player) : undefined}
             />
           ))}
-        </div>
+        </Card>
       )}
 
       {selectedPlayer && (

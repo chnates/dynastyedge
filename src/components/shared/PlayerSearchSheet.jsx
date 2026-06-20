@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { X, Search } from 'lucide-react'
+import { X } from 'lucide-react'
 import { useScrollLock } from '../../hooks/useScrollLock'
 import { useSheetDrag } from '../../hooks/useSheetDrag'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { POS_TEXT } from '../../utils/positionColors'
-import TrendArrow from './TrendArrow'
 import PlayerProfileDrawer from './PlayerProfileDrawer'
+import { SearchInput, IconButton, TrendArrow } from '../ui'
 
 const MAX_RESULTS = 40
 const MAX_DESTINATIONS = 8
@@ -153,9 +153,8 @@ export default function PlayerSearchSheet({ onClose }) {
 
         {/* Search header (fixed; results scroll below it) */}
         <div className="flex items-center gap-2 px-4 pt-1 pb-3 border-b border-border-default shrink-0">
-          <div className="flex items-center gap-2 flex-1 min-w-0 rounded-lg bg-bg-card border border-border-default px-3 py-2">
-            <Search size={16} strokeWidth={2} className="shrink-0 text-text-tertiary" />
-            <input
+          <div className="flex-1 min-w-0">
+            <SearchInput
               ref={inputRef}
               value={query}
               onChange={e => setQuery(e.target.value)}
@@ -163,16 +162,11 @@ export default function PlayerSearchSheet({ onClose }) {
               autoComplete="off"
               autoCorrect="off"
               spellCheck={false}
-              className="flex-1 min-w-0 bg-transparent font-body text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none"
             />
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close search"
-            className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg text-text-secondary hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-          >
+          <IconButton onClick={onClose} label="Close search">
             <X size={20} strokeWidth={1.75} />
-          </button>
+          </IconButton>
         </div>
 
         {/* Results */}

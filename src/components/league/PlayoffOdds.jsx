@@ -10,6 +10,7 @@ import SectionHeader from '../shared/SectionHeader'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import TeamAvatar from '../shared/TeamAvatar'
 import { rankClass } from '../../utils/rankColors'
+import { Badge } from '../ui'
 
 const VERDICT_TONE = {
   success: 'text-success',
@@ -60,11 +61,7 @@ function TeamOddsRow({ rank, roster, result, tier, isMine }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <p className="font-body text-sm font-semibold text-text-primary truncate">{teamName}</p>
-            {isMine && (
-              <span className="shrink-0 font-body text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 bg-accent text-white">
-                You
-              </span>
-            )}
+            {isMine && <Badge className="shrink-0">You</Badge>}
           </div>
           <p className="font-body text-[10px] text-text-tertiary">
             Proj. {result.projWins.toFixed(1)}–{result.projLosses.toFixed(1)} · {ordinal(result.avgSeed)} seed
@@ -107,11 +104,7 @@ function StrengthPreviewRow({ row, isMine }) {
       <TeamAvatar owner={row.owner} size={24} />
       <div className="flex-1 min-w-0 flex items-center gap-1.5">
         <p className="font-body text-sm font-semibold text-text-primary truncate">{teamName}</p>
-        {isMine && (
-          <span className="shrink-0 font-body text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 bg-accent text-white">
-            You
-          </span>
-        )}
+        {isMine && <Badge className="shrink-0">You</Badge>}
       </div>
       <span
         className={`shrink-0 font-body text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 border ${

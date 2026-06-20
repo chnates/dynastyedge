@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { AlertTriangle, Info, X, ArrowRight } from 'lucide-react'
 import { useSleeperRookies, getPlayerMetaMap } from '../../hooks/useSleeperRookies'
 import { suggestSellMove } from '../../utils/recommendations'
+import { Button } from '../ui'
 import { PICK_YEARS } from '../../constants'
 
 const DISMISSAL_KEY = 'dynastyedge_action_dismissals'
@@ -46,13 +47,16 @@ function ActionCard({ item, onDismiss, onAction }) {
         </p>
       )}
       {item.action && (
-        <button
+        <Button
+          variant="tinted"
+          size="sm"
           onClick={() => onAction(item.action)}
-          className="mt-2 ml-[26px] inline-flex items-center gap-1 rounded-lg border border-accent/25 bg-accent/5 px-2.5 py-1 font-body text-[11px] font-semibold text-accent active:opacity-70 transition-opacity"
+          icon={<ArrowRight size={12} strokeWidth={2.25} />}
+          iconRight
+          className="mt-2 ml-[26px] gap-1 px-2.5 py-1 text-[11px]"
         >
           {item.action.label}
-          <ArrowRight size={12} strokeWidth={2.25} />
-        </button>
+        </Button>
       )}
     </div>
   )

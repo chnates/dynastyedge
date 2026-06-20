@@ -5,6 +5,7 @@ import { fetchJSON } from '../../utils/fetchJSON'
 import { useIdentity } from '../../hooks/useIdentity'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getTeamName } from '../../hooks/useLeague'
+import { Input } from '../ui'
 import DynastyEdgeLogo from '../shared/DynastyEdgeLogo'
 import TeamAvatar from '../shared/TeamAvatar'
 import LoadingSpinner from '../shared/LoadingSpinner'
@@ -113,7 +114,7 @@ export default function LoginScreen() {
                 Sleeper username
               </label>
               <div className="flex gap-2">
-                <input
+                <Input
                   id="sleeper-username"
                   type="text"
                   inputMode="text"
@@ -123,7 +124,7 @@ export default function LoginScreen() {
                   value={username}
                   onChange={e => { setUsername(e.target.value); setErr(null) }}
                   placeholder="e.g. chnates"
-                  className="flex-1 min-w-0 bg-bg-secondary border border-border-default rounded-xl px-3 py-2.5 font-body text-[15px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/40 transition-shadow"
+                  className="flex-1 min-w-0 bg-bg-secondary text-[15px] focus:ring-2 focus:ring-accent/40 transition-shadow"
                 />
                 <button
                   type="submit"

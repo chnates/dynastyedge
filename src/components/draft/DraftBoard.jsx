@@ -18,6 +18,7 @@ import { useSleeperDraft, buildDraftOrder } from '../../hooks/useSleeperDraft'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { BOARD_ORDER_KEY, NOTES_KEY, CSV_KEY } from './boardStorage'
 import LoadingSpinner from '../shared/LoadingSpinner'
+import { Modal, Button, Input } from '../ui'
 import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
@@ -208,52 +209,43 @@ function FpOnlyBadge() {
 function CsvNamingOverlay({ file, onConfirm, onCancel }) {
   const [name, setName] = useState(() => file.name.replace(/\.[^.]+$/, ''))
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-      <div className="w-full max-w-sm bg-bg-secondary rounded-2xl border border-border-default p-5">
-        <h3 className="font-display text-lg font-bold uppercase text-text-primary mb-1">Name this ranking</h3>
-        <p className="font-body text-sm text-text-secondary mb-4">{file.name}</p>
-        <input
-          type="text"
-          value={name}
-          onChange={e => setName(e.target.value)}
-          className="w-full px-3 py-2.5 rounded-lg bg-bg-card border border-border-default font-body text-sm text-text-primary focus:outline-none focus:border-accent mb-4"
-          autoFocus
-        />
-        <div className="flex gap-2">
-          <button onClick={onCancel} className="flex-1 py-2.5 rounded-lg border border-border-default font-body text-sm text-text-secondary">
-            Cancel
-          </button>
-          <button
-            onClick={() => name.trim() && onConfirm(name.trim())}
-            disabled={!name.trim()}
-            className="flex-1 py-2.5 rounded-lg bg-accent text-white font-body text-sm font-medium disabled:opacity-50"
-          >
-            Add
-          </button>
-        </div>
+    <Modal onClose={onCancel} maxWidth="max-w-sm" label="Name this ranking" className="p-5">
+      <h3 className="font-display text-lg font-bold uppercase text-text-primary mb-1">Name this ranking</h3>
+      <p className="font-body text-sm text-text-secondary mb-4">{file.name}</p>
+      <Input
+        type="text"
+        value={name}
+        onChange={e => setName(e.target.value)}
+        className="rounded-lg mb-4"
+        autoFocus
+      />
+      <div className="flex gap-2">
+        <Button variant="secondary" fullWidth className="py-2.5" onClick={onCancel}>Cancel</Button>
+        <Button
+          fullWidth
+          className="py-2.5"
+          onClick={() => name.trim() && onConfirm(name.trim())}
+          disabled={!name.trim()}
+        >
+          Add
+        </Button>
       </div>
-    </div>
+    </Modal>
   )
 }
 
 function ResetBoardConfirm({ onConfirm, onCancel }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-      <div className="w-full max-w-xs bg-bg-secondary rounded-2xl border border-border-default p-5 text-center">
-        <h3 className="font-display text-lg font-bold uppercase text-text-primary mb-2">Reset My Board?</h3>
-        <p className="font-body text-sm text-text-secondary mb-5">
-          This restores the default FantasyCalc order and cannot be undone.
-        </p>
-        <div className="flex gap-2">
-          <button onClick={onCancel} className="flex-1 py-2.5 rounded-lg border border-border-default font-body text-sm text-text-secondary">
-            Cancel
-          </button>
-          <button onClick={onConfirm} className="flex-1 py-2.5 rounded-lg bg-danger text-white font-body text-sm font-medium">
-            Reset
-          </button>
-        </div>
+    <Modal onClose={onCancel} label="Reset my board" className="p-5 text-center">
+      <h3 className="font-display text-lg font-bold uppercase text-text-primary mb-2">Reset My Board?</h3>
+      <p className="font-body text-sm text-text-secondary mb-5">
+        This restores the default FantasyCalc order and cannot be undone.
+      </p>
+      <div className="flex gap-2">
+        <Button variant="secondary" fullWidth className="py-2.5" onClick={onCancel}>Cancel</Button>
+        <Button variant="danger" fullWidth className="py-2.5" onClick={onConfirm}>Reset</Button>
       </div>
-    </div>
+    </Modal>
   )
 }
 

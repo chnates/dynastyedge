@@ -1,18 +1,9 @@
-import { useMemo, useEffect } from 'react'
-import { useScrollLock } from '../../hooks/useScrollLock'
-import { useSheetDrag } from '../../hooks/useSheetDrag'
+import { useMemo } from 'react'
+import { Sheet, SheetHeader } from '../ui'
 
 import { POS_TAG as POS_COLORS } from '../../utils/positionColors'
 
 export default function FreeAgentDrawer({ slot, projMap, allRosters, fcPlayerMap, onClose }) {
-  useScrollLock()
-  const { sheetRef, scrollRef } = useSheetDrag(onClose)
-  // Lock body scroll while open
-  useEffect(() => {
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = '' }
-  }, [])
-
   const faList = useMemo(() => {
     if (!projMap || !fcPlayerMap) return []
 
@@ -43,41 +34,17 @@ export default function FreeAgentDrawer({ slot, projMap, allRosters, fcPlayerMap
   const posLabel  = slot.eligible.filter(p => p !== 'DEF').join(' / ')
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-40 bg-black/60"
-        onClick={onClose}
-        aria-hidden="true"
+    <Sheet onClose={onClose} surface="bg-bg-card" maxHeight="max-h-[75vh]" label={`${slotLabel} free agents`}>
+      <SheetHeader
+        eyebrow={`${slotLabel} Free Agents`}
+        subtitle={`${posLabel} · sorted by projected pts`}
+        onClose={onClose}
+        closeLabel="Close"
       />
 
-      {/* Drawer panel */}
-      <div
-        ref={sheetRef}
-        className="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl bg-bg-card dark:bg-bg-card border-t border-border-default dark:border-border-default"
-        style={{ maxHeight: '75vh', display: 'flex', flexDirection: 'column' }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-border-default dark:border-border-default shrink-0">
-          <div>
-            <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-0.5">
-              {slotLabel} Free Agents
-            </p>
-            <p className="font-body text-xs text-text-tertiary dark:text-text-tertiary">
-              {posLabel} · sorted by projected pts
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-text-tertiary dark:text-text-tertiary text-xl leading-none p-1"
-            aria-label="Close"
-          >
-            ×
-          </button>
-        </div>
-
+      <div className="px-4">
         {/* Column headers */}
-        <div className="flex items-center gap-2 px-4 py-1.5 border-b border-border-default dark:border-border-default shrink-0">
+        <div className="flex items-center gap-2 py-1.5 border-b border-border-default dark:border-border-default">
           <span className="w-7 shrink-0" />
           <span className="flex-1 font-body text-[10px] uppercase tracking-wide text-text-tertiary dark:text-text-tertiary">Player</span>
           <span className="font-body text-[10px] uppercase tracking-wide text-text-tertiary dark:text-text-tertiary shrink-0 w-8 text-right">Team</span>
@@ -85,12 +52,8 @@ export default function FreeAgentDrawer({ slot, projMap, allRosters, fcPlayerMap
           <span className="font-mono text-[10px] uppercase tracking-wide text-text-tertiary dark:text-text-tertiary shrink-0 w-14 text-right">Value</span>
         </div>
 
-        {/* FA list — scrollable */}
-        <div
-          ref={scrollRef}
-          className="overflow-y-auto flex-1 px-4"
-          style={{ overscrollBehavior: 'contain', paddingBottom: 'env(safe-area-inset-bottom)' }}
-        >
+        {/* FA list */}
+        <div>
           {faList.length === 0 ? (
             <p className="text-text-tertiary dark:text-text-tertiary font-body text-sm py-6 text-center">
               No free agents with projections this week.
@@ -129,10 +92,7 @@ export default function FreeAgentDrawer({ slot, projMap, allRosters, fcPlayerMap
             ))
           )}
         </div>
-
-        {/* Safe area spacer */}
-        <div style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} className="shrink-0" />
       </div>
-    </>
+    </Sheet>
   )
 }

@@ -11,6 +11,7 @@ import PickBadge from './PickBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import RosterAnalysisSheet from './RosterAnalysisSheet'
 import RosterActionItems from './RosterActionItems'
+import { Card } from '../ui'
 import { POS_BG, POS_TEXT } from '../../utils/positionColors'
 import TeamAvatar from '../shared/TeamAvatar'
 
@@ -114,23 +115,27 @@ export default function RosterView() {
 
       {/* ── Dynasty trajectory (scouting another team — not otherwise reachable) ── */}
       {selectedRosterId && (
-        <button
+        <Card
+          accent="bg-accent"
+          padding="px-3 py-3"
           onClick={() => navigate(`/league/trajectory/${selectedRosterId}`)}
-          className="w-full mt-4 mb-1 flex items-center gap-2.5 px-3 py-3 rounded-xl bg-bg-card border border-border-default border-l-[3px] border-l-accent active:opacity-60 transition-opacity"
+          className="mt-4 mb-1"
         >
-          <span className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-accent/15">
-            <TrendingUp size={15} strokeWidth={2} className="text-accent" />
-          </span>
-          <div className="flex-1 text-left">
-            <p className="font-body text-sm font-semibold text-text-primary leading-tight">
-              Dynasty Trajectory
-            </p>
-            <p className="font-body text-[10px] text-text-tertiary mt-0.5">
-              Where this team's value is headed · when their window closes
-            </p>
+          <div className="flex items-center gap-2.5">
+            <span className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-accent/15">
+              <TrendingUp size={15} strokeWidth={2} className="text-accent" />
+            </span>
+            <div className="flex-1 text-left">
+              <p className="font-body text-sm font-semibold text-text-primary leading-tight">
+                Dynasty Trajectory
+              </p>
+              <p className="font-body text-[10px] text-text-tertiary mt-0.5">
+                Where this team's value is headed · when their window closes
+              </p>
+            </div>
+            <ChevronRight size={16} strokeWidth={1.75} className="text-text-tertiary flex-shrink-0" />
           </div>
-          <ChevronRight size={16} strokeWidth={1.75} className="text-text-tertiary flex-shrink-0" />
-        </button>
+        </Card>
       )}
 
       {/* ── Action Items banner (own roster only) ── */}
@@ -140,23 +145,27 @@ export default function RosterView() {
 
       {/* ── Roster Analysis (own roster only) ── */}
       {!selectedRosterId && (
-        <button
+        <Card
+          accent="bg-accent"
+          padding="px-3 py-3"
           onClick={() => setAnalysisOpen(true)}
-          className="w-full mt-4 mb-1 flex items-center gap-2.5 px-3 py-3 rounded-xl bg-bg-card border border-border-default border-l-[3px] border-l-accent active:opacity-60 transition-opacity"
+          className="mt-4 mb-1"
         >
-          <span className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-accent/15">
-            <ScanSearch size={15} strokeWidth={2} className="text-accent" />
-          </span>
-          <div className="flex-1 text-left">
-            <p className="font-body text-sm font-semibold text-text-primary leading-tight">
-              Roster Analysis
-            </p>
-            <p className="font-body text-[10px] text-text-tertiary mt-0.5">
-              Age curve · win window · position breakdown
-            </p>
+          <div className="flex items-center gap-2.5">
+            <span className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-accent/15">
+              <ScanSearch size={15} strokeWidth={2} className="text-accent" />
+            </span>
+            <div className="flex-1 text-left">
+              <p className="font-body text-sm font-semibold text-text-primary leading-tight">
+                Roster Analysis
+              </p>
+              <p className="font-body text-[10px] text-text-tertiary mt-0.5">
+                Age curve · win window · position breakdown
+              </p>
+            </div>
+            <ChevronRight size={16} strokeWidth={1.75} className="text-text-tertiary flex-shrink-0" />
           </div>
-          <ChevronRight size={16} strokeWidth={1.75} className="text-text-tertiary flex-shrink-0" />
-        </button>
+        </Card>
       )}
 
       {/* ── Position groups ── */}

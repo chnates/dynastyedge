@@ -8,6 +8,7 @@ import WinWindowBadge from '../shared/WinWindowBadge'
 import TrendArrow from '../shared/TrendArrow'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
+import { Card, Chip, cn } from '../ui'
 import { POS_CHIP_ACTIVE, POS_TAG as POS_TAGS } from '../../utils/positionColors'
 
 const POSITION_FILTERS = ['All', 'QB', 'RB', 'WR', 'TE']
@@ -17,9 +18,10 @@ function TargetCard({ target, fairPackage, onTap }) {
   const posTag = POS_TAGS[target.position] ?? 'bg-bg-secondary text-text-secondary'
 
   return (
-    <button
+    <Card
       onClick={onTap}
-      className="w-full text-left rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-3 flex flex-col gap-2 active:opacity-80 transition-opacity"
+      padding="p-3"
+      className="flex flex-col gap-2"
     >
       {/* Row 1: position + name + team + value + trend */}
       <div className="flex items-center gap-2 min-w-0">
@@ -71,7 +73,7 @@ function TargetCard({ target, fairPackage, onTap }) {
           )}
         </div>
       )}
-    </button>
+    </Card>
   )
 }
 
@@ -133,17 +135,15 @@ export default function WhatsFair() {
       {/* Position filter */}
       <div className="flex gap-1.5 overflow-x-auto scrollbar-none py-3 -mx-4 px-4">
         {POSITION_FILTERS.map(pos => (
-          <button
+          <Chip
             key={pos}
+            active={posFilter === pos}
+            activeClass={POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-white'}
             onClick={() => setPosFilter(pos)}
-            className={`shrink-0 px-3 py-1 rounded-full font-body text-xs font-semibold uppercase tracking-wider transition-colors
-              ${posFilter === pos
-                ? POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-white'
-                : 'bg-bg-card dark:bg-bg-card text-text-secondary dark:text-text-secondary border border-border-default dark:border-border-default'
-              }`}
+            className={cn('py-1', posFilter !== pos && 'bg-bg-card dark:bg-bg-card')}
           >
             {pos}
-          </button>
+          </Chip>
         ))}
       </div>
 

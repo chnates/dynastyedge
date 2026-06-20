@@ -21,6 +21,7 @@ import {
 } from '../../utils/edgeBriefing'
 import { POS_TEXT } from '../../utils/positionColors'
 import { TIER_BADGE, TIER_TEXT } from '../../utils/tierColors'
+import { Button, Card, Badge } from '../ui'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import SectionHeader from '../shared/SectionHeader'
@@ -44,9 +45,9 @@ const BRIEFING_ICONS = {
 }
 
 const BRIEFING_TONES = {
-  accent:  { icon: 'text-accent',  bg: 'bg-accent/15',  bar: 'border-l-accent' },
-  success: { icon: 'text-success', bg: 'bg-success/15', bar: 'border-l-success' },
-  warning: { icon: 'text-warning', bg: 'bg-warning/15', bar: 'border-l-warning' },
+  accent:  { icon: 'text-accent',  bg: 'bg-accent/15',  bar: 'bg-accent' },
+  success: { icon: 'text-success', bg: 'bg-success/15', bar: 'bg-success' },
+  warning: { icon: 'text-warning', bg: 'bg-warning/15', bar: 'bg-warning' },
 }
 
 // Win-window tier dot colors for the hero chip (white-on-gradient context —
@@ -74,11 +75,7 @@ function greeting() {
 }
 
 function NewBadge() {
-  return (
-    <span className="shrink-0 font-body text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 bg-accent text-white">
-      New
-    </span>
-  )
+  return <Badge>New</Badge>
 }
 
 function TrendChip({ trend, value, onHero = false }) {
@@ -304,24 +301,28 @@ export default function EdgeView() {
       </div>
 
       {/* ── Roster Analysis shortcut (opens the same sheet as My Roster) ── */}
-      <button
+      <Card
         {...rise()}
         onClick={() => setAnalysisOpen(true)}
-        className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default border-l-[3px] border-l-accent active:opacity-60 transition-opacity"
+        accent="bg-accent"
+        padding="px-3 py-3"
+        className="active:opacity-60"
       >
-        <span className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-accent/15">
-          <ScanSearch size={15} strokeWidth={2} className="text-accent" />
-        </span>
-        <div className="flex-1 text-left">
-          <p className="font-body text-sm font-semibold text-text-primary dark:text-text-primary leading-tight">
-            Roster Analysis
-          </p>
-          <p className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary mt-0.5">
-            Age curve · win window · position breakdown
-          </p>
+        <div className="flex items-center gap-2.5">
+          <span className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-accent/15">
+            <ScanSearch size={15} strokeWidth={2} className="text-accent" />
+          </span>
+          <div className="flex-1 text-left">
+            <p className="font-body text-sm font-semibold text-text-primary dark:text-text-primary leading-tight">
+              Roster Analysis
+            </p>
+            <p className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary mt-0.5">
+              Age curve · win window · position breakdown
+            </p>
+          </div>
+          <ChevronRight size={16} strokeWidth={1.75} className="text-text-tertiary flex-shrink-0" />
         </div>
-        <ChevronRight size={16} strokeWidth={1.75} className="text-text-tertiary flex-shrink-0" />
-      </button>
+      </Card>
 
       {/* ── Your Briefing — prioritized, every row goes somewhere ── */}
       {briefing.length > 0 && (
@@ -332,24 +333,28 @@ export default function EdgeView() {
               const Icon = BRIEFING_ICONS[item.icon] ?? ArrowLeftRight
               const tone = BRIEFING_TONES[item.tone] ?? BRIEFING_TONES.accent
               return (
-                <button
+                <Card
                   key={item.id}
                   onClick={() => runAction(item.action)}
-                  className={`w-full flex items-start gap-2.5 px-3 py-3 rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default border-l-[3px] ${tone.bar} text-left active:opacity-60 transition-opacity`}
+                  accent={tone.bar}
+                  padding="px-3 py-3"
+                  className="active:opacity-60"
                 >
-                  <span className={`shrink-0 mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center ${tone.bg}`}>
-                    <Icon size={15} strokeWidth={2} className={tone.icon} />
-                  </span>
-                  <span className="flex-1 min-w-0">
-                    <span className="block font-body text-sm font-semibold text-text-primary dark:text-text-primary leading-snug">
-                      {item.title}
+                  <div className="flex items-start gap-2.5 text-left">
+                    <span className={`shrink-0 mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center ${tone.bg}`}>
+                      <Icon size={15} strokeWidth={2} className={tone.icon} />
                     </span>
-                    <span className="block font-body text-xs text-text-secondary dark:text-text-secondary leading-snug mt-0.5">
-                      {item.body}
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-body text-sm font-semibold text-text-primary dark:text-text-primary leading-snug">
+                        {item.title}
+                      </span>
+                      <span className="block font-body text-xs text-text-secondary dark:text-text-secondary leading-snug mt-0.5">
+                        {item.body}
+                      </span>
                     </span>
-                  </span>
-                  <ChevronRight size={15} strokeWidth={2} className="shrink-0 mt-1 text-text-tertiary" />
-                </button>
+                    <ChevronRight size={15} strokeWidth={2} className="shrink-0 mt-1 text-text-tertiary" />
+                  </div>
+                </Card>
               )
             })}
           </div>
@@ -395,12 +400,15 @@ export default function EdgeView() {
               )
             })}
           </div>
-          <button
+          <Button
+            variant="tinted"
+            size="lg"
+            fullWidth
             onClick={() => navigate('/news')}
-            className="mt-2 w-full py-2 rounded-xl border border-accent/25 bg-accent/5 font-body text-xs font-semibold text-accent active:opacity-70 transition-opacity"
+            className="mt-2 py-2 text-xs"
           >
             All headlines →
-          </button>
+          </Button>
         </section>
       )}
 
@@ -447,12 +455,15 @@ export default function EdgeView() {
             ))}
           </div>
         )}
-        <button
+        <Button
+          variant="tinted"
+          size="lg"
+          fullWidth
           onClick={() => navigate('/league/movers')}
-          className="mt-2 w-full py-2 rounded-xl border border-accent/25 bg-accent/5 font-body text-xs font-semibold text-accent active:opacity-70 transition-opacity"
+          className="mt-2 py-2 text-xs"
         >
           All market movers →
-        </button>
+        </Button>
       </section>
 
       {/* ── Around the league: latest moves ── */}
@@ -480,11 +491,7 @@ export default function EdgeView() {
                       <span className="font-body text-xs font-medium text-text-primary dark:text-text-primary truncate">
                         {title}
                       </span>
-                      {involvesMe && (
-                        <span className="shrink-0 font-body text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 bg-accent text-white">
-                          You
-                        </span>
-                      )}
+                      {involvesMe && <Badge>You</Badge>}
                       {isFresh && <NewBadge />}
                     </span>
                     {detail && (
@@ -500,12 +507,15 @@ export default function EdgeView() {
               )
             })}
           </div>
-          <button
+          <Button
+            variant="tinted"
+            size="lg"
+            fullWidth
             onClick={() => navigate('/league/activity')}
-            className="mt-2 w-full py-2 rounded-xl border border-accent/25 bg-accent/5 font-body text-xs font-semibold text-accent active:opacity-70 transition-opacity"
+            className="mt-2 py-2 text-xs"
           >
             Full activity feed →
-          </button>
+          </Button>
         </section>
       )}
 

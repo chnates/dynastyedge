@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { X, ChevronDown, ChevronUp } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { PEAK_WINDOWS } from '../../utils/peakWindows'
-import { useScrollLock } from '../../hooks/useScrollLock'
-import { useSheetDrag } from '../../hooks/useSheetDrag'
+import { Sheet, SheetHeader, Chip } from '../ui'
 import { POS_SVG as POS_COLORS } from '../../utils/positionColors'
 
 const LANE_ORDER = ['QB', 'RB', 'WR', 'TE']
@@ -77,19 +76,9 @@ function StatCard({ label, value, valueClass = 'text-text-primary' }) {
 }
 
 export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters, nflState, onClose }) {
-  const overlayRef = useRef(null)
-  const { sheetRef, scrollRef } = useSheetDrag(onClose)
   const [posFilter, setPosFilter] = useState('ALL')
   const [selectedId, setSelectedId] = useState(null)
   const [howToOpen, setHowToOpen] = useState(false)
-
-  useScrollLock()
-
-  useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
 
   const currentYear = Number(nflState?.season) || new Date().getFullYear()
 
@@ -146,10 +135,6 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
     setSelectedId(null)
   }
 
-  function handleOverlayClick(e) {
-    if (e.target === overlayRef.current) onClose()
-  }
-
   function selectedSlotLabel(p) {
     if (p.isIR) return 'IR'
     if (p.isTaxi) return 'Taxi'
@@ -157,53 +142,22 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
   }
 
   return (
-    <div
-      ref={overlayRef}
-      onClick={handleOverlayClick}
-      className="fixed inset-0 z-50 flex items-end bg-black/60"
-    >
-      <div ref={sheetRef} className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default">
-        <div ref={scrollRef} className="max-h-[85vh] overflow-y-auto" style={{ overscrollBehavior: 'contain', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+    <Sheet onClose={onClose} label="Roster analysis">
+      <SheetHeader title="Roster Analysis" subtitle="Age curve · win window" onClose={onClose} closeLabel="Close roster analysis" />
 
-          {/* Handle bar */}
-          <div className="flex justify-center pt-3 pb-1">
-            <div className="w-10 h-1 rounded-full bg-border-default" />
-          </div>
-
-          {/* Header */}
-          <div className="flex items-start justify-between px-4 pt-2 pb-3 border-b border-border-default">
-            <div>
-              <h2 className="font-display text-xl font-bold uppercase tracking-wide text-text-primary leading-tight">
-                Roster Analysis
-              </h2>
-              <p className="font-body text-xs text-text-secondary mt-0.5">
-                Age curve · win window
-              </p>
-            </div>
-            <button
-              onClick={onClose}
-              className="w-9 h-9 flex items-center justify-center rounded-lg text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex-shrink-0"
-            >
-              <X size={18} strokeWidth={1.75} />
-            </button>
-          </div>
-
-          <div className="px-4 pb-6 pt-3 flex flex-col gap-4">
+      <div className="px-4 pb-6 pt-3 flex flex-col gap-4">
 
             {/* Position filter */}
             <div className="flex gap-1.5 overflow-x-auto pb-0.5">
               {POS_FILTERS.map(pos => (
-                <button
+                <Chip
                   key={pos}
+                  active={posFilter === pos}
                   onClick={() => handlePosFilter(pos)}
-                  className={`flex-shrink-0 px-3 py-1.5 rounded-lg font-body text-xs font-semibold uppercase tracking-wide transition-colors ${
-                    posFilter === pos
-                      ? 'bg-accent text-white'
-                      : 'bg-bg-card border border-border-default text-text-secondary'
-                  }`}
+                  className="rounded-lg tracking-wide"
                 >
                   {pos}
-                </button>
+                </Chip>
               ))}
             </div>
 
@@ -454,9 +408,7 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
               )}
             </div>
 
-          </div>
-        </div>
       </div>
-    </div>
+    </Sheet>
   )
 }

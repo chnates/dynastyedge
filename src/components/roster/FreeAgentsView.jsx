@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Search, Sparkles } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useSleeperRookies } from '../../hooks/useSleeperRookies'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { recommendFreeAgents } from '../../utils/recommendations'
+import { Card, Chip, SearchInput } from '../ui'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import SectionHeader from '../shared/SectionHeader'
@@ -40,7 +41,7 @@ function RecommendedPickups({ recs, onSelect }) {
   return (
     <div>
       <SectionHeader label="Recommended Pickups" />
-      <div className="rounded-xl bg-bg-card border border-border-default overflow-hidden">
+      <Card padding="none">
         {recs.map((rec, i) => {
           const p = rec.player
           return (
@@ -74,7 +75,7 @@ function RecommendedPickups({ recs, onSelect }) {
             </button>
           )
         })}
-      </div>
+      </Card>
     </div>
   )
 }
@@ -192,32 +193,26 @@ export default function FreeAgentsView() {
       <div className="px-4 pb-4">
         {/* Search bar */}
         <div className="pt-4 pb-3">
-          <div className="relative">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" strokeWidth={1.75} />
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search free agents…"
-              className="w-full pl-9 pr-3 py-2.5 rounded-lg bg-bg-card border border-border-default font-body text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent"
-            />
-          </div>
+          <SearchInput
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search free agents…"
+            className="rounded-lg"
+          />
         </div>
 
         {/* Position filter */}
         <div className="flex gap-1.5 mb-3 overflow-x-auto pb-0.5">
           {POSITIONS.map(pos => (
-            <button
+            <Chip
               key={pos}
+              active={posFilter === pos}
+              activeClass={POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-white border border-transparent'}
               onClick={() => setPosFilter(pos)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-lg font-body text-xs font-semibold uppercase tracking-wide transition-colors ${
-                posFilter === pos
-                  ? POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-white'
-                  : 'bg-bg-card border border-border-default text-text-secondary'
-              }`}
+              className="rounded-lg tracking-wide"
             >
               {pos}
-            </button>
+            </Chip>
           ))}
         </div>
 
@@ -231,26 +226,22 @@ export default function FreeAgentsView() {
         {/* Filter toggles */}
         <div className="mb-3">
           <div className="flex items-center gap-2">
-            <button
+            <Chip
+              active={upgradesOnly}
+              activeClass="bg-success/20 text-success border border-success/30"
               onClick={() => setUpgradesOnly(o => !o)}
-              className={`px-3 py-1.5 rounded-lg font-body text-xs font-semibold uppercase tracking-wide transition-colors ${
-                upgradesOnly
-                  ? 'bg-success/20 text-success border border-success/30'
-                  : 'bg-bg-card border border-border-default text-text-secondary'
-              }`}
+              className="rounded-lg tracking-wide"
             >
               Upgrades Only
-            </button>
-            <button
+            </Chip>
+            <Chip
+              active={hideRookies}
+              activeClass="bg-warning/20 text-warning border border-warning/30"
               onClick={() => setHideRookies(h => !h)}
-              className={`px-3 py-1.5 rounded-lg font-body text-xs font-semibold uppercase tracking-wide transition-colors ${
-                hideRookies
-                  ? 'bg-warning/20 text-warning border border-warning/30'
-                  : 'bg-bg-card border border-border-default text-text-secondary'
-              }`}
+              className="rounded-lg tracking-wide"
             >
               Hide Rookies
-            </button>
+            </Chip>
           </div>
           {upgradesOnly && (
             <p className="font-body text-[10px] text-text-tertiary leading-tight mt-1.5">
@@ -266,17 +257,15 @@ export default function FreeAgentsView() {
           </span>
           <div className="flex gap-1">
             {SORT_OPTIONS.map(o => (
-              <button
+              <Chip
                 key={o.id}
+                size="sm"
+                active={sortMode === o.id}
                 onClick={() => setSortMode(o.id)}
-                className={`px-2.5 py-1 rounded font-body text-[11px] font-semibold uppercase tracking-wide transition-colors ${
-                  sortMode === o.id
-                    ? 'bg-accent text-white'
-                    : 'bg-bg-card border border-border-default text-text-secondary'
-                }`}
+                className="rounded tracking-wide"
               >
                 {o.label}
-              </button>
+              </Chip>
             ))}
           </div>
         </div>

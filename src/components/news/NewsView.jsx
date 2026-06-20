@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Newspaper, Search } from 'lucide-react'
+import { Newspaper } from 'lucide-react'
 import { useNewsFeed } from '../../hooks/useNewsFeed'
 import { useWatchlist } from '../../hooks/useWatchlist'
 import { relativeTime } from '../../hooks/usePlayerIntel'
 import { POS_TEXT } from '../../utils/positionColors'
+import { Badge, SearchInput, cn } from '../ui'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import SectionHeader from '../shared/SectionHeader'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
@@ -50,11 +51,7 @@ function NewsRow({ item, onOpen }) {
                 {item.player.position}
               </span>
             )}
-            {item.isMine && (
-              <span className="shrink-0 font-body text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 bg-accent text-white">
-                You
-              </span>
-            )}
+            {item.isMine && <Badge>You</Badge>}
           </>
         ) : (
           <span className="font-body text-[10px] font-semibold uppercase tracking-wider text-text-tertiary dark:text-text-tertiary">
@@ -128,13 +125,11 @@ export default function NewsView() {
         </p>
       </div>
 
-      <div className="relative mt-3">
-        <Search size={15} strokeWidth={2} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
-        <input
+      <div className="mt-3">
+        <SearchInput
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder="Search news or players"
-          className="w-full rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default pl-9 pr-3 py-2.5 font-body text-sm text-text-primary dark:text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent/50"
         />
       </div>
 
@@ -143,11 +138,12 @@ export default function NewsView() {
           <button
             key={f.id}
             onClick={() => setFilter(f.id)}
-            className={`flex-1 py-2 rounded-lg font-body text-xs font-semibold transition-colors ${
+            className={cn(
+              'flex-1 py-2 rounded-lg font-body text-xs font-semibold transition-colors',
               filter === f.id
                 ? 'bg-accent text-white'
-                : 'bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default text-text-secondary dark:text-text-secondary'
-            }`}
+                : 'bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default text-text-secondary dark:text-text-secondary',
+            )}
           >
             {f.label}
           </button>

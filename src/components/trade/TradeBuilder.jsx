@@ -5,6 +5,7 @@ import PickBadge from '../roster/PickBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { useScrollLock } from '../../hooks/useScrollLock'
 import { useSheetDrag } from '../../hooks/useSheetDrag'
+import { Button, Chip, cn } from '../ui'
 import { POS_CHIP_ACTIVE, POS_TAG as POS_TAGS } from '../../utils/positionColors'
 
 const FILTER_TABS = ['All', 'QB', 'RB', 'WR', 'TE', 'Picks']
@@ -283,12 +284,13 @@ function AddAssetSheet({
             <h2 className="font-display text-base font-bold uppercase tracking-wide text-text-primary dark:text-text-primary">
               {title}
             </h2>
-            <button
+            <Button
+              size="sm"
               onClick={onClose}
-              className="shrink-0 px-3 py-1 rounded-lg bg-accent text-white font-body text-xs font-semibold"
+              className="shrink-0 py-1"
             >
               Done
-            </button>
+            </Button>
           </div>
           <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary mt-1">
             Give <span className="font-mono text-text-primary dark:text-text-primary tabular-nums">{giveTotal.toLocaleString()}</span>
@@ -316,17 +318,16 @@ function AddAssetSheet({
         {/* Position filter */}
         <div className="flex gap-1.5 overflow-x-auto scrollbar-none px-4 py-2 border-b border-border-default dark:border-border-default shrink-0">
           {FILTER_TABS.map(tab => (
-            <button
+            <Chip
               key={tab}
+              size="sm"
+              active={posFilter === tab}
+              activeClass={POS_CHIP_ACTIVE[tab] ?? 'bg-accent text-white'}
               onClick={() => setPosFilter(tab)}
-              className={`shrink-0 px-2.5 py-1 rounded-full font-body text-[11px] font-semibold uppercase tracking-wider transition-colors
-                ${posFilter === tab
-                  ? POS_CHIP_ACTIVE[tab] ?? 'bg-accent text-white'
-                  : 'bg-bg-card dark:bg-bg-card text-text-secondary dark:text-text-secondary border border-border-default dark:border-border-default'
-                }`}
+              className={cn(posFilter !== tab && 'bg-bg-card dark:bg-bg-card')}
             >
               {tab}
-            </button>
+            </Chip>
           ))}
         </div>
 

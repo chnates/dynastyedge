@@ -8,6 +8,7 @@ import { findPickValue } from '../../utils/pickCapital'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
+import { Chip, Badge, Button, cn } from '../ui'
 
 const PAGE_SIZE = 25
 const ROUND_SUFFIXES = ['', '1st', '2nd', '3rd', '4th', '5th']
@@ -186,17 +187,14 @@ export default function LeagueActivity() {
       <div className="py-3 -mx-4 px-4 overflow-x-auto scrollbar-none">
         <div className="flex gap-1.5 w-max">
           {FILTERS.map(f => (
-            <button
+            <Chip
               key={f.id}
+              active={filter === f.id}
               onClick={() => setFilter(f.id)}
-              className={`shrink-0 px-2.5 py-1 rounded-full font-body text-xs font-medium transition-colors ${
-                filter === f.id
-                  ? 'bg-accent text-white'
-                  : 'bg-bg-secondary dark:bg-bg-secondary text-text-secondary dark:text-text-secondary border border-border-default dark:border-border-default'
-              }`}
+              className={cn('px-2.5 py-1', filter !== f.id && 'bg-bg-secondary dark:bg-bg-secondary')}
             >
               {f.label}
-            </button>
+            </Chip>
           ))}
         </div>
       </div>
@@ -224,11 +222,7 @@ export default function LeagueActivity() {
                   <span className={`font-body text-[11px] font-semibold uppercase tracking-wider ${meta.color}`}>
                     {meta.label}
                   </span>
-                  {involvesMe && (
-                    <span className="font-body text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 bg-accent text-white">
-                      You
-                    </span>
-                  )}
+                  {involvesMe && <Badge>You</Badge>}
                   <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary ml-auto">
                     Week {tx.week} · {formatDate(tx.status_updated)}
                   </span>
@@ -241,12 +235,15 @@ export default function LeagueActivity() {
           })}
 
           {visibleCount < filtered.length && (
-            <button
+            <Button
+              variant="tinted"
+              size="lg"
+              fullWidth
               onClick={() => setVisibleCount(c => c + PAGE_SIZE)}
-              className="mt-1 py-2.5 rounded-xl border border-accent/25 bg-accent/5 font-body text-sm font-semibold text-accent active:opacity-70 transition-opacity"
+              className="mt-1"
             >
               Show more
-            </button>
+            </Button>
           )}
         </div>
       )}

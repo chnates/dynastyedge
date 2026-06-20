@@ -11,6 +11,7 @@ import { buildAgeCurves, buildRosterTrajectory, getTrajectoryRead } from '../../
 import WinWindowBadge from '../shared/WinWindowBadge'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
+import { Card, Chip, Button, cn } from '../ui'
 import { POS_CHIP_ACTIVE } from '../../utils/positionColors'
 
 const FILTER_TABS = ['All', 'QB', 'RB', 'WR', 'TE', 'Picks']
@@ -117,9 +118,10 @@ function TradePartnerCard({ partner, watchedNames, profile, odds, trajectoryRead
   const badge = FIT_BADGE[fitBadge] ?? FIT_BADGE['Poor Fit']
 
   return (
-    <button
+    <Card
       onClick={onClick}
-      className="w-full text-left rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-3 flex flex-col gap-2 active:opacity-80 transition-opacity"
+      padding="p-3"
+      className="flex flex-col gap-2"
     >
       {/* Row 1: fit icon + team name + win window badge */}
       <div className="flex items-center justify-between gap-2">
@@ -190,7 +192,7 @@ function TradePartnerCard({ partner, watchedNames, profile, odds, trajectoryRead
           <span className="font-body text-[11px] text-warning leading-tight">{mismatchWarning}</span>
         </div>
       )}
-    </button>
+    </Card>
   )
 }
 
@@ -276,17 +278,15 @@ export default function TradePartnerFinder() {
       {/* Position filter bar */}
       <div className="flex gap-1.5 overflow-x-auto scrollbar-none py-3 -mx-4 px-4">
         {FILTER_TABS.map(tab => (
-          <button
+          <Chip
             key={tab}
+            active={activeFilter === tab}
+            activeClass={POS_CHIP_ACTIVE[tab] ?? 'bg-accent text-white'}
             onClick={() => setActiveFilter(tab)}
-            className={`shrink-0 px-3 py-1 rounded-full font-body text-xs font-semibold uppercase tracking-wider transition-colors
-              ${activeFilter === tab
-                ? POS_CHIP_ACTIVE[tab] ?? 'bg-accent text-white'
-                : 'bg-bg-card dark:bg-bg-card text-text-secondary dark:text-text-secondary border border-border-default dark:border-border-default'
-              }`}
+            className={cn('py-1', activeFilter !== tab && 'bg-bg-card dark:bg-bg-card')}
           >
             {tab}
-          </button>
+          </Chip>
         ))}
       </div>
 
@@ -312,12 +312,15 @@ export default function TradePartnerFinder() {
       )}
 
       {/* Discoverability hook into the pick-swap planner (Trade › Pick Trades) */}
-      <button
+      <Button
+        variant="tinted"
+        size="lg"
+        fullWidth
         onClick={() => navigate('/trade/pick-trades')}
-        className="mt-3 w-full py-2.5 rounded-xl border border-accent/25 bg-accent/5 font-body text-xs font-semibold text-accent active:opacity-70 transition-opacity"
+        className="mt-3 py-2.5 text-xs active:opacity-70"
       >
         Planning a pick swap? Open the Pick Trade Calculator →
-      </button>
+      </Button>
     </div>
   )
 }

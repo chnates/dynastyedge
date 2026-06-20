@@ -1,18 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { X, ArrowRight, Star, ChevronRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import TrendArrow from './TrendArrow'
 import NewsArticleSheet from './NewsArticleSheet'
 import { usePlayerNews } from '../../hooks/usePlayerNews'
 import { usePlayerIntel, relativeTime, TOUCH_LABEL } from '../../hooks/usePlayerIntel'
 import { getPeakStatus } from '../../utils/peakWindows'
-import { useScrollLock } from '../../hooks/useScrollLock'
-import { useSheetDrag } from '../../hooks/useSheetDrag'
 import { useWatchlist } from '../../hooks/useWatchlist'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { getTeamName } from '../../hooks/useLeague'
 import { POS_TEXT } from '../../utils/positionColors'
+import { Sheet, IconButton, Button, TrendArrow, cn } from '../ui'
 
 // ── Opportunity grade ────────────────────────────────────────────────────────
 
@@ -134,14 +132,10 @@ export default function PlayerProfileDrawer({
   isDraftContext = false, note = '', onNoteChange = null,
   fpNotesMap = {},
 }) {
-  const overlayRef = useRef(null)
-  const { sheetRef, scrollRef } = useSheetDrag(onClose)
   const navigate = useNavigate()
   const ctx = useLeagueContext()
   const league = ctx?.league
   const values = ctx?.values
-
-  useScrollLock()
 
   const { injuryFlag, injuryStatus, injuryDetail, injuryNotes, loading: newsLoading } = usePlayerNews(player.sleeperId)
   const intel = usePlayerIntel(player.sleeperId, ctx?.nflState)
@@ -149,12 +143,6 @@ export default function PlayerProfileDrawer({
   const { toggleWatch, isWatched } = useWatchlist()
   const watched = isWatched(player.sleeperId)
   const [openArticle, setOpenArticle] = useState(null)
-
-  useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
 
   // Determine player ownership
   const { playerContext, ownerRoster } = useMemo(() => {
@@ -224,10 +212,6 @@ export default function PlayerProfileDrawer({
 
   const fpNotes = fpNotesMap[player.sleeperId] ?? null
 
-  function handleOverlayClick(e) {
-    if (e.target === overlayRef.current) onClose()
-  }
-
   function handleAnalyzeTrade() {
     if (playerContext === 'opponent' && ownerRoster) {
       navigate('/trade/analyze', { state: { opponentRosterId: ownerRoster.rosterId, whatsFairTarget: player } })
@@ -240,22 +224,9 @@ export default function PlayerProfileDrawer({
   const flagStyle = FLAG_STYLES[injuryFlag] ?? FLAG_STYLES.green
 
   return (
-    <div
-      ref={overlayRef}
-      onClick={handleOverlayClick}
-      className="fixed inset-0 z-50 flex items-end bg-black/60"
-    >
-      <div ref={sheetRef} className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default">
-        <div
-          ref={scrollRef}
-          className="max-h-[85vh] overflow-y-auto"
-          style={{ overscrollBehavior: 'contain', paddingBottom: 'env(safe-area-inset-bottom)' }}
-        >
-
-        {/* Handle bar */}
-        <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1 rounded-full bg-border-default" />
-        </div>
+    <>
+      {/* z-50 so the nested NewsArticleSheet (z-[60], rendered after) paints on top */}
+      <Sheet onClose={onClose} zIndex="z-50" label={player.name}>
 
         {/* Header */}
         <div className="flex items-start justify-between px-4 pt-2 pb-3 border-b border-border-default">
@@ -284,19 +255,16 @@ export default function PlayerProfileDrawer({
             </p>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
-            <button
+            <IconButton
               onClick={() => toggleWatch(player.sleeperId)}
-              aria-label={watched ? 'Remove from watchlist' : 'Add to watchlist'}
-              className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors hover:bg-black/5 dark:hover:bg-white/5 ${watched ? 'text-accent' : 'text-text-secondary hover:text-text-primary'}`}
+              label={watched ? 'Remove from watchlist' : 'Add to watchlist'}
+              className={cn('transition-colors', watched && 'text-accent hover:text-accent')}
             >
               <Star size={18} strokeWidth={1.75} className={watched ? 'fill-accent' : ''} />
-            </button>
-            <button
-              onClick={onClose}
-              className="w-9 h-9 flex items-center justify-center rounded-lg text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-            >
+            </IconButton>
+            <IconButton onClick={onClose} label="Close">
               <X size={18} strokeWidth={1.75} />
-            </button>
+            </IconButton>
           </div>
         </div>
 
@@ -705,17 +673,13 @@ export default function PlayerProfileDrawer({
           )}
 
           {/* Analyze Trade button */}
-          <button
-            onClick={handleAnalyzeTrade}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-accent text-white font-body font-semibold text-sm active:opacity-80 transition-opacity"
-          >
+          <Button size="lg" fullWidth onClick={handleAnalyzeTrade}
+            icon={<ArrowRight size={16} strokeWidth={2} />} iconRight>
             Analyze Trade
-            <ArrowRight size={16} strokeWidth={2} />
-          </button>
+          </Button>
 
         </div>
-        </div>
-      </div>
+      </Sheet>
 
       {openArticle && (
         <NewsArticleSheet
@@ -723,6 +687,6 @@ export default function PlayerProfileDrawer({
           onClose={() => setOpenArticle(null)}
         />
       )}
-    </div>
+    </>
   )
 }

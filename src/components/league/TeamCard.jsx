@@ -7,6 +7,7 @@ import { POS_TEXT, POS_BAR } from '../../utils/positionColors'
 import { ROUND_CLASSES, ROUND_TEXT, ROUND_LABELS } from '../../utils/roundColors'
 import { rankClass } from '../../utils/rankColors'
 import TeamAvatar from '../shared/TeamAvatar'
+import { Badge } from '../ui'
 
 const POSITION_DEPTH = { QB: 3, RB: 5, WR: 5, TE: 3 }
 
@@ -76,11 +77,7 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
             <p className="font-body text-sm font-semibold text-text-primary dark:text-text-primary truncate leading-tight">
               {teamName}
             </p>
-            {isMyTeam && (
-              <span className="shrink-0 font-body text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 bg-accent text-white">
-                You
-              </span>
-            )}
+            {isMyTeam && <Badge className="shrink-0">You</Badge>}
           </div>
           {(username || roster.hasRecord) && (
             <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary truncate leading-tight mt-0.5">

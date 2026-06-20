@@ -17,6 +17,7 @@ import ErrorState from '../shared/ErrorState'
 import SectionHeader from '../shared/SectionHeader'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import Sparkline from '../shared/Sparkline'
+import { Card } from '../ui'
 
 // Ignore deep free agents whose tiny values produce noisy trend swings.
 const MIN_FA_VALUE = 500
@@ -106,7 +107,7 @@ function MoverSection({ label, players, emptyHint, getOwnerLabel, getNote, getSe
           {emptyHint}
         </p>
       ) : (
-        <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+        <Card padding="px-3">
           {players.map(p => (
             <MoverRow
               key={p.sleeperId}
@@ -118,7 +119,7 @@ function MoverSection({ label, players, emptyHint, getOwnerLabel, getNote, getSe
               onBuildTrade={onBuildTrade && p.ownerRoster ? () => onBuildTrade(p) : null}
             />
           ))}
-        </div>
+        </Card>
       )}
     </section>
   )

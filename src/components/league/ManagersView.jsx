@@ -10,6 +10,7 @@ import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import SectionHeader from '../shared/SectionHeader'
 import ManagerScoutingSheet from './ManagerScoutingSheet'
+import { Card, Button, Badge } from '../ui'
 
 function fmtNet(net) {
   return `${net >= 0 ? '+' : '−'}${Math.abs(Math.round(net)).toLocaleString()}`
@@ -66,9 +67,7 @@ function MyReportCard({ profile, tier, insights, onOpen }) {
             <p className="font-display text-base font-bold uppercase tracking-wide text-text-primary dark:text-text-primary truncate leading-tight">
               {getTeamName(profile.user)}
             </p>
-            <span className="font-body text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 bg-accent text-white shrink-0">
-              You
-            </span>
+            <Badge>You</Badge>
           </div>
           <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary">
             {profile.activity}{winRate != null ? ` · ${winRate}% trade win rate` : ''}
@@ -100,22 +99,16 @@ function MyReportCard({ profile, tier, insights, onOpen }) {
       <InsightList title="Your Edge" items={insights.strengths} Icon={TrendingUp} colorClass="text-success" />
       <InsightList title="Work On" items={insights.workOn} Icon={AlertTriangle} colorClass="text-warning" />
 
-      <button
-        onClick={onOpen}
-        className="w-full mt-3 py-2.5 rounded-xl border border-accent/25 bg-accent/5 font-body text-sm font-semibold text-accent active:opacity-70 transition-opacity"
-      >
+      <Button variant="tinted" size="lg" fullWidth onClick={onOpen} className="mt-3">
         Full ledger & draft record
-      </button>
+      </Button>
     </div>
   )
 }
 
 function ManagerCard({ profile, tier, onOpen }) {
   return (
-    <button
-      onClick={onOpen}
-      className="w-full text-left rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-3 flex flex-col gap-2 active:opacity-80 transition-opacity"
-    >
+    <Card as="button" onClick={onOpen} padding="p-3" className="text-left flex flex-col gap-2">
       <div className="flex items-center gap-2.5">
         <TeamAvatar owner={profile.user} size={30} />
         <div className="min-w-0 flex-1">
@@ -163,7 +156,7 @@ function ManagerCard({ profile, tier, onOpen }) {
           </span>
         </p>
       )}
-    </button>
+    </Card>
   )
 }
 

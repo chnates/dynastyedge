@@ -1,7 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { X } from 'lucide-react'
-import { useScrollLock } from '../../hooks/useScrollLock'
-import { useSheetDrag } from '../../hooks/useSheetDrag'
 import { useTradeTimeValues } from '../../hooks/useTradeTimeValues'
 import { STEAL_DELTA } from '../../utils/managerAnalysis'
 import { getTeamName } from '../../hooks/useLeague'
@@ -9,6 +7,7 @@ import TeamAvatar from '../shared/TeamAvatar'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import SectionHeader from '../shared/SectionHeader'
+import { Sheet, IconButton, Button } from '../ui'
 
 const LEDGER_PAGE = 10
 
@@ -184,23 +183,9 @@ function DraftPickRow({ row, onSelectPlayer }) {
 // tendencies, head-to-head vs me, rookie-draft grades, and the complete
 // multi-season trade ledger from their perspective.
 export default function ManagerScoutingSheet({ profile, tier, userById, onClose }) {
-  const overlayRef = useRef(null)
-  const { sheetRef, scrollRef } = useSheetDrag(onClose)
   const [ledgerCount, setLedgerCount] = useState(LEDGER_PAGE)
   const [selectedPlayer, setSelectedPlayer] = useState(null)
   const { getTradeTimeTotals } = useTradeTimeValues()
-
-  useScrollLock()
-
-  useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
-
-  function handleOverlayClick(e) {
-    if (e.target === overlayRef.current) onClose()
-  }
 
   const nameFor = ownerId =>
     ownerId != null && userById[ownerId] ? getTeamName(userById[ownerId]) : 'Unknown team'
@@ -211,18 +196,8 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
   const visibleTrades = profile.trades.slice(0, ledgerCount)
 
   return (
-    <div
-      ref={overlayRef}
-      onClick={handleOverlayClick}
-      className="fixed inset-0 z-50 flex items-end bg-black/60"
-    >
-      <div ref={sheetRef} className="w-full bg-bg-secondary dark:bg-bg-secondary rounded-t-2xl border-t border-border-default dark:border-border-default">
-        <div ref={scrollRef} className="max-h-[88vh] overflow-y-auto" style={{ overscrollBehavior: 'contain', paddingBottom: 'env(safe-area-inset-bottom)' }}>
-
-          <div className="flex justify-center pt-3 pb-1">
-            <div className="w-10 h-1 rounded-full bg-border-default" />
-          </div>
-
+    <>
+      <Sheet onClose={onClose} maxHeight="max-h-[88vh]" label="Manager scouting report">
           <div className="px-4 pb-6">
             {/* Header */}
             <div className="flex items-center gap-2.5 py-2">
@@ -237,13 +212,9 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
                 </p>
               </div>
               {tier && <WinWindowBadge tier={tier} />}
-              <button
-                onClick={onClose}
-                aria-label="Close"
-                className="w-9 h-9 flex items-center justify-center rounded-lg text-text-secondary dark:text-text-secondary active:bg-black/5 dark:active:bg-white/5 shrink-0"
-              >
+              <IconButton label="Close" onClick={onClose}>
                 <X size={18} strokeWidth={2} />
-              </button>
+              </IconButton>
             </div>
 
             {/* Stat summary */}
@@ -327,12 +298,13 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
                   />
                 ))}
                 {ledgerCount < profile.tradeCount && (
-                  <button
+                  <Button
+                    variant="tinted"
+                    size="lg"
                     onClick={() => setLedgerCount(c => c + LEDGER_PAGE)}
-                    className="py-2.5 rounded-xl border border-accent/25 bg-accent/5 font-body text-sm font-semibold text-accent active:opacity-70 transition-opacity"
                   >
                     Show more
-                  </button>
+                  </Button>
                 )}
               </div>
             )}
@@ -344,8 +316,7 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
               deal, so its value washes out across the two trades.
             </p>
           </div>
-        </div>
-      </div>
+      </Sheet>
 
       {selectedPlayer && (
         <PlayerProfileDrawer
@@ -353,6 +324,6 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
           onClose={() => setSelectedPlayer(null)}
         />
       )}
-    </div>
+    </>
   )
 }

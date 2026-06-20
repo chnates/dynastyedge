@@ -14,6 +14,7 @@ import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
 import { TIER_BADGE, TIER_TEXT } from '../../utils/tierColors'
 import { rankClass } from '../../utils/rankColors'
 import TeamAvatar from '../shared/TeamAvatar'
+import { Chip, Badge, cn } from '../ui'
 
 const SORT_OPTIONS = [
   { id: 'value',  label: 'Overall Value' },
@@ -66,9 +67,7 @@ function PositionRankCard({ roster, posFilter, tier, posStrength, posRank, onTap
             {teamName}
           </p>
           {isMyTeam && (
-            <span className="shrink-0 font-body text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 bg-accent text-white">
-              You
-            </span>
+            <Badge className="shrink-0">You</Badge>
           )}
         </div>
       </div>
@@ -219,17 +218,15 @@ export default function LeagueOverview() {
           {TIERS.map(tier => {
             const active = tierFilter === tier
             return (
-              <button
+              <Chip
                 key={tier}
+                active={active}
+                activeClass={TIER_BADGE[tier]}
                 onClick={() => setTierFilter(active ? 'ALL' : tier)}
-                className={`px-2.5 py-1 rounded-full font-body text-xs font-medium border transition-colors ${
-                  active
-                    ? TIER_BADGE[tier]
-                    : 'bg-bg-secondary dark:bg-bg-secondary text-text-secondary dark:text-text-secondary border-border-default dark:border-border-default'
-                }`}
+                className={cn('px-2.5 py-1', !active && 'bg-bg-secondary dark:bg-bg-secondary')}
               >
                 {tierCounts[tier]} {tier}
-              </button>
+              </Chip>
             )
           })}
         </div>
@@ -251,20 +248,17 @@ export default function LeagueOverview() {
       <div className="pt-4 pb-2 -mx-4 px-4 overflow-x-auto scrollbar-none">
         <div className="flex gap-1.5 w-max">
           {sortOptions.map(opt => (
-            <button
+            <Chip
               key={opt.id}
+              active={effectiveSort === opt.id}
               onClick={() => {
                 setSortMode(opt.id)
                 if (opt.id !== 'value') setPosFilter('ALL')
               }}
-              className={`shrink-0 px-2.5 py-1 rounded-full font-body text-xs font-medium transition-colors ${
-                effectiveSort === opt.id
-                  ? 'bg-accent text-white'
-                  : 'bg-bg-secondary dark:bg-bg-secondary text-text-secondary dark:text-text-secondary border border-border-default dark:border-border-default'
-              }`}
+              className={cn('px-2.5 py-1', effectiveSort !== opt.id && 'bg-bg-secondary dark:bg-bg-secondary')}
             >
               {opt.label}
-            </button>
+            </Chip>
           ))}
         </div>
       </div>
@@ -274,17 +268,15 @@ export default function LeagueOverview() {
         <div className="pb-3">
           <div className="flex gap-1.5">
             {['ALL', ...POSITIONS].map(pos => (
-              <button
+              <Chip
                 key={pos}
+                active={posFilter === pos}
+                activeClass={POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-white border border-transparent'}
                 onClick={() => setPosFilter(pos)}
-                className={`px-2.5 py-1 rounded-full font-body text-xs font-medium transition-colors ${
-                  posFilter === pos
-                    ? POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-white'
-                    : 'bg-bg-secondary dark:bg-bg-secondary text-text-secondary dark:text-text-secondary border border-border-default dark:border-border-default'
-                }`}
+                className={cn('px-2.5 py-1', posFilter !== pos && 'bg-bg-secondary dark:bg-bg-secondary')}
               >
                 {pos}
-              </button>
+              </Chip>
             ))}
           </div>
         </div>
