@@ -22,7 +22,8 @@ const EDGE_BARS = [
 // fallback. "Login" is read-only identity resolution against a public Sleeper
 // endpoint — no password, no token, it never touches the user's account.
 export default function LoginScreen() {
-  const { league, loading, error, retry } = useLeagueContext()
+  // Sign-in only needs Sleeper rosters — never gate it on FantasyCalc.
+  const { signInRosters, sleeperLoading, sleeperError, sleeperRetry } = useLeagueContext()
   const { setIdentity } = useIdentity()
 
   const [username, setUsername] = useState('')
@@ -30,9 +31,9 @@ export default function LoginScreen() {
   const [err, setErr] = useState(null)
 
   const rosters = useMemo(() => {
-    const list = league?.allRosters ?? []
+    const list = signInRosters ?? []
     return [...list].sort((a, b) => getTeamName(a.owner).localeCompare(getTeamName(b.owner)))
-  }, [league])
+  }, [signInRosters])
 
   function pick(roster) {
     setIdentity({ userId: roster.owner?.user_id ?? null, rosterId: roster.rosterId })
@@ -50,7 +51,7 @@ export default function LoginScreen() {
         setErr(`Couldn't find a Sleeper user named "${username.trim()}". Check the spelling or pick your team below.`)
         return
       }
-      const roster = (league?.allRosters ?? []).find(r => r.owner?.user_id === user.user_id)
+      const roster = (signInRosters ?? []).find(r => r.owner?.user_id === user.user_id)
       if (!roster) {
         setErr(`"${username.trim()}" isn't a manager in this league. Pick your team below.`)
         return
@@ -97,10 +98,10 @@ export default function LoginScreen() {
           </p>
         </div>
 
-        {loading && !league ? (
+        {sleeperLoading && !signInRosters ? (
           <LoadingSpinner message="Loading league…" />
-        ) : error && !league ? (
-          <ErrorState message={error} onRetry={retry} />
+        ) : sleeperError && !signInRosters ? (
+          <ErrorState message={sleeperError} onRetry={sleeperRetry} />
         ) : (
           <>
             {/* Username sign-in */}

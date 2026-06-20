@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { LayoutList } from 'lucide-react'
+import { LayoutList, CheckCircle2 } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useFantasyCalc } from '../../hooks/useFantasyCalc'
 import { useLineupData } from '../../hooks/useLineupData'
@@ -182,14 +182,44 @@ export default function LineupOptimizer() {
         <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-text-primary dark:text-text-primary leading-tight">
           Lineup Optimizer
         </h1>
-        {(flagCounts.red > 0 || flagCounts.yellow > 0) && (
+        {(flagCounts.red > 0 || flagCounts.yellow > 0) ? (
           <p className="font-body text-xs text-warning mt-1">
             {[
               flagCounts.red > 0 ? `${flagCounts.red} must-start change${flagCounts.red > 1 ? 's' : ''}` : null,
               flagCounts.yellow > 0 ? `${flagCounts.yellow} decision${flagCounts.yellow > 1 ? 's' : ''} to review` : null,
             ].filter(Boolean).join(' · ')}
           </p>
+        ) : (
+          <p className="font-body text-xs text-success mt-1 flex items-center gap-1.5">
+            <CheckCircle2 size={13} strokeWidth={2.25} className="shrink-0" />
+            Lineup is optimal — no changes needed
+          </p>
         )}
+      </div>
+
+      {/* Legend — the matchup pills and status dots aren't hoverable on touch,
+          so the color vocabulary is spelled out once up top. */}
+      <div className="flex flex-col gap-1.5 pt-3 pb-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-body text-[10px] font-semibold uppercase tracking-wide text-text-tertiary dark:text-text-tertiary w-12 shrink-0">
+            Matchup
+          </span>
+          <span className="rounded-full px-1.5 py-0.5 font-body text-[9px] font-semibold uppercase tracking-wide text-success bg-success/10">Easy</span>
+          <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">soft defense</span>
+          <span className="rounded-full px-1.5 py-0.5 font-body text-[9px] font-semibold uppercase tracking-wide text-danger bg-danger/10">Tough</span>
+          <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">hard defense</span>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-body text-[10px] font-semibold uppercase tracking-wide text-text-tertiary dark:text-text-tertiary w-12 shrink-0">
+            Status
+          </span>
+          <span className="inline-block w-2 h-2 rounded-full bg-success" />
+          <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">set</span>
+          <span className="inline-block w-2 h-2 rounded-full bg-warning" />
+          <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">review</span>
+          <span className="inline-block w-2 h-2 rounded-full bg-danger" />
+          <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">must start</span>
+        </div>
       </div>
 
       {/* Starters */}

@@ -185,6 +185,25 @@ export default function TradeAnalyzer() {
     return partners.find(p => p.rosterId === selectedOpponentId) ?? null
   }, [league, selectedOpponentId])
 
+  // Fit-ranked pick list so the opponent selector isn't a blind list of names —
+  // it answers "who do I call?" inline: grouped by fit, each option carrying
+  // win-window tier + record. Partners come pre-sorted (best match first).
+  const partnerPickList = useMemo(() => {
+    if (!league?.myRoster || !league?.allRosters?.length) return []
+    const { partners } = rankTradePartners(league.myRoster, league.allRosters)
+    const rosterById = Object.fromEntries(league.allRosters.map(r => [r.rosterId, r]))
+    return partners.map(p => {
+      const r = rosterById[p.rosterId]
+      return {
+        rosterId: p.rosterId,
+        name: getTeamName(p.owner),
+        fitBadge: p.fitBadge,
+        tier: p.winWindowTier,
+        record: r?.hasRecord ? r.record : null,
+      }
+    })
+  }, [league])
+
   const bothSides = giveAssets.length > 0 && getAssets.length > 0
 
   // Opponent's multi-year value direction (Dynasty Trajectory) — feeds Layer 3
@@ -343,7 +362,7 @@ export default function TradeAnalyzer() {
   if (error && !league)   return <ErrorState message={error} onRetry={retry} />
   if (!league?.myRoster) return <ErrorState message="Could not load league data." onRetry={retry} />
 
-  const opponents = league.allRosters.filter(r => r.rosterId !== league.myRoster.rosterId)
+  const FIT_GROUPS = ['Priority', 'Good Fit', 'Poor Fit']
 
   return (
     <div className="px-4 pb-4">
@@ -354,7 +373,8 @@ export default function TradeAnalyzer() {
         </p>
       </div>
 
-      {/* Opponent selector */}
+      {/* Opponent selector — grouped by trade fit, each option carrying tier +
+          record so the choice isn't blind. */}
       <div className="mb-3">
         <label className="block font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-1.5">
           Opponent
@@ -366,16 +386,31 @@ export default function TradeAnalyzer() {
             className="w-full bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default rounded-xl px-3 py-2.5 font-body text-sm text-text-primary dark:text-text-primary appearance-none focus:outline-none focus:border-accent pr-8"
           >
             <option value="">Select a team…</option>
-            {opponents.map(r => (
-              <option key={r.rosterId} value={r.rosterId}>
-                {getTeamName(r.owner)}
-              </option>
-            ))}
+            {FIT_GROUPS.map(group => {
+              const inGroup = partnerPickList.filter(p => p.fitBadge === group)
+              if (inGroup.length === 0) return null
+              return (
+                <optgroup key={group} label={group}>
+                  {inGroup.map(p => (
+                    <option key={p.rosterId} value={p.rosterId}>
+                      {[
+                        p.name,
+                        p.tier,
+                        p.record ? `${p.record.wins}-${p.record.losses}${p.record.ties ? `-${p.record.ties}` : ''}` : null,
+                      ].filter(Boolean).join(' · ')}
+                    </option>
+                  ))}
+                </optgroup>
+              )
+            })}
           </select>
           <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary text-xs">
             ▾
           </span>
         </div>
+        <p className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary mt-1">
+          Sorted by fit — Priority targets first
+        </p>
       </div>
 
       {opponentRoster ? (

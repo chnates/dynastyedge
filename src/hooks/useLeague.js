@@ -139,6 +139,29 @@ export function useLeague() {
     return { allRosters, myRoster, userMap, leagueInfo }
   }, [sleeperData, fcValues, playerDB, myRosterId])
 
+  // A Sleeper-only roster list for sign-in. Identity selection must never
+  // depend on FantasyCalc — a values-API outage shouldn't lock the user out of
+  // their own app. Derives straight from the rosters+users responses, so it's
+  // available the moment Sleeper resolves, even while/if FantasyCalc fails.
+  const signInRosters = useMemo(() => {
+    if (!sleeperData) return null
+    const { rosters, users } = sleeperData
+    const userById = {}
+    users.forEach(u => { userById[u.user_id] = u })
+    return rosters.map(r => {
+      const s = r.settings ?? {}
+      const wins = s.wins ?? 0
+      const losses = s.losses ?? 0
+      const ties = s.ties ?? 0
+      return {
+        rosterId: r.roster_id,
+        owner: userById[r.owner_id] ?? null,
+        record: { wins, losses, ties },
+        hasRecord: wins + losses + ties > 0,
+      }
+    })
+  }, [sleeperData])
+
   const nflState = sleeperData?.nflState ?? null
   const isOffseason = nflState?.season_type !== 'regular'
   const leagueInfo = sleeperData?.leagueInfo ?? null
@@ -174,6 +197,8 @@ export function useLeague() {
     league, nflState, matchups, isOffseason, leagueInfo, tradeDeadline,
     myRosterId,
     loading, error, retry, sleeperFetchedAt, fcFetchedAt, values: fcValues,
+    // Sleeper-scoped sign-in inputs (independent of FantasyCalc).
+    signInRosters, sleeperLoading, sleeperError, sleeperRetry,
   }
 }
 
