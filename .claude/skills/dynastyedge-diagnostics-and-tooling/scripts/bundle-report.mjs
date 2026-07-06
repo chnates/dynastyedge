@@ -7,8 +7,8 @@
 //   node /home/user/dynastyedge/.claude/skills/dynastyedge-diagnostics-and-tooling/scripts/bundle-report.mjs
 //   node ...bundle-report.mjs --skip-build     # just re-measure existing dist/
 //
-// Baseline as of 2026-07-05: main index-*.js chunk ~377 KB raw / ~117 KB gzip
-// (re-verify with a fresh run; see SKILL.md for the current table).
+// Baseline measured 2026-07-06: main index-*.js chunk 369 KB raw / 115 KB gzip,
+// dist total 912 KB raw (re-verify with a fresh run; see SKILL.md).
 // No new deps: uses child_process + fs + zlib only.
 import { execSync } from 'node:child_process'
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs'
@@ -71,6 +71,6 @@ console.log(kb(totRaw) + kb(totGzip) + '  TOTAL (gzip col counts binaries at raw
 const main = files.find(f => /^assets\/index-.*\.js$/.test(f.rel))
 if (main) {
   console.log(`\nMain chunk: ${main.rel} — ${(main.raw / 1024).toFixed(0)} KB raw / ${(main.gzip / 1024).toFixed(0)} KB gzip`)
-  console.log('Baseline (2026-07-05): ~377 KB raw / ~117 KB gzip. A jump of >10% after')
-  console.log('your change means you added weight — find it before shipping.')
+  console.log('Baseline (measured 2026-07-06): 369 KB raw / 115 KB gzip. A jump of >10%')
+  console.log('after your change means you added weight — find it before shipping.')
 }
