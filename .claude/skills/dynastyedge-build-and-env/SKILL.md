@@ -61,7 +61,9 @@ build ≈ 3.5 s):
 dist/
 ├── index.html                      # asset URLs rewritten to /dynastyedge/assets/...
 ├── assets/
-│   ├── index-<hash>.js             # main bundle ~377 kB (117 kB gzip)
+│   ├── index-<hash>.js             # main bundle ~369 kB (115 kB gzip; canonical
+│   │                               #   baseline: dynastyedge-diagnostics-and-tooling's
+│   │                               #   bundle-report.mjs, measured 2026-07-06)
 │   ├── index-<hash>.css            # one compiled Tailwind sheet ~43 kB
 │   └── <Route>-<hash>.js × ~30     # per-route lazy chunks (DraftBoard, TradeAnalyzer, …)
 └── (everything from public/ copied verbatim: manifest.webmanifest, favicon.ico,

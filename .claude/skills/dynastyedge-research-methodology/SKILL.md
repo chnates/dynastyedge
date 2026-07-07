@@ -27,7 +27,7 @@ Context you must hold (all as of 2026-07-05):
 - DynastyEdge is a static React SPA for one Sleeper dynasty league. The
   analytical core is **pure ESM in `src/utils/`**, runnable under plain Node
   via the loader in `dynastyedge-diagnostics-and-tooling`
-  (`node --import .claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs your-script.mjs`).
+  (`node --import ./.claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs your-script.mjs`).
 - **There is no test suite.** `npm run build` is the only machine gate.
   Everything else that looks like "testing" in this repo is a discipline you
   perform, not a harness that catches you.
@@ -103,11 +103,15 @@ the mechanism cannot cover must be either (a) investigated until it fits, or
 
 *Why:* the local history shows unexplained negatives are where wrong models
 hide. The PWA status-bar saga (`cfd9ad0` → reverted in `3083f0c` → resolved
-in `78b6c29`, all 2026-06-16) went through a fix that handled the observed
-light-mode symptom but was reverted the same day because it didn't account
-for the full observation set on the real device; the accepted fix was the
-one whose mechanism (manifest `theme_color` overriding the live meta)
-explained *every* observed bar color in both themes.
+in `78b6c29`, all 2026-06-16; canonical record:
+`dynastyedge-failure-archaeology` §1) went through a fix that handled the
+observed light-mode symptom but was reverted the same day because it didn't
+account for the full observation set on the real device — its "manifest
+`theme_color` overriding the live meta" diagnosis was wrong for standalone
+mode. The accepted fix (`78b6c29`) was the one whose mechanism — iOS
+standalone doesn't honor the live theme-color meta, so restore the
+`black-translucent` status bar plus a light-mode-only dark strip behind the
+status text — explained *every* observed bar color in both themes.
 
 ### Law 3: Every accepted result survives an assigned adversarial-refutation pass
 
@@ -387,7 +391,7 @@ failed>", with commands and numbers for every attack you ran.
 | **Eyeball verdicts** ("looks better/faster") | No test suite means your eye is the only gate you skipped | Neon glow `e31deaf` shipped on aesthetic judgment, reverted same day `aa0892b` once actually viewed in dark mode on the device. Cheap only because it was killed fast. |
 | **Tuning on the evaluation set** | With N=10 teams you can fit noise perfectly and "prove" anything | Standing fence in `dynastyedge-model-quality-campaign`: tune on season A, evaluate frozen on season B; the holdout is named in the pre-registration and touched once. |
 | **Changing two things at once** | Tiny N gives you zero statistical attribution; isolation is the only attribution you get | The Navigation Refactor deliberately split IA restructure (Phases 1–2, `59627db`…`f7df308`) from the visual repaint (Phase 3, still unbuilt) — CLAUDE.md states the reason: "so we don't restructure and restyle at once". |
-| **Claiming without explaining the negatives** | Two half-explanations hide a wrong model; the unexplained case is where it bites | First PWA status-bar fix `cfd9ad0` addressed the observed symptom, reverted `3083f0c` same day; accepted fix `78b6c29` was the one whose mechanism covered all observations in both themes. |
+| **Claiming without explaining the negatives** | Two half-explanations hide a wrong model; the unexplained case is where it bites | First PWA status-bar fix `cfd9ad0` addressed the observed symptom via the (wrong) theme-color-override diagnosis, reverted `3083f0c` same day; accepted fix `78b6c29` — restore `black-translucent` + light-mode-only dark strip, since iOS standalone ignores live theme-color — covered all observations in both themes. |
 | **Experiment lingering half-landed on main** | main auto-deploys to the owner's phone — a half-experiment is a broken pocket app; violates always-shippable | House rule from the lifecycle: candidate logic lives in scratch/skill scripts until it passes refutation; multi-step adoptions land as independently-shippable phases with CLAUDE.md status lines (`d4f9e75` pattern). Same-day-revert culture (`aa0892b`, `3083f0c`) exists precisely so nothing lingers. |
 | **Claiming live-data runs from this sandbox** | Fantasy APIs are proxy-blocked (403) here; a fabricated "verified against live rosters" poisons the whole evidence chain | Standing sandbox fact (verified 2026-07-05). Write "requires network — not run here" and route through the runbook instead. |
 | **Skipping the grounding check** | You will re-fight a settled battle and possibly re-land a reverted change | `dynastyedge-failure-archaeology` carries standing rulings on sheets, PWA metas, pick pricing, and glow effects that exist because sessions DID retry these. |
@@ -405,11 +409,10 @@ failed>", with commands and numbers for every attack you ran.
   commit messages are trustworthy, but diffs AT the graft boundaries are
   not locally inspectable; re-verify boundary diffs on a full clone or via
   the GitHub UI before citing their contents.
-- Sibling-skill references reflect the library as designed on 2026-07-05;
-  some siblings (`dynastyedge-validation-and-qa`,
+- Sibling-skill references: all cited siblings (`dynastyedge-validation-and-qa`,
   `dynastyedge-model-quality-campaign`, `dynastyedge-analysis-toolkit`,
-  `dynastyedge-research-frontier`) may land after this file — the routing
-  stands regardless.
+  `dynastyedge-research-frontier`, and the rest) exist on disk as of
+  2026-07-07 — verify with `ls .claude/skills/`.
 - **Update this skill when:** a test suite or CI gate beyond `npm run build`
   appears (Law 4's "no harness catches you" framing changes); a new
   experiment-design substitute proves out (add it to §3 with its first

@@ -36,8 +36,11 @@ references were verified against the repo **as of 2026-07-05**.
   `dynastyedge-analysis-toolkit`. **How to do research honestly** (nulls,
   held-out data, pre-registered thresholds) → `dynastyedge-research-methodology`.
   Every item below must follow that discipline.
+- **Fantasy-football terms or domain reasoning** (what FAAB/Superflex mean,
+  why a pick is priced that way) → `dynasty-fantasy-reference`.
 - Anything that would contradict CLAUDE.md's **Future Features** section:
-  the FAAB bid recommender is explicitly *do-not-build-yet* (research is fine;
+  the FAAB (free-agent bidding budget) bid recommender is explicitly
+  *do-not-build-yet* (research is fine;
   the build needs an explicit owner ask), and push notifications are noted as
   blocked on Sleeper's read-only API + the no-backend architecture. Item 5
   below explores the honest edges of that constraint — it does not override it.
@@ -110,7 +113,7 @@ selects players who subsequently recover.
 
 **First three concrete steps (analysis-only).**
 1. Read `edgeBriefing.js` end to end and write down, in the analysis notes,
-   the exact selection rule for each of the 9 item types (verified ids:
+   the exact selection rule for each of the 11 item types (verified ids:
    `draft-live`, `deadline`, `playoff-odds`, `draft-prep`, `fresh-tx`,
    `buy-low`, `sell-high`, `pickup`, `watch-mover`, `underperformer`,
    `closing-window`) and which of them make a *falsifiable claim* (buy-low,

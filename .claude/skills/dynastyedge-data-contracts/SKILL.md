@@ -9,11 +9,12 @@ description: >
   the unofficial ESPN endpoints, every dynastyedge_* localStorage/sessionStorage
   key, constants.js, and runtime static assets (public/rankings.json). Load
   this when touching any fetch, hook, or feed; adding or changing a data
-  source; changing FANTASYCALC_PARAMS or any URL; debugging wrong/missing/stale
-  data, blank rosters, missing sparklines, or news that won't show; writing or
+  source; changing FANTASYCALC_PARAMS or any URL; checking what shape a feed
+  or endpoint is SUPPOSED to have when debugging wrong/missing data, blank
+  rosters, missing sparklines, or news that won't show; writing or
   editing scripts/*.mjs that produce the feeds; adding/renaming a storage key;
-  or working on sign-in/identity (useIdentity). This is the WHAT; the
-  architecture-contract skill is the WHY.
+  or working on sign-in/identity (useIdentity). This is the WHAT (schemas and
+  contracts); the architecture-contract skill is the WHY.
 ---
 
 # DynastyEdge Data Contracts
@@ -246,8 +247,9 @@ prevents re-fetch loops.
 ### 3a. `NEWS_FEED_URL` → news.json (branch `news-data`)
 
 Writer: `scripts/fetch-news.mjs`, run by `.github/workflows/news.yml`
-(cron `17,47 * * * *` + `workflow_dispatch`, as of 2026-07-05); force-pushes
-a single-commit branch. Exits 1 (keeping the previous feed) only when ALL
+(cron `17,47 * * * *` + `workflow_dispatch`, as of 2026-07-05; schedules +
+60-day auto-disable ops canonical: `dynastyedge-run-and-operate`);
+force-pushes a single-commit branch. Exits 1 (keeping the previous feed) only when ALL
 five sources (ESPN news API, FantasyPros RSS, Yahoo RSS, ESPN RSS, CBS RSS)
 return nothing. Dedupe by normalized headline, newest first,
 `MAX_ITEMS = 100`.

@@ -1,6 +1,6 @@
 ---
 name: dynastyedge-diagnostics-and-tooling
-description: Measurement tools for DynastyEdge — load when you need to measure app behavior instead of eyeballing it. Run the pure analytical models (playoff Monte Carlo, dynasty trajectory, trade analysis) outside the browser under plain Node; probe the live Sleeper league for sanity; check freshness of the news / values-history / trade-values static feeds; quantify bundle size before/after a change. Owns THE Node resolver hook that makes src/utils' extensionless ESM imports work under node — siblings that need to import repo modules use it too.
+description: Measurement tools for DynastyEdge — load when you need to measure app behavior instead of eyeballing it. Run the pure analytical models (playoff Monte Carlo, dynasty trajectory, trade analysis) outside the browser under plain Node; probe the live Sleeper league for sanity; measure feed freshness (the news / values-history / trade-values static feeds); quantify bundle size before/after a change. Owns THE Node resolver hook that makes src/utils' extensionless ESM imports work under node — siblings that need to import repo modules use it too.
 ---
 
 # DynastyEdge diagnostics & tooling
@@ -33,6 +33,8 @@ environment and fail gracefully otherwise. Never claim a network script
 - **Looking up feed/API JSON shapes** — `dynastyedge-data-contracts` has the
   schemas; this skill only measures liveness/freshness against them.
 - **Debugging a broken build or dependency problem** — `dynastyedge-build-and-env`.
+- **Fantasy-football terms or domain reasoning** (taxi, FAAB, Superflex, pick
+  tiers…) — `dynasty-fantasy-reference`.
 - **Judging whether model outputs are *good*** (calibration, tuning) — this
   skill produces the numbers; `dynastyedge-model-quality-campaign` judges them.
 - Don't run `bundle-report.mjs` for changes that can't affect the bundle
@@ -216,7 +218,8 @@ verdict:      no staleness rule — archive only gains entries when trades happe
 
 **What it measures:** live league ground truth in one shot — league name/season,
 `season_type` (drives all offseason-hidden UI), team count (expect 10), roster
-sizes / taxi / IR / records / fpts per team, playoff settings, trade deadline,
+sizes / taxi (developmental-player stash — see dynasty-fantasy-reference) /
+IR / records / fpts per team, playoff settings, trade deadline,
 and that roster 6 (Nix Cage) exists. Constants read from `src/constants.js`;
 league ID `1313933520715907072` hardcoded as fallback.
 

@@ -52,8 +52,9 @@ run* is a prediction you must confirm.
 2. **`main` auto-deploys** — every commit must leave the app shippable
    (`npm run build` green). Measurement scripts live in this skill's
    `scripts/` dir, never in `src/`.
-3. **CLAUDE.md same-commit** for any behavior change that alters documented
-   model behavior (thresholds, blend weights, iteration counts).
+3. **CLAUDE.md same-commit** for ANY behavior change (thresholds, blend
+   weights, iteration counts). Where CLAUDE.md is silent about the behavior,
+   the same commit ADDS the documentation.
 4. **NO new npm dependencies.** All statistics (Brier, binomial CIs,
    reliability tables) are plain JS — already written in `scripts/`.
 5. **Sandbox honesty.** Fantasy APIs are blocked in CCR sandboxes
@@ -501,8 +502,9 @@ or `managerAnalysis.js` routes through **`dynastyedge-change-control`**:
    80–100% bucket 14pp → 5pp" — never "looks better", never a screenshot.
 3. **Real-data verification** (owner's law): the artifact must come from real
    season files / real trade corpus, not synthetic.
-4. **CLAUDE.md same-commit** if any documented constant/threshold/behavior
-   changed; `npm run build` green; `main` stays shippable.
+4. **CLAUDE.md same-commit** for ANY constant/threshold/behavior change — if
+   CLAUDE.md doesn't yet document the changed behavior, the same commit adds
+   that documentation; `npm run build` green; `main` stays shippable.
 5. Verify determinism survived: two same-seed `simulatePlayoffs` runs
    identical, and the UI odds page stable across re-renders (see
    `dynastyedge-validation-and-qa` for the evidence bar).

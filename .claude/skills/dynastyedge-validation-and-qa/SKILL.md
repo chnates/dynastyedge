@@ -36,6 +36,8 @@ number ships straight to the owner's phone: every push to `main` auto-deploys.
 - **Writing or running measurement/probe scripts** — the scripts and the Node
   loader live in `dynastyedge-diagnostics-and-tooling`; this skill only tells
   you when to reach for them.
+- **Fantasy-football terms or domain reasoning** (Superflex, FAAB, taxi,
+  pick tiers, win windows…) — `dynasty-fantasy-reference`.
 
 ---
 
@@ -65,9 +67,12 @@ after, from the same script on the same input. No number, no claim; write
 "expected to improve X, unmeasured" instead.
 
 **Never claim you ran what you didn't.** In this sandbox (as of 2026-07-06)
-outbound calls to `api.sleeper.app`, `api.fantasycalc.com`, and
-`raw.githubusercontent.com` are blocked by the proxy (403). Label those steps
-**NETWORK REQUIRED** and hand them to the owner rather than pretending.
+outbound calls to `api.sleeper.app` and `api.fantasycalc.com` are blocked by
+the proxy (403); `raw.githubusercontent.com` IS reachable (the static feeds
+can be checked). Network posture varies between sandboxes — probe first; the
+canonical home for the current posture is
+`dynastyedge-diagnostics-and-tooling`. Label blocked steps **NETWORK
+REQUIRED** and hand them to the owner rather than pretending.
 
 ---
 
@@ -79,8 +84,9 @@ Run every item that applies. All commands from repo root
 
 - [ ] **Build is green:** `npm run build` — must end `✓ built in …s` with no
   errors. Baseline (2026-07-06, Node v22.22.2, Vite 6): builds in ~7s, main
-  bundle `dist/assets/index-*.js` ≈ 377 kB (117 kB gzip). A wildly larger
-  bundle or new build warnings = investigate before committing.
+  bundle `dist/assets/index-*.js` ≈ 369 kB (115 kB gzip; canonical baseline:
+  run `dynastyedge-diagnostics-and-tooling`'s `bundle-report.mjs`). A wildly
+  larger bundle or new build warnings = investigate before committing.
 - [ ] **UI diff?** → run the `/design-review` skill on the diff. Any
   hand-rolled button/card/sheet/chip/badge/input outside
   `src/components/ui` is a finding.
@@ -164,7 +170,8 @@ curl -s "https://api.sleeper.app/v1/league/1313933520715907072/rosters" \
 ```
 
 Then: `npm run dev`, open the app in devtools at 390px, and check the
-displayed record/FAAB/player list against the curl output. FAAB remaining =
+displayed record/FAAB (free-agent bidding budget)/player list against the
+curl output. FAAB remaining =
 league `waiver_budget` (from `/league/{id}`) minus `waiver_budget_used`, and
 must display as `$XXX`.
 
@@ -249,7 +256,7 @@ while the rest load.
 | Block `raw.githubusercontent.com/.../news.json` | `loadNewsFeed` in `src/hooks/usePlayerIntel.js` (`.catch(() => [])`, ~line 86) | NO error anywhere; news sections (drawer, Edge Headlines) simply hide; `/news` page shows the friendly empty state | any error text, retry loop, or blocked panel |
 | Block `values-history.json` | `src/hooks/useValueHistory.js` `.catch` ~line 25 | sparklines and the Edge team-value line silently hide; no loading state lingers | spinner that never resolves, or an error |
 | Block `trade-values.json` | `src/hooks/useTradeTimeValues.js` `.catch` ~line 28 | "At trade time" line in the scouting sheet simply absent | error or placeholder junk |
-| Block `api.fantasycalc.com` | `signInRosters` in `src/hooks/useLeague.js` (~line 146, Sleeper-only memo); consumed by `LoginScreen.jsx` | **Login still works** (team list from Sleeper alone); rosters render every player with `—` values contributing 0; core views show ErrorState only where values are essential | login blocked, players dropped, crash on null value |
+| Block `api.fantasycalc.com` | `signInRosters` in `src/hooks/useLeague.js` (~line 146, Sleeper-only memo); consumed by `LoginScreen.jsx` (contract canonical: `dynastyedge-architecture-contract`) | **Login still works** (team list from Sleeper alone); rosters render every player with `—` values contributing 0; core views show ErrorState only where values are essential | login blocked, players dropped, crash on null value |
 | Block `api.sleeper.app` | core load path in `useLeague` / `LeagueContext` | `ErrorState` component (`src/components/shared/ErrorState.jsx`) with a retry button — never a blank screen | blank screen or unstyled error |
 | Sparse value history (< 4 points for a player) | `MIN_SPARKLINE_POINTS = 4`, `src/hooks/useValueHistory.js` line 38 | `getSeries` returns null → sparkline hides | a 2-point "line" rendering |
 | Offseason | `isOffseason = nflState?.season_type !== 'regular'` in `useLeague.js` | matchups, lineup optimizer flags, weekly projections, deadline banner, playoff-odds consumers all hide/degrade; everything else fully works | in-season UI showing stale/empty in-season data |
@@ -285,7 +292,7 @@ Two mechanics make this work (both verified 2026-07-06):
    (`import { findPickValue } from './pickCapital'`), which plain Node
    rejects. The canonical fix is the loader owned by
    `dynastyedge-diagnostics-and-tooling`:
-   `node --import .claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs your-test.mjs`
+   `node --import ./.claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs your-test.mjs`
    A test can also self-register an equivalent hook from a `data:` URL to be
    fully self-contained (as the worked example below does).
 
@@ -402,7 +409,9 @@ As of 2026-07-06:
   the behavioral reference. If your change makes a number differ from what
   the live site shows for the same input data, you must explain why.
 - **The green-build baseline:** `npm run build` on current `main`
-  (HEAD `6fb85f3`) completes clean in ~7s; main bundle ≈ 377 kB / 117 kB gzip.
+  (HEAD `6fb85f3`) completes clean in ~7s; main bundle ≈ 369 kB / 115 kB gzip
+  (canonical baseline: `dynastyedge-diagnostics-and-tooling`'s
+  `bundle-report.mjs`).
 - **CLAUDE.md's documented behaviors** — the doc of record, EXCEPT where a
   code check contradicts it (one known instance: `slotTier` Early boundary,
   §3/§6). On conflict: the code is what ships; flag the conflict via

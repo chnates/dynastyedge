@@ -168,10 +168,14 @@ follow-up session reads the stale doc and doesn't know a follow-up is owed).
 **Exhibit A — the rule-16 drift (the one known live contradiction, as of
 2026-07-06).** The full story, from git:
 
-1. `cfd9ad0` "Fix PWA status-bar color in installed app (light + dark)" —
-   dropped the `apple-mobile-web-app-status-bar-style` meta in favor of the
-   `theme-color` approach. CLAUDE.md rule 16 was rewritten to say "**No
-   `apple-mobile-web-app-status-bar-style` meta**".
+1. A prior commit (locally unrecoverable — shallow-clone history gap) had
+   removed the `apple-mobile-web-app-status-bar-style` meta in favor of the
+   `theme-color` approach, and CLAUDE.md rule 16 was written to say "**No
+   `apple-mobile-web-app-status-bar-style` meta**". `cfd9ad0` "Fix PWA
+   status-bar color in installed app (light + dark)" then refined that
+   theme-color approach — its diff touches ONLY `public/manifest.webmanifest`
+   (dropped the static `theme_color`) + `src/hooks/useTheme.js` (verify:
+   `git show cfd9ad0 --stat`).
 2. `3083f0c` reverted it (the theme-color approach read as a black bar on iOS
    standalone).
 3. `78b6c29` "Restore black-translucent status bar (seamless, both themes)" —
@@ -223,8 +227,8 @@ through the change-control divergence protocol.
 | Rules vs shipped HTML (PWA metas) | `grep -n 'apple-mobile-web-app' index.html; grep -n 'apple-mobile-web-app-status-bar-style' CLAUDE.md` | Doc and index.html agree on which metas ship |
 | Constants section vs the real file | `diff <(sed -n '/^## Constants File/,/^## Rules/p' CLAUDE.md) src/constants.js` — or eyeball `cat src/constants.js` against the doc's snippet | Every exported constant appears in the doc's snippet |
 | File Structure vs actual tree | `ls src src/components/* src/hooks src/utils` vs the doc's tree; quick check: `for f in $(ls src/utils); do grep -q "$f" CLAUDE.md \|\| echo "undocumented: $f"; done` | No undocumented files; no documented ghosts |
-| Storage keys vs code | `grep -rhoE 'dynastyedge_[a-z0-9_]+' src \| sort -u` vs the Rules storage-key list | Every key in code appears in the rule (prefix keys like `dynastyedge_draft_*` cover `dynastyedge_draft_tracker_…`) |
-| Workflow crons vs stated schedules | `grep -n cron .github/workflows/*.yml` vs the Data Sources pipeline text | news `17,47 * * * *`, values-history `41 9 * * *` (matches doc as of 2026-07-06) |
+| Storage keys vs code | `grep -rhoE 'dynastyedge_[a-z0-9_]+' src \| sort -u` vs the Rules storage-key list | Every key in code appears in the rule (prefix keys like `dynastyedge_draft_*` cover `dynastyedge_draft_tracker_…`; key inventory canonical: `dynastyedge-data-contracts`) |
+| Workflow crons vs stated schedules | `grep -n cron .github/workflows/*.yml` vs the Data Sources pipeline text | news `17,47 * * * *`, values-history `41 9 * * *` (matches doc as of 2026-07-06; pipeline ops canonical: `dynastyedge-run-and-operate`) |
 | Feature locations vs routes | `grep -n 'path=\|Navigate' src/App.jsx \| head -50` vs the Navigation route map | Every route in App.jsx appears in the doc's route map or redirect list |
 | Future Features vs reality | Read "Future Features"; for each bullet, `grep -rn` a distinctive term in `src/` | Nothing listed as "do not build yet" already exists |
 
@@ -244,10 +248,16 @@ through the change-control divergence protocol.
    for roster 6, which the constants.js comment now softens.
 4. **OMISSION:** `src/utils/recommendations.js` exists but is missing from the
    File Structure tree.
+5. **CONTRADICTION (known, owner-fix pending):** CLAUDE.md Feature 13 (and
+   the inline comment in `src/utils/pickTrades.js` ~line 14) say pick slot
+   tiers are Early 1–3 / Mid 4–7; the code (`slot <= Math.ceil(teams/3)`,
+   ceil(10/3)=4) computes Early 1–4 / Mid 5–7 / Late 8–10. Code wins; doc
+   fix is owner-gated. Canonical record: `dynastyedge-failure-archaeology`
+   §7; worked test: `dynastyedge-validation-and-qa` §6.
 
-Items 2–4 are omissions (doc gaps, low blast radius); item 1 is the dangerous
-one. When you fix any of them (with owner sign-off for 1), remove it from this
-list in the same session — see §6.
+Items 2–4 are omissions (doc gaps, low blast radius); items 1 and 5 are the
+dangerous ones. When you fix any of them (with owner sign-off for 1 and 5),
+remove it from this list in the same session — see §6.
 
 ---
 
@@ -321,17 +331,17 @@ reference implementation):
 6. Close with **"Provenance and maintenance"**: when facts were verified and a
    table of one-line re-verification commands per fact class.
 
-**Sibling inventory** (cross-reference these by name; verify with
-`ls .claude/skills/`): design-review · dynasty-fantasy-reference ·
+**Sibling inventory** (all 16 exist on disk as of 2026-07-07; cross-reference
+these by name; verify with `ls .claude/skills/`): design-review ·
+dynasty-fantasy-reference · dynastyedge-analysis-toolkit ·
 dynastyedge-architecture-contract · dynastyedge-build-and-env ·
 dynastyedge-change-control · dynastyedge-data-contracts ·
 dynastyedge-debugging-playbook · dynastyedge-diagnostics-and-tooling ·
-dynastyedge-failure-archaeology · dynastyedge-docs-and-writing (this file) —
-plus planned/in-flight siblings referenced by others:
-dynastyedge-run-and-operate · dynastyedge-validation-and-qa ·
-dynastyedge-model-quality-campaign · dynastyedge-analysis-toolkit ·
-dynastyedge-research-frontier · dynastyedge-research-methodology. If you cite
-a sibling, confirm it exists on disk first; if it doesn't yet, say so.
+dynastyedge-docs-and-writing (this file) · dynastyedge-failure-archaeology ·
+dynastyedge-model-quality-campaign · dynastyedge-research-frontier ·
+dynastyedge-research-methodology · dynastyedge-run-and-operate ·
+dynastyedge-validation-and-qa. If you cite a sibling, confirm it exists on
+disk first.
 
 **Adding a skill:** check the inventory for overlap first — extend the owning
 skill rather than fork a near-duplicate. New skills are commits like any

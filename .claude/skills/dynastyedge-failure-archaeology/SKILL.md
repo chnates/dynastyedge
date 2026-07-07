@@ -33,6 +33,8 @@ conflicts with before proceeding.
 - **Understanding how systems are supposed to work** → use
   `dynastyedge-architecture-contract` and `dynastyedge-data-contracts`.
 - **Process for landing a change safely** → `dynastyedge-change-control`.
+- **Fantasy-football terms or domain reasoning** (taxi, FAAB, Superflex,
+  pick tiers…) → `dynasty-fantasy-reference`.
 - Don't cite this file as a substitute for reading the current code — code
   has moved since some entries; verify line numbers before editing.
 
@@ -48,7 +50,9 @@ and `4f31aad` (2026-06-12). Consequences:
   carries the fix), and are marked accordingly.
 - There is a **history gap**: commits between 2026-06-01 (`55a4a66`) and
   2026-06-12 are missing from this clone entirely.
-- History spans 2026-05-31 → 2026-06-20, ~69 commits, all Claude-authored.
+- History spans 2026-05-31 → 2026-06-20, ~69 commits, all but one
+  Claude-authored (`ce25b04` "Add files via upload" by chnates — the
+  FantasyPros rookie-rankings CSV).
   Only two true reverts exist: `3083f0c` (status bar) and `aa0892b` (neon
   glow) — both covered below.
 
@@ -360,7 +364,7 @@ sessionStorage draft. The precedence rule (verified in
 
 | Item | Evidence | Ruling |
 |---|---|---|
-| **Taxi duration is 2 years, not 1.** Action items flagged `years_exp === 1`; league settings allow rookie + 2nd-year seasons on taxi. | `24ed7cf` (2026-06-12), `src/components/roster/RosterActionItems.jsx` + CLAUDE.md | Taxi alerts flag `years_exp >= 2` only. Never "restore" the 2nd-year flag. |
+| **Taxi (developmental-player stash — see dynasty-fantasy-reference) duration is 2 years, not 1.** Action items flagged `years_exp === 1`; league settings allow rookie + 2nd-year seasons on taxi. | `24ed7cf` (2026-06-12), `src/components/roster/RosterActionItems.jsx` + CLAUDE.md | Taxi alerts flag `years_exp >= 2` only. Never "restore" the 2nd-year flag. |
 | **Sparklines hide below 4 points.** With the daily pipeline 2 days old, every sparkline was a straight diagonal that read as broken. | `31a7b32` (2026-06-12), `MIN_SPARKLINE_POINTS = 4` in `src/hooks/useValueHistory.js`, shared by `buildTeamValueSeries` | Keep the shared threshold; do not lower to 2 "to show more data". Lines reappear automatically as history accumulates. |
 | **FantasyPros CSV column quirks.** Header shortened to "FP", column made sortable, FP TIERS field drives tier grouping when FP-sorted; tiers captured during the fuzzy-match phase. | `0b977be` (2026-05-31), `src/components/draft/DraftBoard.jsx` | CSV parsing is positional (`cols[0]` rank, `cols[1]` tier, `cols[2]` name…); position strings like "RB1" are stripped of digits. Changing the CSV format breaks this silently — check `parseFantasyProsCsv` first. |
 | **Integration-review sweep.** Draft views used hand-rolled error UI; Tracker pick modals violated the sheet contract; LeagueActivity joined player IDs without `String()`. | `6ad6e24` (2026-06-12) | All joins normalize IDs with `String()`; all error UI is shared `ErrorState`; every bottom-docked panel honors the sheet contract — no exceptions for "small" modals. |
@@ -374,20 +378,32 @@ sessionStorage draft. The precedence rule (verified in
    meta; `index.html` deliberately has `black-translucent` per `78b6c29`).
    Pending action: a docs commit updating CLAUDE.md rule 16 to describe the
    black-translucent + light-mode-strip design. Do NOT change index.html.
-2. **GitHub Actions cron auto-disable risk.** `news.yml` (twice-hourly) and
+2. **GitHub Actions cron auto-disable risk** (pipeline ops canonical:
+   `dynastyedge-run-and-operate`). `news.yml` (twice-hourly) and
    `values-history.yml` (daily) are disabled by GitHub after ~60 days
    without repo activity. Last commit is `6fb85f3` (2026-06-20), so the
    window closes around **late August 2026** if nothing is pushed. Any push
    re-enables them. If sparklines/news/trade-time values go stale, check the
    Actions tab for disabled workflows before debugging client code.
+   Re-verify the projection before quoting it — last repo push date:
+   `git log -1 --format=%cd` (the ~60-day clock runs from repo activity).
 3. **Shallow history.** The true diffs of `dc0afdc` and `4f31aad`, and all
    commits between 2026-06-01 and 2026-06-12, are unrecoverable locally
    (`git fetch --unshallow` would need network + remote access). Entry 3a is
    the only entry in this file reconstructed without its diff.
-4. **CLAUDE.md rule 16 aside, no other doc/code divergences were found** in
-   this pass — but the doc-of-record contract ("CLAUDE.md updated same
-   commit as behavior changes") means any future divergence you find should
-   be treated as a bug and added here.
+4. **`slotTier` Early/Mid boundary — the SECOND live doc/code divergence.**
+   CLAUDE.md Feature 13 and the inline comment at `src/utils/pickTrades.js`
+   ~line 14 say Early = slots 1–3 / Mid = 4–7; the code
+   (`slot <= Math.ceil(teams/3)`, ceil(10/3)=4) computes Early = 1–4 /
+   Mid = 5–7 / Late = 8–10. Status: open. Evidence:
+   `dynastyedge-validation-and-qa`'s worked test (§6 there) asserts the code
+   behavior and passes. Pending action: a doc fix, owner-gated via
+   `dynastyedge-change-control` — do NOT silently "fix" either the doc or
+   the code.
+5. **Beyond rule 16 (#1) and the slotTier boundary (#4), no other doc/code
+   divergences were found** in this pass — but the doc-of-record contract
+   ("CLAUDE.md updated same commit as behavior changes") means any future
+   divergence you find should be treated as a bug and added here.
 
 ---
 

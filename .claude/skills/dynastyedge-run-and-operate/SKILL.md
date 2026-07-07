@@ -6,8 +6,9 @@ description: >
   status checks, rollback = revert on main), and operate the two data
   pipelines (news.yml → news-data branch, values-history.yml →
   values-history branch). Load when: starting the app locally; deploying or
-  checking why the live site is stale or serving an old bundle; the news
-  feed or value-history sparklines look stale; re-running or re-enabling a
+  checking why the live site is stale or serving an old bundle; operating,
+  re-running, or fixing the pipelines behind a stale news feed or stale
+  value-history sparklines; re-running or re-enabling a
   scheduled workflow (60-day cron auto-disable); manually triggering
   workflow_dispatch; investigating the news-data / values-history branches;
   or running scripts/*.mjs locally for debugging.
@@ -227,7 +228,7 @@ external API curls get proxy 403; not runnable/verified here).
 ```bash
 # Run from a scratch dir so output doesn't land in the repo root
 # (news.json / values-history.json / trade-values.json are NOT gitignored):
-cd /tmp/de-scratch && mkdir -p /tmp/de-scratch
+mkdir -p /tmp/de-scratch && cd /tmp/de-scratch
 node /home/user/dynastyedge/scripts/fetch-news.mjs            # → ./news.json
 node /home/user/dynastyedge/scripts/snapshot-values.mjs       # → ./values-history.json
 node /home/user/dynastyedge/scripts/snapshot-trade-values.mjs # → ./trade-values.json

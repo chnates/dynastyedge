@@ -6,7 +6,10 @@ description: >
   loading, sign-in / login broken, player shows "—" instead of a value, player
   missing from roster view, wrong numbers, pick valued at 0, trade totals look
   wrong, FAAB not counted, sparkline missing, news section gone, stale news or
-  values, section disappeared, offseason weirdness, iOS-only bugs (black status
+  values as an in-app symptom (this playbook is the first stop for symptom
+  triage; operating/re-running the pipelines is dynastyedge-run-and-operate,
+  measuring feed freshness is dynastyedge-diagnostics-and-tooling), section
+  disappeared, offseason weirdness, iOS-only bugs (black status
   bar, dead bar above home indicator, keyboard covers input, page zooms on
   focus, background scrolls, sheet won't swipe-dismiss), cache confusion, or
   "works on desktop but not on the phone". Contains discriminating experiments
@@ -275,10 +278,9 @@ Every model lives in pure utils (`src/utils/*.js` — no React, no fetches).
 Run the suspect function in Node against captured JSON before touching any
 component. Trap (verified): utils use **extensionless ESM imports**
 (`import { findPickValue } from './pickCapital'`), so plain `node` fails with
-`ERR_MODULE_NOT_FOUND`. Use the resolver hook from
-`dynastyedge-diagnostics-and-tooling` (`scripts/reg.mjs` + `loader.mjs` in
-that skill's directory — note: not yet present in this repo as of 2026-07-05
-if that skill hasn't landed; fallback below):
+`ERR_MODULE_NOT_FOUND`. Use the canonical resolver hook owned by
+`dynastyedge-diagnostics-and-tooling` — `scripts/reg.mjs` + `loader.mjs` in
+that skill's directory (both exist on disk; verified 2026-07-07):
 
 ```bash
 # With the diagnostics skill's hook:
@@ -287,8 +289,9 @@ node --import /home/user/dynastyedge/.claude/skills/dynastyedge-diagnostics-and-
       console.log(m.findPickValue({season:'2027', round:1}, JSON.parse(require('fs').readFileSync('/tmp/pickEntries.json'))))"
 ```
 
-Fallback if the hook is missing — a minimal loader that appends `.js`
-(write to your scratchpad, not the repo):
+Emergency fallback ONLY if the skill dir is ever missing — a minimal loader
+that appends `.js` (write to your scratchpad, not the repo; the diagnostics
+copy is canonical):
 
 ```js
 // scratch/loader.mjs

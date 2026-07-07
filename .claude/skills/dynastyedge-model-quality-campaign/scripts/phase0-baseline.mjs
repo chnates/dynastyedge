@@ -2,7 +2,7 @@
 // playoff-odds model. NO model changes, NO network. Run with:
 //
 //   cd /home/user/dynastyedge
-//   node --import .claude/skills/dynastyedge-model-quality-campaign/scripts/reg.mjs \
+//   node --import ./.claude/skills/dynastyedge-model-quality-campaign/scripts/reg.mjs \
 //        .claude/skills/dynastyedge-model-quality-campaign/scripts/phase0-baseline.mjs
 //
 // Checks (each prints PASS/FAIL):
