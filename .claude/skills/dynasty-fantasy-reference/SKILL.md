@@ -155,8 +155,12 @@ the value 30 days ago).
 - FantasyCalc lists picks *as players* named like `"2026 Mid 1st"` — they live
   in the same 0–10000 economy.
 - **Early / Mid / Late = draft-slot thirds.** In this 10-team league
-  (verified `slotTier` in `src/utils/pickTrades.js`): Early = slots 1–3,
-  Mid = 4–7, Late = 8–10 (via `ceil(teams/3)` / `ceil(2*teams/3)`). When
+  (verified `slotTier` in `src/utils/pickTrades.js`): Early = slots 1–4,
+  Mid = 5–7, Late = 8–10 (via `ceil(teams/3)` / `ceil(2*teams/3)`;
+  `ceil(10/3) = 4`). Note: the inline comment in pickTrades.js and CLAUDE.md
+  Feature 13 still say 1–3 / 4–7 — known stale docs; the code wins. See
+  dynastyedge-validation-and-qa §3/§6, which documents this doc/code
+  mismatch with a passing test. When
   Sleeper's draft order is known, a pick prices at its exact tier entry
   (`findSlotPickValue`); otherwise it falls back to the round median.
 - **Round median = `findPickValue`** (in `src/utils/pickCapital.js`, not
@@ -294,7 +298,7 @@ strings). Win/loss/points live in `roster.settings`.
 | Fair trade / verdicts / ±5% band / counter | `analyzeTrade`, `getTradeVerdict`, `getCounterSuggestion`, `suggestFairPackage` | `src/utils/tradeAnalysis.js` |
 | Pick ownership (who owns which pick) | `resolvePickOwnership` — from `traded_picks` only | `src/utils/pickCapital.js` |
 | Pick price (round median) / pick capital score | `findPickValue` (median), `computePickCapitalScore` (3/2/1 year weights) | `src/utils/pickCapital.js` |
-| Pick slot tiers (Early 1–3 / Mid 4–7 / Late 8–10) + move-up/down packages | `slotTier`, `findSlotPickValue`, `makePickPricer`, `suggestPickPackages` | `src/utils/pickTrades.js` |
+| Pick slot tiers (Early 1–4 / Mid 5–7 / Late 8–10) + move-up/down packages | `slotTier`, `findSlotPickValue`, `makePickPricer`, `suggestPickPackages` | `src/utils/pickTrades.js` |
 | Rookie ADP (derived, not fetched) | `assignRookieAdp`, `buildRookieProspects` | `src/utils/rookieAdp.js` |
 | Playoff odds + Buyer/Seller deadline stance | Monte Carlo sim; `getDeadlineVerdict` (70%/35% cutoffs) | `src/utils/playoffOdds.js` (+ `src/hooks/usePlayoffOdds.js`) |
 | Multi-year value projection / age curves / pick maturation | `buildAgeCurves`, `buildRosterTrajectory`, `getTrajectoryRead` (0.55–1.18 yearly clamps) | `src/utils/dynastyTrajectory.js` |

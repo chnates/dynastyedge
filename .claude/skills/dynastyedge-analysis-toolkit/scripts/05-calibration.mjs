@@ -17,11 +17,20 @@ function mulberry32(seed) {
 const rng = mulberry32(7)
 
 // ── The climatology baseline for THIS league, by hand ──
-// 10 teams, 5 make the playoffs → base rate 0.5. Predicting 0.5 for everyone:
-// Brier = mean((0.5 - outcome)^2) = 0.25 exactly, regardless of who makes it.
-console.log('climatology baseline (10-team league, playoffTeams=5, base rate 0.5):')
-console.log('  Brier = mean((0.5 - o)^2) = 0.25 for every possible outcome set')
-console.log('  → any model claiming skill must beat 0.25 on real playoff outcomes\n')
+// Base rate = playoff_teams / 10. playoff_teams is API-sourced; the code
+// default is 6 (`?? 6` in src/hooks/usePlayoffOdds.js) → base rate 0.6.
+// Predicting the base rate for everyone with k of 10 teams in:
+// Brier = (k*(1-k/10)^2 + (10-k)*(k/10)^2) / 10 — for k=6 that is 0.2400,
+// regardless of WHO makes it. Confirm the live setting before quoting a bar.
+{
+  const k = 6 // code-default playoff_teams — replace with the live setting
+  const base = k / 10
+  const brier = (k * (1 - base) ** 2 + (10 - k) * base ** 2) / 10
+  console.log(`climatology baseline (10-team league, playoff_teams=${k} [code default], base rate ${base}):`)
+  console.log(`  Brier = mean((${base} - o)^2) = ${brier.toFixed(4)} for every possible outcome set`)
+  console.log(`  → any model claiming skill must beat the climatology Brier computed`)
+  console.log(`    from the LIVE playoff_teams setting, on real playoff outcomes\n`)
+}
 
 // ── Synthetic demo: three forecasters over N events ──
 const N = 5000

@@ -94,7 +94,7 @@ team 5 playoffPct across 20 seeds (real simulatePlayoffs, 10000 iters each):
 **Pitfalls:**
 - Don't compare same-seed runs to estimate noise — same seed ⇒ zero spread by construction; vary the seed.
 - Seed distributions (`seedDist`) split the same 10000 iterations over n·n cells — per-cell SE is far worse than the headline playoffPct SE. Don't over-read a 2% cell.
-- Raising ITERATIONS 10× buys only √10 ≈ 3.2× precision and costs 10× compute on the phone's main thread — the CLAUDE.md perf note calls this the app's heaviest path. Justify with the formula, not vibes.
+- Raising ITERATIONS 10× buys only √10 ≈ 3.2× precision and costs 10× compute on the phone's main thread — this is the app's heaviest path (see perf commit `6fb85f3` "perf: speed up playoff Monte Carlo + cut redundant league recompute"). Justify with the formula, not vibes.
 
 ---
 
@@ -134,7 +134,7 @@ prior mean (hand): 124.20  |  empirical scoring: 140 every week
 13 |   136.282 |   136.282 |   0.76   MATCH
 ```
 
-**Interpretation:** week 1, one hot 140-point game moves the model only 20% of the way off the prior (127.4, not 140) — by design; a single game is mostly noise. By week 8 the data carries 67%; even at a full 13-game season the prior retains 4/17 ≈ 24% weight. If you want real results to dominate faster, lower `PRIOR_GAMES`; the number IS the knob, with an exact interpretation ("the prior is worth k games of evidence").
+**Interpretation:** week 1, one hot 140-point game moves the model only 20% of the way off the prior (127.4, not 140) — by design; a single game is mostly noise. By week 8 the data carries 67%; even at g=13 (a late-season example — the table's last row) the prior retains 4/17 ≈ 24% weight, and at the full 14-week regular season (`playoff_week_start` default 15 ⇒ 14 weeks) still 4/18 ≈ 22%. If you want real results to dominate faster, lower `PRIOR_GAMES`; the number IS the knob, with an exact interpretation ("the prior is worth k games of evidence").
 
 **Pitfalls:**
 - A shrinkage estimator is deliberately biased toward the prior. Don't "fix" the week-8 mean not equaling the raw average — that's the feature.
@@ -189,7 +189,7 @@ one age bin [800,900,1000,1100,1200,9000]: mean = 2333 (dragged 2x by one stud),
 
 **WHEN:** asserting the playoff-odds model is "accurate"; comparing model variants; any claim of the form "these probabilities are good".
 
-**The math.** For probability forecasts p_i of binary outcomes o_i, the **Brier score** = mean((p_i − o_i)²); lower is better. It decomposes (Murphy) into *reliability* (are the probabilities honest? predicted 70% events should happen ~70% of the time) − *resolution* (does the model separate haves from have-nots?) + *uncertainty* (base-rate variance, model-independent). The floor for a skillless forecaster is **climatology**: always predict the base rate. **For this league that baseline is exact and computable in your head:** 10 teams, `playoff_teams` = 5 ⇒ base rate 0.5 ⇒ Brier = mean((0.5 − o)²) = **0.25 for every possible outcome set**. Any model claiming skill must beat 0.25 on real end-of-season outcomes. A **reliability table** buckets predictions and compares mean predicted vs observed frequency per bucket, each with SE = √(p(1−p)/n_bucket).
+**The math.** For probability forecasts p_i of binary outcomes o_i, the **Brier score** = mean((p_i − o_i)²); lower is better. It decomposes (Murphy) into *reliability* (are the probabilities honest? predicted 70% events should happen ~70% of the time) − *resolution* (does the model separate haves from have-nots?) + *uncertainty* (base-rate variance, model-independent). The floor for a skillless forecaster is **climatology**: always predict the base rate. **For this league that baseline is exact and computable in your head:** base rate = `playoff_teams` / 10. `playoff_teams` is API-sourced (the code default is 6 — `?? 6` in `src/hooks/usePlayoffOdds.js`), so the default baseline is 0.6 ⇒ climatology Brier = mean((0.6 − o)²) = **0.2400 for every possible outcome set** (with k of 10 in: `k·(1−k/10)² + (10−k)·(k/10)²` all over 10). Confirm the live `playoff_teams` setting before quoting a bar. Any model claiming skill must beat the climatology Brier computed from the LIVE `playoff_teams` on real end-of-season outcomes. A **reliability table** buckets predictions and compares mean predicted vs observed frequency per bucket, each with SE = √(p(1−p)/n_bucket).
 
 **Worked example:** `scripts/05-calibration.mjs` (plain `node`; synthetic because real playoff outcomes accrue 10 per season). Three forecasters over 5000 events: calibrated, climatology, overconfident (probabilities stretched 1.6× from 0.5). Real output (excerpt):
 
