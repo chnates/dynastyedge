@@ -195,7 +195,12 @@ architecture as the news pipeline:
   `workflow_dispatch`). It runs `scripts/snapshot-values.mjs`, which fetches
   FantasyCalc, appends today's column to the rolling history, and
   force-pushes a single-commit `values-history` branch containing
-  `values-history.json`.
+  `values-history.json`. The script starts a fresh history **only** when the
+  existing file 404s (first run / missing branch); any other load failure
+  aborts the run non-zero so a transient error can't force-push a one-day
+  file over the rolling window, and the publish step re-fetches the previous
+  file from the branch if today's output is missing — the same guard as the
+  trade archive.
 - **Format is columnar** to stay mobile-sized:
   `{ updatedAt, dates: ['YYYY-MM-DD', …], players: { sleeperId: [v|null, …] } }`
   — arrays aligned to `dates`. Rolling window: 90 days, top 500 players by
