@@ -181,7 +181,11 @@ file — keeping the no-backend architecture:
 - **News must never block a panel, show an error, or retry-loop.** On any
   failure the news section simply hides.
 - Caveat: GitHub disables cron workflows after ~60 days without repo
-  activity — any push re-enables it.
+  activity — any push re-enables it. The workflows' own force-pushes to the
+  data branches do NOT reset that clock; the values-history workflow's
+  keepalive step (empty bot commit to `main` when it's 45+ days quiet)
+  protects both pipelines, and the side drawer's feed-age line surfaces a
+  dead feed.
 
 -----
 
@@ -230,6 +234,15 @@ architecture as the news pipeline:
   fails, the publish step carries the previous archive forward from the
   branch via git — and aborts the publish entirely if it can't, so the
   archive is never erased.
+- **Keepalive step** (first step, before the snapshots, `continue-on-error`):
+  GitHub disables scheduled workflows after ~60 days without repo activity,
+  and the pipelines' own data-branch force-pushes don't reset that clock —
+  only default-branch commits do. When `main`'s last commit is 45+ days old,
+  the step pushes an empty github-actions bot commit to `main` (guarded to
+  the `main` ref so a `workflow_dispatch` from another branch can never push
+  foreign commits); otherwise it's a no-op. GITHUB_TOKEN pushes trigger no
+  other workflows, so the keepalive commit causes no redeploy. This keeps
+  both cron pipelines (news + values) alive through a quiet offseason.
 
 -----
 
@@ -1209,7 +1222,12 @@ min-w-max`, so the row fills the width when the tabs fit and scrolls
 horizontally when they don't (long labels never wrap to a second line). The
 active tab scrolls into view on navigation, and a right-edge fade appears only
 while the row overflows.
-The drawer also holds: data freshness timestamp, manual Refresh, and the theme toggle.
+The drawer also holds: data freshness timestamp, a feed-age line for the two
+Actions-published feeds ("News 26m · Values 12h", from each feed's
+`updatedAt` — amber when news > 2h or values > 36h stale, a segment hides
+entirely when its feed never loaded; reads the session caches via
+`loadNewsFeed` / `loadHistory` on drawer open, zero extra requests), manual
+Refresh, and the theme toggle.
 The app header shows the active section name.
 
 **Route map (post-refactor).** My-squad views live under `/my-team`

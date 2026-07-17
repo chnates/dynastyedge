@@ -78,14 +78,24 @@ function stripHtml(s) {
 // one, otherwise by full name in the headline.
 
 let newsFeedPromise = null
+let newsFeedUpdatedAt = null
 
 export function loadNewsFeed() {
   if (!newsFeedPromise) {
     newsFeedPromise = fetchJSON(NEWS_FEED_URL, { timeoutMs: 10000, label: 'News feed' })
-      .then(data => (Array.isArray(data?.items) ? data.items : []))
+      .then(data => {
+        if (typeof data?.updatedAt === 'string') newsFeedUpdatedAt = data.updatedAt
+        return Array.isArray(data?.items) ? data.items : []
+      })
       .catch(() => [])
   }
   return newsFeedPromise
+}
+
+// Feed generation time (ISO string) — null until the feed loads, or when it
+// failed / carried no timestamp. Best-effort, same contract as the feed.
+export function getNewsFeedUpdatedAt() {
+  return newsFeedUpdatedAt
 }
 
 export function normalizeName(s) {

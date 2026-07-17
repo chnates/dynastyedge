@@ -18,6 +18,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Keepalive — reset the 60-day cron-disable clock
+        # GitHub disables scheduled workflows after ~60 days without repo
+        # activity, and this workflow's own force-pushes to the data branches
+        # do NOT reset that clock — only commits to the default branch do
+        # (the standard keepalive-workflow mechanism). When main's last
+        # commit is 45+ days old, push an empty bot commit; otherwise no-op.
+        # Runs BEFORE the snapshot steps so a failing snapshot during a
+        # quiet stretch can't stop the keepalive and let both crons die.
+        # GITHUB_TOKEN pushes trigger no other workflows, so no redeploy.
+        continue-on-error: true   # a keepalive hiccup must not block the snapshot; it retries daily
+        run: |
+          if [ "$GITHUB_REF_NAME" != "main" ]; then
+            echo "not on main ($GITHUB_REF_NAME) — skipping keepalive"
+            exit 0
+          fi
+          LAST_COMMIT=$(git log -1 --format=%ct)
+          AGE_DAYS=$(( ( $(date +%s) - LAST_COMMIT ) / 86400 ))
+          echo "last commit on main: ${AGE_DAYS} days ago"
+          if [ "$AGE_DAYS" -lt 45 ]; then
+            echo "fresh enough — keepalive not needed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty -m "chore: keepalive commit so scheduled workflows stay enabled"
+          git push origin HEAD:main
       - uses: actions/setup-node@v4
         with:
           node-version: 20

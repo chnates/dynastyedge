@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   Zap, Users, ArrowLeftRight, Trophy, FileText, Newspaper,
@@ -9,6 +9,25 @@ import TeamAvatar from './TeamAvatar'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useIdentity } from '../../hooks/useIdentity'
 import { getTeamName } from '../../hooks/useLeague'
+import { loadNewsFeed, getNewsFeedUpdatedAt } from '../../hooks/usePlayerIntel'
+import { loadHistory } from '../../hooks/useValueHistory'
+
+// Feed-age readout for the two Actions-published feeds. Both die silently by
+// design (the client hides stale feeds), so the drawer is the one place their
+// age is visible. Amber past these thresholds: the news cron runs twice an
+// hour (2h ≈ four missed runs), the values cron daily (36h ≈ a missed day).
+const NEWS_STALE_MS = 2 * 60 * 60 * 1000
+const VALUES_STALE_MS = 36 * 60 * 60 * 1000
+
+function formatFeedAge(iso) {
+  const t = Date.parse(iso ?? '')
+  if (!Number.isFinite(t)) return null
+  const mins = Math.max(0, Math.round((Date.now() - t) / 60000))
+  if (mins < 60) return `${mins}m`
+  const hours = Math.floor(mins / 60)
+  if (hours < 48) return `${hours}h`
+  return `${Math.floor(hours / 24)}d`
+}
 
 // The drawer is the app's complete map: an always-expanded hierarchical tree
 // (docs-sidebar pattern). Each section has an identity color — icons always
@@ -76,6 +95,27 @@ export default function SideDrawer({
   const myTeamName = myOwner ? getTeamName(myOwner) : null
 
   const touchStartX = useRef(null)
+
+  // Feed ages (news / values updatedAt) — read from the session-cached feed
+  // loaders on drawer open (no fetch beyond each feed's one per session).
+  // Best-effort: a feed that never loaded stays null and its segment hides.
+  const [feedStamps, setFeedStamps] = useState({ news: null, values: null })
+  useEffect(() => {
+    if (!isOpen) return
+    let cancelled = false
+    loadNewsFeed().then(() => {
+      if (!cancelled) setFeedStamps(s => ({ ...s, news: getNewsFeedUpdatedAt() }))
+    })
+    loadHistory().then(h => {
+      if (!cancelled) setFeedStamps(s => ({ ...s, values: h?.updatedAt ?? null }))
+    })
+    return () => { cancelled = true }
+  }, [isOpen])
+
+  const feedAges = [
+    { label: 'News', age: formatFeedAge(feedStamps.news), stale: Date.now() - Date.parse(feedStamps.news ?? '') > NEWS_STALE_MS },
+    { label: 'Values', age: formatFeedAge(feedStamps.values), stale: Date.now() - Date.parse(feedStamps.values ?? '') > VALUES_STALE_MS },
+  ].filter(f => f.age !== null)
 
   // Close on Escape
   useEffect(() => {
@@ -212,6 +252,21 @@ export default function SideDrawer({
           {lastUpdated && (
             <div className="px-3 py-1.5">
               <span className="font-body text-[11px] text-text-tertiary">{lastUpdated}</span>
+            </div>
+          )}
+
+          {feedAges.length > 0 && (
+            <div className="px-3 pb-1.5">
+              <span className="font-body text-[11px] text-text-tertiary">
+                {feedAges.map((f, i) => (
+                  <span key={f.label}>
+                    {i > 0 && ' · '}
+                    <span className={f.stale ? 'text-warning' : ''}>
+                      {f.label} {f.age}
+                    </span>
+                  </span>
+                ))}
+              </span>
             </div>
           )}
 
