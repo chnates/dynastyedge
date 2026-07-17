@@ -31,7 +31,7 @@ lineup optimization with matchup context, and a full league-wide competitive lan
 |Navigation|React Router v7 |Side drawer menu, 7 sections       |
 |Build tool|Vite            |Outputs to `dist/` for GitHub Pages|
 |Deployment|GitHub Pages    |Auto-deploys via GitHub Actions    |
-|CI/CD     |GitHub Actions  |Triggers on every push to `main`   |
+|CI/CD     |GitHub Actions  |Every push to `main`: lint + test, then deploy|
 
 ### Non-negotiable rules
 
@@ -1630,7 +1630,8 @@ Load from Google Fonts. Both are free.
 dynastyedge/
 ├── .github/
 │   └── workflows/
-│       ├── deploy.yml          ← GitHub Actions auto-deploy
+│       ├── deploy.yml          ← GitHub Actions auto-deploy (lint + test gate before build)
+│       ├── ci.yml              ← lint + test + build on branch pushes / PRs (no deploy)
 │       ├── news.yml            ← twice-hourly news aggregation → news-data branch
 │       └── values-history.yml  ← daily value snapshot + trade archive → values-history branch
 ├── scripts/
@@ -1767,6 +1768,7 @@ dynastyedge/
 │   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
 │   └── lineupHistory.test.mjs       ← optimal-lineup slot-fill order (singles → FLEX → SFLX)
 ├── index.html
+├── eslint.config.js             ← ESLint 9 flat config (recommended + react-hooks, src/ + scripts/)
 ├── vite.config.js
 ├── tailwind.config.js
 └── package.json
@@ -1784,11 +1786,31 @@ suite runs on synthetic fixtures — it proves the logic is deterministic and
 threshold-correct, not that the models are well-calibrated (that bar is
 real-data verification).
 
+**Lint:** `npm run lint` runs ESLint 9 (flat config, `eslint.config.js`) over
+`src/` and `scripts/` — `@eslint/js` recommended rules plus
+`react-hooks/rules-of-hooks` and `react-hooks/exhaustive-deps`, all at error
+severity so CI actually fails. `eslint` + `eslint-plugin-react-hooks` are the
+two owner-sanctioned lint devDependencies (the config imports `@eslint/js`,
+which ships as a direct dependency of `eslint` — nothing else was added; the
+browser/node globals are hand-written literals in the config for the same
+reason). Core ESLint's scope analysis doesn't count JSX references, so
+`no-unused-vars` runs with `varsIgnorePattern`/`argsIgnorePattern` `^[A-Z_]`
+(the Vite React template's convention) — capitalized component identifiers are
+exempt; lowercase unused variables still fail. CI runs lint + test + build on
+every branch push and PR (`ci.yml`), and the same gate runs in `deploy.yml`
+before the build step, so a broken push to `main` fails before anything
+publishes. Both workflows run Node 22 — the test script's
+`node --test 'tests/*.test.mjs'` glob needs Node ≥ 21, so never pin these two
+workflows back to Node 20 (the news/values pipelines, which run no tests,
+still use 20).
+
 -----
 
 ## GitHub Pages Deployment
 
-Every push to `main` triggers an automatic build and deploy. No manual steps ever.
+Every push to `main` triggers an automatic build and deploy — gated by
+`npm run lint` and `npm test`, which must pass before the build and publish
+steps run. No manual steps ever.
 
 ### GitHub Actions workflow
 
@@ -1820,9 +1842,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
+      # Quality gates — a broken push fails here, BEFORE anything publishes.
+      - run: npm run lint
+      - run: npm test
       - run: npm run build
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3
@@ -1974,6 +1999,14 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
    from the `'../ui'` barrel. Never reintroduce a hand-rolled button, card,
    bottom sheet, filter chip, badge, or input inline; extend a primitive
    instead. Run `/design-review` before committing component work.
+1. **Lint gate:** `npm run lint` (ESLint 9 flat config: recommended +
+   react-hooks rules at error severity, scoped to `src/` + `scripts/`) must
+   exit 0 before any commit, alongside `npm test` and `npm run build`. CI
+   enforces all three on every branch push (`ci.yml`) and before the build
+   step of every `main` deploy (`deploy.yml`). Never fix a
+   `react-hooks/exhaustive-deps` error by deleting the dependency array or
+   blanket-disabling the rule — either add the dependency or
+   disable-with-comment on the one line, stating why the value is stable.
 1. **The app name is DynastyEdge.** Use it in the page `<title>`,
    the header, and any loading/splash screen.
 

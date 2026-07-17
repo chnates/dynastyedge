@@ -119,8 +119,10 @@ export default function PickTradeCalculator() {
   const [mode, setMode] = useState('up')
   const [expandedKey, setExpandedKey] = useState(null)
 
-  const pickEntries = values?.pickEntries ?? []
-  const allRosters = league?.allRosters ?? []
+  // Memoized so the `?? []` fallback doesn't mint a fresh array every render
+  // and invalidate every memo downstream of it.
+  const pickEntries = useMemo(() => values?.pickEntries ?? [], [values])
+  const allRosters = useMemo(() => league?.allRosters ?? [], [league])
 
   const draftOrder = useMemo(
     () => buildDraftOrder(sleeperDraft.data?.draft, sleeperDraft.data?.tradedPicks ?? []),
@@ -160,7 +162,7 @@ export default function PickTradeCalculator() {
         rosterPick: p, value: priceFor({ season: p.season, round: p.round }),
       }))
     return [...thisSeason, ...future]
-  }, [market, league, priceFor])
+  }, [market, league, priceFor, myRosterId])
 
   // Same pool per opponent, for move-down return packages
   const candidatesFor = useMemo(() => {

@@ -400,7 +400,7 @@ export default function DraftBoard() {
         : [],
       live: draft.status === 'drafting' || draft.status === 'paused',
     }
-  }, [sleeperDraft.data])
+  }, [sleeperDraft.data, myRosterId])
 
   // Rookie prospects enriched from FantasyCalc, with adp = rank within the
   // rookie class (1..N by FantasyCalc overall rank — see utils/rookieAdp.js)
@@ -535,7 +535,7 @@ export default function DraftBoard() {
           setCsvColumns(parsed.columns)
         }
       }
-    } catch {}
+    } catch { /* corrupt localStorage CSV cache — ignore; remote sync below still runs */ }
 
     fetch(`${import.meta.env.BASE_URL}rankings.json`)
       .then(r => r.ok ? r.json() : null)

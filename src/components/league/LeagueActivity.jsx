@@ -145,7 +145,7 @@ export default function LeagueActivity() {
     if (filter === 'all') return transactions
     if (filter === 'mine') return transactions.filter(tx => (tx.roster_ids ?? []).includes(myRosterId))
     return transactions.filter(tx => tx.type === filter)
-  }, [transactions, filter])
+  }, [transactions, filter, myRosterId])
 
   const loading = (leagueLoading && !league) || (txLoading && !transactions)
   if (loading) return <LoadingSpinner message="Loading league activity…" />
