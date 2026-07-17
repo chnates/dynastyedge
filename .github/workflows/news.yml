@@ -8,6 +8,11 @@ on:
 permissions:
   contents: write
 
+# One run at a time — overlapping runs would race their force-pushes of the
+# news-data branch and one could clobber the other's feed.
+concurrency:
+  group: news-data
+
 jobs:
   news:
     runs-on: ubuntu-latest

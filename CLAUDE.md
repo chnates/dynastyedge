@@ -198,9 +198,14 @@ architecture as the news pipeline:
   `values-history.json`. The script starts a fresh history **only** when the
   existing file 404s (first run / missing branch); any other load failure
   aborts the run non-zero so a transient error can't force-push a one-day
-  file over the rolling window, and the publish step re-fetches the previous
-  file from the branch if today's output is missing — the same guard as the
-  trade archive.
+  file over the rolling window. The publish step recovers any missing output
+  **via git from the existing `values-history` branch** (not the raw CDN —
+  a different failure domain than the one the snapshot scripts read from),
+  and hard-fails rather than push without a file it can't recover, so a
+  correlated script+CDN outage can never erase accumulated data; the branch
+  stays untouched that day and the next run self-heals. The workflow runs
+  under a `concurrency` group so overlapping runs can't race force-pushes
+  (news.yml and deploy.yml carry the same guard).
 - **Format is columnar** to stay mobile-sized:
   `{ updatedAt, dates: ['YYYY-MM-DD', …], players: { sleeperId: [v|null, …] } }`
   — arrays aligned to `dates`. Rolling window: 90 days, top 500 players by
@@ -221,8 +226,10 @@ architecture as the news pipeline:
   (`continue-on-error`), which archives asset values for trades completed in
   the last 8 days into `trade-values.json` on the same branch — permanent
   (never pruned), read lazily via `useTradeTimeValues` for the manager
-  scouting ledger's "at trade time" line (see Feature 11). The publish step
-  re-fetches the previous archive when the script fails so it's never erased.
+  scouting ledger's "at trade time" line (see Feature 11). When the script
+  fails, the publish step carries the previous archive forward from the
+  branch via git — and aborts the publish entirely if it can't, so the
+  archive is never erased.
 
 -----
 
@@ -813,9 +820,10 @@ there and profiles cover fewer seasons.
 `scripts/snapshot-trade-values.mjs` runs in the same daily workflow as the
 values snapshot and permanently records asset values for any trade completed
 in the last 8 days into `trade-values.json` on the `values-history` branch
-(never pruned, never overwritten — trades are immutable). The publish step
-re-fetches the previous archive if the script fails, so a bad run can't
-erase it. The app loads it lazily via `useTradeTimeValues`; when a ledger
+(never pruned, never overwritten — trades are immutable). If the script
+fails, the publish step carries the previous archive forward from the branch
+via git, and aborts the publish rather than push without it, so a bad run
+can't erase it. The app loads it lazily via `useTradeTimeValues`; when a ledger
 trade has a complete archive entry, the scouting sheet shows an
 "At trade time: got X ⇄ gave Y" line under the hindsight numbers. Missing
 file/entries ⇒ the line simply hides — never an error or loading state.
@@ -1777,6 +1785,10 @@ permissions:
   contents: read
   pages: write
   id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   deploy:
