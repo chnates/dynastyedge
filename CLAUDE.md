@@ -195,7 +195,17 @@ architecture as the news pipeline:
   `workflow_dispatch`). It runs `scripts/snapshot-values.mjs`, which fetches
   FantasyCalc, appends today's column to the rolling history, and
   force-pushes a single-commit `values-history` branch containing
-  `values-history.json`.
+  `values-history.json`. The script starts a fresh history **only** when the
+  existing file 404s (first run / missing branch); any other load failure
+  aborts the run non-zero so a transient error can't force-push a one-day
+  file over the rolling window. The publish step recovers any missing output
+  **via git from the existing `values-history` branch** (not the raw CDN —
+  a different failure domain than the one the snapshot scripts read from),
+  and hard-fails rather than push without a file it can't recover, so a
+  correlated script+CDN outage can never erase accumulated data; the branch
+  stays untouched that day and the next run self-heals. The workflow runs
+  under a `concurrency` group so overlapping runs can't race force-pushes
+  (news.yml and deploy.yml carry the same guard).
 - **Format is columnar** to stay mobile-sized:
   `{ updatedAt, dates: ['YYYY-MM-DD', …], players: { sleeperId: [v|null, …] } }`
   — arrays aligned to `dates`. Rolling window: 90 days, top 500 players by
@@ -216,8 +226,10 @@ architecture as the news pipeline:
   (`continue-on-error`), which archives asset values for trades completed in
   the last 8 days into `trade-values.json` on the same branch — permanent
   (never pruned), read lazily via `useTradeTimeValues` for the manager
-  scouting ledger's "at trade time" line (see Feature 11). The publish step
-  re-fetches the previous archive when the script fails so it's never erased.
+  scouting ledger's "at trade time" line (see Feature 11). When the script
+  fails, the publish step carries the previous archive forward from the
+  branch via git — and aborts the publish entirely if it can't, so the
+  archive is never erased.
 
 -----
 
@@ -808,9 +820,10 @@ there and profiles cover fewer seasons.
 `scripts/snapshot-trade-values.mjs` runs in the same daily workflow as the
 values snapshot and permanently records asset values for any trade completed
 in the last 8 days into `trade-values.json` on the `values-history` branch
-(never pruned, never overwritten — trades are immutable). The publish step
-re-fetches the previous archive if the script fails, so a bad run can't
-erase it. The app loads it lazily via `useTradeTimeValues`; when a ledger
+(never pruned, never overwritten — trades are immutable). If the script
+fails, the publish step carries the previous archive forward from the branch
+via git, and aborts the publish rather than push without it, so a bad run
+can't erase it. The app loads it lazily via `useTradeTimeValues`; when a ledger
 trade has a complete archive entry, the scouting sheet shows an
 "At trade time: got X ⇄ gave Y" line under the hindsight numbers. Missing
 file/entries ⇒ the line simply hides — never an error or loading state.
@@ -1745,11 +1758,31 @@ dynastyedge/
 │   ├── constants.js             ← league ID, my roster ID, API base URLs
 │   ├── App.jsx
 │   └── main.jsx
+├── tests/                       ← plain-Node test suite (node:test + node:assert/strict, zero deps)
+│   ├── playoffOdds.test.mjs         ← fixed-seed determinism, Σ odds = playoff teams, verdict thresholds
+│   ├── pickCapital.test.mjs         ← pick ownership resolution, round-median pick values, year weights
+│   ├── pickTrades.test.mjs          ← slot tiers (as coded), slot pricing fallback, package constraints
+│   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
+│   ├── tradeAnalysis.test.mjs       ← verdict ladder, % vs larger side, counter never re-suggests
+│   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
+│   └── lineupHistory.test.mjs       ← optimal-lineup slot-fill order (singles → FLEX → SFLX)
 ├── index.html
 ├── vite.config.js
 ├── tailwind.config.js
 └── package.json
 ```
+
+**Tests:** `npm test` runs the `tests/` suite — plain `.mjs` scripts on Node's
+built-in `node:test` runner with `node:assert/strict`, zero new dependencies
+(the sanctioned no-deps pattern). The script registers the module-resolver hook
+at `.claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs` so
+`src/utils`' extensionless imports load under plain Node. Scope is the **pure
+analytical utils only** — hooks and components are out (they need the browser
+and live APIs); every assertion cites the documented behavior it pins, so a
+failing test is either a code regression or doc drift, never a mystery. The
+suite runs on synthetic fixtures — it proves the logic is deterministic and
+threshold-correct, not that the models are well-calibrated (that bar is
+real-data verification).
 
 -----
 
@@ -1772,6 +1805,10 @@ permissions:
   contents: read
   pages: write
   id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   deploy:

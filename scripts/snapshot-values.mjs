@@ -28,7 +28,11 @@ async function getJSON(url) {
     headers: { Accept: 'application/json', 'User-Agent': UA },
     signal: AbortSignal.timeout(30000),
   })
-  if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`)
+  if (!res.ok) {
+    const err = new Error(`HTTP ${res.status} from ${url}`)
+    err.status = res.status
+    throw err
+  }
   return res.json()
 }
 
@@ -52,14 +56,22 @@ const topIds = new Set(
     .map(([sid]) => sid)
 )
 
-// Existing history — best-effort (first run, or branch missing, starts fresh)
+// Existing history. 404 = first run (branch/file missing), start fresh. Any
+// other failure is fatal: the workflow force-pushes whatever this script
+// writes, so proceeding after a transient error would replace the rolling
+// window with a one-day file.
 let history = { dates: [], players: {} }
 try {
   const prev = await getJSON(HISTORY_URL)
   if (Array.isArray(prev?.dates) && prev?.players) history = prev
   console.log(`Loaded existing history: ${history.dates.length} days, ${Object.keys(history.players).length} players`)
 } catch (err) {
-  console.log(`No existing history (${err.message}) — starting fresh`)
+  if (err.status === 404) {
+    console.log('No existing history — starting fresh')
+  } else {
+    console.error(`Could not load existing history (${err.message}) — aborting to avoid data loss`)
+    process.exit(1)
+  }
 }
 
 const today = new Date().toISOString().slice(0, 10)
