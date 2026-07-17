@@ -11,7 +11,10 @@ let historyCache = null
 let historyPromise = null
 let historyFailed = false
 
-function loadHistory() {
+// Exported for the side drawer's feed-age readout: resolves the cached
+// history object (whose `updatedAt` stamps the last snapshot), or null when
+// the feed never loaded. Same single session-cached request as the hook.
+export function loadHistory() {
   if (historyCache) return Promise.resolve(historyCache)
   if (historyFailed) return Promise.resolve(null)
   if (!historyPromise) {
