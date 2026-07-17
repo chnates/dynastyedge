@@ -309,7 +309,7 @@ function ProspectList({
   )
 }
 
-function PickRow({ pick, player, teamName, isMine, label, delta, isLast, onSelect }) {
+function PickRow({ player, teamName, isMine, label, delta, isLast, onSelect }) {
   const Inner = (
     <>
       <span className={`font-mono text-xs font-bold w-10 flex-shrink-0 ${isMine ? 'text-accent' : 'text-text-tertiary'}`}>
@@ -447,7 +447,7 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects, my
       used: false,
       value: p.value ?? 0,
     }))
-  }, [order, orderKnown, league, sortedPicks.length])
+  }, [order, orderKnown, league, sortedPicks.length, myRosterId])
 
   const taxiSlots = leagueInfo?.settings?.taxi_slots ?? null
   const taxiUsed = useMemo(

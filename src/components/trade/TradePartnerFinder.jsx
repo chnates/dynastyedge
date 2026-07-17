@@ -245,7 +245,7 @@ export default function TradePartnerFinder() {
     })
     Object.values(byRoster).forEach(list => list.sort((a, b) => b.value - a.value))
     return byRoster
-  }, [league, watchlist])
+  }, [league, watchlist, myRosterId])
 
   const displayedPartners = useMemo(() => {
     if (!analysis) return []

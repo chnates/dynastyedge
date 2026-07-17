@@ -177,7 +177,7 @@ export default function LeagueOverview() {
       winWindowTiers, leagueAverages, tierCounts, sortedRosters,
       positionRanked, rankMap, divergenceMap, anyRecords, effectiveSort, myTier,
     }
-  }, [league, sortMode, posFilter])
+  }, [league, sortMode, posFilter, myRosterId])
 
   if (loading && !league) return <LoadingSpinner message="Loading league data…" />
   if (error && !league)   return <ErrorState message={error} onRetry={retry} />

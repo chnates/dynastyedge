@@ -197,7 +197,7 @@ export default function MarketMovers() {
       .map(p => ({ ...p, ownerRoster: league.myRoster }))
 
     return { watching, risers, fallers, buyLow, sellHigh, myDeficits, mySurpluses }
-  }, [league, values, watchlist])
+  }, [league, values, watchlist, myRosterId])
 
   if (loading && !league) return <LoadingSpinner message="Loading market data…" />
   if (error && !league)   return <ErrorState message={error} onRetry={retry} />

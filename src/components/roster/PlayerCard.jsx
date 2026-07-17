@@ -1,7 +1,7 @@
 import TrendArrow from '../shared/TrendArrow'
 import { POS_TEXT } from '../../utils/positionColors'
 
-export default function PlayerCard({ player, showSlot = false, onClick }) {
+export default function PlayerCard({ player, onClick }) {
   const {
     name,
     position,
