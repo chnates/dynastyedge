@@ -9,6 +9,12 @@ permissions:
   pages: write
   id-token: write
 
+# GitHub's recommended Pages guard: one deployment at a time, and never
+# cancel an in-flight deploy (a half-cancelled deploy can wedge Pages).
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest

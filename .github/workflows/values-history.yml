@@ -8,6 +8,11 @@ on:
 permissions:
   contents: write
 
+# One run at a time — overlapping runs would race their force-pushes of the
+# values-history branch and one could clobber the other's snapshot.
+concurrency:
+  group: values-history
+
 jobs:
   snapshot:
     runs-on: ubuntu-latest
@@ -25,21 +30,41 @@ jobs:
         run: |
           mkdir -p /tmp/valuesrepo && cd /tmp/valuesrepo
           git init -b values-history .
-          # History: use today's output, else re-fetch the existing file from
-          # the branch so a force-push can never erase the rolling window.
-          # No trailing `|| true` — unlike the optional trade archive, this
-          # file is the branch's primary artifact, so publishing without it
-          # should fail loudly.
-          cp "$GITHUB_WORKSPACE/values-history.json" . 2>/dev/null \
-            || curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/values-history/values-history.json" -o values-history.json
-          # Trade archive: use today's output, else re-fetch the existing file
-          # from the branch so a failed archive step never erases history.
-          cp "$GITHUB_WORKSPACE/trade-values.json" . 2>/dev/null \
-            || curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/values-history/trade-values.json" -o trade-values.json \
-            || true
+          REMOTE="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          # Missing outputs are recovered from the existing branch via git —
+          # a different failure domain than the raw.githubusercontent CDN the
+          # snapshot scripts read from, so a correlated script+CDN outage can
+          # never force-push the branch without its accumulated data. Any git
+          # failure below aborts the step (bash -e): the branch stays
+          # untouched today and the next run self-heals.
+          PREV="$(git ls-remote "$REMOTE" refs/heads/values-history)"
+          PREV="${PREV%%[[:space:]]*}"   # previous head sha; '' if the branch doesn't exist yet
+          if [ -n "$PREV" ]; then
+            git fetch --depth 1 "$REMOTE" values-history
+          fi
+          # History: today's output, else the previous file from the branch.
+          # This file is the branch's primary artifact, so publishing without
+          # it fails loudly.
+          if [ -f "$GITHUB_WORKSPACE/values-history.json" ]; then
+            cp "$GITHUB_WORKSPACE/values-history.json" .
+          elif [ -n "$PREV" ] && git cat-file -e "$PREV:values-history.json" 2>/dev/null; then
+            git checkout "$PREV" -- values-history.json
+          else
+            echo "no values-history.json produced and none recoverable from the branch — aborting publish" >&2
+            exit 1
+          fi
+          # Trade archive: today's output, else the previous file from the
+          # branch. The archive is permanent (never pruned) — if it exists on
+          # the branch it MUST carry forward; only a branch that never had
+          # the file (first runs) may publish without it.
+          if [ -f "$GITHUB_WORKSPACE/trade-values.json" ]; then
+            cp "$GITHUB_WORKSPACE/trade-values.json" .
+          elif [ -n "$PREV" ] && git cat-file -e "$PREV:trade-values.json" 2>/dev/null; then
+            git checkout "$PREV" -- trade-values.json
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add values-history.json
           if [ -f trade-values.json ]; then git add trade-values.json; fi
           git commit -m "Update values history"
-          git push --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" values-history
+          git push --force "$REMOTE" values-history
