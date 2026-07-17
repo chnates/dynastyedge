@@ -1758,11 +1758,31 @@ dynastyedge/
 │   ├── constants.js             ← league ID, my roster ID, API base URLs
 │   ├── App.jsx
 │   └── main.jsx
+├── tests/                       ← plain-Node test suite (node:test + node:assert/strict, zero deps)
+│   ├── playoffOdds.test.mjs         ← fixed-seed determinism, Σ odds = playoff teams, verdict thresholds
+│   ├── pickCapital.test.mjs         ← pick ownership resolution, round-median pick values, year weights
+│   ├── pickTrades.test.mjs          ← slot tiers (as coded), slot pricing fallback, package constraints
+│   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
+│   ├── tradeAnalysis.test.mjs       ← verdict ladder, % vs larger side, counter never re-suggests
+│   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
+│   └── lineupHistory.test.mjs       ← optimal-lineup slot-fill order (singles → FLEX → SFLX)
 ├── index.html
 ├── vite.config.js
 ├── tailwind.config.js
 └── package.json
 ```
+
+**Tests:** `npm test` runs the `tests/` suite — plain `.mjs` scripts on Node's
+built-in `node:test` runner with `node:assert/strict`, zero new dependencies
+(the sanctioned no-deps pattern). The script registers the module-resolver hook
+at `.claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs` so
+`src/utils`' extensionless imports load under plain Node. Scope is the **pure
+analytical utils only** — hooks and components are out (they need the browser
+and live APIs); every assertion cites the documented behavior it pins, so a
+failing test is either a code regression or doc drift, never a mystery. The
+suite runs on synthetic fixtures — it proves the logic is deterministic and
+threshold-correct, not that the models are well-calibrated (that bar is
+real-data verification).
 
 -----
 
