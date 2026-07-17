@@ -25,7 +25,13 @@ jobs:
         run: |
           mkdir -p /tmp/valuesrepo && cd /tmp/valuesrepo
           git init -b values-history .
-          cp "$GITHUB_WORKSPACE/values-history.json" .
+          # History: use today's output, else re-fetch the existing file from
+          # the branch so a force-push can never erase the rolling window.
+          # No trailing `|| true` — unlike the optional trade archive, this
+          # file is the branch's primary artifact, so publishing without it
+          # should fail loudly.
+          cp "$GITHUB_WORKSPACE/values-history.json" . 2>/dev/null \
+            || curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/values-history/values-history.json" -o values-history.json
           # Trade archive: use today's output, else re-fetch the existing file
           # from the branch so a failed archive step never erases history.
           cp "$GITHUB_WORKSPACE/trade-values.json" . 2>/dev/null \
