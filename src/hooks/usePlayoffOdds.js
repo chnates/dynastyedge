@@ -82,6 +82,9 @@ export function usePlayoffOdds() {
   const season = leagueInfo?.season ?? nflState?.season ?? 'unknown'
   const firstPlayoffWeek = leagueInfo?.settings?.playoff_week_start ?? 15
   const playoffTeams = leagueInfo?.settings?.playoff_teams ?? 6
+  // leagueInfo and nflState land together (one setData in useSleeper), so once
+  // either exists the real season and playoff_week_start are both known.
+  const seasonKnown = leagueInfo != null || nflState != null
 
   const [perWeek, setPerWeek] = useState(
     scheduleCache?.season === season ? scheduleCache.weeks : null
@@ -91,6 +94,11 @@ export function usePlayoffOdds() {
   const [retryTick, setRetryTick] = useState(0)
 
   useEffect(() => {
+    // The default route mounts this hook before the league loads; fetching then
+    // would cache 14 weeks under season 'unknown' and refetch them all when the
+    // real season arrives. Wait — schedLoading stays true, so consumers still
+    // show their loading state (league data is loading too).
+    if (!seasonKnown) return
     let cancelled = false
     setSchedLoading(scheduleCache?.season !== season)
     setSchedError(null)
@@ -106,7 +114,7 @@ export function usePlayoffOdds() {
         setSchedLoading(false)
       })
     return () => { cancelled = true }
-  }, [season, firstPlayoffWeek, retryTick])
+  }, [seasonKnown, season, firstPlayoffWeek, retryTick])
 
   const derived = useMemo(() => {
     if (!league?.allRosters?.length || !perWeek) return null

@@ -974,7 +974,10 @@ yields *both* the remaining schedule (future pairings, grouped by `matchup_id`)
 *and* every completed week's actual per-team score — no separate history call.
 A week counts as **complete** only when *every* team in it has scored, so a
 partially-played current week is simulated fresh instead of contaminating the
-model. Everything else (rosters, records, points-for, FantasyCalc values,
+model. The fetch waits until league settings / NFL state have loaded (The Edge
+mounts the hook before they exist) — otherwise the weeks would cache under an
+unknown season key and all refetch when the real season lands, doubling the
+requests. Everything else (rosters, records, points-for, FantasyCalc values,
 win-window tiers) comes from `LeagueContext`.
 
 **The model + sim (`utils/playoffOdds.js`, pure):**
