@@ -130,6 +130,7 @@ until a full page reload.
 | Value history (daily snapshots, columnar) | `src/hooks/useValueHistory.js` | module + **`historyFailed` latch** | lazy, first sparkline consumer | never; one failure = silent give-up for the session |
 | Trade-time value archive | `src/hooks/useTradeTimeValues.js` | module + `archiveFailed` latch | lazy (scouting ledger) | same latch pattern |
 | Playoff schedule/scores (all regular-season matchup weeks) | `src/hooks/usePlayoffOdds.js` | module, keyed by season | lazy (Playoffs page + odds consumers) | refetches only if season changes |
+| Playoff odds derived results (model + 10k-iteration sim) | `src/hooks/usePlayoffOdds.js` (`derivedCache`) | module, keyed by `league`/`perWeek` reference identity + `playoffTeams`/`firstPlayoffWeek` | computed on first consumer with data; the four consumers share one sim run | recomputes when the league or schedule reference changes (new fetch / identity switch); `myOdds` stays per-instance |
 | Rookie draft sync | `src/hooks/useSleeperDraft.js` | module `{data, fetchedAt}` | lazy (Board/Tracker share it) | manual Refresh; focus refetch (10 s threshold while `drafting`, 5 min idle); 30 s poll while live + visible |
 
 **Player DB trimmed fields** (verified in `usePlayerDB.js` — the raw 5–8 MB
