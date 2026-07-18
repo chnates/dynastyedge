@@ -978,7 +978,12 @@ model. The fetch waits until league settings / NFL state have loaded (The Edge
 mounts the hook before they exist) — otherwise the weeks would cache under an
 unknown season key and all refetch when the real season lands, doubling the
 requests. Everything else (rosters, records, points-for, FantasyCalc values,
-win-window tiers) comes from `LeagueContext`.
+win-window tiers) comes from `LeagueContext`. The **derived results (model +
+sim) are memoized at module scope** too, keyed by the schedule and league
+references, so the four odds consumers (The Edge, Trade Analyzer, Partner
+Finder, the Playoffs page) share one ~50–200 ms simulation per data load
+instead of each re-running it on mount; only the cheap `myOdds` lookup stays
+per-instance.
 
 **The model + sim (`utils/playoffOdds.js`, pure):**
 

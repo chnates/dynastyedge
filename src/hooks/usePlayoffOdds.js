@@ -73,6 +73,70 @@ function processWeeks(perWeek) {
   return { completedScores, remainingSchedule, completedWeeks }
 }
 
+// The scoring model + 10,000-iteration simulation are the heaviest compute in
+// the app (~50–200ms of main-thread work). Four consumers mount this hook (The
+// Edge, Trade Analyzer, Trade Partner Finder, the Playoffs page), and a
+// per-instance useMemo would re-run the sim on every one of those mounts. So
+// the derived results are memoized once at module scope, keyed by the inputs'
+// identities — `league` is LeagueContext's memoized object and `perWeek` is the
+// module-cached schedule array, so unchanged data always arrives as the same
+// references — and navigating between sections reuses one simulation. The sim
+// itself stays pure and fixed-seed, so the shared result is exactly what each
+// instance would have computed on its own. `myRosterId` deliberately stays out
+// of the key: it only selects `myOdds`, a per-instance map lookup.
+let derivedCache = null // { league, perWeek, playoffTeams, firstPlayoffWeek, value }
+
+function deriveOdds(league, perWeek, playoffTeams, firstPlayoffWeek) {
+  const c = derivedCache
+  if (
+    c && c.league === league && c.perWeek === perWeek &&
+    c.playoffTeams === playoffTeams && c.firstPlayoffWeek === firstPlayoffWeek
+  ) {
+    return c.value
+  }
+
+  const { completedScores, remainingSchedule, completedWeeks } = processWeeks(perWeek)
+  // Roster strength is the costliest piece of the model (an optimal-lineup
+  // solve per team). Compute it once and feed both the scoring model and the
+  // preseason preview, instead of solving every roster twice.
+  const strengths = league.allRosters.map(teamStartingStrength)
+  const model = buildScoringModel(league.allRosters, completedScores, strengths)
+  const remainingGames = remainingSchedule.reduce((s, w) => s + w.matchups.length, 0)
+
+  let status
+  if (remainingSchedule.length === 0 && completedWeeks === 0) status = 'preseason'
+  else if (remainingSchedule.length === 0) status = 'complete'
+  else status = 'active'
+
+  const results = status === 'preseason'
+    ? null
+    : simulatePlayoffs({ allRosters: league.allRosters, model, remainingSchedule, playoffTeams })
+
+  // Keyed by roster for consumers (Trade Analyzer / Partner Finder / The Edge)
+  // that need one team's odds without re-running the sim.
+  const oddsByRoster = {}
+  ;(results ?? []).forEach(r => { oddsByRoster[r.rosterId] = r })
+
+  const value = {
+    status,
+    results,
+    oddsByRoster,
+    model,
+    completedWeeks,
+    remainingWeeks: remainingSchedule.length,
+    remainingGames,
+    // Only the preseason page consumes this — don't solve seeding when the
+    // real simulation already ran.
+    strengthPreview: status === 'preseason'
+      ? buildStrengthPreview(league.allRosters, playoffTeams, strengths)
+      : null,
+    playoffTeams,
+    firstPlayoffWeek,
+  }
+  derivedCache = { league, perWeek, playoffTeams, firstPlayoffWeek, value }
+  return value
+}
+
 export function usePlayoffOdds() {
   const {
     league, leagueInfo, nflState, myRosterId,
@@ -118,47 +182,11 @@ export function usePlayoffOdds() {
 
   const derived = useMemo(() => {
     if (!league?.allRosters?.length || !perWeek) return null
+    return deriveOdds(league, perWeek, playoffTeams, firstPlayoffWeek)
+  }, [league, perWeek, playoffTeams, firstPlayoffWeek])
 
-    const { completedScores, remainingSchedule, completedWeeks } = processWeeks(perWeek)
-    // Roster strength is the costliest piece of the model (an optimal-lineup
-    // solve per team). Compute it once and feed both the scoring model and the
-    // preseason preview, instead of solving every roster twice.
-    const strengths = league.allRosters.map(teamStartingStrength)
-    const model = buildScoringModel(league.allRosters, completedScores, strengths)
-    const remainingGames = remainingSchedule.reduce((s, w) => s + w.matchups.length, 0)
-
-    let status
-    if (remainingSchedule.length === 0 && completedWeeks === 0) status = 'preseason'
-    else if (remainingSchedule.length === 0) status = 'complete'
-    else status = 'active'
-
-    const results = status === 'preseason'
-      ? null
-      : simulatePlayoffs({ allRosters: league.allRosters, model, remainingSchedule, playoffTeams })
-
-    // Keyed by roster for consumers (Trade Analyzer / Partner Finder / The Edge)
-    // that need one team's odds without re-running the sim.
-    const oddsByRoster = {}
-    ;(results ?? []).forEach(r => { oddsByRoster[r.rosterId] = r })
-
-    return {
-      status,
-      results,
-      oddsByRoster,
-      myOdds: oddsByRoster[myRosterId] ?? null,
-      model,
-      completedWeeks,
-      remainingWeeks: remainingSchedule.length,
-      remainingGames,
-      // Only the preseason page consumes this — don't solve seeding when the
-      // real simulation already ran.
-      strengthPreview: status === 'preseason'
-        ? buildStrengthPreview(league.allRosters, playoffTeams, strengths)
-        : null,
-      playoffTeams,
-      firstPlayoffWeek,
-    }
-  }, [league, perWeek, playoffTeams, firstPlayoffWeek, myRosterId])
+  // Per-instance: which team is "me" doesn't affect the shared simulation.
+  const myOdds = derived ? (derived.oddsByRoster[myRosterId] ?? null) : null
 
   function retry() {
     scheduleCache = null
@@ -176,7 +204,7 @@ export function usePlayoffOdds() {
     status: derived?.status ?? null,
     results: derived?.results ?? null,
     oddsByRoster: derived?.oddsByRoster ?? {},
-    myOdds: derived?.myOdds ?? null,
+    myOdds,
     model: derived?.model ?? null,
     completedWeeks: derived?.completedWeeks ?? 0,
     remainingWeeks: derived?.remainingWeeks ?? 0,
