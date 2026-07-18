@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { FANTASYCALC_BASE, FANTASYCALC_PARAMS } from '../constants'
 import { fetchJSON } from '../utils/fetchJSON'
 
@@ -93,11 +93,13 @@ export function useFantasyCalc() {
 
   // Keeps existing values on screen during a refresh (stale-while-revalidate):
   // loading only flips on when there is nothing cached to show.
-  function retry() {
+  // Stable identity (like useSleeper's fetchData) so useLeague's memoized
+  // context value doesn't churn every render.
+  const retry = useCallback(() => {
     setError(null)
     if (!moduleCache) setLoading(true)
     setRefreshKey(k => k + 1)
-  }
+  }, [])
 
   return { values, loading, error, retry, fetchedAt }
 }

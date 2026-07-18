@@ -14,7 +14,8 @@ function loadDismissals() {
 }
 
 function saveDismissals(map) {
-  localStorage.setItem(DISMISSAL_KEY, JSON.stringify(map))
+  try { localStorage.setItem(DISMISSAL_KEY, JSON.stringify(map)) }
+  catch { /* storage blocked — dismissal just won't persist */ }
 }
 
 const URGENCY = {
