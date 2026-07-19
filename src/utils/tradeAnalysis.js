@@ -209,8 +209,12 @@ export function getCounterSuggestion(analysis, myRoster, opponentRoster, giveAss
 
   function bestBridger(assets) {
     const sorted = assets.filter(a => a.value > 0).sort((a, b) => a.value - b.value)
-    const ideal  = sorted.find(a => a.value >= gap * 0.8 && a.value <= gap * 1.5)
-    if (ideal) return ideal
+    const inWindow = sorted.filter(a => a.value >= gap * 0.8 && a.value <= gap * 1.5)
+    if (inWindow.length > 0)
+      // Closest to the gap lands the applied counter nearest the ±5% fair band
+      // (ties break cheap, since the list is sorted ascending).
+      return inWindow.reduce((best, a) =>
+        Math.abs(a.value - gap) < Math.abs(best.value - gap) ? a : best)
     const under = sorted.filter(a => a.value < gap)
     return under.length > 0 ? under[under.length - 1] : sorted[0]
   }
