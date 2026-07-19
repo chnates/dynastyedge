@@ -1295,7 +1295,12 @@ the route changed.
 > `/league/teams/:id` + `/league/trajectory/:id` routes (header "League"); the
 > `SideDrawer` is now the always-expanded hierarchical map; and global search
 > jumps to sections/features as well as players. **Next:** Phase 3 — the visual
-> design refresh (separate job; see watch-items below). This section is the
+> design refresh (separate job; see watch-items below). **Phase 3 direction is
+> chosen and owner-approved (2026-07-19): "Primetime Blackout" — Falcons
+> red/black/silver broadcast rebrand. The active spec is
+> `docs/design/phase3-design-brief.md` (+ reference render); it supersedes the
+> Design System section below for the refresh work, and the doc updates land
+> with the code per change control.** This section is the
 > spec; the live Navigation section above is updated phase-by-phase as each step
 > lands.
 
