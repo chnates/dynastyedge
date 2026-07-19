@@ -14,9 +14,11 @@ description: >
 
 Ground truth verified by executing the commands in this repo on **2026-07-05**.
 DynastyEdge is a React 19 + Vite 6 + Tailwind CSS 3 + React Router 7 SPA,
-statically hosted on GitHub Pages. There is **no backend, no test suite, no
-linter, no typechecker** — `npm run build` succeeding is the only automated
-gate, so treat a green build as necessary but nowhere near sufficient.
+statically hosted on GitHub Pages. There is **no backend and no
+typechecker**; the automated gates (as of 2026-07-19) are `npm run lint` +
+`npm test` + `npm run build`, CI-enforced — treat green gates as necessary
+but nowhere near sufficient (the tests cover pure logic on synthetic
+fixtures only).
 
 ## When NOT to use this skill
 
@@ -44,12 +46,14 @@ npm run preview # serves dist/ → http://localhost:4173/dynastyedge/
 
 | Where | Version | Evidence |
 |---|---|---|
-| All 3 GitHub Actions workflows | **Node 20** (pinned) | `node-version: 20` in `.github/workflows/{deploy,news,values-history}.yml` |
+| App workflows (`deploy.yml`, `ci.yml`) | **Node 22** (pinned — the `npm test` glob needs Node ≥ 21; never pin back to 20) | `node-version: 22` in `.github/workflows/{deploy,ci}.yml` |
+| Data pipelines (`news.yml`, `values-history.yml`) | **Node 20** (pinned; they run no tests) | `node-version: 20` in `.github/workflows/{news,values-history}.yml` |
 | `package.json` engines | **none declared** | no `engines` field |
 | Verified working here | Node 22.22.2 / npm 10.9.7 | `npm ci` + `npm run build` + `npm run preview` all green |
 
 `package-lock.json` is `lockfileVersion: 3` (needs npm ≥ 7; written by npm 9+).
-Use Node 20 if you want CI parity; Node 22 is known-good. **Always `npm ci`,
+Use Node 22 for app-CI parity (`ci.yml`/`deploy.yml` pin 22; `npm test`
+needs ≥ 21); the data pipelines pin Node 20. **Always `npm ci`,
 never `npm install`**, unless you are deliberately changing a dependency —
 `npm install` can rewrite the lockfile as a side effect, and lockfile churn is
 a red flag in review.
@@ -255,7 +259,7 @@ Barlow Condensed 600/700/800, IBM Plex Mono 400/500, IBM Plex Sans
 | Committing build output | `dist/` and `node_modules/` are gitignored (`.gitignore` also covers `.DS_Store`, `*.local`). Never force-add them; Pages deploys build `dist/` fresh in Actions. |
 | Case-sensitivity | CI builds on Linux (case-sensitive). An import like `./playerCard` for `PlayerCard.jsx` can work on macOS and fail only in the deploy build. Match file-name case exactly in every import. |
 | `sharp` is a native binary | Platform-specific prebuilds land in `node_modules`. After switching OS/arch (e.g. copying `node_modules` between machines — don't), icon generation fails until `npm ci` on the target platform. Irrelevant to `npm run build` (sharp is script-only). |
-| Node skew vs CI | Workflows pin Node 20; local Node 22 verified fine. If a build passes locally but fails in Actions (or vice versa), reproduce with Node 20 before digging deeper. |
+| Node skew vs CI | App workflows (`ci.yml`/`deploy.yml`) pin Node 22, data pipelines pin Node 20; local Node 22 verified fine. If a build passes locally but fails in Actions (or vice versa), reproduce with the workflow's pinned Node before digging deeper. |
 | Preview URL confusion | Everything is under `/dynastyedge/` locally (dev and preview). `curl localhost:4173/` returns 302, not the app. |
 | "Styles fine in dev, gone in prod" | Almost always the literal-class trap (§3). Grep the built CSS before suspecting anything else. |
 

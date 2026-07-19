@@ -14,10 +14,15 @@ description: >
 
 # DynastyEdge Validation & QA
 
-This repo has **no test suite, no lint, no typecheck**. `npm run build` is the
-only machine gate (verified in `package.json` — scripts are `dev`/`build`/
-`preview` only, as of 2026-07-06). That means the burden of proof is on YOU,
-and this skill defines what proof means here. The app is a static React SPA
+This repo's machine gates (verified 2026-07-19) are `npm run lint` (ESLint 9
+flat config, error severity) + `npm test` (`tests/*.test.mjs` on Node's
+built-in `node:test`, 55 passing) + `npm run build` — enforced by `ci.yml`
+on every branch push/PR and by `deploy.yml` before publishing. But there is
+still **no typecheck**, and the suite pins only the pure `src/utils` logic
+and the module fetch loaders on synthetic fixtures — no component or hook
+rendering, no model calibration, no visuals. For everything the suite
+doesn't pin, the burden of proof is on YOU, and this skill defines what
+proof means here. The app is a static React SPA
 for one real Sleeper dynasty league, used daily on an iPhone at 390px. A wrong
 number ships straight to the owner's phone: every push to `main` auto-deploys.
 
@@ -66,13 +71,23 @@ Strongest to weakest. Always state which rung your evidence sits on.
 after, from the same script on the same input. No number, no claim; write
 "expected to improve X, unmeasured" instead.
 
-**Never claim you ran what you didn't.** In this sandbox (as of 2026-07-06)
-outbound calls to `api.sleeper.app` and `api.fantasycalc.com` are blocked by
-the proxy (403); `raw.githubusercontent.com` IS reachable (the static feeds
-can be checked). Network posture varies between sandboxes — probe first; the
-canonical home for the current posture is
-`dynastyedge-diagnostics-and-tooling`. Label blocked steps **NETWORK
-REQUIRED** and hand them to the owner rather than pretending.
+**Never claim you ran what you didn't.** Network posture **varies per
+session — probe before assuming either way** (2026-07-06: both fantasy APIs
+proxy-blocked, feeds reachable; 2026-07-19: live site + both APIs fully
+reachable, and the built app was rendered and driven in headless Chromium
+with live data). The canonical home for the current posture and the
+browser-driving recipe is `dynastyedge-diagnostics-and-tooling`. Label
+blocked steps **NETWORK REQUIRED** and hand them to the owner rather than
+pretending.
+
+**Browser-driven checks are real evidence — for the right claims.** When
+network allows, a headless-Chromium run of the built app on real league data
+(recipe in `dynastyedge-diagnostics-and-tooling`) substantiates rendering,
+navigation, and on-screen numbers — rung-1-grade for those claims. It is
+NEVER evidence for the iOS-specific class: PWA metas / status bar (iOS
+chrome, invisible to any browser screenshot), standalone mode, safe-area
+insets (0 in emulation), sheet gestures, rubber-banding, or the iOS
+keyboard. Those still require the owner's physical iPhone.
 
 ---
 
@@ -283,7 +298,11 @@ FantasyCalc outage.**
 library — without explicit owner sign-off (route through
 `dynastyedge-change-control`). The sanctioned pattern is **plain `.mjs`
 scripts using `node:assert/strict`** run directly with `node`, importing the
-repo's pure utils.
+repo's pure utils — now formalized as the `tests/` suite: a permanent test
+is a `tests/<name>.test.mjs` file on the built-in `node:test` runner, picked
+up automatically by `npm test` (the script registers the resolver hook
+itself; its glob needs Node ≥ 21, which is why ci.yml/deploy.yml pin
+Node 22).
 
 Two mechanics make this work (both verified 2026-07-06):
 
@@ -438,7 +457,8 @@ Everything above was verified against source / executed on 2026-07-06 at
 `main` = `6fb85f3`. Re-verify before trusting:
 
 - Build baseline: `npm run build` (expect `✓ built`; note time + bundle size).
-- No test/lint scripts still true: `cat package.json` (scripts block).
+- Lint/test gates present and green: `cat package.json` (scripts block) ·
+  `npm run lint` · `npm test`.
 - Best-effort catches still in place: `grep -n "catch" src/hooks/useValueHistory.js src/hooks/useTradeTimeValues.js` and `grep -n "catch(() => \[\])" src/hooks/usePlayerIntel.js`.
 - Sign-in independence: `grep -n signInRosters src/hooks/useLeague.js src/components/auth/LoginScreen.jsx`.
 - Sparkline threshold: `grep -n MIN_SPARKLINE_POINTS src/hooks/useValueHistory.js` (expect 4).

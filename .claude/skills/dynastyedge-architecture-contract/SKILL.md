@@ -132,6 +132,7 @@ until a full page reload.
 | Matchup weeks (`/matchups/{week}` full entries — shared by playoff odds AND lineup history, one fetch per week per session) | `src/hooks/matchupWeeks.js` (consumed by `usePlayoffOdds.js` weeks 1..playoff_week_start−1 and `useLineupHistory.js` weeks 1..17 / 1..current−1) | module, per-week + per-range promise latches | lazy (first consumer of either feature) | `resetMatchupWeeks()` (the Playoffs retry path); a week failing degrades to empty entries, EVERY requested week failing rejects (nothing cached, retry refetches) |
 | Playoff odds derived results (model + 10k-iteration sim) | `src/hooks/usePlayoffOdds.js` (`derivedCache`) | module, keyed by `league`/`perWeek` reference identity + `playoffTeams`/`firstPlayoffWeek` | computed on first consumer with data; the four consumers share one sim run | recomputes when the league or schedule reference changes (new fetch / identity switch); `myOdds` stays per-instance |
 | Rookie draft sync | `src/hooks/useSleeperDraft.js` | module `{data, fetchedAt}` | lazy (Board/Tracker share it) | manual Refresh; focus refetch (10 s threshold while `drafting`, 5 min idle); 30 s poll while live + visible |
+| Lineup optimizer data (NFL state, week projections, schedule, prev-week def stats) | `src/hooks/useLineupData.js` | React state, **per-mount — deliberately no module cache** (projections/injury statuses must be fresh on every Lineup tab open, per Feature 4's "update when the user opens the Lineup tab" contract; the player-DB piece still reads the shared `loadPlayerDB` cache) | mount effect (My Team › Lineup) | `retry` refetches; state discarded on unmount |
 
 **Player DB trimmed fields** (verified in `usePlayerDB.js` — the raw 5–8 MB
 response is discarded, only these survive): `name`, `position`, `team`, `age`,
@@ -333,17 +334,20 @@ injectable/fixed seed.
 Do not "discover" these as bugs; they are known trade-offs. Do fix them when a
 task legitimately touches them.
 
-1. **No automated tests, lint, or typecheck.** `npm run build` is the only
-   gate before auto-deploy to the live site. Verification is manual /
-   real-data (owner's law). See `dynastyedge-validation-and-qa` before
-   shipping anything risky.
-2. **CLAUDE.md rule 16 is stale on the status-bar meta.** It says "No
-   `apple-mobile-web-app-status-bar-style` meta"; `index.html` (line 18)
-   ships `content="black-translucent"`, restored deliberately in commit
-   `78b6c29` after a revert cycle (`cfd9ad0` → `3083f0c` → `78b6c29`).
-   **Code + git history win.** The `App.jsx` safe-area strip (the fixed
-   `#0D0D0F` div behind the status bar in light mode) exists *because of*
-   black-translucent — don't remove either half alone.
+1. **Machine gates exist but are narrow** (updated 2026-07-19). `npm run
+   lint` + `npm test` + `npm run build` gate every branch push (`ci.yml`)
+   and every deploy (`deploy.yml`) — but there is no typecheck, and the
+   test suite covers only pure utils + module fetch loaders on synthetic
+   fixtures (no component/hook rendering, no model calibration).
+   Real-data verification remains the owner's law. See
+   `dynastyedge-validation-and-qa` before shipping anything risky.
+2. **CLAUDE.md rule 16 staleness on the status-bar meta — FIXED
+   2026-07-19** by an owner-approved docs commit: rule 16 now describes the
+   `black-translucent` meta (`index.html:18`, restored deliberately in
+   commit `78b6c29` after the `cfd9ad0` → `3083f0c` revert cycle) plus the
+   light-mode strips. Still true and load-bearing: the `App.jsx` safe-area
+   strip (the fixed `#0D0D0F` div behind the status bar in light mode)
+   exists *because of* black-translucent — don't remove either half alone.
 3. **GitHub cron workflows auto-disable after ~60 days without repo
    activity.** Both data pipelines (news twice-hourly, values daily) die
    silently in a quiet offseason. Any push re-enables them. Symptom: stale
@@ -398,8 +402,10 @@ Written 2026-07-05 against the working tree at that date, by direct reading of:
 `src/utils/playoffOdds.js`, `index.html`, plus `git log` for `78b6c29`.
 
 Re-verify before trusting volatile claims (all commands read-only; network
-calls to the fantasy APIs are **blocked in the CI sandbox** — proxy 403 — so
-verify shapes from code, not live calls, when sandboxed):
+posture **varies per session — probe first** (restricted sandboxes 403 the
+fantasy APIs; open sessions reach them — see
+`dynastyedge-diagnostics-and-tooling` for the current posture). When
+blocked, verify shapes from code, not live calls):
 
 ```bash
 # Purity boundary: must print nothing
@@ -417,8 +423,8 @@ grep -n "ROSTER_SCOPED" src/hooks/useIdentity.js
 # Storage key inventory (check versioning claims):
 grep -rhoE "dynastyedge_[a-z0-9_]+" src | sort -u
 
-# Rule-16 divergence still present:
-grep -n "status-bar-style" index.html && git log --oneline -1 78b6c29
+# Rule-16 doc/code agreement (divergence fixed 2026-07-19):
+grep -n "status-bar-style" index.html CLAUDE.md && git log --oneline -1 78b6c29
 
 # Redirect block + HashRouter:
 grep -n "HashRouter\|Navigate to=" src/App.jsx | head -25

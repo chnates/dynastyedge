@@ -11,7 +11,8 @@ export function pickRoundLabel(pick) {
   return `${pick.season} ${suffix}`
 }
 
-// Early / Mid / Late thirds of a round (1–3 / 4–7 / 8–10 in a 10-team league).
+// Early / Mid / Late ceil-thirds of a round (1–4 / 5–7 / 8–10 in a
+// 10-team league — Early runs through ceil(teams/3)).
 export function slotTier(slot, teams = 10) {
   if (slot <= Math.ceil(teams / 3)) return 'Early'
   if (slot <= Math.ceil((2 * teams) / 3)) return 'Mid'

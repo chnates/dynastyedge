@@ -28,9 +28,12 @@ Context you must hold (all as of 2026-07-05):
   analytical core is **pure ESM in `src/utils/`**, runnable under plain Node
   via the loader in `dynastyedge-diagnostics-and-tooling`
   (`node --import ./.claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs your-script.mjs`).
-- **There is no test suite.** `npm run build` is the only machine gate.
-  Everything else that looks like "testing" in this repo is a discipline you
-  perform, not a harness that catches you.
+- **The test suite is narrow.** `npm test` (`tests/*.test.mjs`, since
+  2026-07) pins documented behavior of the pure utils + fetch loaders on
+  synthetic fixtures; lint + build round out the machine gates. Nothing
+  covers components, hooks, rendering, or model *quality* — for those,
+  everything that looks like "testing" is still a discipline you perform,
+  not a harness that catches you.
 - `main` auto-deploys to the owner's phone on every push. A half-finished
   experiment on `main` is a broken app in the owner's pocket.
 - Owner's laws: **real-data verification · always-shippable main ·
@@ -123,7 +126,8 @@ claim, the data, and the harness — **not** your reasoning or your draft
 report, so it cannot anchor on your narrative. The claim is accepted only if
 the refuter fails.
 
-*Why:* this repo has no test suite to catch you, and the same session that
+*Why:* this repo's test suite pins pure-logic behavior only — nothing
+catches a flawed experiment design — and the same session that
 built a result is structurally incapable of hunting its own confounds.
 Precedent that fresh adversarial eyes find real defects here: the structured
 audits `a3a34dc` (2026-06-20, UX audit — found four shipped-and-broken
@@ -388,7 +392,7 @@ failed>", with commands and numbers for every attack you ran.
 
 | Anti-pattern | Why it fails here | Local story |
 |---|---|---|
-| **Eyeball verdicts** ("looks better/faster") | No test suite means your eye is the only gate you skipped | Neon glow `e31deaf` shipped on aesthetic judgment, reverted same day `aa0892b` once actually viewed in dark mode on the device. Cheap only because it was killed fast. |
+| **Eyeball verdicts** ("looks better/faster") | The test suite covers no visuals — your eye is the gate, and you skipped it | Neon glow `e31deaf` shipped on aesthetic judgment, reverted same day `aa0892b` once actually viewed in dark mode on the device. Cheap only because it was killed fast. |
 | **Tuning on the evaluation set** | With N=10 teams you can fit noise perfectly and "prove" anything | Standing fence in `dynastyedge-model-quality-campaign`: tune on season A, evaluate frozen on season B; the holdout is named in the pre-registration and touched once. |
 | **Changing two things at once** | Tiny N gives you zero statistical attribution; isolation is the only attribution you get | The Navigation Refactor deliberately split IA restructure (Phases 1–2, `59627db`…`f7df308`) from the visual repaint (Phase 3, still unbuilt) — CLAUDE.md states the reason: "so we don't restructure and restyle at once". |
 | **Claiming without explaining the negatives** | Two half-explanations hide a wrong model; the unexplained case is where it bites | First PWA status-bar fix `cfd9ad0` addressed the observed symptom via the (wrong) theme-color-override diagnosis, reverted `3083f0c` same day; accepted fix `78b6c29` — restore `black-translucent` + light-mode-only dark strip, since iOS standalone ignores live theme-color — covered all observations in both themes. |

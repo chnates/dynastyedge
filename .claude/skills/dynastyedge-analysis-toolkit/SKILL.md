@@ -15,7 +15,7 @@ description: First-principles analysis recipes for DynastyEdge's hand-written st
 node --import /home/user/dynastyedge/.claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs  your-script.mjs
 ```
 
-All seven worked examples live in this skill's `scripts/` dir (`01-…` through `07-…`); each file's header comment carries its exact run command. Everything runs **offline** — fantasy APIs are proxy-blocked in this sandbox, so examples use synthetic data fed into the repo's real functions. If the harness files are ever missing, the hook is 12 lines: a `resolve()` that appends `.js` to extensionless relative specifiers when the file exists (see the header of any script here, or `dynastyedge-diagnostics-and-tooling`).
+All seven worked examples live in this skill's `scripts/` dir (`01-…` through `07-…`); each file's header comment carries its exact run command. Everything runs **offline by design** — examples use synthetic data fed into the repo's real functions, so they work in any session regardless of network posture (which varies; probe first — see `dynastyedge-diagnostics-and-tooling`). If the harness files are ever missing, the hook is 12 lines: a `resolve()` that appends `.js` to extensionless relative specifiers when the file exists (see the header of any script here, or `dynastyedge-diagnostics-and-tooling`).
 
 ## When NOT to use this skill
 

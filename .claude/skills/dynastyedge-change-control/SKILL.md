@@ -7,10 +7,14 @@ description: How changes are classified, gated, and landed in the DynastyEdge re
 
 **The one fact that shapes everything:** every push to `main` auto-builds and
 deploys to the owner's iPhone within minutes (`.github/workflows/deploy.yml`
-triggers on `push: branches: [main]`). There is no staging environment, no
-test suite, no linter, no typecheck. `main` **is** production, and the only
-machine gate is `npm run build`. Everything else in this skill exists to
-compensate for that.
+triggers on `push: branches: [main]`). There is no staging environment;
+`main` **is** production. The machine gates (as of 2026-07-19) are
+`npm run lint` + `npm test` + `npm run build`, enforced by `ci.yml` on every
+branch push/PR and by `deploy.yml` before anything publishes — but there is
+still no typecheck, and the test suite pins only the pure utils + module
+fetch loaders on synthetic fixtures (no components, no hooks, no model
+calibration). Everything else in this skill exists to compensate for that
+gap.
 
 Terms used below (defined once):
 - **CLAUDE.md** — the ~108KB doc of record at the repo root. Authoritative
@@ -48,11 +52,11 @@ classes must pass the union of both gate sets.
 
 | Class | Examples from history | Required gates before merge to main |
 |---|---|---|
-| **UI-only** (styling/layout, no logic or data change) | `4457e45` stadium-lights rollout · `0b15ca3` login neon styling · `e98260f` iOS focus-zoom fix | build green · **`design-review` skill on the diff** · 390px mental layout check · CLAUDE.md same-commit *if* the design system or a documented treatment changed (`8b6edb4` bundled CLAUDE.md with the ui/ library) |
-| **Behavior/logic** (any change to what the app computes, fetches, stores, or shows) | `24ed7cf` taxi (developmental-player stash — see dynasty-fantasy-reference) rule fix · `1ef480a` pick pricing fix · `119c164` new Feature 17 · `92657ae` trade preload fix | build green · **real-data verification** against the live league (route: `dynastyedge-validation-and-qa`) · **CLAUDE.md updated in the SAME commit** · design-review if UI moved too |
-| **Data-pipeline/workflow** (`.github/workflows/*.yml`, `scripts/*.mjs`) | `news.yml` (cron `17,47 * * * *`) · `values-history.yml` (cron `41 9 * * *`) — both force-push single-commit data branches | build green (if app code touched) · run the script locally where network allows · **never write a publish step that can erase accumulated branch data** (values-history.yml's publish step re-fetches the old trade archive on script failure — preserve that pattern) · CLAUDE.md same commit · after merge, verify with a manual `workflow_dispatch` run (workflows can only truly be tested on the default branch) · pipeline ops/schedules canonical: `dynastyedge-run-and-operate` |
-| **Doc-only** (CLAUDE.md / skills, no code) | `700ce00` "docs: reflect UX audit fixes" · `d4f9e75` "docs: add phased Navigation Refactor plan" | prefix subject with `docs:` · verify every claim against the code before writing it (see Divergence protocol) · build not required but costs 4s — run it anyway |
-| **PWA-meta/manifest** (index.html metas, manifest.webmanifest, theme-color logic in `useTheme`) | the `cfd9ad0` → `3083f0c` → `78b6c29` status-bar saga (below) | **highest-risk class.** All behavior-class gates, PLUS: read the saga below and `dynastyedge-failure-archaeology` first · know that meta changes only take effect after the owner **removes and re-adds** the home-screen app (stated in index.html's own comment and CLAUDE.md rule 16) — you cannot verify this class in any sandbox; it needs the physical phone · bump the `?v=N` icon query only for logo changes |
+| **UI-only** (styling/layout, no logic or data change) | `4457e45` stadium-lights rollout · `0b15ca3` login neon styling · `e98260f` iOS focus-zoom fix | gates green (lint + test + build) · **`design-review` skill on the diff** · 390px mental layout check · CLAUDE.md same-commit *if* the design system or a documented treatment changed (`8b6edb4` bundled CLAUDE.md with the ui/ library) |
+| **Behavior/logic** (any change to what the app computes, fetches, stores, or shows) | `24ed7cf` taxi (developmental-player stash — see dynasty-fantasy-reference) rule fix · `1ef480a` pick pricing fix · `119c164` new Feature 17 · `92657ae` trade preload fix | gates green (lint + test + build) · **real-data verification** against the live league (route: `dynastyedge-validation-and-qa`) · **CLAUDE.md updated in the SAME commit** · design-review if UI moved too |
+| **Data-pipeline/workflow** (`.github/workflows/*.yml`, `scripts/*.mjs`) | `news.yml` (cron `17,47 * * * *`) · `values-history.yml` (cron `41 9 * * *`) — both force-push single-commit data branches | gates green (lint + test + build, if app code touched) · run the script locally where network allows · **never write a publish step that can erase accumulated branch data** (values-history.yml's publish step re-fetches the old trade archive on script failure — preserve that pattern) · CLAUDE.md same commit · after merge, verify with a manual `workflow_dispatch` run (workflows can only truly be tested on the default branch) · pipeline ops/schedules canonical: `dynastyedge-run-and-operate` |
+| **Doc-only** (CLAUDE.md / skills, no code) | `700ce00` "docs: reflect UX audit fixes" · `d4f9e75` "docs: add phased Navigation Refactor plan" | prefix subject with `docs:` · verify every claim against the code before writing it (see Divergence protocol) · gates not strictly required but cost seconds — run lint + test + build anyway (CLAUDE.md rule 22 expects lint green before any commit) |
+| **PWA-meta/manifest** (index.html metas, manifest.webmanifest, theme-color logic in `useTheme`) | the `cfd9ad0` → `3083f0c` → `78b6c29` status-bar saga (below) | **highest-risk class.** All behavior-class gates, PLUS: read the saga below and `dynastyedge-failure-archaeology` first · know that meta changes only take effect after the owner **removes and re-adds** the home-screen app (stated in index.html's own comment and CLAUDE.md rule 16) — you cannot verify this class in any sandbox — a headless-browser screenshot shows the page, never iOS chrome, so it needs the physical phone · bump the `?v=N` icon query only for logo changes |
 
 **The PWA saga (why that class is special), as of 2026-07-05:** a prior
 commit had already dropped the `black-translucent` status bar for a
@@ -73,21 +77,31 @@ Run top to bottom before any merge to `main`:
 
 ```bash
 cd /home/user/dynastyedge
-npm run build          # the ONLY machine check; must end "✓ built in …"
+npm run lint           # ESLint 9 flat config over src/ + scripts/, error severity
+npm test               # tests/*.test.mjs on node:test (55 passing as of 2026-07-19)
+npm run build          # must end "✓ built in …"
 ```
 
-1. **Build green.** Verified working as of 2026-07-05 (`vite build`, ~3s).
-   There is no `npm test` / `npm run lint` — do not invent one, do not skip
-   the build because the change "is just CSS".
+1. **Lint + tests + build green.** All three verified working as of
+   2026-07-19; `ci.yml` runs them on every branch push and PR, and
+   `deploy.yml` runs them before the build step of every `main` deploy. Do
+   not skip them because the change "is just CSS". Never fix a
+   `react-hooks/exhaustive-deps` error by deleting the dependency array or
+   blanket-disabling the rule (CLAUDE.md rule 22). And remember what a green
+   `npm test` proves: the pure logic matches its documented behavior on
+   synthetic fixtures — it is NOT real-data verification (gate 3).
 2. **Design review for any UI diff.** Invoke the `design-review` skill on the
    diff. It enforces CLAUDE.md's rule that all UI routes through
    `src/components/ui` (Button, Card, Sheet, Chip, Badge, Input…). This is
    the project's stated enforcement mechanism, not a suggestion.
 3. **Real-data verification for behavior changes.** The owner's law: verify
    against the REAL live league, never mocks. Evidence standards live in
-   `dynastyedge-validation-and-qa`. Example spot-checks (⚠ require open
-   network — api.sleeper.app / api.fantasycalc.com return proxy 403 in
-   restricted sandboxes like this one; never claim you ran these if blocked):
+   `dynastyedge-validation-and-qa`. Example spot-checks (⚠ network varies
+   per session — probe first. Restricted sandboxes 403 both fantasy APIs;
+   open sessions reach them fine (verified 2026-07-19, when the built app
+   was also rendered + driven in headless Chromium — recipe and current
+   posture: `dynastyedge-diagnostics-and-tooling`). Never claim you ran
+   these if blocked):
 
    ```bash
    curl -s 'https://api.sleeper.app/v1/league/1313933520715907072/rosters' | head -c 2000
@@ -147,7 +161,7 @@ the scar tissue. Deeper invariants: `dynastyedge-architecture-contract`.
   `claude/app-integration-flow-review-jiy6nb`). Merge commits read
   `Merge claude/<branch>: <subject>` or `Merge: <subject>`.
 - **Merging/pushing to `main` IS deployment.** `deploy.yml`: push to main →
-  `npm ci` → `npm run build` → deploy `dist/` to GitHub Pages (Node 20).
+  `npm ci` → `npm run lint` → `npm test` → `npm run build` → deploy `dist/` to GitHub Pages (Node 22).
   No approval step, no environment gate you control.
 - **Therefore: no WIP, no experiments, no "let's see how it looks" on main.**
   History shows the cost: `e31deaf` (neon glow experiment) → `aa0892b`
@@ -176,16 +190,18 @@ Then:
 4. **Record the case in `dynastyedge-failure-archaeology`** so the next
    session doesn't re-derive it.
 
-**Worked example (live divergence, unfixed as of 2026-07-05):** CLAUDE.md
-rule 16 (line ~1896) states "**No `apple-mobile-web-app-status-bar-style`
-meta**". But `index.html:18` deliberately ships
+**Worked example (divergence — RESOLVED 2026-07-19 by an owner-approved
+docs commit):** CLAUDE.md rule 16 stated "**No
+`apple-mobile-web-app-status-bar-style` meta**". But `index.html:18`
+deliberately ships
 `<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />`,
 restored by `78b6c29` after the `cfd9ad0` → `3083f0c` revert saga, with a
 14-line comment explaining why (transparent bar; app glow paints under it;
-light mode adds a dark strip behind the white status text). The doc describes
-the *reverted* approach. If you touch this area: the meta STAYS, and rule 16
-gets corrected in the same commit. Never "fix" index.html to match the stale
-doc — that re-ships the regression the owner already caught on his phone.
+light mode adds a dark strip behind the white status text). The doc described
+the *reverted* approach until the 2026-07-19 docs commit rewrote rule 16 to
+match the code; `index.html` was untouched. The standing ruling is unchanged:
+the meta STAYS. Never "fix" index.html to match a stale doc — that re-ships
+the regression the owner already caught on his phone.
 
 **Sub-case — this clone's git history is shallow:** `.git/shallow` grafts at
 `4f31aad` and `dc0afdc`, so `git show 4f31aad` displays the whole tree
@@ -212,7 +228,7 @@ each class before trusting it:
 | Fact class | Re-verification command |
 |---|---|
 | Deploy trigger + steps | `cat .github/workflows/deploy.yml` |
-| Only machine check is the build (no test/lint scripts) | `cat package.json` (scripts: dev/build/preview only) |
+| Machine gates are lint + test + build | `cat package.json` (scripts incl. `lint`/`test`) · `npm run lint` · `npm test` |
 | Build is green | `npm run build` |
 | Dependency count / icon tooling in devDeps | `cat package.json` |
 | CLAUDE.md-same-commit pattern | `git log --format='%h %s' --name-only \| grep -B8 CLAUDE.md \| head -60` |

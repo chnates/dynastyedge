@@ -455,7 +455,8 @@ Show the % difference clearly: “You’re getting 12% more value” or “You�
 
 **Layer 2 — Roster fit**
 Does what you’re getting fill an actual need (a deficit position)?
-Does what you’re giving hurt a position of strength?
+Does what you’re giving come from a position where you’re already below
+league average — selling depth you genuinely need?
 Uses the same positional surplus/deficit logic as Trade Partner Finder.
 
 **Layer 3 — Win window fit**
@@ -935,8 +936,10 @@ the trade workflow, not just its own tab.
 **Slot-level pricing:** FantasyCalc lists picks as "2026 Early 1st" /
 "Mid" / "Late". When Sleeper has set the draft order (`slot_to_roster_id`,
 via `buildDraftOrder` — including in-draft pick trades), every pick maps to
-its exact slot (1.01–4.10) and is priced by its round's Early (slots 1–3) /
-Mid (4–7) / Late (8–10) tier entry. Before the order exists, the market
+its exact slot (1.01–4.10) and is priced by its round's Early (slots 1–4) /
+Mid (5–7) / Late (8–10) tier entry — tiers are ceil-thirds of the round
+(`slotTier`: Early runs through `ceil(teams/3)`, i.e. slot 4 in a 10-team
+league). Before the order exists, the market
 falls back to round-level picks at round medians (`findPickValue`) with a
 note that prices upgrade automatically. A price-board card shows each
 round's E/M/L prices on top.
@@ -1998,15 +2001,23 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 1. **Standalone web app (Add to Home Screen):** `index.html` declares
    `apple-mobile-web-app-capable` + `manifest.webmanifest` (display
    standalone, icons 192/512) so iOS draws the app edge-to-edge instead of
-   letterboxing it with black bars. **No `apple-mobile-web-app-status-bar-style`
-   meta** — modern iOS colors the standalone status bar from the
-   `theme-color` meta (synced to the app theme by `useTheme`) and picks
-   readable text automatically, so the bar matches the header in both
-   themes. The fixed header still pads with `env(safe-area-inset-top)` as a
-   harmless fallback. Changes to these metas only take effect after the
-   user removes and re-adds the home-screen app. Icon link tags carry a
-   `?v=N` query — bump it to bust Safari's per-site icon cache when the
-   logo changes.
+   letterboxing it with black bars. The standalone status bar uses the
+   **`apple-mobile-web-app-status-bar-style` meta set to
+   `black-translucent`**: the bar is transparent, so app content + the
+   ambient glow paint under it seamlessly — no solid colored band. iOS
+   forces white status text in this mode, so in light mode a fixed dark
+   strip (`dark:hidden`, height `env(safe-area-inset-top)`, in both
+   `App.jsx`'s AppShell and `LoginScreen.jsx`) sits behind the bar to keep
+   the clock/battery readable. The meta and the strips are one design —
+   never remove either half alone, and never switch the standalone bar to
+   the theme-color approach (tried and reverted: iOS standalone doesn't
+   honor the live per-theme `theme-color`, so the bar rendered as a solid
+   black band). The `theme-color` meta (synced to the app theme by
+   `useTheme`) still colors regular Safari's bar area. The fixed header
+   still pads with `env(safe-area-inset-top)`. Changes to these metas only
+   take effect after the user removes and re-adds the home-screen app.
+   Icon link tags carry a `?v=N` query — bump it to bust Safari's per-site
+   icon cache when the logo changes.
 1. **Bottom sheets:** The app's scroll container is `<main>` — the body never
    scrolls. Every bottom sheet (PlayerProfileDrawer, RosterAnalysisSheet,
    trade add sheet, and any future sheet) must: call `useScrollLock()` while

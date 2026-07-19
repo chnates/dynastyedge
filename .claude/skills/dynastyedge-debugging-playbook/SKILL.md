@@ -28,8 +28,9 @@ used on iPhone Safari / installed home-screen PWA at 390px. It joins two free
 APIs — Sleeper (league/rosters, numeric player IDs) and FantasyCalc (dynasty
 trade values, carries `sleeperId` as the join key) — plus static JSON feeds
 built by GitHub Actions on the `news-data` and `values-history` branches.
-There are **no tests, no linter**; the only machine check is `npm run build`
-(verified green 2026-07-05, ~3.4s). `CLAUDE.md` at repo root is the doc of
+The machine checks are `npm run lint` + `npm test` (pure-utils + fetch-loader
+tests only — nothing renders) + `npm run build` (all verified green
+2026-07-19). `CLAUDE.md` at repo root is the doc of
 record *except where code demonstrably diverges* — one known divergence is
 documented in §5 below.
 
@@ -207,8 +208,9 @@ Feeds are static JSON on orphan branches, force-pushed by Actions
 `values-history/{values-history.json,trade-values.json}` (cron `41 9 * * *`).
 URLs in `src/constants.js:20,25,30` (raw.githubusercontent.com).
 
-Triage stale feeds — **these need network; the local sandbox blocks
-api.sleeper.app / api.fantasycalc.com outright and may proxy-block others.
+Triage stale feeds — **these need network; posture varies per session
+(probe first — restricted sandboxes 403 the fantasy APIs, open sessions
+reach them; canonical posture: `dynastyedge-diagnostics-and-tooling`).
 Never claim you ran one if it failed:**
 
 ```bash
@@ -253,9 +255,10 @@ Note `useIdentity` already wipes roster-scoped keys on identity switch — a
 ### 8.1 API-side vs app-side
 
 Curl the source of truth, compare with what the app renders.
-**Requires open network — blocked in this sandbox (proxy 403 on
-api.sleeper.app / api.fantasycalc.com as of 2026-07-05). Run on a machine
-with egress, or ask the owner; never fabricate output.**
+**Requires open network — varies per session, probe first (restricted
+sandboxes 403 api.sleeper.app / api.fantasycalc.com; open sessions reach
+both — verified 2026-07-19). If blocked, run on a machine with egress or
+ask the owner; never fabricate output.**
 
 ```bash
 # Sleeper (league 1313933520715907072; my roster_id = 6)
@@ -342,4 +345,4 @@ live API responses, feed-branch freshness, the ~60-day cron-disable behavior
 - Pick pricing paths: `grep -n "makePickPricer\|findPickValue" src/utils/pickTrades.js src/utils/pickCapital.js`
 - SWR window: `grep -n STALE_AFTER_MS src/App.jsx`
 - Storage keys: `grep -rhoE "dynastyedge_[a-z_0-9]+" src | sort -u`
-- Build still the only gate: `npm run build` (and confirm no test/lint scripts in `package.json`)
+- Machine gates: `npm run lint && npm test && npm run build` (scripts verified in `package.json`)

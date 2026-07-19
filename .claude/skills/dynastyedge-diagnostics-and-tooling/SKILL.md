@@ -17,12 +17,46 @@ All scripts live in `scripts/` next to this file and use **Node builtins only**
 SKILL=/home/user/dynastyedge/.claude/skills/dynastyedge-diagnostics-and-tooling
 ```
 
-Network reality (as of 2026-07-06, in the sandboxed CCR environment):
-`api.sleeper.app` and `api.fantasycalc.com` are **blocked** (proxy HTTP 403),
-while `raw.githubusercontent.com` **is reachable**. So `check-feeds.mjs` works
-here; `probe-league.mjs` and `run-model.mjs --live` need a real-network
-environment and fail gracefully otherwise. Never claim a network script
-"passed" when it printed its NETWORK FAILURE block.
+Network reality — **it varies per session; probe, never assume.** The egress
+policy is set per environment, so two sessions in the "same" repo can differ.
+Probe first:
+`curl -sS -o /dev/null -w '%{http_code}\n' https://api.sleeper.app/v1/state/nfl`.
+Observed postures: 2026-07-06 (restricted CCR sandbox) — both fantasy APIs
+proxy-blocked (403), `raw.githubusercontent.com` reachable, so only
+`check-feeds.mjs` worked; 2026-07-19 (Claude Code on the web) — the live
+GitHub Pages site, `api.sleeper.app`, AND `api.fantasycalc.com` all returned
+200, so `probe-league.mjs` and `run-model.mjs --live` can run for real.
+Never claim a network script "passed" when it printed its NETWORK FAILURE
+block.
+
+## Driving the app in a headless browser (when network allows)
+
+Verified 2026-07-19: the built app can be rendered AND driven end-to-end in
+this environment's pre-installed Chromium (`/opt/pw-browsers`), signed in as
+a real team with live league data on screen at 390×844. The working recipe —
+each step exists for a reason:
+
+1. `npm run build && npm run preview -- --port 4173` — serve `dist/` on
+   localhost. Localhost is on the proxy's no-proxy list, so the browser
+   reaches it directly. App URL: `http://127.0.0.1:4173/dynastyedge/`.
+2. Install `playwright-core` in the session **scratchpad, never the repo**
+   (the no-new-deps law governs `package.json`, not throwaway tooling), and
+   launch with `executablePath` pointing at the pre-installed Chromium.
+3. **Chromium cannot traverse the egress proxy's HTTPS itself** (TLS reset
+   on every host, even ones curl reaches — verified 2026-07-19). Intercept
+   the app's external calls with `context.route()` and fulfill them via
+   Node's fetch, which does work through the proxy: run the script with
+   `NODE_USE_ENV_PROXY=1 NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt`, and
+   add `access-control-allow-origin: *` to fulfilled responses.
+
+**What this evidence is and is not.** It proves rendering, data flow, and
+navigation against real league data — real screenshots, real numbers. It is
+**NOT iPhone evidence**: emulated Chromium shows the page only, never iOS
+chrome (the status bar the PWA metas control is invisible here),
+`env(safe-area-inset-*)` resolves to 0, and iOS Safari's standalone mode,
+scroll rubber-banding, sheet gestures, and keyboard/visualViewport behavior
+are not reproduced. The PWA-meta/manifest change class still requires the
+owner's physical phone (see `dynastyedge-change-control`).
 
 ## When NOT to use this skill
 

@@ -183,21 +183,16 @@ follow-up session reads the stale doc and doesn't know a follow-up is owed).
    content="black-translucent" />` (index.html line 18, with a long comment
    explaining the mechanism). **CLAUDE.md rule 16 was never updated.**
 
-Result: the doc of record still asserts the opposite of what the code
-deliberately ships. Any session that "fixes" index.html to match rule 16
-re-introduces the black-bar regression that `78b6c29` fixed. That is what one
-missed doc edit costs. (The revert saga itself is `dynastyedge-failure-
-archaeology` territory; the doc lesson is this skill's.)
+Result: for a month the doc of record asserted the opposite of what the code
+deliberately ships — a session that "fixed" index.html to match rule 16 would
+have re-introduced the black-bar regression that `78b6c29` fixed. That is
+what one missed doc edit costs. (The revert saga itself is
+`dynastyedge-failure-archaeology` territory; the doc lesson is this skill's.)
 
-**Do not fix rule 16 yourself.** It needs an owner-approved doc edit (rewrite
-rule 16 to describe the black-translucent approach + the light-mode dark
-strip, citing `78b6c29`). Until then, flag it in any work that touches PWA
-metas. Verify it still stands before citing it:
-
-```bash
-sed -n '18p' index.html
-grep -n 'apple-mobile-web-app-status-bar-style' CLAUDE.md
-```
+**Resolved 2026-07-19:** an owner-approved `docs:` commit rewrote rule 16 to
+describe the black-translucent approach + the light-mode dark strips (per
+`78b6c29`); `index.html` was not touched. The history above stands as the
+cautionary tale.
 
 **Mechanics, as practiced in history** (verify:
 `git log --format='%h %s' -- CLAUDE.md | head`):
@@ -234,30 +229,26 @@ through the change-control divergence protocol.
 
 ### Open findings from the 2026-07-06 run
 
-1. **CONTRADICTION (known, owner-fix pending):** rule 16 vs
-   `index.html:18` — see Exhibit A above.
-2. **OMISSION:** `dynastyedge_identity_v1` (set in
+1. **OMISSION:** `dynastyedge_identity_v1` (set in
    `src/hooks/useIdentity.js:3`) is absent from the Rules storage-key list
    (the doc describes useIdentity as "localStorage store" but never names the
    key). Needs a one-line addition to the storage-key rule.
-3. **OMISSION:** the Constants File snippet lags `src/constants.js` — the real
+2. **OMISSION:** the Constants File snippet lags `src/constants.js` — the real
    file also exports `ESPN_BASE`, `ESPN_WEB_BASE`, `NEWS_FEED_URL`,
    `VALUES_HISTORY_URL`, `TRADE_VALUES_URL`, `ROSTER_SLOTS`, plus the
    "identity is now runtime state" comment qualifying `MY_ROSTER_ID`. The
    League Context table still says "always use this when fetching my roster"
    for roster 6, which the constants.js comment now softens.
-4. **OMISSION:** `src/utils/recommendations.js` exists but is missing from the
+3. **OMISSION:** `src/utils/recommendations.js` exists but is missing from the
    File Structure tree.
-5. **CONTRADICTION (known, owner-fix pending):** CLAUDE.md Feature 13 (and
-   the inline comment in `src/utils/pickTrades.js` ~line 14) say pick slot
-   tiers are Early 1–3 / Mid 4–7; the code (`slot <= Math.ceil(teams/3)`,
-   ceil(10/3)=4) computes Early 1–4 / Mid 5–7 / Late 8–10. Code wins; doc
-   fix is owner-gated. Canonical record: `dynastyedge-failure-archaeology`
-   §7; worked test: `dynastyedge-validation-and-qa` §6.
 
-Items 2–4 are omissions (doc gaps, low blast radius); items 1 and 5 are the
-dangerous ones. When you fix any of them (with owner sign-off for 1 and 5),
-remove it from this list in the same session — see §6.
+All three are omissions (doc gaps, low blast radius). The two
+**contradictions** that run also found — rule 16 vs `index.html:18` (see
+Exhibit A) and the Feature 13 / `pickTrades.js` slot-tier boundary (code
+computes ceil-thirds: Early 1–4 / Mid 5–7 / Late 8–10) — were **fixed by the
+owner-approved docs commit of 2026-07-19** (doc + comments updated to match
+the code; no code changed). When you fix a remaining item, remove it from
+this list in the same session — see §6.
 
 ---
 
@@ -361,7 +352,7 @@ trusting:
 |---|---|
 | CLAUDE.md section map + size | `grep -n '^## ' CLAUDE.md; wc -c CLAUDE.md` |
 | Feature-entry anatomy | `sed -n '/^### Feature 17/,/^-----/p' CLAUDE.md` |
-| Rule-16 contradiction still live | `sed -n '18p' index.html; grep -n 'status-bar-style' CLAUDE.md` |
+| Rule-16 doc/code agreement (contradiction fixed 2026-07-19) | `sed -n '18p' index.html; grep -n 'status-bar-style' CLAUDE.md` |
 | Storage keys in code vs doc | `grep -rhoE 'dynastyedge_[a-z0-9_]+' src \| sort -u` (2026-07-06: `dynastyedge_identity_v1` undocumented) |
 | Constants drift | `cat src/constants.js` vs CLAUDE.md → Constants File |
 | File Structure drift | `ls src/utils` (2026-07-06: `recommendations.js` undocumented) |
