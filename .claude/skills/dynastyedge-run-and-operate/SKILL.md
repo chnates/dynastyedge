@@ -39,7 +39,9 @@ dependencies.
 
 ## 1. Running the app locally
 
-Verified in-sandbox 2026-07-05 (Node v22, npm 10; CI uses Node 20 — both work).
+Verified in-sandbox 2026-07-05 (Node v22, npm 10). CI (`ci.yml`) and
+deploy use Node 22 — the `npm test` glob needs Node ≥ 21, so never pin them
+back to 20; the news/values pipelines (no tests) still run Node 20.
 
 | Command | What happens (verified) |
 |---|---|
@@ -80,15 +82,20 @@ any end-to-end verification.
 **Trigger: push to `main`. Only.** No workflow_dispatch, no PR builds, no
 other branch. There is no staging environment.
 
-Steps, in order (as of 2026-07-05):
+Steps, in order (as of 2026-07-19):
 
 1. `actions/checkout@v4`
-2. `actions/setup-node@v4` — Node **20**, npm cache
+2. `actions/setup-node@v4` — Node **22**, npm cache
 3. `npm ci`
-4. `npm run build` → `dist/`
-5. `actions/configure-pages@v4`
-6. `actions/upload-pages-artifact@v3` with `path: dist`
-7. `actions/deploy-pages@v4` → publishes to <https://chnates.github.io/dynastyedge/>
+4. `npm run lint` — quality gate; a broken push fails BEFORE anything publishes
+5. `npm test`
+6. `npm run build` → `dist/`
+7. `actions/configure-pages@v4`
+8. `actions/upload-pages-artifact@v3` with `path: dist`
+9. `actions/deploy-pages@v4` → publishes to <https://chnates.github.io/dynastyedge/>
+
+(Branch pushes and PRs get the same lint + test + build gate via `ci.yml`,
+which never touches Pages — `deploy.yml` remains the only deploying workflow.)
 
 Permissions: `contents: read`, `pages: write`, `id-token: write`; environment
 `github-pages`. Typical end-to-end time: a few minutes (build itself is ~3s;
@@ -282,10 +289,10 @@ your machine (not in this sandbox).
 
 **Deploy failed**
 1. Actions → "Deploy to GitHub Pages" → open the red run; failures are
-   almost always `npm ci` or `npm run build` (build/toolchain → switch to
-   `dynastyedge-build-and-env`).
-2. Reproduce locally: `npm ci && npm run build` on the same commit (CI is
-   Node 20).
+   almost always `npm ci`, `npm run lint`, `npm test`, or `npm run build`
+   (build/toolchain → switch to `dynastyedge-build-and-env`).
+2. Reproduce locally: `npm ci && npm run lint && npm test && npm run build`
+   on the same commit (CI is Node 22).
 3. If a bad commit is live-adjacent, revert on `main` first (Section 2
    rollback), then fix forward. Re-run the failed job via the run page's
    "Re-run jobs" if the failure looks transient (runner/network flake).

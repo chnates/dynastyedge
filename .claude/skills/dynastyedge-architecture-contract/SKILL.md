@@ -334,10 +334,13 @@ injectable/fixed seed.
 Do not "discover" these as bugs; they are known trade-offs. Do fix them when a
 task legitimately touches them.
 
-1. **No automated tests, lint, or typecheck.** `npm run build` is the only
-   gate before auto-deploy to the live site. Verification is manual /
-   real-data (owner's law). See `dynastyedge-validation-and-qa` before
-   shipping anything risky.
+1. **Machine gates exist but are narrow** (updated 2026-07-19). `npm run
+   lint` + `npm test` + `npm run build` gate every branch push (`ci.yml`)
+   and every deploy (`deploy.yml`) — but there is no typecheck, and the
+   test suite covers only pure utils + module fetch loaders on synthetic
+   fixtures (no component/hook rendering, no model calibration).
+   Real-data verification remains the owner's law. See
+   `dynastyedge-validation-and-qa` before shipping anything risky.
 2. **CLAUDE.md rule 16 staleness on the status-bar meta — FIXED
    2026-07-19** by an owner-approved docs commit: rule 16 now describes the
    `black-translucent` meta (`index.html:18`, restored deliberately in

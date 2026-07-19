@@ -28,8 +28,9 @@ used on iPhone Safari / installed home-screen PWA at 390px. It joins two free
 APIs — Sleeper (league/rosters, numeric player IDs) and FantasyCalc (dynasty
 trade values, carries `sleeperId` as the join key) — plus static JSON feeds
 built by GitHub Actions on the `news-data` and `values-history` branches.
-There are **no tests, no linter**; the only machine check is `npm run build`
-(verified green 2026-07-05, ~3.4s). `CLAUDE.md` at repo root is the doc of
+The machine checks are `npm run lint` + `npm test` (pure-utils + fetch-loader
+tests only — nothing renders) + `npm run build` (all verified green
+2026-07-19). `CLAUDE.md` at repo root is the doc of
 record *except where code demonstrably diverges* — one known divergence is
 documented in §5 below.
 
@@ -344,4 +345,4 @@ live API responses, feed-branch freshness, the ~60-day cron-disable behavior
 - Pick pricing paths: `grep -n "makePickPricer\|findPickValue" src/utils/pickTrades.js src/utils/pickCapital.js`
 - SWR window: `grep -n STALE_AFTER_MS src/App.jsx`
 - Storage keys: `grep -rhoE "dynastyedge_[a-z_0-9]+" src | sort -u`
-- Build still the only gate: `npm run build` (and confirm no test/lint scripts in `package.json`)
+- Machine gates: `npm run lint && npm test && npm run build` (scripts verified in `package.json`)

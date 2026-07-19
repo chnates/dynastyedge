@@ -14,10 +14,15 @@ description: >
 
 # DynastyEdge Validation & QA
 
-This repo has **no test suite, no lint, no typecheck**. `npm run build` is the
-only machine gate (verified in `package.json` — scripts are `dev`/`build`/
-`preview` only, as of 2026-07-06). That means the burden of proof is on YOU,
-and this skill defines what proof means here. The app is a static React SPA
+This repo's machine gates (verified 2026-07-19) are `npm run lint` (ESLint 9
+flat config, error severity) + `npm test` (`tests/*.test.mjs` on Node's
+built-in `node:test`, 55 passing) + `npm run build` — enforced by `ci.yml`
+on every branch push/PR and by `deploy.yml` before publishing. But there is
+still **no typecheck**, and the suite pins only the pure `src/utils` logic
+and the module fetch loaders on synthetic fixtures — no component or hook
+rendering, no model calibration, no visuals. For everything the suite
+doesn't pin, the burden of proof is on YOU, and this skill defines what
+proof means here. The app is a static React SPA
 for one real Sleeper dynasty league, used daily on an iPhone at 390px. A wrong
 number ships straight to the owner's phone: every push to `main` auto-deploys.
 
@@ -293,7 +298,11 @@ FantasyCalc outage.**
 library — without explicit owner sign-off (route through
 `dynastyedge-change-control`). The sanctioned pattern is **plain `.mjs`
 scripts using `node:assert/strict`** run directly with `node`, importing the
-repo's pure utils.
+repo's pure utils — now formalized as the `tests/` suite: a permanent test
+is a `tests/<name>.test.mjs` file on the built-in `node:test` runner, picked
+up automatically by `npm test` (the script registers the resolver hook
+itself; its glob needs Node ≥ 21, which is why ci.yml/deploy.yml pin
+Node 22).
 
 Two mechanics make this work (both verified 2026-07-06):
 
@@ -448,7 +457,8 @@ Everything above was verified against source / executed on 2026-07-06 at
 `main` = `6fb85f3`. Re-verify before trusting:
 
 - Build baseline: `npm run build` (expect `✓ built`; note time + bundle size).
-- No test/lint scripts still true: `cat package.json` (scripts block).
+- Lint/test gates present and green: `cat package.json` (scripts block) ·
+  `npm run lint` · `npm test`.
 - Best-effort catches still in place: `grep -n "catch" src/hooks/useValueHistory.js src/hooks/useTradeTimeValues.js` and `grep -n "catch(() => \[\])" src/hooks/usePlayerIntel.js`.
 - Sign-in independence: `grep -n signInRosters src/hooks/useLeague.js src/components/auth/LoginScreen.jsx`.
 - Sparkline threshold: `grep -n MIN_SPARKLINE_POINTS src/hooks/useValueHistory.js` (expect 4).
