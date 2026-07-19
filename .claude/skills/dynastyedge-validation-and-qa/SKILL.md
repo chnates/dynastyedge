@@ -66,13 +66,23 @@ Strongest to weakest. Always state which rung your evidence sits on.
 after, from the same script on the same input. No number, no claim; write
 "expected to improve X, unmeasured" instead.
 
-**Never claim you ran what you didn't.** In this sandbox (as of 2026-07-06)
-outbound calls to `api.sleeper.app` and `api.fantasycalc.com` are blocked by
-the proxy (403); `raw.githubusercontent.com` IS reachable (the static feeds
-can be checked). Network posture varies between sandboxes — probe first; the
-canonical home for the current posture is
-`dynastyedge-diagnostics-and-tooling`. Label blocked steps **NETWORK
-REQUIRED** and hand them to the owner rather than pretending.
+**Never claim you ran what you didn't.** Network posture **varies per
+session — probe before assuming either way** (2026-07-06: both fantasy APIs
+proxy-blocked, feeds reachable; 2026-07-19: live site + both APIs fully
+reachable, and the built app was rendered and driven in headless Chromium
+with live data). The canonical home for the current posture and the
+browser-driving recipe is `dynastyedge-diagnostics-and-tooling`. Label
+blocked steps **NETWORK REQUIRED** and hand them to the owner rather than
+pretending.
+
+**Browser-driven checks are real evidence — for the right claims.** When
+network allows, a headless-Chromium run of the built app on real league data
+(recipe in `dynastyedge-diagnostics-and-tooling`) substantiates rendering,
+navigation, and on-screen numbers — rung-1-grade for those claims. It is
+NEVER evidence for the iOS-specific class: PWA metas / status bar (iOS
+chrome, invisible to any browser screenshot), standalone mode, safe-area
+insets (0 in emulation), sheet gestures, rubber-banding, or the iOS
+keyboard. Those still require the owner's physical iPhone.
 
 ---
 

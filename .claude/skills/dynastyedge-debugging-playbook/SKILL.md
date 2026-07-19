@@ -207,8 +207,9 @@ Feeds are static JSON on orphan branches, force-pushed by Actions
 `values-history/{values-history.json,trade-values.json}` (cron `41 9 * * *`).
 URLs in `src/constants.js:20,25,30` (raw.githubusercontent.com).
 
-Triage stale feeds — **these need network; the local sandbox blocks
-api.sleeper.app / api.fantasycalc.com outright and may proxy-block others.
+Triage stale feeds — **these need network; posture varies per session
+(probe first — restricted sandboxes 403 the fantasy APIs, open sessions
+reach them; canonical posture: `dynastyedge-diagnostics-and-tooling`).
 Never claim you ran one if it failed:**
 
 ```bash
@@ -253,9 +254,10 @@ Note `useIdentity` already wipes roster-scoped keys on identity switch — a
 ### 8.1 API-side vs app-side
 
 Curl the source of truth, compare with what the app renders.
-**Requires open network — blocked in this sandbox (proxy 403 on
-api.sleeper.app / api.fantasycalc.com as of 2026-07-05). Run on a machine
-with egress, or ask the owner; never fabricate output.**
+**Requires open network — varies per session, probe first (restricted
+sandboxes 403 api.sleeper.app / api.fantasycalc.com; open sessions reach
+both — verified 2026-07-19). If blocked, run on a machine with egress or
+ask the owner; never fabricate output.**
 
 ```bash
 # Sleeper (league 1313933520715907072; my roster_id = 6)

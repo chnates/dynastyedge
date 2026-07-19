@@ -52,7 +52,7 @@ classes must pass the union of both gate sets.
 | **Behavior/logic** (any change to what the app computes, fetches, stores, or shows) | `24ed7cf` taxi (developmental-player stash — see dynasty-fantasy-reference) rule fix · `1ef480a` pick pricing fix · `119c164` new Feature 17 · `92657ae` trade preload fix | build green · **real-data verification** against the live league (route: `dynastyedge-validation-and-qa`) · **CLAUDE.md updated in the SAME commit** · design-review if UI moved too |
 | **Data-pipeline/workflow** (`.github/workflows/*.yml`, `scripts/*.mjs`) | `news.yml` (cron `17,47 * * * *`) · `values-history.yml` (cron `41 9 * * *`) — both force-push single-commit data branches | build green (if app code touched) · run the script locally where network allows · **never write a publish step that can erase accumulated branch data** (values-history.yml's publish step re-fetches the old trade archive on script failure — preserve that pattern) · CLAUDE.md same commit · after merge, verify with a manual `workflow_dispatch` run (workflows can only truly be tested on the default branch) · pipeline ops/schedules canonical: `dynastyedge-run-and-operate` |
 | **Doc-only** (CLAUDE.md / skills, no code) | `700ce00` "docs: reflect UX audit fixes" · `d4f9e75` "docs: add phased Navigation Refactor plan" | prefix subject with `docs:` · verify every claim against the code before writing it (see Divergence protocol) · build not required but costs 4s — run it anyway |
-| **PWA-meta/manifest** (index.html metas, manifest.webmanifest, theme-color logic in `useTheme`) | the `cfd9ad0` → `3083f0c` → `78b6c29` status-bar saga (below) | **highest-risk class.** All behavior-class gates, PLUS: read the saga below and `dynastyedge-failure-archaeology` first · know that meta changes only take effect after the owner **removes and re-adds** the home-screen app (stated in index.html's own comment and CLAUDE.md rule 16) — you cannot verify this class in any sandbox; it needs the physical phone · bump the `?v=N` icon query only for logo changes |
+| **PWA-meta/manifest** (index.html metas, manifest.webmanifest, theme-color logic in `useTheme`) | the `cfd9ad0` → `3083f0c` → `78b6c29` status-bar saga (below) | **highest-risk class.** All behavior-class gates, PLUS: read the saga below and `dynastyedge-failure-archaeology` first · know that meta changes only take effect after the owner **removes and re-adds** the home-screen app (stated in index.html's own comment and CLAUDE.md rule 16) — you cannot verify this class in any sandbox — a headless-browser screenshot shows the page, never iOS chrome, so it needs the physical phone · bump the `?v=N` icon query only for logo changes |
 
 **The PWA saga (why that class is special), as of 2026-07-05:** a prior
 commit had already dropped the `black-translucent` status bar for a
@@ -85,9 +85,12 @@ npm run build          # the ONLY machine check; must end "✓ built in …"
    the project's stated enforcement mechanism, not a suggestion.
 3. **Real-data verification for behavior changes.** The owner's law: verify
    against the REAL live league, never mocks. Evidence standards live in
-   `dynastyedge-validation-and-qa`. Example spot-checks (⚠ require open
-   network — api.sleeper.app / api.fantasycalc.com return proxy 403 in
-   restricted sandboxes like this one; never claim you ran these if blocked):
+   `dynastyedge-validation-and-qa`. Example spot-checks (⚠ network varies
+   per session — probe first. Restricted sandboxes 403 both fantasy APIs;
+   open sessions reach them fine (verified 2026-07-19, when the built app
+   was also rendered + driven in headless Chromium — recipe and current
+   posture: `dynastyedge-diagnostics-and-tooling`). Never claim you ran
+   these if blocked):
 
    ```bash
    curl -s 'https://api.sleeper.app/v1/league/1313933520715907072/rosters' | head -c 2000

@@ -399,8 +399,10 @@ Written 2026-07-05 against the working tree at that date, by direct reading of:
 `src/utils/playoffOdds.js`, `index.html`, plus `git log` for `78b6c29`.
 
 Re-verify before trusting volatile claims (all commands read-only; network
-calls to the fantasy APIs are **blocked in the CI sandbox** — proxy 403 — so
-verify shapes from code, not live calls, when sandboxed):
+posture **varies per session — probe first** (restricted sandboxes 403 the
+fantasy APIs; open sessions reach them — see
+`dynastyedge-diagnostics-and-tooling` for the current posture). When
+blocked, verify shapes from code, not live calls):
 
 ```bash
 # Purity boundary: must print nothing
