@@ -124,12 +124,12 @@ until a full page reload.
 | Sleeper core (league, rosters, users, traded_picks, nflState, matchups) | `src/hooks/useSleeper.js` | React state in the **single** App-level `useLeague()` call (no module cache — App mounts it once) | App load | `retry` refetches all |
 | **30-min focus refresh** for both of the above | `src/App.jsx` (`STALE_AFTER_MS = 30*60*1000`) | — | `visibilitychange` + `focus` listeners call the combined `retry()` when data older than 30 min | silent; SWR keeps UI populated |
 | Player DB (trimmed `/players/nfl`, ~5–8 MB raw) | `src/hooks/usePlayerDB.js` | module, **once per session** | first consumer (`useLeague` mounts it eagerly, non-blocking) | never (retry only on error) |
-| Season transactions (18 weekly buckets, parallel, each `.catch(()=>[])`) | `src/hooks/useTransactions.js` | module | lazy, first consumer | `force` param exists |
+| Season transactions (18 weekly buckets, parallel, each `.catch(()=>[])`; ALL buckets failed ⇒ the load rejects → ErrorState) | `src/hooks/useTransactions.js` | module | lazy, first consumer | `force` param exists |
 | League history (walks `previous_league_id` chain ≤ 8 seasons: users/rosters/tx/drafts+picks per season) | `src/hooks/useLeagueHistory.js` | module | lazy (Managers / Partner Finder) | never — past seasons are frozen |
 | Player intel (season stats per year, weekly stats per year-week, ESPN per-player news, aggregated news feed) | `src/hooks/usePlayerIntel.js` | module (promise maps: `seasonStatsPromises`, `weekStatsPromises`, `espnNewsCache`, `newsFeedPromise`) | lazy, first profile open / first news consumer | never |
 | Value history (daily snapshots, columnar) | `src/hooks/useValueHistory.js` | module + **`historyFailed` latch** | lazy, first sparkline consumer | never; one failure = silent give-up for the session |
 | Trade-time value archive | `src/hooks/useTradeTimeValues.js` | module + `archiveFailed` latch | lazy (scouting ledger) | same latch pattern |
-| Playoff schedule/scores (all regular-season matchup weeks) | `src/hooks/usePlayoffOdds.js` | module, keyed by season | lazy (Playoffs page + odds consumers) | refetches only if season changes |
+| Matchup weeks (`/matchups/{week}` full entries — shared by playoff odds AND lineup history, one fetch per week per session) | `src/hooks/matchupWeeks.js` (consumed by `usePlayoffOdds.js` weeks 1..playoff_week_start−1 and `useLineupHistory.js` weeks 1..17 / 1..current−1) | module, per-week + per-range promise latches | lazy (first consumer of either feature) | `resetMatchupWeeks()` (the Playoffs retry path); a week failing degrades to empty entries, EVERY requested week failing rejects (nothing cached, retry refetches) |
 | Playoff odds derived results (model + 10k-iteration sim) | `src/hooks/usePlayoffOdds.js` (`derivedCache`) | module, keyed by `league`/`perWeek` reference identity + `playoffTeams`/`firstPlayoffWeek` | computed on first consumer with data; the four consumers share one sim run | recomputes when the league or schedule reference changes (new fetch / identity switch); `myOdds` stays per-instance |
 | Rookie draft sync | `src/hooks/useSleeperDraft.js` | module `{data, fetchedAt}` | lazy (Board/Tracker share it) | manual Refresh; focus refetch (10 s threshold while `drafting`, 5 min idle); 30 s poll while live + visible |
 
@@ -255,7 +255,7 @@ forever, or retry-loop. On any failure the UI surface simply hides.**
 | ESPN per-player fallback endpoints | `usePlayerIntel.js` (`espnNewsCache`) | unofficial, CORS-blocked in practice; degrades silently |
 | Value history / sparklines | `useValueHistory.js` | `historyFailed` latch → `getSeries` returns `null`; < 4 points also `null` (a 2-point "line" reads as broken) |
 | Trade-time value archive | `useTradeTimeValues.js` | `archiveFailed` latch; missing entry ⇒ "at trade time" line hides |
-| Per-week transaction buckets | `useTransactions.js`, `useLeagueHistory.js`, `usePlayoffOdds.js` | each week `.catch(() => [])` so one bad bucket can't sink the set |
+| Per-week transaction/matchup buckets | `useTransactions.js`, `useLeagueHistory.js`, `matchupWeeks.js` | each week `.catch(() => [])` so one bad bucket can't sink the set — EXCEPT `useTransactions.js` and `matchupWeeks.js` reject when *every* requested bucket failed (a total outage is Class A: ErrorState, not an empty feed / fake preseason) |
 
 **Rule for new work:** anything fed by an Actions-published branch or an
 unofficial endpoint is Class B by construction (section 1, link 6). Anything

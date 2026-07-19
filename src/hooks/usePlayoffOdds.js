@@ -1,40 +1,14 @@
 import { useState, useEffect, useMemo } from 'react'
-import { SLEEPER_BASE, LEAGUE_ID } from '../constants'
-import { fetchJSON } from '../utils/fetchJSON'
 import { useLeagueContext } from '../context/LeagueContext'
+import { loadMatchupWeeks, peekMatchupWeeks, resetMatchupWeeks } from './matchupWeeks'
 import { buildScoringModel, simulatePlayoffs, buildStrengthPreview, teamStartingStrength } from '../utils/playoffOdds'
 
 // The one new fetch this feature needs: every regular-season week's matchups.
 // A single pass gives us BOTH the remaining schedule (who still plays whom) and
-// every completed week's actual per-team score. Lazy + session-cached — the
-// schedule for a season doesn't change, so one fetch per session is plenty.
-let scheduleCache = null // { season, weeks: [{ week, entries }] }
-let schedulePromise = null
-
-function loadSchedule(season, firstPlayoffWeek) {
-  if (scheduleCache?.season === season) return Promise.resolve(scheduleCache.weeks)
-  if (!schedulePromise) {
-    const lastRegWeek = Math.max(1, (firstPlayoffWeek ?? 15) - 1)
-    const weeks = Array.from({ length: lastRegWeek }, (_, i) => i + 1)
-    schedulePromise = Promise.all(
-      weeks.map(w =>
-        fetchJSON(`${SLEEPER_BASE}/league/${LEAGUE_ID}/matchups/${w}`, { label: 'Sleeper matchups' })
-          .catch(() => [])
-          .then(entries => ({ week: w, entries: Array.isArray(entries) ? entries : [] }))
-      )
-    )
-      .then(perWeek => {
-        scheduleCache = { season, weeks: perWeek }
-        schedulePromise = null
-        return perWeek
-      })
-      .catch(err => {
-        schedulePromise = null
-        throw err
-      })
-  }
-  return schedulePromise
-}
+// every completed week's actual per-team score. The fetch itself lives in the
+// shared matchupWeeks cache (lazy + session-cached) so lineup history reads
+// the same weeks without refetching them. A total outage rejects there, so
+// the Playoffs page shows ErrorState instead of a fake "preseason".
 
 // Split the fetched weeks into completed scores (real results) and a remaining
 // schedule (future pairings). A week counts as complete only when every team in
@@ -143,30 +117,28 @@ export function usePlayoffOdds() {
     loading: leagueLoading, error: leagueError, retry: leagueRetry,
   } = useLeagueContext()
 
-  const season = leagueInfo?.season ?? nflState?.season ?? 'unknown'
   const firstPlayoffWeek = leagueInfo?.settings?.playoff_week_start ?? 15
   const playoffTeams = leagueInfo?.settings?.playoff_teams ?? 6
   // leagueInfo and nflState land together (one setData in useSleeper), so once
   // either exists the real season and playoff_week_start are both known.
   const seasonKnown = leagueInfo != null || nflState != null
+  const lastRegWeek = Math.max(1, firstPlayoffWeek - 1)
 
-  const [perWeek, setPerWeek] = useState(
-    scheduleCache?.season === season ? scheduleCache.weeks : null
-  )
+  const [perWeek, setPerWeek] = useState(() => peekMatchupWeeks(lastRegWeek))
   const [schedLoading, setSchedLoading] = useState(perWeek === null)
   const [schedError, setSchedError] = useState(null)
   const [retryTick, setRetryTick] = useState(0)
 
   useEffect(() => {
     // The default route mounts this hook before the league loads; fetching then
-    // would cache 14 weeks under season 'unknown' and refetch them all when the
-    // real season arrives. Wait — schedLoading stays true, so consumers still
-    // show their loading state (league data is loading too).
+    // would guess the week range from the default playoff_week_start instead of
+    // the league's real setting. Wait — schedLoading stays true, so consumers
+    // still show their loading state (league data is loading too).
     if (!seasonKnown) return
     let cancelled = false
-    setSchedLoading(scheduleCache?.season !== season)
+    setSchedLoading(peekMatchupWeeks(lastRegWeek) == null)
     setSchedError(null)
-    loadSchedule(season, firstPlayoffWeek)
+    loadMatchupWeeks(lastRegWeek)
       .then(weeks => {
         if (cancelled) return
         setPerWeek(weeks)
@@ -178,7 +150,7 @@ export function usePlayoffOdds() {
         setSchedLoading(false)
       })
     return () => { cancelled = true }
-  }, [seasonKnown, season, firstPlayoffWeek, retryTick])
+  }, [seasonKnown, lastRegWeek, retryTick])
 
   const derived = useMemo(() => {
     if (!league?.allRosters?.length || !perWeek) return null
@@ -189,7 +161,7 @@ export function usePlayoffOdds() {
   const myOdds = derived ? (derived.oddsByRoster[myRosterId] ?? null) : null
 
   function retry() {
-    scheduleCache = null
+    resetMatchupWeeks()
     setSchedError(null)
     setRetryTick(t => t + 1)
     leagueRetry()

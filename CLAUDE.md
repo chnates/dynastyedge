@@ -121,7 +121,10 @@ rosters endpoint — no extra call needed.
 
 **Transactions note:** The transaction feed fetches all 18 weekly buckets in
 parallel (small responses, well under the rate limit) and caches per session.
-Waiver claims include the winning FAAB bid in `settings.waiver_bid`.
+A failed bucket contributes nothing (per-week catch), but when **all 18**
+fail the load rejects so League › Activity shows `ErrorState` + retry instead
+of an empty feed masquerading as "no moves". Waiver claims include the
+winning FAAB bid in `settings.waiver_bid`.
 
 **Offseason detection:** Call `/state/nfl` on app load. If `season_type !== 'regular'`,
 hide all in-season UI: current matchups, weekly projections, lineup optimizer flags.
@@ -708,7 +711,10 @@ every completed week.
 - Summary card: efficiency % + total points left on bench
 - Per-week rows: actual, optimal, delta (green ✓ when optimal, amber/red otherwise)
 - Shows during the offseason too (it reviews the completed season)
-- Data: `/matchups/{week}` for completed weeks, cached per session
+- Data: `/matchups/{week}` for completed weeks, read from the shared
+  matchup-weeks cache (`src/hooks/matchupWeeks.js`, shared with Playoff Odds —
+  one fetch per week per session across both). If every week fails to load,
+  the page shows an error + retry instead of "no data"
 - **Its own sub-tab** under **My Team** (`/roster/season-review`), a sibling of
   My Roster, the Optimizer, and Trajectory — not stacked inside the Optimizer's
   scroll. It renders as a standalone padded page with its own header.
@@ -969,15 +975,21 @@ odds before — every number is defined on the page, no outside lookup needed.
 
 **One new data source, lazy + session-cached (`usePlayoffOdds`):** the only
 fetch is every regular-season week's matchups (weeks 1 … `playoff_week_start − 1`
-from league settings, in parallel, each `.catch(() => [])`). That single pass
+from league settings, in parallel) via the **shared matchup-weeks cache**
+(`src/hooks/matchupWeeks.js`) — one session-cached fetch per week, shared
+with the Season Review's lineup history so visiting both features never
+refetches the overlapping weeks. A failed week degrades to empty entries
+(the per-week `.catch(() => [])` contract), but when **every** requested week
+fails the load rejects, so the Playoffs page shows `ErrorState` + retry
+instead of masquerading as preseason during a total outage (retry clears the
+shared cache and refetches). That single pass
 yields *both* the remaining schedule (future pairings, grouped by `matchup_id`)
 *and* every completed week's actual per-team score — no separate history call.
 A week counts as **complete** only when *every* team in it has scored, so a
 partially-played current week is simulated fresh instead of contaminating the
 model. The fetch waits until league settings / NFL state have loaded (The Edge
-mounts the hook before they exist) — otherwise the weeks would cache under an
-unknown season key and all refetch when the real season lands, doubling the
-requests. Everything else (rosters, records, points-for, FantasyCalc values,
+mounts the hook before they exist) — otherwise it would guess the week range
+from the default `playoff_week_start` instead of the league's real setting. Everything else (rosters, records, points-for, FantasyCalc values,
 win-window tiers) comes from `LeagueContext`. The **derived results (model +
 sim) are memoized at module scope** too, keyed by the schedule and league
 references, so the four odds consumers (The Edge, Trade Analyzer, Partner
@@ -1746,8 +1758,9 @@ dynastyedge/
 │   │   ├── useLeagueHistory.js  ← walks previous_league_id chain: past seasons' tx/drafts
 │   │   ├── useManagerProfiles.js← composes history + current season into scouting profiles
 │   │   ├── useTradeTimeValues.js← trade-time value archive for the ledger (best-effort)
-│   │   ├── useLineupHistory.js  ← my past matchups for efficiency review
-│   │   ├── usePlayoffOdds.js    ← regular-season schedule fetch + Monte Carlo sim
+│   │   ├── matchupWeeks.js      ← shared /matchups/{week} session cache (playoff odds + lineup history)
+│   │   ├── useLineupHistory.js  ← my past matchups for efficiency review (reads matchupWeeks)
+│   │   ├── usePlayoffOdds.js    ← regular-season schedule (via matchupWeeks) + Monte Carlo sim
 │   │   ├── useLineupData.js     ← projections, statuses, schedule, def stats
 │   │   ├── useWatchlist.js      ← starred players (localStorage-backed store)
 │   │   ├── useLastVisit.js      ← The Edge's "since your last visit" anchor
@@ -1792,7 +1805,9 @@ dynastyedge/
 │   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
 │   ├── tradeAnalysis.test.mjs       ← verdict ladder, % vs larger side, counter never re-suggests
 │   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
-│   └── lineupHistory.test.mjs       ← optimal-lineup slot-fill order (singles → FLEX → SFLX)
+│   ├── lineupHistory.test.mjs       ← optimal-lineup slot-fill order (singles → FLEX → SFLX)
+│   ├── matchupWeeks.test.mjs        ← mocked-fetch: one fetch/week across both consumers, all-fail rejection
+│   └── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
 ├── index.html
 ├── eslint.config.js             ← ESLint 9 flat config (recommended + react-hooks, src/ + scripts/)
 ├── vite.config.js
@@ -1805,8 +1820,10 @@ built-in `node:test` runner with `node:assert/strict`, zero new dependencies
 (the sanctioned no-deps pattern). The script registers the module-resolver hook
 at `.claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs` so
 `src/utils`' extensionless imports load under plain Node. Scope is the **pure
-analytical utils only** — hooks and components are out (they need the browser
-and live APIs); every assertion cites the documented behavior it pins, so a
+analytical utils** plus the **module-level fetch loaders**
+(`matchupWeeks.test.mjs`, `transactions.test.mjs` run against a mocked
+`globalThis.fetch` — React components and hook *rendering* stay out, they
+need the browser); every assertion cites the documented behavior it pins, so a
 failing test is either a code regression or doc drift, never a mystery. The
 suite runs on synthetic fixtures — it proves the logic is deterministic and
 threshold-correct, not that the models are well-calibrated (that bar is

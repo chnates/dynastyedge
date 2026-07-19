@@ -5,11 +5,14 @@ import { fetchJSON } from '../utils/fetchJSON'
 // League transactions for the whole season. Sleeper buckets transactions by
 // week (1–18); fetching all buckets in parallel (~18 small calls, well under
 // the rate limit) is the only way to guarantee nothing is missed regardless
-// of how offseason moves are bucketed. Cached for the session.
+// of how offseason moves are bucketed. Cached for the session. One bad bucket
+// is tolerated (contributes nothing), but when EVERY bucket fails the load
+// rejects — League › Activity shows ErrorState instead of an empty feed
+// masquerading as "no moves".
 let txCache = null
 let txPromise = null
 
-function loadTransactions(force = false) {
+export function loadTransactions(force = false) {
   if (txCache && !force) return Promise.resolve(txCache)
   if (!txPromise) {
     const weeks = Array.from({ length: 18 }, (_, i) => i + 1)
@@ -17,13 +20,18 @@ function loadTransactions(force = false) {
       weeks.map(w =>
         fetchJSON(`${SLEEPER_BASE}/league/${LEAGUE_ID}/transactions/${w}`, {
           label: 'Sleeper transactions',
-        }).catch(() => [])
+        })
+          .then(txs => ({ txs: Array.isArray(txs) ? txs : [], failed: false }))
+          .catch(() => ({ txs: [], failed: true }))
       )
     )
       .then(perWeek => {
+        if (perWeek.every(r => r.failed)) {
+          throw new Error('Could not load league activity — check your connection and retry')
+        }
         const all = []
-        perWeek.forEach((txs, i) => {
-          ;(Array.isArray(txs) ? txs : []).forEach(tx => {
+        perWeek.forEach(({ txs }, i) => {
+          txs.forEach(tx => {
             if (tx?.status === 'complete') all.push({ ...tx, week: i + 1 })
           })
         })

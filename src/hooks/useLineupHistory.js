@@ -1,51 +1,33 @@
 import { useState, useEffect } from 'react'
-import { SLEEPER_BASE, LEAGUE_ID } from '../constants'
-import { fetchJSON } from '../utils/fetchJSON'
 import { useIdentity } from './useIdentity'
+import { loadMatchupWeeks } from './matchupWeeks'
 
 // My matchup entries for every completed week of the season — the raw
-// material for the lineup efficiency review. Fetched once per session.
-// Cached per (roster, lastWeek) since "my" entries depend on who's signed in.
+// material for the lineup efficiency review. The weeks themselves come from
+// the shared matchupWeeks cache (full entries, shared with playoff odds — one
+// fetch per week per session across both); this module only derives "my"
+// rows, cached per (roster, lastWeek) since they depend on who's signed in.
 let histCache = null // { key, byWeek }
-let histPromise = null
 
-function loadHistory(rosterId, lastWeek) {
+export function loadHistory(rosterId, lastWeek) {
   const key = `${rosterId}:${lastWeek}`
   if (histCache?.key === key) return Promise.resolve(histCache.byWeek)
-  if (!histPromise) {
-    const weeks = Array.from({ length: lastWeek }, (_, i) => i + 1)
-    histPromise = Promise.all(
-      weeks.map(w =>
-        fetchJSON(`${SLEEPER_BASE}/league/${LEAGUE_ID}/matchups/${w}`, {
-          label: 'Sleeper matchups',
-        }).catch(() => [])
-      )
-    )
-      .then(perWeek => {
-        const byWeek = []
-        perWeek.forEach((entries, i) => {
-          const mine = (Array.isArray(entries) ? entries : []).find(
-            m => m.roster_id === rosterId
-          )
-          if (!mine?.players?.length) return
-          if ((mine.points ?? 0) === 0) return // week not played
-          byWeek.push({
-            week: i + 1,
-            points: mine.points ?? 0,
-            players: mine.players,
-            playersPoints: mine.players_points ?? {},
-          })
-        })
-        histCache = { key, byWeek }
-        histPromise = null
-        return byWeek
+  return loadMatchupWeeks(lastWeek).then(perWeek => {
+    const byWeek = []
+    perWeek.forEach(({ week, entries }) => {
+      const mine = entries.find(m => m.roster_id === rosterId)
+      if (!mine?.players?.length) return
+      if ((mine.points ?? 0) === 0) return // week not played
+      byWeek.push({
+        week,
+        points: mine.points ?? 0,
+        players: mine.players,
+        playersPoints: mine.players_points ?? {},
       })
-      .catch(err => {
-        histPromise = null
-        throw err
-      })
-  }
-  return histPromise
+    })
+    histCache = { key, byWeek }
+    return byWeek
+  })
 }
 
 export function useLineupHistory(nflState) {
