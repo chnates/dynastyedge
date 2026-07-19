@@ -96,10 +96,11 @@ verified until a remove+re-add cycle on the actual phone.
   the two `dark:hidden` safe-area strips, do not re-attempt the
   "theme-color drives the standalone bar" approach — it was tried (`cfd9ad0`)
   and reverted (`3083f0c`) same night.
-- **CLAUDE.md rule 16 is STALE on this point as of 2026-07-05**: it still
-  says "No `apple-mobile-web-app-status-bar-style` meta", but `index.html`
-  line ~18 has one, deliberately (`78b6c29`). The correct future action is a
-  **doc fix to CLAUDE.md**, never "fixing" index.html to match the doc.
+- **CLAUDE.md rule 16 was stale on this point until 2026-07-19**, when an
+  owner-approved docs commit rewrote it to describe the black-translucent +
+  light-mode-strip design (`78b6c29`); `index.html` was not touched. If the
+  two ever diverge again, the correct action is a **doc fix to CLAUDE.md**,
+  never "fixing" index.html to match a stale doc.
 
 ---
 
@@ -374,10 +375,10 @@ sessionStorage draft. The precedence rule (verified in
 
 ## 7. Open sores (as of 2026-07-05 — open, NOT settled)
 
-1. **CLAUDE.md rule 16 is stale** (says no `apple-mobile-web-app-status-bar-style`
-   meta; `index.html` deliberately has `black-translucent` per `78b6c29`).
-   Pending action: a docs commit updating CLAUDE.md rule 16 to describe the
-   black-translucent + light-mode-strip design. Do NOT change index.html.
+1. **CLAUDE.md rule 16 stale — FIXED 2026-07-19.** An owner-approved `docs:`
+   commit rewrote rule 16 to describe the settled black-translucent +
+   light-mode-strip design (per `78b6c29`); `index.html` was not changed.
+   Entry 1's standing ruling is otherwise unchanged.
 2. **GitHub Actions cron auto-disable risk** (pipeline ops canonical:
    `dynastyedge-run-and-operate`). `news.yml` (twice-hourly) and
    `values-history.yml` (daily) are disabled by GitHub after ~60 days
@@ -391,15 +392,14 @@ sessionStorage draft. The precedence rule (verified in
    commits between 2026-06-01 and 2026-06-12, are unrecoverable locally
    (`git fetch --unshallow` would need network + remote access). Entry 3a is
    the only entry in this file reconstructed without its diff.
-4. **`slotTier` Early/Mid boundary — the SECOND live doc/code divergence.**
+4. **`slotTier` Early/Mid boundary divergence — FIXED 2026-07-19.**
    CLAUDE.md Feature 13 and the inline comment at `src/utils/pickTrades.js`
-   ~line 14 say Early = slots 1–3 / Mid = 4–7; the code
+   ~line 14 said Early = slots 1–3 / Mid = 4–7; the code
    (`slot <= Math.ceil(teams/3)`, ceil(10/3)=4) computes Early = 1–4 /
-   Mid = 5–7 / Late = 8–10. Status: open. Evidence:
-   `dynastyedge-validation-and-qa`'s worked test (§6 there) asserts the code
-   behavior and passes. Pending action: a doc fix, owner-gated via
-   `dynastyedge-change-control` — do NOT silently "fix" either the doc or
-   the code.
+   Mid = 5–7 / Late = 8–10. The same owner-approved docs commit as #1
+   updated the doc and the comment to the code's ceil-thirds behavior; the
+   code was not changed (`dynastyedge-validation-and-qa`'s worked test, §6
+   there, continues to assert it).
 5. **Beyond rule 16 (#1) and the slotTier boundary (#4), no other doc/code
    divergences were found** in this pass — but the doc-of-record contract
    ("CLAUDE.md updated same commit as behavior changes") means any future

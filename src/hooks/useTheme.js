@@ -2,8 +2,11 @@ import { useState, useCallback } from 'react'
 
 const THEME_KEY = 'dynastyedge_theme'
 
-// Safari colors its status-bar area from this meta tag — keep it matching
-// the app header (bg-secondary) or the strip above the header looks wrong.
+// Safari colors its status-bar area from this meta tag. Dark matches the
+// app header (bg-secondary, #16161A); light is deliberately #F4F4F8 —
+// near, but not equal to, bg-secondary (#E9ECF5). Don't align it to
+// #E9ECF5 without an on-device light-mode check (regular Safari AND the
+// standalone home-screen app).
 export function syncThemeColorMeta(isDark) {
   document
     .querySelector('meta[name="theme-color"]')

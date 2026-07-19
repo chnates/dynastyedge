@@ -176,16 +176,18 @@ Then:
 4. **Record the case in `dynastyedge-failure-archaeology`** so the next
    session doesn't re-derive it.
 
-**Worked example (live divergence, unfixed as of 2026-07-05):** CLAUDE.md
-rule 16 (line ~1896) states "**No `apple-mobile-web-app-status-bar-style`
-meta**". But `index.html:18` deliberately ships
+**Worked example (divergence — RESOLVED 2026-07-19 by an owner-approved
+docs commit):** CLAUDE.md rule 16 stated "**No
+`apple-mobile-web-app-status-bar-style` meta**". But `index.html:18`
+deliberately ships
 `<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />`,
 restored by `78b6c29` after the `cfd9ad0` → `3083f0c` revert saga, with a
 14-line comment explaining why (transparent bar; app glow paints under it;
-light mode adds a dark strip behind the white status text). The doc describes
-the *reverted* approach. If you touch this area: the meta STAYS, and rule 16
-gets corrected in the same commit. Never "fix" index.html to match the stale
-doc — that re-ships the regression the owner already caught on his phone.
+light mode adds a dark strip behind the white status text). The doc described
+the *reverted* approach until the 2026-07-19 docs commit rewrote rule 16 to
+match the code; `index.html` was untouched. The standing ruling is unchanged:
+the meta STAYS. Never "fix" index.html to match a stale doc — that re-ships
+the regression the owner already caught on his phone.
 
 **Sub-case — this clone's git history is shallow:** `.git/shallow` grafts at
 `4f31aad` and `dc0afdc`, so `git show 4f31aad` displays the whole tree
