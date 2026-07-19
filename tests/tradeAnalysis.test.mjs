@@ -134,6 +134,22 @@ test('counter suggestion never names an asset already in the trade (Feature 3: "
   assert.match(s.text, /Available Guy/)
 })
 
+test('counter suggestion picks the in-window asset closest to the gap (Feature 3 Counter: "get within ~5% raw value")', () => {
+  const opponentRoster = {
+    players: [
+      { sleeperId: 201, name: 'Window Floor', value: 1600, isIR: false }, // 0.8×gap — applied residual 10%
+      { sleeperId: 202, name: 'Near Gap', value: 1900, isIR: false },     // applied residual 3%
+      { sleeperId: 203, name: 'Overshoot', value: 2900, isIR: false },    // in window, farther from gap
+    ],
+    picks: [],
+  }
+  const myRoster = { players: [], picks: [] }
+  // I'm down 2000 on a 4000-side trade → gap 2000; all three sit in [1600, 3000].
+  const a = analysis({ valueWinner: 'them', valuePct: 50, giveTotal: 4000, getTotal: 2000 })
+  const s = getCounterSuggestion(a, myRoster, opponentRoster, [], [])
+  assert.equal(s.item.sleeperId, 202, 'must minimize |value − gap|, not pick the cheapest in-window asset')
+})
+
 test('counter suggestion: picks already in the trade are excluded too, and no candidates → null (Feature 3)', () => {
   const myRoster = {
     players: [],
