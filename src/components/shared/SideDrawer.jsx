@@ -10,8 +10,8 @@ import { cn } from '../ui'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useIdentity } from '../../hooks/useIdentity'
 import { getTeamName } from '../../hooks/useLeague'
-import { loadNewsFeed, getNewsFeedUpdatedAt } from '../../hooks/usePlayerIntel'
-import { loadHistory } from '../../hooks/useValueHistory'
+import { loadNewsFeed, getNewsFeedUpdatedAt, getNewsFeedFetchedAt } from '../../hooks/usePlayerIntel'
+import { loadHistory, getHistoryFetchedAt } from '../../hooks/useValueHistory'
 
 // Feed-age readout for the two Actions-published feeds. Both die silently by
 // design (the client hides stale feeds), so the drawer is the one place their
@@ -20,19 +20,24 @@ import { loadHistory } from '../../hooks/useValueHistory'
 const NEWS_STALE_MS = 2 * 60 * 60 * 1000
 const VALUES_STALE_MS = 36 * 60 * 60 * 1000
 
-// The four independent data sources the Refresh button pulls. They fire in
-// parallel and fully in the background (stale-while-revalidate everywhere), so
-// nothing blanks and the wall-clock cost is just the slowest source. Each
-// ticks ✓/✗ as it lands: Rosters (Sleeper) · Values (FantasyCalc) · News +
-// History (the two Actions-published feeds).
-const REFRESH_SOURCES = [
-  { key: 'sleeper', label: 'Rosters' },
-  { key: 'fc', label: 'Values' },
-  { key: 'news', label: 'News' },
-  { key: 'values', label: 'History' },
-]
 // How long "Updated ✓" lingers before the button settles back to idle.
 const DONE_LINGER_MS = 2200
+// Floor on the visible "Refreshing…" phase. Sleeper + the two CDN feeds often
+// resolve in a few hundred ms, so without this the spinner/ticks flash by
+// faster than the eye catches and the button looks like it did nothing.
+const MIN_REFRESH_MS = 800
+
+// "2m ago" / "3h ago" from an epoch-ms timestamp — the per-source last-refreshed
+// line. Null when never fetched so the row can hide.
+function formatAgo(ts) {
+  if (!ts) return null
+  const mins = Math.max(0, Math.round((Date.now() - ts) / 60000))
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 48) return `${hours}h ago`
+  return `${Math.floor(hours / 24)}d ago`
+}
 
 function formatFeedAge(iso) {
   const t = Date.parse(iso ?? '')
@@ -98,37 +103,53 @@ const NAV_TREE = [
 export default function SideDrawer({
   isOpen,
   onClose,
-  lastUpdated,
   isDark,
   onToggleTheme,
 }) {
-  const { league, sleeperRetry, fcRetry } = useLeagueContext()
+  const { league, sleeperRetry, fcRetry, sleeperFetchedAt, fcFetchedAt } = useLeagueContext()
   const { clearIdentity } = useIdentity()
   const myOwner = league?.myRoster?.owner ?? null
   const myTeamName = myOwner ? getTeamName(myOwner) : null
 
   const touchStartX = useRef(null)
 
-  // Feed ages (news / values updatedAt) — read from the session-cached feed
-  // loaders on drawer open (no fetch beyond each feed's one per session).
-  // Best-effort: a feed that never loaded stays null and its segment hides.
-  const [feedStamps, setFeedStamps] = useState({ news: null, values: null })
+  // Feed timestamps for the two Actions-published feeds. `pub` = the feed's own
+  // publish time (updatedAt — news twice/hour, values daily); `fetched` = when
+  // this session last pulled it. The live APIs (Sleeper/FC) carry their own
+  // fetch time via context, so only the feed stamps live in local state.
+  const [feed, setFeed] = useState({ newsPub: null, valuesPub: null, newsFetched: null, historyFetched: null })
+  function readFeedStamps() {
+    setFeed(f => ({ ...f, newsPub: getNewsFeedUpdatedAt(), newsFetched: getNewsFeedFetchedAt() }))
+  }
   useEffect(() => {
     if (!isOpen) return
     let cancelled = false
     loadNewsFeed().then(() => {
-      if (!cancelled) setFeedStamps(s => ({ ...s, news: getNewsFeedUpdatedAt() }))
+      if (!cancelled) setFeed(f => ({ ...f, newsPub: getNewsFeedUpdatedAt(), newsFetched: getNewsFeedFetchedAt() }))
     })
     loadHistory().then(h => {
-      if (!cancelled) setFeedStamps(s => ({ ...s, values: h?.updatedAt ?? null }))
+      if (!cancelled) setFeed(f => ({ ...f, valuesPub: h?.updatedAt ?? null, historyFetched: getHistoryFetchedAt() }))
     })
     return () => { cancelled = true }
   }, [isOpen])
 
-  const feedAges = [
-    { label: 'News', age: formatFeedAge(feedStamps.news), stale: Date.now() - Date.parse(feedStamps.news ?? '') > NEWS_STALE_MS },
-    { label: 'Values', age: formatFeedAge(feedStamps.values), stale: Date.now() - Date.parse(feedStamps.values ?? '') > VALUES_STALE_MS },
-  ].filter(f => f.age !== null)
+  // Per-source status rows: app-side "last refreshed" for all four, plus the
+  // publish age for the two feeds (that's the number that only moves when the
+  // cron publishes — labelled "feed" so it reads as a separate thing).
+  const dataStatus = [
+    { key: 'sleeper', label: 'Rosters', refreshed: formatAgo(sleeperFetchedAt) },
+    { key: 'fc', label: 'Values', refreshed: formatAgo(fcFetchedAt) },
+    {
+      key: 'news', label: 'News', refreshed: formatAgo(feed.newsFetched),
+      feedAge: formatFeedAge(feed.newsPub),
+      feedStale: Date.now() - Date.parse(feed.newsPub ?? '') > NEWS_STALE_MS,
+    },
+    {
+      key: 'history', label: 'History', refreshed: formatAgo(feed.historyFetched),
+      feedAge: formatFeedAge(feed.valuesPub),
+      feedStale: Date.now() - Date.parse(feed.valuesPub ?? '') > VALUES_STALE_MS,
+    },
+  ]
 
   // ── Refresh coordinator ────────────────────────────────────────────────────
   // One button, four independent sources fired in parallel and non-blocking.
@@ -142,33 +163,40 @@ export default function SideDrawer({
   function handleRefresh() {
     if (phase === 'refreshing') return
     if (doneTimer.current) { clearTimeout(doneTimer.current); doneTimer.current = null }
+    const startedAt = Date.now()
     setPhase('refreshing')
-    setSources({ sleeper: 'loading', fc: 'loading', news: 'loading', values: 'loading' })
+    setSources({ sleeper: 'loading', fc: 'loading', news: 'loading', history: 'loading' })
     const mark = (key, ok) => setSources(s => ({ ...s, [key]: ok ? 'done' : 'error' }))
 
     const jobs = [
       // Live APIs — each retry resolves true/false and keeps cached data on
-      // screen while it runs (stale-while-revalidate), so no view blanks.
+      // screen while it runs (stale-while-revalidate), so no view blanks. Their
+      // fetch time updates reactively via context (sleeperFetchedAt/fcFetchedAt).
       Promise.resolve(sleeperRetry?.()).then(ok => mark('sleeper', ok !== false), () => mark('sleeper', false)),
       Promise.resolve(fcRetry?.()).then(ok => mark('fc', ok !== false), () => mark('fc', false)),
-      // Actions-published feeds — force a fresh pull, then re-read the
-      // updatedAt so the feed-age line can actually move.
+      // Actions-published feeds — force a fresh pull, then re-read the publish +
+      // fetch stamps so both the "refreshed" line and feed age reflect it.
       loadNewsFeed(true).then(
-        () => { setFeedStamps(s => ({ ...s, news: getNewsFeedUpdatedAt() })); mark('news', true) },
+        () => { readFeedStamps(); mark('news', true) },
         () => mark('news', false),
       ),
       loadHistory(true).then(
-        h => { setFeedStamps(s => ({ ...s, values: h?.updatedAt ?? null })); mark('values', true) },
-        () => mark('values', false),
+        h => { setFeed(f => ({ ...f, valuesPub: h?.updatedAt ?? null, historyFetched: getHistoryFetchedAt() })); mark('history', true) },
+        () => mark('history', false),
       ),
     ]
+    // Hold "Refreshing…" for at least MIN_REFRESH_MS so the animation is always
+    // perceptible even when every source resolves in a few hundred ms.
     Promise.allSettled(jobs).then(() => {
-      setPhase('done')
-      doneTimer.current = setTimeout(() => {
-        setPhase('idle')
-        setSources({})
-        doneTimer.current = null
-      }, DONE_LINGER_MS)
+      const wait = Math.max(0, MIN_REFRESH_MS - (Date.now() - startedAt))
+      setTimeout(() => {
+        setPhase('done')
+        doneTimer.current = setTimeout(() => {
+          setPhase('idle')
+          setSources({})
+          doneTimer.current = null
+        }, DONE_LINGER_MS)
+      }, wait)
     })
   }
 
@@ -307,31 +335,10 @@ export default function SideDrawer({
         <div className="px-3 pt-2 pb-4 shrink-0">
           <div className="h-px bg-border-default mx-2 mb-3" />
 
-          {lastUpdated && (
-            <div className="px-3 py-1.5">
-              <span className="font-body text-[11px] text-text-tertiary">{lastUpdated}</span>
-            </div>
-          )}
-
-          {feedAges.length > 0 && (
-            <div className="px-3 pb-1.5">
-              <span className="font-body text-[11px] text-text-tertiary">
-                {feedAges.map((f, i) => (
-                  <span key={f.label}>
-                    {i > 0 && ' · '}
-                    <span className={f.stale ? 'text-warning' : ''}>
-                      {f.label} {f.age}
-                    </span>
-                  </span>
-                ))}
-              </span>
-            </div>
-          )}
-
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:opacity-60"
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:opacity-60"
           >
             {justRefreshed ? (
               <Check size={18} strokeWidth={2} className="text-success" />
@@ -343,35 +350,40 @@ export default function SideDrawer({
             </span>
           </button>
 
-          {/* Per-source ticks — visible while a refresh runs and briefly after,
-              so "in progress" and "done" both read clearly. */}
-          {phase !== 'idle' && (
-            <div className="px-3 pb-1 flex flex-wrap gap-x-3 gap-y-1">
-              {REFRESH_SOURCES.map(({ key, label }) => {
-                const st = sources[key] ?? 'loading'
-                return (
-                  <span
-                    key={key}
-                    className={cn(
-                      'font-body text-[11px] inline-flex items-center gap-1',
-                      st === 'done' && 'text-success',
-                      st === 'error' && 'text-danger',
-                      st === 'loading' && 'text-text-tertiary',
-                    )}
-                  >
+          {/* Per-source data status — last refreshed (app fetch time) for all
+              four, always visible so "did it work?" is answerable at a glance.
+              While a refresh runs, each row's leading glyph ticks
+              spinner → ✓/✗. The two feeds also show their publish age ("feed
+              Xh"), the number that only moves when the cron publishes. */}
+          <div className="px-3 pt-1 pb-1.5 space-y-1">
+            {dataStatus.map(({ key, label, refreshed, feedAge, feedStale }) => {
+              const st = phase !== 'idle' ? (sources[key] ?? 'loading') : null
+              return (
+                <div key={key} className="flex items-center gap-2 text-[11px] font-body">
+                  <span className="w-3 shrink-0 flex items-center justify-center">
                     {st === 'done' ? (
-                      <Check size={11} strokeWidth={2.5} />
+                      <Check size={11} strokeWidth={2.5} className="text-success" />
                     ) : st === 'error' ? (
-                      <X size={11} strokeWidth={2.5} />
+                      <X size={11} strokeWidth={2.5} className="text-danger" />
+                    ) : st === 'loading' ? (
+                      <Loader2 size={11} strokeWidth={2.5} className="animate-spin text-text-secondary" />
                     ) : (
-                      <Loader2 size={11} strokeWidth={2.5} className="animate-spin" />
+                      <span className="w-1 h-1 rounded-full bg-text-tertiary/50" />
                     )}
-                    {label}
                   </span>
-                )
-              })}
-            </div>
-          )}
+                  <span className="text-text-secondary">{label}</span>
+                  <span className="ml-auto text-text-tertiary tabular-nums">
+                    {refreshed ?? '—'}
+                    {feedAge && (
+                      <span className={cn('ml-1.5', feedStale ? 'text-warning' : 'text-text-tertiary/70')}>
+                        · feed {feedAge}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
 
           <button
             onClick={onToggleTheme}
