@@ -124,8 +124,6 @@ function AppShell({ leagueData }) {
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         lastUpdated={formatTimestamp(lastUpdated)}
-        onRefresh={retry}
-        loading={loading}
         isDark={isDark}
         onToggleTheme={toggleTheme}
       />

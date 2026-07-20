@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { SLEEPER_BASE, LEAGUE_ID } from '../constants'
 import { fetchJSON } from '../utils/fetchJSON'
 
@@ -7,9 +7,15 @@ export function useSleeper() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [fetchedAt, setFetchedAt] = useState(null)
+  const hasData = useRef(false)
 
+  // Resolves true on success / false on failure (never rejects), so the
+  // manual-refresh coordinator can show a per-source ✓/✗ tick.
   const fetchData = useCallback(async () => {
-    setLoading(true)
+    // Stale-while-revalidate: only show the full-screen loading state on the
+    // first load. A manual or auto refresh keeps the cached data on screen
+    // (matches useFantasyCalc) so pressing Refresh never blanks a view.
+    if (!hasData.current) setLoading(true)
     setError(null)
     try {
       const [leagueInfo, rosters, users, tradedPicks, nflState] = await Promise.all([
@@ -29,11 +35,14 @@ export function useSleeper() {
       }
 
       setData({ leagueInfo, rosters, users, tradedPicks, nflState, matchups })
+      hasData.current = true
       setFetchedAt(Date.now())
       setLoading(false)
+      return true
     } catch (err) {
       setError(err.message)
       setLoading(false)
+      return false
     }
   }, [])
 

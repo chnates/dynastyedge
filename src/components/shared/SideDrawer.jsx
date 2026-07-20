@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   Zap, Users, ArrowLeftRight, Trophy, FileText, Newspaper,
-  RefreshCw, Sun, Moon, LogOut,
+  RefreshCw, Sun, Moon, LogOut, Check, X, Loader2,
 } from 'lucide-react'
 import DynastyEdgeLogo from './DynastyEdgeLogo'
 import TeamAvatar from './TeamAvatar'
+import { cn } from '../ui'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useIdentity } from '../../hooks/useIdentity'
 import { getTeamName } from '../../hooks/useLeague'
@@ -18,6 +19,20 @@ import { loadHistory } from '../../hooks/useValueHistory'
 // hour (2h ≈ four missed runs), the values cron daily (36h ≈ a missed day).
 const NEWS_STALE_MS = 2 * 60 * 60 * 1000
 const VALUES_STALE_MS = 36 * 60 * 60 * 1000
+
+// The four independent data sources the Refresh button pulls. They fire in
+// parallel and fully in the background (stale-while-revalidate everywhere), so
+// nothing blanks and the wall-clock cost is just the slowest source. Each
+// ticks ✓/✗ as it lands: Rosters (Sleeper) · Values (FantasyCalc) · News +
+// History (the two Actions-published feeds).
+const REFRESH_SOURCES = [
+  { key: 'sleeper', label: 'Rosters' },
+  { key: 'fc', label: 'Values' },
+  { key: 'news', label: 'News' },
+  { key: 'values', label: 'History' },
+]
+// How long "Updated ✓" lingers before the button settles back to idle.
+const DONE_LINGER_MS = 2200
 
 function formatFeedAge(iso) {
   const t = Date.parse(iso ?? '')
@@ -84,12 +99,10 @@ export default function SideDrawer({
   isOpen,
   onClose,
   lastUpdated,
-  onRefresh,
-  loading,
   isDark,
   onToggleTheme,
 }) {
-  const { league } = useLeagueContext()
+  const { league, sleeperRetry, fcRetry } = useLeagueContext()
   const { clearIdentity } = useIdentity()
   const myOwner = league?.myRoster?.owner ?? null
   const myTeamName = myOwner ? getTeamName(myOwner) : null
@@ -116,6 +129,51 @@ export default function SideDrawer({
     { label: 'News', age: formatFeedAge(feedStamps.news), stale: Date.now() - Date.parse(feedStamps.news ?? '') > NEWS_STALE_MS },
     { label: 'Values', age: formatFeedAge(feedStamps.values), stale: Date.now() - Date.parse(feedStamps.values ?? '') > VALUES_STALE_MS },
   ].filter(f => f.age !== null)
+
+  // ── Refresh coordinator ────────────────────────────────────────────────────
+  // One button, four independent sources fired in parallel and non-blocking.
+  // `phase` drives the button (idle → refreshing → done → idle); `sources`
+  // tracks each source's 'loading'|'done'|'error' for the per-source ticks.
+  const [phase, setPhase] = useState('idle')
+  const [sources, setSources] = useState({})
+  const doneTimer = useRef(null)
+  useEffect(() => () => { if (doneTimer.current) clearTimeout(doneTimer.current) }, [])
+
+  function handleRefresh() {
+    if (phase === 'refreshing') return
+    if (doneTimer.current) { clearTimeout(doneTimer.current); doneTimer.current = null }
+    setPhase('refreshing')
+    setSources({ sleeper: 'loading', fc: 'loading', news: 'loading', values: 'loading' })
+    const mark = (key, ok) => setSources(s => ({ ...s, [key]: ok ? 'done' : 'error' }))
+
+    const jobs = [
+      // Live APIs — each retry resolves true/false and keeps cached data on
+      // screen while it runs (stale-while-revalidate), so no view blanks.
+      Promise.resolve(sleeperRetry?.()).then(ok => mark('sleeper', ok !== false), () => mark('sleeper', false)),
+      Promise.resolve(fcRetry?.()).then(ok => mark('fc', ok !== false), () => mark('fc', false)),
+      // Actions-published feeds — force a fresh pull, then re-read the
+      // updatedAt so the feed-age line can actually move.
+      loadNewsFeed(true).then(
+        () => { setFeedStamps(s => ({ ...s, news: getNewsFeedUpdatedAt() })); mark('news', true) },
+        () => mark('news', false),
+      ),
+      loadHistory(true).then(
+        h => { setFeedStamps(s => ({ ...s, values: h?.updatedAt ?? null })); mark('values', true) },
+        () => mark('values', false),
+      ),
+    ]
+    Promise.allSettled(jobs).then(() => {
+      setPhase('done')
+      doneTimer.current = setTimeout(() => {
+        setPhase('idle')
+        setSources({})
+        doneTimer.current = null
+      }, DONE_LINGER_MS)
+    })
+  }
+
+  const refreshing = phase === 'refreshing'
+  const justRefreshed = phase === 'done'
 
   // Close on Escape
   useEffect(() => {
@@ -271,13 +329,49 @@ export default function SideDrawer({
           )}
 
           <button
-            onClick={onRefresh}
-            disabled={loading}
-            className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:opacity-40"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:opacity-60"
           >
-            <RefreshCw size={18} strokeWidth={1.75} className={loading ? 'animate-spin' : ''} />
-            <span className="font-body font-medium text-[14px]">Refresh data</span>
+            {justRefreshed ? (
+              <Check size={18} strokeWidth={2} className="text-success" />
+            ) : (
+              <RefreshCw size={18} strokeWidth={1.75} className={refreshing ? 'animate-spin' : ''} />
+            )}
+            <span className={cn('font-body font-medium text-[14px]', justRefreshed && 'text-success')}>
+              {refreshing ? 'Refreshing…' : justRefreshed ? 'Updated ✓' : 'Refresh data'}
+            </span>
           </button>
+
+          {/* Per-source ticks — visible while a refresh runs and briefly after,
+              so "in progress" and "done" both read clearly. */}
+          {phase !== 'idle' && (
+            <div className="px-3 pb-1 flex flex-wrap gap-x-3 gap-y-1">
+              {REFRESH_SOURCES.map(({ key, label }) => {
+                const st = sources[key] ?? 'loading'
+                return (
+                  <span
+                    key={key}
+                    className={cn(
+                      'font-body text-[11px] inline-flex items-center gap-1',
+                      st === 'done' && 'text-success',
+                      st === 'error' && 'text-danger',
+                      st === 'loading' && 'text-text-tertiary',
+                    )}
+                  >
+                    {st === 'done' ? (
+                      <Check size={11} strokeWidth={2.5} />
+                    ) : st === 'error' ? (
+                      <X size={11} strokeWidth={2.5} />
+                    ) : (
+                      <Loader2 size={11} strokeWidth={2.5} className="animate-spin" />
+                    )}
+                    {label}
+                  </span>
+                )
+              })}
+            </div>
+          )}
 
           <button
             onClick={onToggleTheme}

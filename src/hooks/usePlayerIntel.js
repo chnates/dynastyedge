@@ -80,7 +80,11 @@ function stripHtml(s) {
 let newsFeedPromise = null
 let newsFeedUpdatedAt = null
 
-export function loadNewsFeed() {
+// `force` re-fetches the feed on demand (the drawer's Refresh button) and
+// refreshes the cached `updatedAt` so the feed-age readout can move. A failed
+// forced fetch resolves to [] but leaves the previous `updatedAt` intact.
+export function loadNewsFeed(force = false) {
+  if (force) newsFeedPromise = null
   if (!newsFeedPromise) {
     newsFeedPromise = fetchJSON(NEWS_FEED_URL, { timeoutMs: 10000, label: 'News feed' })
       .then(data => {

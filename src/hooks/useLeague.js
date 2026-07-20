@@ -201,12 +201,16 @@ export function useLeague() {
     league, nflState, matchups, isOffseason, leagueInfo, tradeDeadline,
     myRosterId,
     loading, error, retry, sleeperFetchedAt, fcFetchedAt, values: fcValues,
+    // Per-source refresher for the drawer's granular Refresh coordinator —
+    // resolves true/false on completion so it can tick ✓/✗ per source.
+    // (sleeperRetry is already exposed just below for sign-in.)
+    fcRetry,
     // Sleeper-scoped sign-in inputs (independent of FantasyCalc).
     signInRosters, sleeperLoading, sleeperError, sleeperRetry,
   }), [
     league, nflState, matchups, isOffseason, leagueInfo, tradeDeadline,
     myRosterId, loading, error, retry, sleeperFetchedAt, fcFetchedAt, fcValues,
-    signInRosters, sleeperLoading, sleeperError, sleeperRetry,
+    signInRosters, sleeperLoading, sleeperError, sleeperRetry, fcRetry,
   ])
 }
 

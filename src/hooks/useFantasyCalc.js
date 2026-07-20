@@ -71,11 +71,10 @@ export function useFantasyCalc() {
   const [loading, setLoading] = useState(!moduleCache)
   const [error, setError] = useState(null)
   const [fetchedAt, setFetchedAt] = useState(moduleFetchedAt)
-  const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
-    loadValues(refreshKey > 0)
+    loadValues(false)
       .then(cache => {
         if (cancelled) return
         setValues(cache)
@@ -89,16 +88,30 @@ export function useFantasyCalc() {
         setLoading(false)
       })
     return () => { cancelled = true }
-  }, [refreshKey])
+  }, [])
 
   // Keeps existing values on screen during a refresh (stale-while-revalidate):
-  // loading only flips on when there is nothing cached to show.
-  // Stable identity (like useSleeper's fetchData) so useLeague's memoized
-  // context value doesn't churn every render.
+  // loading only flips on when there is nothing cached to show. Resolves true
+  // on success / false on failure (never rejects) so the manual-refresh
+  // coordinator can show a per-source ✓/✗ tick. Stable identity (like
+  // useSleeper's fetchData) so useLeague's memoized context value doesn't
+  // churn every render.
   const retry = useCallback(() => {
     setError(null)
     if (!moduleCache) setLoading(true)
-    setRefreshKey(k => k + 1)
+    return loadValues(true)
+      .then(cache => {
+        setValues(cache)
+        setFetchedAt(moduleFetchedAt)
+        setError(null)
+        setLoading(false)
+        return true
+      })
+      .catch(err => {
+        setError(err.message)
+        setLoading(false)
+        return false
+      })
   }, [])
 
   return { values, loading, error, retry, fetchedAt }
