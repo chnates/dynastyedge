@@ -50,12 +50,13 @@ const BRIEFING_TONES = {
   warning: { icon: 'text-warning', bg: 'bg-warning/15', bar: 'bg-warning' },
 }
 
-// Win-window tier dot colors for the hero chip (white-on-gradient context —
-// the standard tinted TIER_BADGE doesn't read on the brand gradient).
+// Win-window tier dot colors for the hero stat strip. The hero panel is dark
+// in BOTH themes, so these are the dark-theme tier identity literals — the
+// theme-tracking --tier-* tokens would go near-invisible in light mode.
 const TIER_DOT = {
-  Contending: 'bg-warning',
-  Middle:     'bg-cyan-400',
-  Rebuilding: 'bg-indigo-400',
+  Contending: 'bg-[#C9CDD1]',
+  Middle:     'bg-[#57C4E8]',
+  Rebuilding: 'bg-[#8F9BF2]',
 }
 
 const TX_ICONS = {
@@ -231,67 +232,84 @@ export default function EdgeView() {
   })
 
   const dateline = new Date().toLocaleDateString([], {
-    weekday: 'long', month: 'long', day: 'numeric',
+    weekday: 'short', month: 'short', day: 'numeric',
   })
 
   return (
-    <div className="px-4 pb-6">
+    <div className="px-4 pb-6 hero-sweep">
 
-      {/* ── Hero: greeting + franchise pulse, full brand gradient ── */}
-      <div {...rise('hero-card mt-4 rounded-xl px-4 pt-3.5 pb-3.5')}>
-        <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-white/60">
-          {dateline}
-        </p>
-        <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-white mt-0.5 leading-tight">
-          {greeting()}, {myTeamName}
-        </h1>
-        <p className="font-body text-sm text-white/80 mt-1 leading-snug">
-          {gmLine}
-        </p>
-
-        <button
-          onClick={() => navigate('/my-team')}
-          className="w-full flex items-end justify-between gap-3 mt-3 pt-3 border-t border-white/20 text-left active:opacity-70 transition-opacity"
-        >
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="hero-value font-mono text-3xl font-medium tabular-nums text-white">
-                {myRoster.totalValue.toLocaleString()}
-              </span>
-              <TrendChip trend={signals.teamTrend} value={signals.playerValue} onHero />
-            </div>
-            <p className="font-body text-[10px] text-white/55 mt-0.5">
-              Team value · 30-day trend
-            </p>
-          </div>
-          {teamSeries && <Sparkline data={teamSeries} width={96} height={28} />}
-        </button>
-
-        <div className="flex items-center gap-1.5 mt-3 flex-wrap">
-          <button
-            onClick={() => navigate('/league')}
-            className="flex items-center gap-1 rounded-full bg-white/15 border border-white/20 px-2.5 py-1 active:opacity-70 transition-opacity"
-          >
-            <span className={`font-mono text-xs font-bold tabular-nums ${signals.valueRank <= 3 ? 'text-amber-300' : 'text-white'}`}>
-              #{signals.valueRank}
-            </span>
-            <span className="font-body text-[10px] text-white/70">in value</span>
-          </button>
-          <button
-            onClick={() => navigate('/league')}
-            className="flex items-center gap-1.5 rounded-full bg-white/15 border border-white/20 px-2.5 py-1 font-body text-[10px] font-semibold uppercase tracking-wider text-white active:opacity-70 transition-opacity"
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${TIER_DOT[signals.myTier] ?? 'bg-cyan-400'}`} />
-            {signals.myTier}
-          </button>
-          {myRoster.hasRecord && (
-            <span className="rounded-full bg-white/15 border border-white/20 px-2.5 py-1 font-mono text-xs tabular-nums text-white">
-              {myRoster.record.wins}-{myRoster.record.losses}{myRoster.record.ties ? `-${myRoster.record.ties}` : ''}
-            </span>
-          )}
-          <span className="rounded-full bg-white/15 border border-white/20 px-2.5 py-1 font-mono text-xs tabular-nums text-white">
-            ${myRoster.faabRemaining} <span className="font-body text-[10px] text-white/60">FAAB</span>
+      {/* ── Hero: the red score-bug franchise report ── */}
+      <div {...rise('mt-4')}>
+        <div className="bug-red flex items-center justify-between gap-2 px-3 py-1.5">
+          <span className="font-display text-[12px] uppercase tracking-[0.1em] leading-none truncate">
+            {myTeamName} · Franchise Report
           </span>
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] leading-none shrink-0">
+            {dateline}
+          </span>
+        </div>
+        <div className="hero-card border-t-0 px-4 pt-3 pb-3.5">
+          <p className="font-body text-sm text-white/75 leading-snug">
+            {greeting()}, {myTeamName}.
+          </p>
+          <p className="font-body text-sm font-semibold text-white mt-0.5 leading-snug">
+            {gmLine}
+          </p>
+
+          <button
+            onClick={() => navigate('/my-team')}
+            className="w-full flex items-end justify-between gap-3 mt-3 text-left active:opacity-70 transition-opacity"
+          >
+            <div>
+              <div className="flex items-baseline gap-2">
+                <span className="font-mono text-4xl font-medium tabular-nums text-white leading-none">
+                  {myRoster.totalValue.toLocaleString()}
+                </span>
+                <TrendChip trend={signals.teamTrend} value={signals.playerValue} onHero />
+              </div>
+              <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-white/50 mt-2">
+                Team value · 30-day trend
+              </p>
+            </div>
+            {teamSeries && <Sparkline data={teamSeries} width={96} height={28} />}
+          </button>
+
+          {/* Score-bug stat strip: rank · record · window · FAAB */}
+          <div className="flex mt-3 pt-2.5 border-t border-white/15 divide-x divide-white/15">
+            <button
+              onClick={() => navigate('/league')}
+              className="text-left pr-3 active:opacity-70 transition-opacity"
+            >
+              <p className={`font-mono text-base font-semibold tabular-nums leading-none ${signals.valueRank <= 3 ? 'text-amber-300' : 'text-white'}`}>
+                #{signals.valueRank}
+              </p>
+              <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-white/45 mt-1">Rank</p>
+            </button>
+            {myRoster.hasRecord && (
+              <div className="px-3">
+                <p className="font-mono text-base font-semibold tabular-nums leading-none text-white">
+                  {myRoster.record.wins}–{myRoster.record.losses}{myRoster.record.ties ? `–${myRoster.record.ties}` : ''}
+                </p>
+                <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-white/45 mt-1">Record</p>
+              </div>
+            )}
+            <button
+              onClick={() => navigate('/league')}
+              className="text-left px-3 active:opacity-70 transition-opacity"
+            >
+              <p className="flex items-center gap-1.5 font-display text-[14px] uppercase tracking-wide leading-none text-white">
+                <span className={`w-1.5 h-1.5 rounded-full ${TIER_DOT[signals.myTier] ?? 'bg-cyan-400'}`} />
+                {signals.myTier}
+              </p>
+              <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-white/45 mt-1">Window</p>
+            </button>
+            <div className="pl-3">
+              <p className="font-mono text-base font-semibold tabular-nums leading-none text-emerald-300">
+                ${myRoster.faabRemaining}
+              </p>
+              <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-white/45 mt-1">FAAB</p>
+            </div>
+          </div>
         </div>
       </div>
 

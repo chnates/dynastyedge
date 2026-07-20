@@ -102,7 +102,9 @@ body {
   background-color: rgb(var(--bg-primary));
 }
 
-.hero-sweep {
+/* Dark only — against light backgrounds even a .06 red wash reads as a
+   pink cast over the whole screen, not an ambient hint. */
+.dark .hero-sweep {
   background-image:
     conic-gradient(from 210deg at 70% -10%, rgba(216, 30, 60, 0.06), transparent 28%, transparent 72%, rgba(216, 30, 60, 0.06));
   background-repeat: no-repeat;
@@ -170,30 +172,20 @@ body {
   box-shadow: 0 0 22px -2px rgb(99 102 241 / 0.7);
 }
 
-/* ── The Edge hero: full brand-gradient card, white text on top ── */
-/* Deep electric blue → violet with a violet bloom (top-right) and  */
-/* a cyan hint (bottom-left). Same treatment both themes; dark gets */
-/* a stronger ambient glow shadow so it reads neon at night.        */
+/* ── Score-bug hero (Primetime Blackout) ─────────────────────── */
+/* The one loud moment per screen: a near-black broadcast panel —  */
+/* deliberately dark in BOTH themes, as the old gradient hero was  */
+/* its own dark surface in light mode too — capped by a .bug-red   */
+/* score-bug bar in the consumer. No glows, no gradients beyond    */
+/* the two sanctioned score-bugs.                                  */
 
 .hero-card {
-  background-image:
-    radial-gradient(130% 120% at 88% -12%, rgb(167 139 250 / 0.55), transparent 58%),
-    radial-gradient(100% 100% at -8% 112%, rgb(34 211 238 / 0.26), transparent 55%),
-    linear-gradient(135deg, #2843C8 0%, #3B6FEF 52%, #6B4DE6 100%);
-  box-shadow: 0 10px 30px -12px rgb(59 111 239 / 0.45);
+  background-color: #101013;
+  border: 1px solid #34343B;
 }
 
 .dark .hero-card {
-  background-image:
-    radial-gradient(130% 120% at 88% -12%, rgb(167 139 250 / 0.5), transparent 58%),
-    radial-gradient(100% 100% at -8% 112%, rgb(34 211 238 / 0.2), transparent 55%),
-    linear-gradient(135deg, #2336A8 0%, #3D63E8 52%, #5F3FD8 100%);
-  box-shadow: 0 12px 36px -14px rgb(79 127 255 / 0.55);
-}
-
-/* Soft glow on the hero's marquee number */
-.hero-value {
-  text-shadow: 0 0 18px rgb(255 255 255 / 0.35);
+  border-color: #2C2C33;
 }
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
