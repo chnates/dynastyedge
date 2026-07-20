@@ -14,9 +14,12 @@ let historyFailed = false
 // Exported for the side drawer's feed-age readout: resolves the cached
 // history object (whose `updatedAt` stamps the last snapshot), or null when
 // the feed never loaded. Same single session-cached request as the hook.
-export function loadHistory() {
-  if (historyCache) return Promise.resolve(historyCache)
-  if (historyFailed) return Promise.resolve(null)
+// `force` re-fetches on demand (the drawer's Refresh button) so a new daily
+// snapshot is picked up mid-session and the feed-age readout can move.
+export function loadHistory(force = false) {
+  if (force) { historyPromise = null; historyFailed = false }
+  if (historyCache && !force) return Promise.resolve(historyCache)
+  if (historyFailed && !force) return Promise.resolve(null)
   if (!historyPromise) {
     historyPromise = fetchJSON(VALUES_HISTORY_URL, { label: 'Values history' })
       .then(data => {
