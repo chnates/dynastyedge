@@ -2074,19 +2074,22 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
    `apple-mobile-web-app-capable` + `manifest.webmanifest` (display
    standalone, icons 192/512) so iOS draws the app edge-to-edge instead of
    letterboxing it with black bars. The standalone status bar uses the
-   **`apple-mobile-web-app-status-bar-style` meta set to
-   `black-translucent`**: the bar is transparent, so app content paints
-   under it seamlessly — no solid colored band. iOS
-   forces white status text in this mode, so in light mode a fixed dark
-   strip (`dark:hidden`, height `env(safe-area-inset-top)`, in both
-   `App.jsx`'s AppShell and `LoginScreen.jsx`) sits behind the bar to keep
-   the clock/battery readable. The meta and the strips are one design —
-   never remove either half alone, and never switch the standalone bar to
-   the theme-color approach (tried and reverted: iOS standalone doesn't
-   honor the live per-theme `theme-color`, so the bar rendered as a solid
-   black band). The `theme-color` meta (synced to the app theme by
-   `useTheme`) still colors regular Safari's bar area. The fixed header
-   still pads with `env(safe-area-inset-top)`. Changes to these metas only
+   **`apple-mobile-web-app-status-bar-style` meta set to `default`**: iOS
+   draws an opaque status bar and **auto-contrasts the clock/battery text to
+   the appearance** (black on a light appearance, white on dark), so the bar
+   matches the header in both themes with no hand-drawn strip. The bar color
+   comes from **two static `prefers-color-scheme` `theme-color` metas** (light
+   `#E7E9EC`, dark `#101013` — each matching the header). They must be static:
+   a single JS-mutated `theme-color` gets cached at launch in standalone mode,
+   which is what previously rendered a stuck black band (owner-directed change
+   2026-07-20 — the earlier `black-translucent` + light-mode dark strip design
+   was replaced because the strip read as a hard black bar in light mode). The
+   app header is **opaque** (`bg-bg-secondary`, no translucency/backdrop-blur)
+   and fills the safe-area region via `paddingTop: env(safe-area-inset-top)`,
+   so the bar and header read as one surface with no `-webkit-backdrop-filter`
+   hairline at the boundary. Caveat inherent to `default`/system-driven bars:
+   if the in-app theme toggle disagrees with the phone's system appearance,
+   the iOS bar follows the system, not the toggle. Changes to these metas only
    take effect after the user removes and re-adds the home-screen app.
    Icon link tags carry a `?v=N` query — bump it to bust Safari's per-site
    icon cache when the logo changes.

@@ -2,7 +2,6 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import './index.css'
 import App from './App'
-import { syncThemeColorMeta } from './hooks/useTheme'
 
 let storedTheme = null
 try { storedTheme = localStorage.getItem('dynastyedge_theme') }
@@ -13,7 +12,6 @@ if (storedTheme === 'light') {
 } else {
   html.classList.add('dark')
 }
-syncThemeColorMeta(storedTheme !== 'light')
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
