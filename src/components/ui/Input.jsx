@@ -15,7 +15,7 @@ export const Input = forwardRef(function Input({ className, ...rest }, ref) {
     <input
       ref={ref}
       className={cn(
-        'w-full rounded-xl bg-bg-card border border-border-default',
+        'w-full rounded-none bg-bg-card border border-border-default',
         'px-3 py-2.5 font-body text-sm text-text-primary placeholder:text-text-tertiary',
         'focus:outline-none focus:border-accent transition-colors',
         className,

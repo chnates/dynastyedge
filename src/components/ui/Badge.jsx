@@ -10,7 +10,10 @@ import { cn } from './cn'
 //   <Badge tone="neutral" soft>NFL</Badge>
 
 const SOLID = {
-  accent:  'bg-accent text-white',
+  // Solid silver carries near-black text (silver score-bug rule). `brand` is
+  // the rationed Falcons red — reserved for "you" treatments (You-chip).
+  accent:  'bg-accent text-bg-primary',
+  brand:   'bg-brand text-white',
   success: 'bg-success text-white',
   warning: 'bg-warning text-white',
   danger:  'bg-danger text-white',
@@ -18,6 +21,7 @@ const SOLID = {
 
 const SOFT = {
   accent:  'bg-accent/15 text-accent',
+  brand:   'bg-brand/15 text-brand-bright',
   success: 'bg-success/15 text-success',
   warning: 'bg-warning/15 text-warning',
   danger:  'bg-danger/15 text-danger',
@@ -29,8 +33,8 @@ export default function Badge({ tone = 'accent', soft = false, pill = false, cla
   return (
     <span
       className={cn(
-        'inline-flex items-center shrink-0 font-body text-[9px] font-bold uppercase tracking-wider px-1 py-0.5',
-        pill ? 'rounded-full' : 'rounded',
+        'inline-flex items-center shrink-0 font-mono text-[9px] font-semibold uppercase tracking-wider px-1 py-0.5',
+        pill ? 'rounded-full' : 'rounded-none',
         palette,
         className,
       )}

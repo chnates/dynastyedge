@@ -187,12 +187,12 @@ export default function SideDrawer({
                   className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors duration-150"
                 >
                   <Icon size={20} strokeWidth={1.75} className={text} />
-                  <span className="font-body font-semibold text-[15px]">{label}</span>
+                  <span className="font-display text-[14px] uppercase tracking-[0.08em]">{label}</span>
                 </NavLink>
 
                 {/* Children — indented on a section-colored guide rail */}
                 <div className="relative ml-[26px] mt-0.5">
-                  <span className={`absolute left-0 top-1 bottom-1 w-px rounded-full ${rail}`} aria-hidden="true" />
+                  <span className={`absolute left-0 top-1 bottom-1 w-[2px] ${rail}`} aria-hidden="true" />
                   {children.map(child => (
                     <NavLink
                       key={child.to + child.label}
@@ -237,7 +237,7 @@ export default function SideDrawer({
                       <span className={`absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full ${bar}`} />
                     )}
                     <Icon size={20} strokeWidth={1.75} className={text} />
-                    <span className="font-body font-semibold text-[15px]">{label}</span>
+                    <span className="font-display text-[14px] uppercase tracking-[0.08em]">{label}</span>
                   </>
                 )}
               </NavLink>

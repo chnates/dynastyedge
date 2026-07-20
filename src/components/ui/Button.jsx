@@ -14,17 +14,20 @@ import { cn } from './cn'
 // Tailwind's content scan always picks them up.
 
 const VARIANTS = {
-  primary:   'bg-accent text-white',
+  // Primary is the solid silver CTA — near-black text (silver score-bug rule),
+  // via text-bg-primary so it resolves correctly in both themes.
+  primary:   'bg-accent text-bg-primary',
   secondary: 'border border-border-default text-text-primary',
   tinted:    'border border-accent/25 bg-accent/5 text-accent',
   ghost:     'text-text-secondary hover:text-text-primary',
   danger:    'bg-danger text-white',
 }
 
+// Square corners — broadcast panels (Primetime Blackout).
 const SIZES = {
-  sm: 'text-xs px-3 py-1.5 rounded-lg',
-  md: 'text-sm px-4 py-2 rounded-lg',
-  lg: 'text-sm px-4 py-3 rounded-xl',
+  sm: 'text-xs px-3 py-1.5 rounded-none',
+  md: 'text-sm px-4 py-2 rounded-none',
+  lg: 'text-sm px-4 py-3 rounded-none',
 }
 
 export default function Button({

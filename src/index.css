@@ -108,6 +108,34 @@ body {
   background-repeat: no-repeat;
 }
 
+/* ── Score-bugs + angled cuts (Primetime Blackout's ONE flourish) ── */
+/* The two sanctioned gradients (phase3-design-brief.md). Silver bugs  */
+/* carry near-black text in both themes; red bugs carry white text and */
+/* deepen to #A71930 in light mode for contrast on white surfaces.     */
+
+.bug-silver {
+  background-image: linear-gradient(90deg, #C9CDD1, #8F949B);
+  color: #101013;
+}
+
+.bug-red {
+  background-image: linear-gradient(90deg, #A71930, #711022);
+  color: #FFFFFF;
+}
+.dark .bug-red {
+  background-image: linear-gradient(90deg, #C8102E, #7E0E22);
+}
+
+/* Lower-third: hard 8px angled trailing cut (section headers). */
+.lower-third {
+  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+
+/* Action cards cut the bottom-left corner (10px). */
+.corner-cut {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+}
+
 /* ── Login screen: amped neon ambient (far more saturated than app-bg) ── */
 .login-bg {
   background-color: rgb(var(--bg-primary));
