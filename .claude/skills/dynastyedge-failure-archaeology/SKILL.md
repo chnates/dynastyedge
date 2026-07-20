@@ -90,17 +90,31 @@ regression shipped silently and only surfaced when the app was re-added —
 long after the offending commit. Never assume a status-bar/meta change is
 verified until a remove+re-add cycle on the actual phone.
 
-**Status:** SETTLED. **Standing ruling:**
-- `black-translucent` + the light-mode dark strips is the settled design. Do
-  not remove the `apple-mobile-web-app-status-bar-style` meta, do not remove
-  the two `dark:hidden` safe-area strips, do not re-attempt the
-  "theme-color drives the standalone bar" approach — it was tried (`cfd9ad0`)
-  and reverted (`3083f0c`) same night.
-- **CLAUDE.md rule 16 was stale on this point until 2026-07-19**, when an
-  owner-approved docs commit rewrote it to describe the black-translucent +
-  light-mode-strip design (`78b6c29`); `index.html` was not touched. If the
-  two ever diverge again, the correct action is a **doc fix to CLAUDE.md**,
-  never "fixing" index.html to match a stale doc.
+**Status:** SUPERSEDED 2026-07-20 (owner-directed). The `black-translucent` +
+light-mode dark strip design was replaced: in light mode the dark strip read
+as a hard black bar that didn't match the light header, and in dark mode a
+`-webkit-backdrop-filter` hairline showed at the safe-area/header boundary.
+
+**Current settled design (the standing ruling now):**
+- **`apple-mobile-web-app-status-bar-style=default`** — iOS draws an opaque
+  status bar and auto-contrasts the clock/battery text to the appearance
+  (black on light, white on dark). No hand-drawn strip; both `dark:hidden`
+  safe-area strips (App.jsx, LoginScreen.jsx) were removed.
+- Bar color = **two static `prefers-color-scheme` `theme-color` metas** (light
+  `#E7E9EC`, dark `#101013`). They MUST stay static — the reverted `cfd9ad0`
+  black-band failure was a single JS-swapped `theme-color` getting cached at
+  launch in standalone; static per-scheme metas ARE honored + updated live, so
+  `syncThemeColorMeta` (and its main.jsx/useTheme callers) were deleted.
+- The header is **opaque** (`bg-bg-secondary`, no `/85` + no `backdrop-blur`)
+  and fills the safe area via `paddingTop` — no blur hairline at the boundary.
+- Inherent caveat of a system-driven bar: if the in-app theme toggle disagrees
+  with the phone's system appearance, the bar follows the system.
+- Why this differs from the reverted `cfd9ad0` attempt: that one kept content
+  edge-to-edge and relied on a *live-swapped* theme-color; this uses `default`
+  (iOS-drawn bar) + *static* per-scheme metas. Do not conflate them.
+- **Verify on device with a remove + re-add** — PWA meta changes are silent
+  until the home-screen app is re-added (the trap that hid the original
+  regression for weeks).
 
 ---
 

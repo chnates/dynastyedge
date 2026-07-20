@@ -3,19 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <!-- Colors Safari's status-bar area to match the app header.
-         Kept in sync with the theme toggle by useTheme. -->
-    <meta name="theme-color" content="#101013" />
-    <!-- Standalone (Add to Home Screen) mode: draw edge-to-edge instead of
-         iOS letterboxing the app with black bars. black-translucent makes the
-         status bar TRANSPARENT so the app content + ambient glow paint under
-         it seamlessly (no solid colored band). iOS forces white status text;
-         in dark mode the dark header/glow shows through, and in light mode a
-         dark strip (App.jsx, light-mode-only) sits behind the bar to keep the
-         clock/battery readable. Changing these requires removing + re-adding
-         the home-screen app. -->
+    <!-- Status-bar area color. STATIC per-scheme metas (not a runtime JS swap):
+         iOS honors prefers-color-scheme theme-color and updates it live, whereas
+         a single JS-mutated meta gets cached at launch in standalone mode (that
+         cached-swap approach was tried and produced a stuck black band). Each
+         value matches the app header in that scheme so the bar and header read
+         as one surface. -->
+    <meta name="theme-color" content="#E7E9EC" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#101013" media="(prefers-color-scheme: dark)" />
+    <!-- Standalone (Add to Home Screen) mode. `default` status-bar-style makes
+         iOS draw an OPAQUE status bar and auto-contrast the clock/battery text
+         to the appearance (black on light, white on dark) — so no hand-drawn
+         dark strip is needed and the bar matches the header in both themes.
+         (black-translucent, the prior setting, forced white text and required a
+         light-mode dark strip behind it.) Changing these metas only takes effect
+         after removing + re-adding the home-screen app. -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="DynastyEdge" />
     <link rel="manifest" href="manifest.webmanifest" />
     <title>DynastyEdge</title>
