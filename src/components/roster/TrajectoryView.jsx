@@ -117,7 +117,7 @@ function TrajectoryChart({ seasons, team, league, peakIdx }) {
               fontSize="10"
               fill="currentColor"
               className="text-text-tertiary"
-              fontFamily="'IBM Plex Sans', system-ui, sans-serif"
+              fontFamily="'Archivo', system-ui, sans-serif"
             >
               {seasons[i]}
             </text>

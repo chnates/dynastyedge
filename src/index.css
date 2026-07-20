@@ -6,46 +6,68 @@
 /* Values are space-separated RGB channels so Tailwind opacity     */
 /* modifiers (e.g. bg-accent/10) continue to work.                 */
 
+/* "Primetime Blackout" (Phase 3, docs/design/phase3-design-brief.md):
+   silver is structure, Falcons brand red is rationed (hero score-bug, "you"
+   treatments, active sub-tab underline only). Brand red (--brand family) and
+   trend/status red (--danger) are deliberately different values and must
+   never swap roles. */
+
 :root {
-  --bg-primary:    242 244 250;   /* #F2F4FA — cool tint so white cards lift */
-  --bg-secondary:  233 236 245;   /* #E9ECF5 */
+  --bg-primary:    240 241 243;   /* #F0F1F3 */
+  --bg-secondary:  231 233 236;   /* #E7E9EC */
   --bg-card:       255 255 255;   /* #FFFFFF */
-  --border-default:224 228 238;   /* #E0E4EE */
-  --text-primary:  13 13 15;      /* #0D0D0F */
-  --text-secondary:85 85 95;      /* #55555F */
-  --text-tertiary: 138 138 149;   /* #8A8A95 */
-  --accent:        59 111 239;    /* #3B6FEF */
-  --success:       34 197 94;     /* #22C55E */
+  --border-default:217 220 225;   /* #D9DCE1 */
+  --text-primary:  16 16 19;      /* #101013 */
+  --text-secondary:84 86 92;      /* #54565C */
+  --text-tertiary: 138 144 150;   /* #8A9096 */
+  --accent:        92 100 112;    /* #5C6470 — "silver" reads as slate on white */
+  --brand:         167 25 48;     /* #A71930 — Falcons red, deepened for white bg */
+  --brand-deep:    113 16 34;     /* #711022 — score-bug gradient partner */
+  --brand-bright:  167 25 48;     /* red-as-text on light = same deepened red */
+  --success:       31 157 92;     /* #1F9D5C */
   --warning:       245 158 11;    /* #F59E0B */
-  --danger:        239 68 68;     /* #EF4444 */
+  --danger:        216 56 63;     /* #D8383F */
+
+  /* Win-window tier identity */
+  --tier-contend:  74 85 96;      /* #4A5560 */
+  --tier-middle:   14 124 158;    /* #0E7C9E */
+  --tier-rebuild:  85 96 206;     /* #5560CE */
 
   /* Position identity colors — darker shades for light backgrounds */
-  --pos-qb:        219 39 119;    /* #DB2777 pink */
-  --pos-rb:        13 148 136;    /* #0D9488 teal */
-  --pos-wr:        2 132 199;     /* #0284C7 sky */
-  --pos-te:        234 88 12;     /* #EA580C orange */
-  --pos-def:       124 58 237;    /* #7C3AED violet */
+  --pos-qb:        196 51 90;     /* #C4335A pink */
+  --pos-rb:        15 138 102;    /* #0F8A66 teal */
+  --pos-wr:        31 111 192;    /* #1F6FC0 sky */
+  --pos-te:        192 95 26;     /* #C05F1A orange */
+  --pos-def:       90 100 200;    /* #5A64C8 violet */
 }
 
 .dark {
-  --bg-primary:    13 13 15;      /* #0D0D0F */
-  --bg-secondary:  22 22 26;      /* #16161A */
-  --bg-card:       28 28 33;      /* #1C1C21 */
-  --border-default:42 42 48;      /* #2A2A30 */
-  --text-primary:  240 240 245;   /* #F0F0F5 */
-  --text-secondary:138 138 149;   /* #8A8A95 */
-  --text-tertiary: 85 85 95;      /* #55555F */
-  --accent:        79 127 255;    /* #4F7FFF */
-  --success:       34 197 94;     /* #22C55E */
+  --bg-primary:    11 11 13;      /* #0B0B0D */
+  --bg-secondary:  16 16 19;      /* #101013 */
+  --bg-card:       20 20 23;      /* #141417 */
+  --border-default:40 40 46;      /* #28282E */
+  --text-primary:  244 245 247;   /* #F4F5F7 */
+  --text-secondary:138 144 150;   /* #8A9096 */
+  --text-tertiary: 84 86 92;      /* #54565C */
+  --accent:        201 205 209;   /* #C9CDD1 — silver: the structural color */
+  --brand:         200 16 46;     /* #C8102E — Falcons red, rationed */
+  --brand-deep:    126 14 34;     /* #7E0E22 — score-bug gradient partner */
+  --brand-bright:  216 30 60;     /* #D81E3C — red-as-text on dark */
+  --success:       55 200 120;    /* #37C878 */
   --warning:       245 158 11;    /* #F59E0B */
-  --danger:        239 68 68;     /* #EF4444 */
+  --danger:        255 92 92;     /* #FF5C5C — trend/status salmon, never brand */
+
+  /* Win-window tier identity */
+  --tier-contend:  201 205 209;   /* #C9CDD1 silver (gold left the system) */
+  --tier-middle:   87 196 232;    /* #57C4E8 */
+  --tier-rebuild:  143 155 242;   /* #8F9BF2 */
 
   /* Position identity colors — brighter shades for dark backgrounds */
-  --pos-qb:        244 114 182;   /* #F472B6 pink */
-  --pos-rb:        45 212 191;    /* #2DD4BF teal */
-  --pos-wr:        56 189 248;    /* #38BDF8 sky */
-  --pos-te:        251 146 60;    /* #FB923C orange */
-  --pos-def:       167 139 250;   /* #A78BFA violet */
+  --pos-qb:        242 117 143;   /* #F2758F pink */
+  --pos-rb:        58 208 164;    /* #3AD0A4 teal */
+  --pos-wr:        87 169 242;    /* #57A9F2 sky */
+  --pos-te:        240 150 78;    /* #F0964E orange */
+  --pos-def:       154 163 238;   /* #9AA3EE violet */
 }
 
 body {
@@ -69,25 +91,21 @@ body {
   overflow: hidden;
 }
 
-/* ── App background: ambient color glow at the top of the screen ── */
+/* ── App background: flat (Primetime Blackout) ─────────────────── */
 /* Applied to the app shell div (App.jsx), not <body> — the shell     */
-/* paints over the body. Fixed at the top since the body never        */
-/* scrolls (<main> is the scroll container).                          */
+/* paints over the body. The old blue/violet ambient radials are      */
+/* removed per the Phase 3 brief: flat black; the ONE sanctioned      */
+/* ambient device is a faint red conic sweep behind the hero area     */
+/* (see .hero-sweep, applied only where a score-bug hero renders).    */
 
 .app-bg {
   background-color: rgb(var(--bg-primary));
-  background-image:
-    radial-gradient(600px 300px at 12% -4%, rgb(var(--accent) / 0.14), transparent 70%),
-    radial-gradient(520px 260px at 92% -6%, rgb(var(--pos-def) / 0.12), transparent 70%),
-    radial-gradient(560px 420px at 50% 82%, rgb(var(--accent) / 0.06), transparent 70%);
-  background-repeat: no-repeat;
 }
 
-.dark .app-bg {
+.hero-sweep {
   background-image:
-    radial-gradient(600px 300px at 12% -4%, rgb(var(--accent) / 0.26), transparent 70%),
-    radial-gradient(520px 260px at 92% -6%, rgb(var(--pos-def) / 0.2), transparent 70%),
-    radial-gradient(560px 420px at 50% 82%, rgb(var(--accent) / 0.1), transparent 70%);
+    conic-gradient(from 210deg at 70% -10%, rgba(216, 30, 60, 0.06), transparent 28%, transparent 72%, rgba(216, 30, 60, 0.06));
+  background-repeat: no-repeat;
 }
 
 /* ── Login screen: amped neon ambient (far more saturated than app-bg) ── */

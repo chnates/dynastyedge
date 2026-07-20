@@ -203,7 +203,7 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
                         x={4} y={lane.centerY + 3}
                         fontSize="10" fontWeight="700"
                         fill={POS_COLORS[lane.pos]}
-                        fontFamily="'IBM Plex Sans', system-ui, sans-serif"
+                        fontFamily="'Archivo', system-ui, sans-serif"
                         pointerEvents="none"
                       >{lane.pos}</text>
 
@@ -260,7 +260,7 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
                         x={x} y={axisY + 14}
                         textAnchor="middle" fontSize="9"
                         fill="currentColor" className="text-text-tertiary"
-                        fontFamily="'IBM Plex Sans', system-ui, sans-serif"
+                        fontFamily="'Archivo', system-ui, sans-serif"
                       >{age}</text>
                     </g>
                   )
