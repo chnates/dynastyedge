@@ -61,17 +61,6 @@ function getSectionName(pathname) {
   return 'DynastyEdge'
 }
 
-function formatTimestamp(ts) {
-  if (!ts) return null
-  const now = Date.now()
-  const time = new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-  if (now - ts > 3600000) {
-    const date = new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' })
-    return `Updated ${time} · ${date}`
-  }
-  return `Updated ${time}`
-}
-
 function AppShell({ leagueData }) {
   const location = useLocation()
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -123,7 +112,6 @@ function AppShell({ leagueData }) {
       <SideDrawer
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        lastUpdated={formatTimestamp(lastUpdated)}
         isDark={isDark}
         onToggleTheme={toggleTheme}
       />

@@ -10,6 +10,15 @@ import { fetchJSON } from '../utils/fetchJSON'
 let historyCache = null
 let historyPromise = null
 let historyFailed = false
+let historyFetchedAt = null
+
+// When this session last successfully pulled the history feed (epoch ms) —
+// powers the drawer's per-source "last refreshed" line. Distinct from the
+// feed's own `updatedAt` (the daily snapshot's publish time): this moves on
+// every successful (re)fetch.
+export function getHistoryFetchedAt() {
+  return historyFetchedAt
+}
 
 // Exported for the side drawer's feed-age readout: resolves the cached
 // history object (whose `updatedAt` stamps the last snapshot), or null when
@@ -25,6 +34,7 @@ export function loadHistory(force = false) {
       .then(data => {
         if (!Array.isArray(data?.dates) || !data?.players) throw new Error('bad shape')
         historyCache = data
+        historyFetchedAt = Date.now()
         historyPromise = null
         return data
       })

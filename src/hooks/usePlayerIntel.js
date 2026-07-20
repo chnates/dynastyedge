@@ -79,6 +79,7 @@ function stripHtml(s) {
 
 let newsFeedPromise = null
 let newsFeedUpdatedAt = null
+let newsFeedFetchedAt = null
 
 // `force` re-fetches the feed on demand (the drawer's Refresh button) and
 // refreshes the cached `updatedAt` so the feed-age readout can move. A failed
@@ -89,6 +90,7 @@ export function loadNewsFeed(force = false) {
     newsFeedPromise = fetchJSON(NEWS_FEED_URL, { timeoutMs: 10000, label: 'News feed' })
       .then(data => {
         if (typeof data?.updatedAt === 'string') newsFeedUpdatedAt = data.updatedAt
+        newsFeedFetchedAt = Date.now()
         return Array.isArray(data?.items) ? data.items : []
       })
       .catch(() => [])
@@ -100,6 +102,13 @@ export function loadNewsFeed(force = false) {
 // failed / carried no timestamp. Best-effort, same contract as the feed.
 export function getNewsFeedUpdatedAt() {
   return newsFeedUpdatedAt
+}
+
+// When this session last successfully pulled the feed (epoch ms) — powers the
+// drawer's per-source "last refreshed" line. Distinct from the publish time
+// above: this moves on every successful (re)fetch.
+export function getNewsFeedFetchedAt() {
+  return newsFeedFetchedAt
 }
 
 export function normalizeName(s) {
