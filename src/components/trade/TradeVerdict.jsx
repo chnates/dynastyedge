@@ -6,9 +6,9 @@ import { Card, Button } from '../ui'
 import { relativeTime } from '../../hooks/usePlayerIntel'
 
 const VERDICT_STYLES = {
-  Accept:  { Icon: CheckCircle2, color: 'text-success', bg: 'bg-gradient-to-br from-success/20 via-success/10 to-transparent' },
-  Decline: { Icon: XCircle,      color: 'text-danger',  bg: 'bg-gradient-to-br from-danger/20 via-danger/10 to-transparent' },
-  Counter: { Icon: RefreshCw,    color: 'text-warning', bg: 'bg-gradient-to-br from-warning/20 via-warning/10 to-transparent' },
+  Accept:  { Icon: CheckCircle2, color: 'text-success', bg: 'bg-success/10' },
+  Decline: { Icon: XCircle,      color: 'text-danger',  bg: 'bg-danger/10' },
+  Counter: { Icon: RefreshCw,    color: 'text-warning', bg: 'bg-warning/10' },
 }
 
 const FLAG_DOT = { red: 'bg-danger', yellow: 'bg-warning', green: 'bg-success' }
@@ -167,7 +167,7 @@ export default function TradeVerdict({
     <div>
       {/* What's Fair callout */}
       {whatsFairTarget && fairPackage && (
-        <div className="mb-4 rounded-xl bg-warning/10 border border-warning/30 px-4 py-3 relative">
+        <div className="mb-4 rounded-none corner-cut bg-warning/10 border border-warning/30 px-4 py-3 relative">
           <button
             onClick={onClearWhatsFair}
             className="absolute top-2 right-3 text-warning text-base font-bold leading-none"
@@ -175,7 +175,7 @@ export default function TradeVerdict({
           >
             ×
           </button>
-          <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-warning mb-2 pr-5">
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-warning mb-2 pr-5">
             What's fair for {whatsFairTarget.name}?
           </p>
           <p className="font-mono text-sm text-warning mb-0.5">
@@ -197,14 +197,14 @@ export default function TradeVerdict({
       <Card padding="none" className="mb-4">
         {/* Section label */}
         <div className="px-4 py-2.5 border-b border-border-default dark:border-border-default">
-          <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary">
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary">
             Analysis
           </p>
         </div>
 
         {/* Layer 1: Raw value */}
         <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
-          <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-tertiary dark:text-text-tertiary mb-2">
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary mb-2">
             Raw Value
           </p>
           <ValueSummary giveTotal={giveTotal} getTotal={getTotal} bothSides={bothSides} />
@@ -212,7 +212,7 @@ export default function TradeVerdict({
 
         {/* Layer 2: Roster fit */}
         <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
-          <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-tertiary dark:text-text-tertiary mb-2">
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary mb-2">
             Roster Fit
           </p>
           {filledNeeds.length === 0 && hurtStrengths.length === 0 ? (
@@ -247,7 +247,7 @@ export default function TradeVerdict({
         {/* Layer 3: Win window */}
         <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
           <div className="flex items-center gap-2 mb-1.5">
-            <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-tertiary dark:text-text-tertiary">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary">
               Win Window
             </p>
             <WinWindowBadge tier={myTier} />
@@ -299,7 +299,7 @@ export default function TradeVerdict({
           <div className={`px-4 py-3 ${vs.bg}`}>
             <div className="flex items-center gap-2 mb-1.5">
               <vs.Icon size={16} strokeWidth={2} className={vs.color} />
-              <span className={`font-display text-base font-bold uppercase tracking-wide ${vs.color}`}>
+              <span className={`font-display text-base uppercase tracking-wide ${vs.color}`}>
                 {verdict.verdict}
               </span>
             </div>
@@ -344,7 +344,7 @@ export default function TradeVerdict({
       {liveIntelligence && liveIntelligence.length > 0 && (
         <Card padding="none" className="mb-4">
           <div className="px-4 py-2.5 border-b border-border-default dark:border-border-default flex items-center gap-2">
-            <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary">
               Live Intelligence
             </p>
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-success animate-pulse" />

@@ -138,38 +138,14 @@ body {
   clip-path: polygon(0 0, 100% 0, 100% 100%, 10px 100%, 0 calc(100% - 10px));
 }
 
-/* ── Login screen: amped neon ambient (far more saturated than app-bg) ── */
+/* ── Login screen: flat blackout, same sanctioned red sweep as the app ── */
 .login-bg {
   background-color: rgb(var(--bg-primary));
-  background-image:
-    radial-gradient(680px 440px at 6% -4%, rgb(var(--accent) / 0.38), transparent 64%),
-    radial-gradient(620px 440px at 100% 2%, rgb(var(--pos-def) / 0.34), transparent 62%),
-    radial-gradient(520px 400px at 96% 52%, rgb(34 211 238 / 0.24), transparent 64%),
-    radial-gradient(560px 480px at 0% 88%, rgb(244 114 182 / 0.24), transparent 64%),
-    radial-gradient(760px 560px at 50% 112%, rgb(var(--accent) / 0.2), transparent 68%);
-  background-repeat: no-repeat;
 }
 .dark .login-bg {
   background-image:
-    radial-gradient(680px 440px at 6% -4%, rgb(var(--accent) / 0.55), transparent 62%),
-    radial-gradient(620px 440px at 100% 2%, rgb(var(--pos-def) / 0.5), transparent 60%),
-    radial-gradient(520px 400px at 96% 52%, rgb(34 211 238 / 0.34), transparent 62%),
-    radial-gradient(560px 480px at 0% 88%, rgb(244 114 182 / 0.32), transparent 62%),
-    radial-gradient(760px 560px at 50% 112%, rgb(var(--accent) / 0.28), transparent 66%);
-}
-
-/* Neon glow halo behind the login hero card */
-.login-hero {
-  box-shadow:
-    0 0 0 1px rgb(255 255 255 / 0.12) inset,
-    0 18px 50px -12px rgb(79 127 255 / 0.65),
-    0 8px 40px -8px rgb(167 139 250 / 0.5);
-}
-
-/* Gradient neon CTA button */
-.neon-cta {
-  background-image: linear-gradient(135deg, #4F7FFF 0%, #8B5CF6 60%, #EC4899 120%);
-  box-shadow: 0 0 22px -2px rgb(99 102 241 / 0.7);
+    conic-gradient(from 210deg at 70% -10%, rgba(216, 30, 60, 0.06), transparent 28%, transparent 72%, rgba(216, 30, 60, 0.06));
+  background-repeat: no-repeat;
 }
 
 /* ── Score-bug hero (Primetime Blackout) ─────────────────────── */

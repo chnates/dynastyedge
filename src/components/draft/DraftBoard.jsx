@@ -141,7 +141,7 @@ function splitFPNotes(notes) {
 function TierHeader({ tier }) {
   return (
     <div className="flex items-center gap-2 pt-5 pb-2">
-      <span className={`font-display text-sm font-bold uppercase tracking-wider ${TIER_COLORS[tier.id]}`}>
+      <span className={`font-display text-sm uppercase tracking-wider ${TIER_COLORS[tier.id]}`}>
         {tier.label}
       </span>
       <div className="flex-1 h-px bg-border-default" />
@@ -166,7 +166,7 @@ function SortHeader({ col, sortCol, sortDir, onSort, extra = '' }) {
 
 function FillsNeedBadge() {
   return (
-    <span className="font-body text-[9px] font-bold uppercase tracking-wider text-success bg-success/15 border border-success/30 rounded px-1.5 py-0.5 flex-shrink-0 ml-1">
+    <span className="font-body text-[9px] font-bold uppercase tracking-wider text-success bg-success/15 border border-success/30 rounded-none px-1.5 py-0.5 flex-shrink-0 ml-1">
       Need
     </span>
   )
@@ -176,7 +176,7 @@ function FillsNeedBadge() {
 // where this prospect is projected available (by derived rookie ADP).
 function TargetBadge({ label }) {
   return (
-    <span className="font-mono text-[9px] font-bold text-warning bg-warning/15 border border-warning/30 rounded px-1.5 py-0.5 flex-shrink-0 ml-1">
+    <span className="font-mono text-[9px] font-bold text-warning bg-warning/15 border border-warning/30 rounded-none px-1.5 py-0.5 flex-shrink-0 ml-1">
       {label}
     </span>
   )
@@ -184,7 +184,7 @@ function TargetBadge({ label }) {
 
 function DraftedChip() {
   return (
-    <span className="font-body text-[9px] font-bold uppercase tracking-wider text-text-tertiary bg-bg-secondary border border-border-default rounded px-1.5 py-0.5 flex-shrink-0 ml-1">
+    <span className="font-body text-[9px] font-bold uppercase tracking-wider text-text-tertiary bg-bg-secondary border border-border-default rounded-none px-1.5 py-0.5 flex-shrink-0 ml-1">
       Drafted
     </span>
   )
@@ -192,7 +192,7 @@ function DraftedChip() {
 
 function AdpOnlyBadge() {
   return (
-    <span className="font-body text-[9px] font-bold uppercase tracking-wider text-text-tertiary bg-bg-secondary border border-border-default rounded px-1.5 py-0.5 flex-shrink-0 ml-1">
+    <span className="font-body text-[9px] font-bold uppercase tracking-wider text-text-tertiary bg-bg-secondary border border-border-default rounded-none px-1.5 py-0.5 flex-shrink-0 ml-1">
       ADP Only
     </span>
   )
@@ -200,7 +200,7 @@ function AdpOnlyBadge() {
 
 function FpOnlyBadge() {
   return (
-    <span className="font-body text-[9px] font-bold uppercase tracking-wider text-accent bg-accent/15 border border-accent/30 rounded px-1.5 py-0.5 flex-shrink-0 ml-1">
+    <span className="font-body text-[9px] font-bold uppercase tracking-wider text-accent bg-accent/15 border border-accent/30 rounded-none px-1.5 py-0.5 flex-shrink-0 ml-1">
       FP Only
     </span>
   )
@@ -210,13 +210,13 @@ function CsvNamingOverlay({ file, onConfirm, onCancel }) {
   const [name, setName] = useState(() => file.name.replace(/\.[^.]+$/, ''))
   return (
     <Modal onClose={onCancel} maxWidth="max-w-sm" label="Name this ranking" className="p-5">
-      <h3 className="font-display text-lg font-bold uppercase text-text-primary mb-1">Name this ranking</h3>
+      <h3 className="font-display text-lg uppercase text-text-primary mb-1">Name this ranking</h3>
       <p className="font-body text-sm text-text-secondary mb-4">{file.name}</p>
       <Input
         type="text"
         value={name}
         onChange={e => setName(e.target.value)}
-        className="rounded-lg mb-4"
+        className="mb-4"
         autoFocus
       />
       <div className="flex gap-2">
@@ -237,7 +237,7 @@ function CsvNamingOverlay({ file, onConfirm, onCancel }) {
 function ResetBoardConfirm({ onConfirm, onCancel }) {
   return (
     <Modal onClose={onCancel} label="Reset my board" className="p-5 text-center">
-      <h3 className="font-display text-lg font-bold uppercase text-text-primary mb-2">Reset My Board?</h3>
+      <h3 className="font-display text-lg uppercase text-text-primary mb-2">Reset My Board?</h3>
       <p className="font-body text-sm text-text-secondary mb-5">
         This restores the default FantasyCalc order and cannot be undone.
       </p>
@@ -705,7 +705,7 @@ export default function DraftBoard() {
       return (
         <div key={tier.id}>
           <TierHeader tier={tier} />
-          <div className="rounded-xl bg-bg-card border border-border-default px-3">
+          <div className="rounded-none bg-bg-card border border-border-default px-3">
             {players.map(player => (
               <SortablePlayerRow
                 key={player.sleeperId}
@@ -739,13 +739,13 @@ export default function DraftBoard() {
 
         {/* ── Board mode toggle ── */}
         <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-          <div className="flex rounded-lg border border-border-default overflow-hidden">
+          <div className="flex rounded-none border border-border-default overflow-hidden">
             {['FantasyCalc', 'My Board'].map(mode => (
               <button
                 key={mode}
                 onClick={() => handleBoardModeToggle(mode)}
                 className={`px-3 py-1.5 font-body text-xs font-semibold transition-colors ${
-                  boardMode === mode ? 'bg-accent text-white' : 'bg-bg-card text-text-secondary'
+                  boardMode === mode ? 'bg-accent text-bg-primary' : 'bg-bg-card text-text-secondary'
                 }`}
               >
                 {mode}
@@ -777,7 +777,7 @@ export default function DraftBoard() {
                 onClick={() => setPosFilter(pos)}
                 className={`flex-shrink-0 px-3 py-1.5 rounded-lg font-body text-xs font-semibold uppercase tracking-wide transition-colors ${
                   posFilter === pos
-                    ? POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-white'
+                    ? POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-bg-primary'
                     : 'bg-bg-card border border-border-default text-text-secondary'
                 }`}
               >

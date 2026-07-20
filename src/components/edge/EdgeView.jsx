@@ -383,7 +383,7 @@ export default function EdgeView() {
       {newsItems.length > 0 && (
         <section {...rise()}>
           <SectionHeader label="Headlines" count={newsItems.length} />
-          <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+          <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
             {newsItems.map((n, i) => {
               const isFresh = lastVisit && n.published &&
                 new Date(n.published).getTime() > lastVisit
@@ -440,7 +440,7 @@ export default function EdgeView() {
               : 'No meaningful value moves on your players or watchlist right now.'}
           </p>
         ) : (
-          <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+          <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
             {radar.map(p => (
               <button
                 key={p.sleeperId}
@@ -491,7 +491,7 @@ export default function EdgeView() {
             label="Around the League"
             count={freshTx.length > 0 ? `${freshTx.length} new` : undefined}
           />
-          <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+          <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
             {recentTx.map(tx => {
               const { Icon, color } = TX_ICONS[tx.type] ?? TX_ICONS.commissioner
               const { title, detail } = txSummary(tx, teamName, resolveName)
@@ -509,7 +509,7 @@ export default function EdgeView() {
                       <span className="font-body text-xs font-medium text-text-primary dark:text-text-primary truncate">
                         {title}
                       </span>
-                      {involvesMe && <Badge>You</Badge>}
+                      {involvesMe && <Badge tone="brand">You</Badge>}
                       {isFresh && <NewBadge />}
                     </span>
                     {detail && (

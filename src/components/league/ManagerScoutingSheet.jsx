@@ -23,7 +23,7 @@ function fmtNet(net) {
 
 function StatCard({ label, value, valueClass = 'text-text-primary dark:text-text-primary' }) {
   return (
-    <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-2.5">
+    <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-2.5">
       <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary dark:text-text-tertiary mb-1">
         {label}
       </p>
@@ -104,12 +104,12 @@ function TradeLedgerCard({ trade, profileName, nameFor, getTradeTimeTotals, onSe
   })
 
   return (
-    <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-3">
+    <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-3">
       <div className="flex items-center gap-1.5 mb-2">
         <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
           Wk {trade.week} · {trade.season}
         </span>
-        <span className={`ml-auto shrink-0 font-mono text-[11px] font-bold rounded px-1.5 py-0.5 tabular-nums ${RESULT_STYLES[trade.result]}`}>
+        <span className={`ml-auto shrink-0 font-mono text-[11px] font-bold rounded-none px-1.5 py-0.5 tabular-nums ${RESULT_STYLES[trade.result]}`}>
           {trade.result === 'even' ? 'Even' : fmtNet(trade.net)}
         </span>
       </div>
@@ -168,7 +168,7 @@ function DraftPickRow({ row, onSelectPlayer }) {
       )}
       <span className="flex-1" />
       {badge && (
-        <span className={`shrink-0 font-body text-[10px] font-semibold rounded px-1.5 py-0.5 ${badge.cls}`}>
+        <span className={`shrink-0 font-body text-[10px] font-semibold rounded-none px-1.5 py-0.5 ${badge.cls}`}>
           {badge.label}
         </span>
       )}
@@ -203,7 +203,7 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
             <div className="flex items-center gap-2.5 py-2">
               <TeamAvatar owner={profile.user} size={36} />
               <div className="min-w-0 flex-1">
-                <p className="font-display text-lg font-bold uppercase tracking-wide text-text-primary dark:text-text-primary truncate leading-tight">
+                <p className="font-display text-lg uppercase tracking-wide text-text-primary dark:text-text-primary truncate leading-tight">
                   {getTeamName(profile.user)}
                 </p>
                 <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary">
@@ -251,7 +251,7 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
 
             {/* Head-to-head vs me */}
             {profile.vsMe && (
-              <div className="mt-3 rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-2.5">
+              <div className="mt-3 rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-2.5">
                 <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary dark:text-text-tertiary mb-1">
                   Head-to-head vs you
                 </p>
@@ -271,7 +271,7 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
                   label="Rookie Draft Record"
                   count={`${draft.hits} hit${draft.hits === 1 ? '' : 's'} of ${draft.count}`}
                 />
-                <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-1">
+                <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-1">
                   {draft.picks.map((row, i) => (
                     <DraftPickRow key={i} row={row} onSelectPlayer={setSelectedPlayer} />
                   ))}

@@ -47,7 +47,7 @@ function OffseasonPlaceholder({ league }) {
     <div className="px-4 pb-4">
       <div className="pt-4 pb-3 border-b border-border-default dark:border-border-default flex flex-col items-center text-center gap-2">
         <LayoutList size={40} strokeWidth={1.5} className="text-accent" />
-        <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-text-primary dark:text-text-primary">
+        <h2 className="font-display text-2xl uppercase tracking-wide text-text-primary dark:text-text-primary">
           Lineup Optimizer
         </h2>
         <p className="font-body text-sm text-text-secondary dark:text-text-secondary">
@@ -58,8 +58,8 @@ function OffseasonPlaceholder({ league }) {
       {myRoster && (
         <div className="flex flex-col gap-3 pt-4">
           {topNeed && (
-            <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-4 py-3">
-              <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-1.5">
+            <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-4 py-3">
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary mb-1.5">
                 Heading Into The Season
               </p>
               <p className="font-body text-sm text-text-primary dark:text-text-primary leading-relaxed">
@@ -70,8 +70,8 @@ function OffseasonPlaceholder({ league }) {
             </div>
           )}
 
-          <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-4 py-3">
-            <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-2">
+          <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-4 py-3">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary mb-2">
               Rookie Draft Capital
             </p>
             <div className="flex gap-4">
@@ -88,8 +88,8 @@ function OffseasonPlaceholder({ league }) {
             </div>
           </div>
 
-          <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-4 py-3">
-            <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-2">
+          <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-4 py-3">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary mb-2">
               Win Window
             </p>
             <div className="flex items-center gap-2">
@@ -176,10 +176,10 @@ export default function LineupOptimizer() {
     <div className="px-4 pb-4">
       {/* Header */}
       <div className="pt-4 pb-3 border-b border-border-default dark:border-border-default">
-        <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-0.5">
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary mb-0.5">
           Week {currentWeek}
         </p>
-        <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-text-primary dark:text-text-primary leading-tight">
+        <h1 className="font-display text-2xl uppercase tracking-wide text-text-primary dark:text-text-primary leading-tight">
           Lineup Optimizer
         </h1>
         {(flagCounts.red > 0 || flagCounts.yellow > 0) ? (
@@ -225,7 +225,7 @@ export default function LineupOptimizer() {
       {/* Starters */}
       <section>
         <SectionHeader label="Starting Lineup" count={starterSlots.length} />
-        <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+        <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
           {starterSlots.map(({ slot, player, flag, projPts, matchupQuality, bestBenchPts, idx }) => (
             <StarterSlot
               key={`${slot.label}-${idx}`}
@@ -245,7 +245,7 @@ export default function LineupOptimizer() {
       {benchWithProj.length > 0 && (
         <section>
           <SectionHeader label="Bench" count={benchWithProj.length} />
-          <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+          <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
             {benchWithProj.map(({ player, projPts, matchupQuality }) => (
               <div
                 key={player.sleeperId}

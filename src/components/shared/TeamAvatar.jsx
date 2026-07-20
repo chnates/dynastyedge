@@ -50,7 +50,7 @@ export default function TeamAvatar({ owner, size = 28, className = '' }) {
   return (
     <span
       aria-hidden="true"
-      className={`rounded-full shrink-0 bg-gradient-to-br ${grad} flex items-center justify-center text-white font-display font-bold uppercase select-none ${className}`}
+      className={`rounded-full shrink-0 bg-gradient-to-br ${grad} flex items-center justify-center text-white font-display uppercase select-none ${className}`}
       style={{ width: size, height: size, fontSize: Math.round(size * 0.45) }}
     >
       {name.trim().charAt(0) || '?'}

@@ -24,7 +24,7 @@ function netClass(net) {
 
 function ReportStat({ label, value, valueClass = 'text-text-primary dark:text-text-primary' }) {
   return (
-    <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-2.5">
+    <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-2.5">
       <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary dark:text-text-tertiary mb-1">
         {label}
       </p>
@@ -59,15 +59,15 @@ function MyReportCard({ profile, tier, insights, onOpen }) {
     ? Math.round((profile.tradeWins / profile.tradeCount) * 100)
     : null
   return (
-    <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-accent/40 px-3 py-3">
+    <div className="rounded-none bg-bg-card dark:bg-bg-card border border-brand/40 px-3 py-3">
       <div className="flex items-center gap-2.5 mb-3">
         <TeamAvatar owner={profile.user} size={32} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <p className="font-display text-base font-bold uppercase tracking-wide text-text-primary dark:text-text-primary truncate leading-tight">
+            <p className="font-display text-base uppercase tracking-wide text-text-primary dark:text-text-primary truncate leading-tight">
               {getTeamName(profile.user)}
             </p>
-            <Badge>You</Badge>
+            <Badge tone="brand">You</Badge>
           </div>
           <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary">
             {profile.activity}{winRate != null ? ` · ${winRate}% trade win rate` : ''}
@@ -112,7 +112,7 @@ function ManagerCard({ profile, tier, onOpen }) {
       <div className="flex items-center gap-2.5">
         <TeamAvatar owner={profile.user} size={30} />
         <div className="min-w-0 flex-1">
-          <p className="font-display text-base font-bold uppercase tracking-wide text-text-primary dark:text-text-primary truncate leading-tight">
+          <p className="font-display text-base uppercase tracking-wide text-text-primary dark:text-text-primary truncate leading-tight">
             {getTeamName(profile.user)}
           </p>
           <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary truncate">
@@ -189,7 +189,7 @@ export default function ManagersView() {
   return (
     <div className="px-4 pb-4">
       <div className="pt-4 pb-3 border-b border-border-default dark:border-border-default">
-        <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-0.5">
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary mb-0.5">
           Manager Scouting
         </p>
         <p className="font-body text-sm text-text-secondary dark:text-text-secondary">

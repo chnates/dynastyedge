@@ -281,7 +281,7 @@ function AddAssetSheet({
         {/* Header: title + live totals + Done */}
         <div className="px-4 pt-1 pb-2.5 border-b border-border-default dark:border-border-default shrink-0">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="font-display text-base font-bold uppercase tracking-wide text-text-primary dark:text-text-primary">
+            <h2 className="font-display text-base uppercase tracking-wide text-text-primary dark:text-text-primary">
               {title}
             </h2>
             <Button
@@ -322,7 +322,7 @@ function AddAssetSheet({
               key={tab}
               size="sm"
               active={posFilter === tab}
-              activeClass={POS_CHIP_ACTIVE[tab] ?? 'bg-accent text-white'}
+              activeClass={POS_CHIP_ACTIVE[tab] ?? 'bg-accent text-bg-primary'}
               onClick={() => setPosFilter(tab)}
               className={cn(posFilter !== tab && 'bg-bg-card dark:bg-bg-card')}
             >

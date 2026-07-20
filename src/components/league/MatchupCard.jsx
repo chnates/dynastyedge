@@ -14,7 +14,7 @@ export default function MatchupCard({ pair }) {
   }))
 
   return (
-    <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-2.5 flex flex-col gap-1.5">
+    <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-2.5 flex flex-col gap-1.5">
       {rows.map(side => (
         <div key={side.rosterId} className="flex items-center gap-2">
           <TeamAvatar owner={side.owner} size={22} />

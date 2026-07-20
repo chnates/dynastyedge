@@ -187,7 +187,7 @@ export default function PlayerSearchSheet({ onClose }) {
           <>
             {destinations.length > 0 && (
               <div className="pt-2">
-                <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary px-1 pb-1">
+                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary px-1 pb-1">
                   Jump to
                 </p>
                 {destinations.map(d => (
@@ -210,7 +210,7 @@ export default function PlayerSearchSheet({ onClose }) {
             {results.length > 0 && (
               <div className="pt-2">
                 {destinations.length > 0 && (
-                  <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary px-1 pb-1">
+                  <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary px-1 pb-1">
                     Players
                   </p>
                 )}

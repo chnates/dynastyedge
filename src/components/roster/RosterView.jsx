@@ -178,7 +178,7 @@ export default function RosterView() {
         return (
           <section key={pos}>
             <SectionHeader label={pos} count={group.length} accentBar={POS_BG[pos]} accentText={POS_TEXT[pos]} />
-            <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+            <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
               {group.map(player => (
                 <PlayerCard key={player.sleeperId} player={player} onClick={() => setSelectedPlayer(player)} />
               ))}
@@ -191,7 +191,7 @@ export default function RosterView() {
       {taxi.length > 0 && (
         <section>
           <SectionHeader label="Taxi Squad" count={taxi.length} />
-          <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+          <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
             {taxi
               .sort((a, b) => b.value - a.value)
               .map(player => (
@@ -205,7 +205,7 @@ export default function RosterView() {
       {ir.length > 0 && (
         <section>
           <SectionHeader label="IR" count={ir.length} />
-          <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+          <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
             {ir
               .sort((a, b) => b.value - a.value)
               .map(player => (

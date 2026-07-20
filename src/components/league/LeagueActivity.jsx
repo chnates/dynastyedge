@@ -172,7 +172,7 @@ export default function LeagueActivity() {
   return (
     <div className="px-4 pb-4">
       <div className="pt-4 pb-3 border-b border-border-default dark:border-border-default">
-        <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-0.5">
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary mb-0.5">
           League Activity
         </p>
         <p className="font-body text-sm text-text-secondary dark:text-text-secondary">
@@ -211,9 +211,9 @@ export default function LeagueActivity() {
             return (
               <div
                 key={tx.transaction_id}
-                className={`rounded-xl bg-bg-card dark:bg-bg-card border px-3 py-3 ${
+                className={`rounded-none bg-bg-card dark:bg-bg-card border px-3 py-3 ${
                   involvesMe
-                    ? 'border-accent/40'
+                    ? 'border-brand/40'
                     : 'border-border-default dark:border-border-default'
                 }`}
               >
@@ -222,7 +222,7 @@ export default function LeagueActivity() {
                   <span className={`font-body text-[11px] font-semibold uppercase tracking-wider ${meta.color}`}>
                     {meta.label}
                   </span>
-                  {involvesMe && <Badge>You</Badge>}
+                  {involvesMe && <Badge tone="brand">You</Badge>}
                   <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary ml-auto">
                     Week {tx.week} · {formatDate(tx.status_updated)}
                   </span>

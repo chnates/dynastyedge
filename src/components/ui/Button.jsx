@@ -1,6 +1,6 @@
 import { cn } from './cn'
 
-// THE button — never hand-roll `bg-accent text-white rounded-xl ...` inline.
+// THE button — never hand-roll `bg-accent text-bg-primary rounded-xl ...` inline.
 // Variants encode the app's established button idioms (see CLAUDE.md → Design
 // System): the solid accent CTA, the bordered secondary, the accent-tinted
 // footer/link button, a quiet ghost, and the danger action.

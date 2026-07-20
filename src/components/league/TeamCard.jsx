@@ -1,7 +1,7 @@
 import { getTeamName } from '../../hooks/useLeague'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getPositionalStrength } from '../../utils/rosterAnalysis'
-import WinWindowBadge from '../shared/WinWindowBadge'
+import { TIER_TEXT } from '../../utils/tierColors'
 import { POSITIONS, PICK_YEARS } from '../../constants'
 import { POS_TEXT, POS_BAR } from '../../utils/positionColors'
 import { ROUND_CLASSES, ROUND_TEXT, ROUND_LABELS } from '../../utils/roundColors'
@@ -60,25 +60,40 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
   return (
     <button
       onClick={() => onTap(roster.rosterId)}
-      className={`w-full text-left rounded-xl bg-bg-card dark:bg-bg-card border px-3 py-3 active:opacity-70 transition-opacity ${
-        isMyTeam ? 'border-accent/60' : 'border-border-default dark:border-border-default'
+      className={`w-full text-left rounded-none bg-bg-card dark:bg-bg-card border active:opacity-70 transition-opacity overflow-hidden ${
+        isMyTeam ? 'border-brand/60' : 'border-border-default dark:border-border-default'
       }`}
     >
-      {/* Header row */}
-      <div className="flex items-center justify-between gap-2 mb-2">
+      {/* Score-bug caption bar — the my-team card's cap goes silver */}
+      <div
+        className={`flex items-center gap-2 px-3 py-1.5 ${
+          isMyTeam
+            ? 'bug-silver'
+            : 'bg-black/5 dark:bg-white/5 border-b border-border-default dark:border-border-default'
+        }`}
+      >
         {rank != null && (
-          <span className={`font-mono text-lg font-bold tabular-nums w-6 shrink-0 leading-tight ${rankClass(rank)}`}>
-            {rank}
+          <span className={`font-mono text-[11px] font-semibold tabular-nums shrink-0 leading-none ${isMyTeam ? 'text-[#3E444C]' : rankClass(rank)}`}>
+            {String(rank).padStart(2, '0')}
           </span>
         )}
+        <span className={`font-display text-[11px] uppercase tracking-[0.1em] leading-none truncate min-w-0 ${isMyTeam ? '' : 'text-text-primary dark:text-text-primary'}`}>
+          {teamName}
+        </span>
+        {isMyTeam && <Badge tone="brand" className="shrink-0">You</Badge>}
+        <span className={`ml-auto font-mono text-[10px] font-semibold uppercase tracking-wider shrink-0 leading-none ${isMyTeam ? 'text-[#3E444C]' : TIER_TEXT[tier] ?? ''}`}>
+          {tier}
+        </span>
+      </div>
+
+      <div className="px-3 py-3">
+      {/* Header row */}
+      <div className="flex items-center justify-between gap-2 mb-2">
         <TeamAvatar owner={roster.owner} size={30} />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <p className="font-body text-sm font-semibold text-text-primary dark:text-text-primary truncate leading-tight">
-              {teamName}
-            </p>
-            {isMyTeam && <Badge className="shrink-0">You</Badge>}
-          </div>
+          <p className="font-body text-sm font-semibold text-text-primary dark:text-text-primary truncate leading-tight">
+            {teamName}
+          </p>
           {(username || roster.hasRecord) && (
             <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary truncate leading-tight mt-0.5">
               {username ? `@${username}` : ''}
@@ -90,14 +105,11 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
             </p>
           )}
         </div>
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          <WinWindowBadge tier={tier} />
-          {divergenceMeta && (
-            <span className={`font-body text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 ${divergenceMeta.cls}`}>
-              {divergenceMeta.label}
-            </span>
-          )}
-        </div>
+        {divergenceMeta && (
+          <span className={`shrink-0 font-mono text-[9px] font-semibold uppercase tracking-wider rounded-none px-1.5 py-0.5 ${divergenceMeta.cls}`}>
+            {divergenceMeta.label}
+          </span>
+        )}
       </div>
 
       {sortMode === 'picks' ? (
@@ -125,7 +137,7 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
               return (
                 <div key={r} className="flex items-center">
                   <div className="w-10 shrink-0">
-                    <span className={`font-body text-[10px] font-bold rounded px-1.5 py-0.5 ${badge}`}>
+                    <span className={`font-body text-[10px] font-bold rounded-none px-1.5 py-0.5 ${badge}`}>
                       {ROUND_LABELS[r]}
                     </span>
                   </div>
@@ -263,6 +275,7 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
           </div>
         </>
       )}
+      </div>
     </button>
   )
 }

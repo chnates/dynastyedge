@@ -20,7 +20,7 @@ const SORT_OPTIONS = [
 
 function FillsNeedBadge() {
   return (
-    <span className="font-body text-[9px] font-bold uppercase tracking-wider text-success bg-success/15 border border-success/30 rounded px-1.5 py-0.5 flex-shrink-0">
+    <span className="font-body text-[9px] font-bold uppercase tracking-wider text-success bg-success/15 border border-success/30 rounded-none px-1.5 py-0.5 flex-shrink-0">
       Need
     </span>
   )
@@ -28,7 +28,7 @@ function FillsNeedBadge() {
 
 function RookieBadge() {
   return (
-    <span className="font-body text-[9px] font-bold uppercase tracking-wider text-warning bg-warning/15 border border-warning/30 rounded px-1.5 py-0.5 flex-shrink-0">
+    <span className="font-body text-[9px] font-bold uppercase tracking-wider text-warning bg-warning/15 border border-warning/30 rounded-none px-1.5 py-0.5 flex-shrink-0">
       Rookie
     </span>
   )
@@ -67,7 +67,7 @@ function RecommendedPickups({ recs, onSelect }) {
               </div>
               <div className="flex flex-wrap gap-1 pl-[21px]">
                 {rec.reasons.slice(0, 2).map((reason, j) => (
-                  <span key={j} className="font-body text-[10px] text-text-secondary bg-bg-secondary rounded px-1.5 py-0.5">
+                  <span key={j} className="font-body text-[10px] text-text-secondary bg-bg-secondary rounded-none px-1.5 py-0.5">
                     {reason}
                   </span>
                 ))}
@@ -207,7 +207,7 @@ export default function FreeAgentsView() {
             <Chip
               key={pos}
               active={posFilter === pos}
-              activeClass={POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-white border border-transparent'}
+              activeClass={POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-bg-primary border border-transparent'}
               onClick={() => setPosFilter(pos)}
               className="rounded-lg tracking-wide"
             >
@@ -281,7 +281,7 @@ export default function FreeAgentsView() {
             }
           </p>
         ) : (
-          <div className="rounded-xl bg-bg-card border border-border-default px-3">
+          <div className="rounded-none bg-bg-card border border-border-default px-3">
             {filtered.map((player, i) => {
               const fillsNeed = needPositions.includes(player.position)
               const rookie = isRookie(player)

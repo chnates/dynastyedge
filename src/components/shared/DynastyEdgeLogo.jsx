@@ -36,7 +36,7 @@ export default function DynastyEdgeLogo({ theme = 'dark', size = 88 }) {
         </g>
       </svg>
       <span
-        className="font-display font-bold uppercase leading-none tracking-wide whitespace-nowrap"
+        className="font-display uppercase leading-none tracking-wide whitespace-nowrap"
         style={{ fontSize, color: textColor }}
       >
         Dynasty
