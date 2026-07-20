@@ -81,7 +81,7 @@ function PickHeaderRow({ pick, subtitle, expanded, onTap }) {
 function PriceBoard({ board, slotLevel }) {
   if (!board.length) return null
   return (
-    <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-2.5 mb-1">
+    <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-2.5 mb-1">
       <div className="flex items-center gap-2 mb-1.5">
         <p className="flex-1 font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary">
           {DRAFT_SEASON} pick prices {slotLevel ? '· slot tiers' : '· round medians'}
@@ -201,7 +201,7 @@ export default function PickTradeCalculator() {
   return (
     <div className="px-4 pb-4">
       <div className="pt-4 pb-3">
-        <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-0.5">
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary mb-0.5">
           Pick Trade Calculator
         </p>
         <p className="font-body text-xs text-text-tertiary dark:text-text-tertiary leading-snug">
@@ -227,7 +227,7 @@ export default function PickTradeCalculator() {
             key={m.id}
             onClick={() => { setMode(m.id); setExpandedKey(null) }}
             className={`flex-1 py-2 font-body text-xs font-semibold uppercase tracking-wider transition-colors
-              ${mode === m.id ? 'bg-accent text-white' : 'text-text-secondary dark:text-text-secondary'}`}
+              ${mode === m.id ? 'bg-accent text-bg-primary' : 'text-text-secondary dark:text-text-secondary'}`}
           >
             {m.label}
           </button>

@@ -90,13 +90,13 @@ function StickySummary({ giveTotal, getTotal, verdict }) {
 // should I offer them" is answerable while building.
 function OpponentContextStrip({ partner }) {
   return (
-    <div className="mb-4 px-3 py-2.5 rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default flex flex-col gap-1.5">
+    <div className="mb-4 px-3 py-2.5 rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default flex flex-col gap-1.5">
       <div className="flex items-center gap-x-3 gap-y-1.5 flex-wrap">
         {partner.theirNeeds.length > 0 && (
           <span className="flex items-center gap-1">
             <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">Needs</span>
             {partner.theirNeeds.map(pos => (
-              <span key={pos} className="inline-flex items-center rounded px-1.5 py-0.5 font-body text-[10px] font-bold uppercase bg-danger/10 text-danger">
+              <span key={pos} className="inline-flex items-center rounded-none px-1.5 py-0.5 font-body text-[10px] font-bold uppercase bg-danger/10 text-danger">
                 {pos}
               </span>
             ))}
@@ -106,7 +106,7 @@ function OpponentContextStrip({ partner }) {
           <span className="flex items-center gap-1">
             <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">Has</span>
             {partner.theirHaves.map(pos => (
-              <span key={pos} className="inline-flex items-center rounded px-1.5 py-0.5 font-body text-[10px] font-bold uppercase bg-success/10 text-success">
+              <span key={pos} className="inline-flex items-center rounded-none px-1.5 py-0.5 font-body text-[10px] font-bold uppercase bg-success/10 text-success">
                 {pos}
               </span>
             ))}
@@ -368,7 +368,7 @@ export default function TradeAnalyzer() {
     <div className="px-4 pb-4">
       {/* Header */}
       <div className="pt-4 pb-3">
-        <p className="font-display text-base font-bold uppercase tracking-wide text-text-primary dark:text-text-primary">
+        <p className="font-display text-base uppercase tracking-wide text-text-primary dark:text-text-primary">
           Trade Analyzer
         </p>
       </div>
@@ -376,14 +376,14 @@ export default function TradeAnalyzer() {
       {/* Opponent selector — grouped by trade fit, each option carrying tier +
           record so the choice isn't blind. */}
       <div className="mb-3">
-        <label className="block font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-1.5">
+        <label className="block font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary mb-1.5">
           Opponent
         </label>
         <div className="relative">
           <select
             value={selectedOpponentId ?? ''}
             onChange={e => handleOpponentChange(e.target.value)}
-            className="w-full bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default rounded-xl px-3 py-2.5 font-body text-sm text-text-primary dark:text-text-primary appearance-none focus:outline-none focus:border-accent pr-8"
+            className="w-full bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default rounded-none px-3 py-2.5 font-body text-sm text-text-primary dark:text-text-primary appearance-none focus:outline-none focus:border-accent pr-8"
           >
             <option value="">Select a team…</option>
             {FIT_GROUPS.map(group => {

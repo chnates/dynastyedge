@@ -3,14 +3,14 @@ import { useState, useCallback } from 'react'
 const THEME_KEY = 'dynastyedge_theme'
 
 // Safari colors its status-bar area from this meta tag. Dark matches the
-// app header (bg-secondary, #16161A); light is deliberately #F4F4F8 —
-// near, but not equal to, bg-secondary (#E9ECF5). Don't align it to
-// #E9ECF5 without an on-device light-mode check (regular Safari AND the
+// app header (bg-secondary, #101013); light is deliberately #F2F3F5 —
+// near, but not equal to, bg-secondary (#E7E9EC). Don't align it to
+// #E7E9EC without an on-device light-mode check (regular Safari AND the
 // standalone home-screen app).
 export function syncThemeColorMeta(isDark) {
   document
     .querySelector('meta[name="theme-color"]')
-    ?.setAttribute('content', isDark ? '#16161A' : '#F4F4F8')
+    ?.setAttribute('content', isDark ? '#101013' : '#F2F3F5')
 }
 
 // Single source of truth for the theme toggle. The initial dark/light class

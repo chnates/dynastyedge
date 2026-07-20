@@ -82,12 +82,12 @@ export function SheetHeader({ title, eyebrow, subtitle, onClose, closeLabel = 'C
     <div className="flex items-start justify-between px-4 pt-2 pb-3 border-b border-border-default">
       <div className="flex-1 min-w-0 pr-3">
         {eyebrow && (
-          <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary">
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary">
             {eyebrow}
           </p>
         )}
         {title && (
-          <h2 className="font-display text-xl font-bold uppercase tracking-wide text-text-primary mt-1 leading-tight">
+          <h2 className="font-display text-xl uppercase tracking-wide text-text-primary mt-1 leading-tight">
             {title}
           </h2>
         )}

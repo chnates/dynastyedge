@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { AlertTriangle, Info, X, ArrowRight } from 'lucide-react'
 import { useSleeperRookies, getPlayerMetaMap } from '../../hooks/useSleeperRookies'
 import { suggestSellMove } from '../../utils/recommendations'
-import { Button } from '../ui'
+import { Button, SectionHeader } from '../ui'
 import { PICK_YEARS } from '../../constants'
 
 const DISMISSAL_KEY = 'dynastyedge_action_dismissals'
@@ -28,7 +28,7 @@ function ActionCard({ item, onDismiss, onAction }) {
   const u = URGENCY[item.urgency]
   const Icon = item.urgency === 'blue' ? Info : AlertTriangle
   return (
-    <div className={`px-3 py-2.5 rounded-xl border ${u.bg} ${u.border}`}>
+    <div className={`px-3 py-2.5 rounded-none corner-cut border ${u.bg} ${u.border}`}>
       <div className="flex items-start gap-2.5">
         <Icon size={14} strokeWidth={2} className={`mt-0.5 flex-shrink-0 ${u.icon}`} />
         <span className="flex-1 font-body text-xs text-text-primary leading-snug">{item.message}</span>
@@ -182,9 +182,9 @@ export default function RosterActionItems({ myRoster, nflState, allRosters }) {
 
   return (
     <div className="pt-3 pb-1">
-      <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary mb-2">
-        Action Items
-      </p>
+      <div className="mb-2 -mt-4">
+        <SectionHeader label="Action Items" />
+      </div>
       <div className="flex flex-col gap-2">
         {visible.map(item => (
           <ActionCard key={item.key} item={item} onDismiss={dismiss} onAction={runAction} />

@@ -74,7 +74,7 @@ export default function RosterView() {
   }
 
   return (
-    <div className="px-4 pb-4">
+    <div className="px-4 pb-4 hero-sweep">
       {/* ── Back button (when drilling down from League / The Edge) ── */}
       {selectedRosterId && (
         <button
@@ -85,32 +85,35 @@ export default function RosterView() {
         </button>
       )}
 
-      {/* ── Header — brand-gradient hero card ── */}
-      <div className={`hero-card ${selectedRosterId ? 'mt-1' : 'mt-4'} rounded-xl px-4 pt-3 pb-3`}>
-        <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-white/60 mb-0.5">
-          Dynasty Roster
-        </p>
-        <div className="flex items-center gap-2.5">
-          <TeamAvatar owner={displayRoster.owner} size={36} />
-          <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-white leading-tight min-w-0 truncate">
-            {teamName}
-          </h1>
-        </div>
-        <div className="flex items-baseline gap-2 mt-1.5">
-          <span className="hero-value font-mono text-3xl font-medium tabular-nums text-white">
-            {displayRoster.totalValue.toLocaleString()}
-          </span>
-          <span className="font-body text-xs text-white/70">
-            dynasty pts
+      {/* ── Header — red score-bug hero ── */}
+      <div className={selectedRosterId ? 'mt-1' : 'mt-4'}>
+        <div className="bug-red flex items-center px-3 py-1.5">
+          <span className="font-display text-[12px] uppercase tracking-[0.1em] leading-none">
+            Dynasty Roster
           </span>
         </div>
-        <div className="flex items-center gap-1 mt-1.5">
-          <span className="block w-1.5 h-1.5 rounded-full bg-white/80 shrink-0" />
-          <span className="font-body text-[10px] text-white/55">
-            = starting lineup · — = no market value yet
-          </span>
+        <div className="hero-card border-t-0 px-4 pt-3 pb-3">
+          <div className="flex items-center gap-2.5">
+            <TeamAvatar owner={displayRoster.owner} size={36} />
+            <h1 className="font-display text-2xl uppercase tracking-wide text-white leading-tight min-w-0 truncate">
+              {teamName}
+            </h1>
+          </div>
+          <div className="flex items-baseline gap-2 mt-1.5">
+            <span className="font-mono text-3xl font-medium tabular-nums text-white">
+              {displayRoster.totalValue.toLocaleString()}
+            </span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-white/60">
+              dynasty pts
+            </span>
+          </div>
+          <div className="flex items-center gap-1 mt-1.5">
+            <span className="block w-1.5 h-1.5 rounded-full bg-white/80 shrink-0" />
+            <span className="font-body text-[10px] text-white/55">
+              = starting lineup · — = no market value yet
+            </span>
+          </div>
         </div>
-
       </div>
 
       {/* ── Dynasty trajectory (scouting another team — not otherwise reachable) ── */}
@@ -175,7 +178,7 @@ export default function RosterView() {
         return (
           <section key={pos}>
             <SectionHeader label={pos} count={group.length} accentBar={POS_BG[pos]} accentText={POS_TEXT[pos]} />
-            <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+            <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
               {group.map(player => (
                 <PlayerCard key={player.sleeperId} player={player} onClick={() => setSelectedPlayer(player)} />
               ))}
@@ -188,7 +191,7 @@ export default function RosterView() {
       {taxi.length > 0 && (
         <section>
           <SectionHeader label="Taxi Squad" count={taxi.length} />
-          <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+          <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
             {taxi
               .sort((a, b) => b.value - a.value)
               .map(player => (
@@ -202,7 +205,7 @@ export default function RosterView() {
       {ir.length > 0 && (
         <section>
           <SectionHeader label="IR" count={ir.length} />
-          <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+          <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
             {ir
               .sort((a, b) => b.value - a.value)
               .map(player => (

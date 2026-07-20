@@ -5,17 +5,17 @@ import { fetchJSON } from '../../utils/fetchJSON'
 import { useIdentity } from '../../hooks/useIdentity'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getTeamName } from '../../hooks/useLeague'
-import { Input } from '../ui'
+import { Input, Button } from '../ui'
 import DynastyEdgeLogo from '../shared/DynastyEdgeLogo'
 import TeamAvatar from '../shared/TeamAvatar'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 
-// Neon edge-bar palette cycled across the team picker rows so the list reads
-// colorful, not monochrome. Uses the app's identity tokens (never status-as-id).
+// Edge-bar palette cycled across the team picker rows so the list reads
+// colorful, not monochrome. Identity tokens only (never status-as-id).
 const EDGE_BARS = [
   'bg-accent', 'bg-pos-def', 'bg-pos-wr', 'bg-pos-rb',
-  'bg-pos-qb', 'bg-pos-te', 'bg-success', 'bg-warning',
+  'bg-pos-qb', 'bg-pos-te', 'bg-tier-middle', 'bg-tier-rebuild',
 ]
 
 // Gated sign-in: resolve a Sleeper username to a roster in this league (the
@@ -81,22 +81,26 @@ export default function LoginScreen() {
       {/* Light-mode-only strip behind the always-white (black-translucent)
           iOS status text — same treatment as the app shell. */}
       <div
-        className="fixed top-0 left-0 right-0 z-10 dark:hidden bg-[#0D0D0F]"
+        className="fixed top-0 left-0 right-0 z-10 dark:hidden bg-[#0B0B0D]"
         style={{ height: 'env(safe-area-inset-top)' }}
         aria-hidden="true"
       />
       <div className="max-w-[460px] mx-auto px-4">
-        {/* Branding */}
-        <div className="hero-card login-hero rounded-3xl px-6 py-9 mb-6 text-white text-center relative overflow-hidden">
-          <div className="flex justify-center">
-            <DynastyEdgeLogo theme="dark" size={132} />
+        {/* Branding — red score-bug hero */}
+        <div className="mb-6">
+          <div className="bug-red flex items-center justify-center px-3 py-1.5">
+            <span className="font-display text-[12px] uppercase tracking-[0.14em] leading-none">
+              Your dynasty command center
+            </span>
           </div>
-          <p className="font-display font-bold uppercase tracking-[0.14em] text-[13px] text-white/90 mt-4 hero-value">
-            Your dynasty command center
-          </p>
-          <p className="font-body text-[13px] text-white/70 mt-1.5">
-            Sign in with your Sleeper username to load your team.
-          </p>
+          <div className="hero-card border-t-0 px-6 py-8 text-white text-center">
+            <div className="flex justify-center">
+              <DynastyEdgeLogo theme="dark" size={132} />
+            </div>
+            <p className="font-body text-[13px] text-white/70 mt-4">
+              Sign in with your Sleeper username to load your team.
+            </p>
+          </div>
         </div>
 
         {sleeperLoading && !signInRosters ? (
@@ -108,9 +112,9 @@ export default function LoginScreen() {
             {/* Username sign-in */}
             <form
               onSubmit={submitUsername}
-              className="bg-bg-card/80 backdrop-blur-sm border border-accent/30 rounded-2xl p-4 shadow-[0_0_30px_-10px_rgb(79_127_255_/_0.5)]"
+              className="bg-bg-card border border-border-default rounded-none p-4"
             >
-              <label htmlFor="sleeper-username" className="block font-display font-bold uppercase text-[11px] tracking-[0.08em] text-accent mb-2">
+              <label htmlFor="sleeper-username" className="block font-display uppercase text-[11px] tracking-[0.08em] text-accent mb-2">
                 Sleeper username
               </label>
               <div className="flex gap-2">
@@ -126,13 +130,13 @@ export default function LoginScreen() {
                   placeholder="e.g. chnates"
                   className="flex-1 min-w-0 bg-bg-secondary text-[15px] focus:ring-2 focus:ring-accent/40 transition-shadow"
                 />
-                <button
+                <Button
                   type="submit"
                   disabled={busy || !username.trim()}
-                  className="neon-cta shrink-0 px-5 rounded-xl text-white font-body font-bold text-[14px] disabled:opacity-40 disabled:shadow-none flex items-center gap-1 transition-opacity"
+                  className="shrink-0 px-5 gap-1 text-[14px] font-bold"
                 >
                   {busy ? '…' : <>Go <ChevronRight size={16} strokeWidth={2.5} /></>}
-                </button>
+                </Button>
               </div>
               {err && (
                 <p className="font-body text-[13px] text-danger mt-2">{err}</p>
@@ -141,12 +145,12 @@ export default function LoginScreen() {
 
             {/* Team picker fallback */}
             <div className="flex items-center gap-3 my-5">
-              <span className="flex-1 h-px bg-gradient-to-r from-transparent to-accent/40" />
-              <span className="font-display font-bold uppercase tracking-[0.1em] text-[11px] text-text-secondary">or pick your team</span>
-              <span className="flex-1 h-px bg-gradient-to-l from-transparent to-pos-def/40" />
+              <span className="flex-1 h-px bg-border-default" />
+              <span className="font-display uppercase tracking-[0.1em] text-[11px] text-text-secondary">or pick your team</span>
+              <span className="flex-1 h-px bg-border-default" />
             </div>
 
-            <div className="bg-bg-card/80 backdrop-blur-sm border border-border-default rounded-2xl overflow-hidden">
+            <div className="bg-bg-card border border-border-default rounded-none overflow-hidden">
               {rosters.map((roster, i) => (
                 <button
                   key={roster.rosterId}

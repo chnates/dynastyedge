@@ -51,7 +51,7 @@ function NewsRow({ item, onOpen }) {
                 {item.player.position}
               </span>
             )}
-            {item.isMine && <Badge>You</Badge>}
+            {item.isMine && <Badge tone="brand">You</Badge>}
           </>
         ) : (
           <span className="font-body text-[10px] font-semibold uppercase tracking-wider text-text-tertiary dark:text-text-tertiary">
@@ -117,7 +117,7 @@ export default function NewsView() {
   return (
     <div className="px-4 pb-6">
       <div className="pt-4 pb-3 border-b border-border-default dark:border-border-default">
-        <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-0.5">
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary mb-0.5">
           League News
         </p>
         <p className="font-body text-sm text-text-secondary dark:text-text-secondary">
@@ -139,9 +139,9 @@ export default function NewsView() {
             key={f.id}
             onClick={() => setFilter(f.id)}
             className={cn(
-              'flex-1 py-2 rounded-lg font-body text-xs font-semibold transition-colors',
+              'flex-1 py-2 rounded-none font-mono text-[11px] font-semibold uppercase tracking-wider transition-colors',
               filter === f.id
-                ? 'bg-accent text-white'
+                ? 'bg-accent text-bg-primary'
                 : 'bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default text-text-secondary dark:text-text-secondary',
             )}
           >
@@ -163,7 +163,7 @@ export default function NewsView() {
         groups.map(group => (
           <section key={group.label}>
             <SectionHeader label={group.label} count={group.items.length} />
-            <div className="rounded-xl bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+            <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
               {group.items.map((n, i) => (
                 <NewsRow
                   key={`${group.label}-${i}-${n.headline}`}

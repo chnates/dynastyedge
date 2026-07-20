@@ -36,7 +36,7 @@ function TrendChip({ trend, value }) {
     : positive ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'
 
   return (
-    <span className={`shrink-0 w-14 text-right rounded-md px-1 py-0.5 ${color}`}>
+    <span className={`shrink-0 w-14 text-right rounded-none px-1 py-0.5 ${color}`}>
       <span className="block font-mono text-xs font-semibold tabular-nums leading-tight">
         {positive ? '+' : ''}{Math.round(trend)}
       </span>
@@ -86,7 +86,7 @@ function MoverRow({ player, ownerLabel, note, series, onClick, onBuildTrade }) {
           <button
             onClick={e => { e.stopPropagation(); onBuildTrade() }}
             aria-label="Build trade"
-            className="shrink-0 ml-1 flex items-center gap-1 rounded-md border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-accent active:opacity-60 transition-opacity"
+            className="shrink-0 ml-1 flex items-center gap-1 rounded-none border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-accent active:opacity-60 transition-opacity"
           >
             <ArrowLeftRight size={11} strokeWidth={2.25} />
             <span className="font-body text-[10px] font-semibold">Trade</span>
@@ -225,7 +225,7 @@ export default function MarketMovers() {
   return (
     <div className="px-4 pb-4">
       <div className="pt-4 pb-3 border-b border-border-default dark:border-border-default">
-        <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary mb-0.5">
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary mb-0.5">
           Market Movers
         </p>
         <p className="font-body text-sm text-text-secondary dark:text-text-secondary">

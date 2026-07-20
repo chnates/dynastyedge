@@ -5,8 +5,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        display: ['"Barlow Condensed"', 'sans-serif'],
-        body: ['"IBM Plex Sans"', 'sans-serif'],
+        // Anton ships one weight (400) — display-only, never body text.
+        display: ['Anton', 'sans-serif'],
+        body: ['Archivo', 'sans-serif'],
         mono: ['"IBM Plex Mono"', 'monospace'],
       },
       colors: {
@@ -18,6 +19,14 @@ export default {
         'text-secondary':'rgb(var(--text-secondary) / <alpha-value>)',
         'text-tertiary': 'rgb(var(--text-tertiary) / <alpha-value>)',
         accent:          'rgb(var(--accent) / <alpha-value>)',
+        // Brand red is rationed (hero score-bug, "you" accents, active
+        // sub-tab underline) — never a substitute for danger/trend red.
+        brand:           'rgb(var(--brand) / <alpha-value>)',
+        'brand-deep':    'rgb(var(--brand-deep) / <alpha-value>)',
+        'brand-bright':  'rgb(var(--brand-bright) / <alpha-value>)',
+        'tier-contend':  'rgb(var(--tier-contend) / <alpha-value>)',
+        'tier-middle':   'rgb(var(--tier-middle) / <alpha-value>)',
+        'tier-rebuild':  'rgb(var(--tier-rebuild) / <alpha-value>)',
         success:         'rgb(var(--success) / <alpha-value>)',
         warning:         'rgb(var(--warning) / <alpha-value>)',
         danger:          'rgb(var(--danger) / <alpha-value>)',

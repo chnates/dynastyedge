@@ -10,7 +10,7 @@ import SectionHeader from '../shared/SectionHeader'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import TeamCard from './TeamCard'
 import MatchupCard from './MatchupCard'
-import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
+import { POS_CHIP_ACTIVE, POS_TEXT, POS_BG } from '../../utils/positionColors'
 import { TIER_BADGE, TIER_TEXT } from '../../utils/tierColors'
 import { rankClass } from '../../utils/rankColors'
 import TeamAvatar from '../shared/TeamAvatar'
@@ -53,8 +53,8 @@ function PositionRankCard({ roster, posFilter, tier, posStrength, posRank, onTap
   return (
     <button
       onClick={() => onTap(roster.rosterId)}
-      className={`w-full rounded-xl bg-bg-card dark:bg-bg-card border px-3 py-3 text-left active:opacity-70 transition-opacity ${
-        isMyTeam ? 'border-accent/60' : 'border-border-default dark:border-border-default'
+      className={`w-full rounded-none bg-bg-card dark:bg-bg-card border px-3 py-3 text-left active:opacity-70 transition-opacity ${
+        isMyTeam ? 'border-brand/60' : 'border-border-default dark:border-border-default'
       }`}
     >
       <div className="flex items-center gap-2 mb-2">
@@ -67,7 +67,7 @@ function PositionRankCard({ roster, posFilter, tier, posStrength, posRank, onTap
             {teamName}
           </p>
           {isMyTeam && (
-            <Badge className="shrink-0">You</Badge>
+            <Badge tone="brand" className="shrink-0">You</Badge>
           )}
         </div>
       </div>
@@ -207,7 +207,7 @@ export default function LeagueOverview() {
       {/* ── League Health Banner — tap a tier to filter the list ── */}
       <div className="pt-4 pb-3 border-b border-border-default dark:border-border-default">
         <div className="flex items-baseline justify-between mb-1.5">
-          <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary">
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary">
             League Health
           </p>
           <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary">
@@ -271,7 +271,7 @@ export default function LeagueOverview() {
               <Chip
                 key={pos}
                 active={posFilter === pos}
-                activeClass={POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-white border border-transparent'}
+                activeClass={POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-bg-primary border border-transparent'}
                 onClick={() => setPosFilter(pos)}
                 className={cn('px-2.5 py-1', posFilter !== pos && 'bg-bg-secondary dark:bg-bg-secondary')}
               >
@@ -284,7 +284,11 @@ export default function LeagueOverview() {
 
       {/* ── Team List OR Position Ranking ── */}
       {posFilter === 'ALL' || effectiveSort !== 'value' ? (
-        <div className="flex flex-col gap-2">
+        <div>
+          <div className="-mt-4 pb-1">
+            <SectionHeader label="All Teams" count={tierFilteredRosters.length} />
+          </div>
+          <div className="flex flex-col gap-2">
           {tierFilteredRosters.map(roster => (
             <TeamCard
               key={roster.rosterId}
@@ -297,12 +301,13 @@ export default function LeagueOverview() {
               onTap={handleTeamTap}
             />
           ))}
+          </div>
         </div>
       ) : (
         <div>
-          <p className="font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary pb-2">
-            {posFilter} Ranking
-          </p>
+          <div className="-mt-4 pb-1">
+            <SectionHeader label={`${posFilter} Ranking`} accentBar={POS_BG[posFilter]} />
+          </div>
           <div className="flex flex-col gap-2">
             {tierFilteredPositionRanked.map(({ roster, posStrength, posRank, tier }) => (
               <PositionRankCard

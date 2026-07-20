@@ -11,19 +11,20 @@ import { cn } from './cn'
 
 export default function Chip({
   active = false,
-  activeClass = 'bg-accent text-white border border-transparent',
+  // Solid silver active state carries near-black text (silver score-bug rule).
+  activeClass = 'bg-accent text-bg-primary border border-transparent',
   size = 'md',
   className,
   children,
   ...rest
 }) {
   const sizeClass = size === 'sm'
-    ? 'text-[11px] px-2.5 py-1'
-    : 'text-xs px-3 py-1.5'
+    ? 'text-[10px] px-2.5 py-1'
+    : 'text-[11px] px-3 py-1.5'
   return (
     <button
       className={cn(
-        'shrink-0 rounded-full font-body font-semibold uppercase tracking-wider whitespace-nowrap transition-colors',
+        'shrink-0 rounded-none font-mono font-medium uppercase tracking-wider whitespace-nowrap transition-colors',
         sizeClass,
         active
           ? activeClass

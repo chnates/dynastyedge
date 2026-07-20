@@ -64,7 +64,7 @@ function starterAvg(players, position = null) {
 
 function StatCard({ label, value, valueClass = 'text-text-primary' }) {
   return (
-    <div className="rounded-xl bg-bg-card border border-border-default px-3 py-2.5">
+    <div className="rounded-none bg-bg-card border border-border-default px-3 py-2.5">
       <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-1">
         {label}
       </p>
@@ -162,7 +162,7 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
             </div>
 
             {/* Age chart */}
-            <div className="rounded-xl bg-bg-card border border-border-default px-2 py-3">
+            <div className="rounded-none bg-bg-card border border-border-default px-2 py-3">
               <svg
                 viewBox={`0 0 ${SVG_W} ${svgH}`}
                 width="100%"
@@ -203,7 +203,7 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
                         x={4} y={lane.centerY + 3}
                         fontSize="10" fontWeight="700"
                         fill={POS_COLORS[lane.pos]}
-                        fontFamily="'IBM Plex Sans', system-ui, sans-serif"
+                        fontFamily="'Archivo', system-ui, sans-serif"
                         pointerEvents="none"
                       >{lane.pos}</text>
 
@@ -260,7 +260,7 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
                         x={x} y={axisY + 14}
                         textAnchor="middle" fontSize="9"
                         fill="currentColor" className="text-text-tertiary"
-                        fontFamily="'IBM Plex Sans', system-ui, sans-serif"
+                        fontFamily="'Archivo', system-ui, sans-serif"
                       >{age}</text>
                     </g>
                   )
@@ -326,7 +326,7 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
             </div>
 
             {/* Position breakdown */}
-            <div className="rounded-xl bg-bg-card border border-border-default px-3 py-3">
+            <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
                 Avg Starter Age by Position
               </p>
@@ -364,7 +364,7 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
             </div>
 
             {/* How to read this */}
-            <div className="rounded-xl bg-bg-card border border-border-default">
+            <div className="rounded-none bg-bg-card border border-border-default">
               <button
                 onClick={() => setHowToOpen(o => !o)}
                 className="w-full flex items-center justify-between px-3 py-3"

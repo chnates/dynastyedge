@@ -865,13 +865,15 @@ logic lives in `utils/edgeBriefing.js`.
 
 **Sections (top to bottom, staggered `edge-rise` entrance animation):**
 
-- **Hero (gradient card):** time-of-day greeting + dateline, a generated
-  assistant-GM summary line ("2 items on your desk · 3 new league moves"),
-  team value in the brand gradient with a 30-day trend (sum of player
+- **Hero (red score-bug):** a `.bug-red` cap bar (team name · "Franchise
+  Report", short dateline) over the dark hero panel: time-of-day greeting, a
+  generated assistant-GM summary line ("2 items on your desk · 3 new league
+  moves"), team value in white mono with a 30-day trend (sum of player
   `trend30Day`, % vs baseline) and a team-value sparkline (per-player history
   rows summed with last-known-value carry-forward — best-effort, hides
-  without history). Chips: value rank (medal colors), win-window tier badge,
-  record (when it exists), FAAB. Value taps to My Roster; chips tap to League.
+  without history). A divider-separated stat strip closes it: value rank
+  (medal gold in top 3), record (when it exists), win-window tier, FAAB.
+  Value taps to My Roster; rank/window cells tap to League.
 - **Action Items:** the shared `RosterActionItems` component, reused as-is
   (dismissals included).
 - **Roster Analysis shortcut:** a one-tap card (accent edge bar + `ScanSearch`
@@ -1027,7 +1029,7 @@ per-instance.
   a clear "odds activate when the Week 1 schedule posts" hero plus the
   strength-ranked projected seeding preview.
 - **Active** (games remain): my-team hero (big playoff %, projected record,
-  projected seed, Buyer/Seller verdict chip in the stadium-lights treatment),
+  projected seed, Buyer/Seller verdict chip in the red score-bug treatment),
   a basis line ("Based on N completed weeks + M remaining games"), then every
   team ranked by playoff % with a likelihood-colored odds bar, projected
   record, average seed, and win-window badge.
@@ -1294,15 +1296,15 @@ the route changed.
 > `/trade/pick-trades` (Draft → Trade); scouting drill-downs are standalone
 > `/league/teams/:id` + `/league/trajectory/:id` routes (header "League"); the
 > `SideDrawer` is now the always-expanded hierarchical map; and global search
-> jumps to sections/features as well as players. **Next:** Phase 3 — the visual
-> design refresh (separate job; see watch-items below). **Phase 3 direction is
-> chosen and owner-approved (2026-07-19): "Primetime Blackout" — Falcons
-> red/black/silver broadcast rebrand. The active spec is
-> `docs/design/phase3-design-brief.md` (+ reference render); it supersedes the
-> Design System section below for the refresh work, and the doc updates land
-> with the code per change control.** This section is the
-> spec; the live Navigation section above is updated phase-by-phase as each step
-> lands.
+> jumps to sections/features as well as players. **Phase 3 complete
+> (2026-07-20)** — the "Primetime Blackout" visual refresh (owner-approved
+> direction 2026-07-19, spec: `docs/design/phase3-design-brief.md` + reference
+> render) executed in the brief's six steps: token pass, primitive pass, red
+> score-bug heroes, per-section sweeps, red/silver logo re-cut, docs. The
+> **Design System section below is the live post-refresh truth** and matches
+> the brief. Both drawer watch-items were handled in the primitive pass
+> (Anton parents, 2px rails). The refactor is done — this section stays as
+> the historical spec/record.
 
 **Why:** the app grew to 17 features behind a 7-label drawer that hides ~21
 real destinations one level down. Sub-tabs only render *after* you've entered a
@@ -1395,10 +1397,11 @@ the visual pass — surface these when doing the refresh):
   multi-view sections (My Team · Trade · League · Draft) use it. The Phase 3
   visual pass can still restyle it (icon+label, etc.), but the structural rough
   edge is gone.
-- **Always-expanded drawer length.** The hierarchical drawer (Phase 2) shows all
-  ~18 destinations at once. It fits, but the visual pass should make the group
-  hierarchy read instantly (rail weight, indentation, parent vs. child type
-  scale) and confirm it doesn't feel long on a 390px screen.
+- **Always-expanded drawer length — RESOLVED (Phase 3 primitive pass).** The
+  hierarchical drawer shows all ~18 destinations at once. The visual pass made
+  the hierarchy read instantly: parent rows in Anton uppercase (clear type
+  scale vs. Archivo children), guide rails thickened to 2px, verified at
+  390px in both themes.
 
 ### Doc upkeep during the refactor
 
@@ -1433,11 +1436,11 @@ Import everything from the one barrel: `import { Button, Card, Sheet } from '../
 |---------|----------|
 |`Button`|THE button. Variants `primary` (solid accent CTA) · `secondary` (bordered) · `tinted` (accent-tinted footer/link) · `ghost` (quiet) · `danger`; sizes `sm`/`md`/`lg`; `fullWidth`, `icon`/`iconRight`, polymorphic `as`/`href` (renders `<a>`).|
 |`IconButton`|THE icon-only control — the close/affordance button in every sheet/drawer header (`w-9 h-9 rounded-lg … hover:bg-black/5`). Always pass `label` (→ aria-label); sizes `sm`/`md`.|
-|`Card`|THE surface container (`rounded-xl bg-bg-card border border-border-default`). Optional `accent` color class renders the left **edge bar** (stadium-lights treatment); `padding` `none`/`sm`/`md` or a raw class; `interactive`/`onClick` makes it a button.|
+|`Card`|THE surface container (`rounded-none bg-bg-card border border-border-default` — broadcast panels are square). Optional `accent` color class renders the left **edge bar**; `cut` clips the 10px bottom-left corner (the action-card angle); `padding` `none`/`sm`/`md` or a raw class; `interactive`/`onClick` makes it a button.|
 |`Sheet` + `SheetHeader`|THE bottom sheet. Owns the whole sheet contract (`useScrollLock`, `useSheetDrag` swipe-to-dismiss, `overscroll-contain`, safe-area bottom pad, Escape + overlay-tap close, drag handle); `zIndex` is a Tailwind z class so sheets stack. `SheetHeader` adds eyebrow/title/subtitle + the `IconButton` close. **Exception:** a *keyboard-aware* sheet driven by `window.visualViewport` (PlayerSearchSheet, TradeBuilder's add sheet) can't use `Sheet` (which is sized to the layout viewport) — those two are the sanctioned hand-rolled overlays.|
 |`Modal`|THE centered dialog — confirm prompts and small forms that sit mid-screen rather than docking to the bottom (draft "Reset?" confirms, the CSV-name dialog). Owns overlay, `useScrollLock`, Escape + overlay-tap close; `maxWidth`/`surface` props. The bottom-docked counterpart is `Sheet`.|
-|`Chip`|THE filter chip — the QB/RB/WR/TE/All/Picks toggle pill. Inactive is quiet; `active` defaults to solid accent; pass `activeClass={POS_CHIP_ACTIVE[pos]}` for position-tinted active states. Sizes `sm`/`md`.|
-|`Badge`|THE small status/label badge — solid "New"/"You" accent labels plus `tone` (accent/success/warning/danger/neutral) and `soft` tinted variants; `pill` for rounded. (Win-window tiers use `WinWindowBadge`; position tags use `POS_TAG`.)|
+|`Chip`|THE filter chip — the QB/RB/WR/TE/All/Picks toggle, square, in the mono score-bug voice. Inactive is quiet; `active` defaults to solid silver with near-black text; pass `activeClass={POS_CHIP_ACTIVE[pos]}` for position-tinted active states. Sizes `sm`/`md`.|
+|`Badge`|THE small status/label badge, square, mono uppercase — `tone` (accent/brand/success/warning/danger/neutral) and `soft` tinted variants; `pill` for rounded. Solid accent (silver) carries near-black text; **`brand` is the rationed red, reserved for "you" labels** (You-chips). (Win-window tiers use `WinWindowBadge`; position tags use `POS_TAG`.)|
 |`Input` / `SearchInput`|THE text field + search-box variant. Consistent field styling across all search/filter boxes; `SearchInput` adds the leading magnifier. Both `forwardRef`. Keep at `text-sm` (iOS focus-zoom is handled globally).|
 |`cn`|The one styling primitive — a tiny `className` joiner that drops falsy values. Never pull in a heavier classnames dep.|
 
@@ -1454,44 +1457,75 @@ these from `'../ui'` going forward. `NewsArticleSheet.jsx` is the canonical
 - **Toggle:** Always accessible (top-right corner of app, every screen)
 - **Preference stored in:** `localStorage` key `dynastyedge_theme`
 
-The app should feel like a premium sports analytics tool — not a spreadsheet,
-not a generic dashboard. Think ESPN app meets Bloomberg terminal: data-dense
-but organized, purposeful use of color, confident typography.
+The visual language is **"Primetime Blackout"** (Phase 3, owner-approved
+2026-07-19 — full brief: `docs/design/phase3-design-brief.md`): NFL primetime
+broadcast graphics, blacked out, on the Falcons palette — **silver leads,
+red is scarce**. The design law that resolves every argument:
+
+1. **Red is rationed.** Falcons brand red appears ONLY on the hero's
+   score-bug cap bar, the owner's own card/row treatments ("you" accents:
+   border, You-chip, my-pick highlights), and the active sub-tab underline.
+   Everything else that wants an accent is **silver** (structure) or keeps
+   its semantic color. If a surface feels like it wants red, the answer is
+   silver.
+2. **Trend/status semantics are untouchable.** Brand red (`--brand`,
+   crimson) and trend/status red (`--danger`, bright salmon) are different
+   values and never swap roles.
+3. **The angle is the one structural flourish** — lower-third headers,
+   score-bug caps, action-card corner cuts. No glows, and no gradients
+   beyond the two sanctioned score-bugs below.
+4. **Boldness is spent in the hero.** The red score-bug hero is the one loud
+   moment per screen; everything else is flat panels and 1px borders.
+
+**The two sanctioned gradients** (`index.css`): red score-bug `.bug-red`
+(`linear-gradient(90deg,#C8102E,#7E0E22)` dark / `#A71930→#711022` light,
+white text) and silver score-bug `.bug-silver`
+(`linear-gradient(90deg,#C9CDD1,#8F949B)`, near-black text, both themes).
+**Silver fills always carry near-black text** — solid-accent primitives use
+`text-bg-primary`, never white.
 
 ### Color palette
+
+Tokens live in `index.css` (`:root` light / `.dark` dark) and are exposed via
+Tailwind (`bg-accent`, `text-brand-bright`, `bg-tier-middle/10`, …).
 
 #### Dark mode
 
 |Role                |Value                    |
 |--------------------|-------------------------|
-|Background primary  |`#0D0D0F`                |
-|Background secondary|`#16161A`                |
-|Background card     |`#1C1C21`                |
-|Border              |`#2A2A30`                |
-|Text primary        |`#F0F0F5`                |
-|Text secondary      |`#8A8A95`                |
-|Text tertiary       |`#55555F`                |
-|Accent              |`#4F7FFF` (electric blue)|
-|Success green       |`#22C55E`                |
+|Background primary  |`#0B0B0D`                |
+|Background secondary|`#101013`                |
+|Background card     |`#141417`                |
+|Border              |`#28282E`                |
+|Text primary        |`#F4F5F7`                |
+|Text secondary      |`#8A9096`                |
+|Text tertiary       |`#54565C`                |
+|Accent (structure)  |`#C9CDD1` (silver)       |
+|Brand red (rationed)|`--brand #C8102E` · gradient partner `--brand-deep #7E0E22` · text-on-dark `--brand-bright #D81E3C`|
+|Success green       |`#37C878`                |
 |Warning amber       |`#F59E0B`                |
-|Danger red          |`#EF4444`                |
-|Contending gold     |`#F59E0B`                |
-|Middle cyan         |`#22D3EE` (dark) / `#0891B2` (light)|
-|Rebuilding indigo   |`#818CF8` (dark) / `#4F46E5` (light)|
+|Danger red (trend/status)|`#FF5C5C` (salmon — never the brand red)|
+|Tier: Contending    |`--tier-contend #C9CDD1` (silver — gold left the system)|
+|Tier: Middle        |`--tier-middle #57C4E8` (cyan)|
+|Tier: Rebuilding    |`--tier-rebuild #8F9BF2` (indigo)|
 
 #### Light mode
 
 |Role                                 |Value    |
 |-------------------------------------|---------|
-|Background primary                   |`#F2F4FA` (cool tint so white cards lift)|
-|Background secondary                 |`#E9ECF5`|
+|Background primary                   |`#F0F1F3`|
+|Background secondary                 |`#E7E9EC`|
 |Background card                      |`#FFFFFF`|
-|Border                               |`#E0E4EE`|
-|Text primary                         |`#0D0D0F`|
-|Text secondary                       |`#55555F`|
-|Text tertiary                        |`#8A8A95`|
-|Accent                               |`#3B6FEF`|
-|(All status colors same as dark mode)|         |
+|Border                               |`#D9DCE1`|
+|Text primary                         |`#101013`|
+|Text secondary                       |`#54565C`|
+|Text tertiary                        |`#8A9096`|
+|Accent (structure)                   |`#5C6470` ("silver" reads as slate on white)|
+|Brand red                            |`#A71930` (deepened for contrast on white; `--brand-bright` = same)|
+|Success green                        |`#1F9D5C`|
+|Danger red (trend/status)            |`#D8383F`|
+|Warning amber                        |`#F59E0B` (unchanged)|
+|Tiers                                |Contending `#4A5560` · Middle `#0E7C9E` · Rebuilding `#5560CE`|
 
 ### Position identity colors (consistent across entire app)
 
@@ -1504,11 +1538,11 @@ never reuse status colors (success/warning/danger) to mean a position.**
 
 |Position|Dark mode          |Light mode         |
 |--------|-------------------|-------------------|
-|QB      |`#F472B6` (pink)   |`#DB2777`          |
-|RB      |`#2DD4BF` (teal)   |`#0D9488`          |
-|WR      |`#38BDF8` (sky)    |`#0284C7`          |
-|TE      |`#FB923C` (orange) |`#EA580C`          |
-|DEF     |`#A78BFA` (violet) |`#7C3AED`          |
+|QB      |`#F2758F` (pink)   |`#C4335A`          |
+|RB      |`#3AD0A4` (teal)   |`#0F8A66`          |
+|WR      |`#57A9F2` (sky)    |`#1F6FC0`          |
+|TE      |`#F0964E` (orange) |`#C05F1A`          |
+|DEF     |`#9AA3EE` (violet) |`#5A64C8`          |
 
 Where they apply:
 
@@ -1517,8 +1551,8 @@ Where they apply:
 - Active position filter chips everywhere (tinted style: `bg-pos-x/15 text-pos-x
   border-pos-x/40`); the All / Picks chips keep the solid accent style
 - Positional strength bars + labels on TeamCard (above-average = position color)
-- Position group headers in RosterView (accent bar via `SectionHeader`'s
-  `accentBar` prop)
+- Position group headers in RosterView (the lower-third's trailing slash via
+  `SectionHeader`'s `accentBar` prop — the bug itself stays silver)
 - Roster Analysis age-chart lanes (`POS_SVG` for SVG fill/stroke)
 - Lineup slot labels (FLEX / Superflex slots keep accent)
 - Position tags in the trade builder / What's Fair / lineup FA drawer (`POS_TAG`)
@@ -1531,12 +1565,16 @@ health/verdicts/flags — a TE label must never read as "danger".
 Class maps live in `src/utils/roundColors.js` (`ROUND_CLASSES`, `ROUND_TEXT`,
 `ROUND_LABELS`) — shared by PickBadge and TeamCard, never redefined locally.
 
-|Round|Dark bg  |Dark text|Light bg |Light text|
-|-----|---------|---------|---------|----------|
-|1st  |`#3D2E00`|`#F59E0B`|`#FEF3C7`|`#92400E` |
-|2nd  |`#0C2A4A`|`#60A5FA`|`#DBEAFE`|`#1E40AF` |
-|3rd  |`#2A1A4A`|`#A78BFA`|`#EDE9FE`|`#5B21B6` |
-|4th  |`#1F1F25`|`#9CA3AF`|`#F3F4F6`|`#374151` |
+**1st round is silver-on-charcoal** — the old gold-amber collided with the
+warning color once Contending went silver; 2nd/3rd/4th keep their hue
+families, tuned to the Blackout palette.
+
+|Round|Dark bg  |Dark text|Light bg    |Light text  |
+|-----|---------|---------|------------|------------|
+|1st  |`#26262C`|`#C9CDD1`|`#E4E6EA`   |`#3E444C`   |
+|2nd  |`#10263C`|`#5FA8E8`|`blue-100`  |`blue-800`  |
+|3rd  |`#252047`|`#8F9BF2`|`violet-100`|`violet-800`|
+|4th  |`#1A1A1E`|`#8A9096`|`gray-100`  |`gray-700`  |
 
 ### Status / verdict colors (consistent throughout)
 
@@ -1545,12 +1583,13 @@ Class maps live in `src/utils/roundColors.js` (`ROUND_CLASSES`, `ROUND_TEXT`,
 |🔴 Hard block / Decline|Danger red   |Out, IR, bye, decline verdict                 |
 |🟡 Soft flag / Counter |Warning amber|Questionable, projection flag, counter verdict|
 |🟢 Confirmed / Accept  |Success green|Healthy, optimal, accept verdict              |
-|🎯 Priority            |Accent blue  |Top trade partner tier                        |
+|🎯 Priority            |Accent silver|Top trade partner tier                        |
 |✅ Good Fit            |Muted green  |Second trade partner tier                     |
 |⚪ Poor Fit            |Text tertiary|Lowest trade partner tier                     |
 
-Verdict blocks (Accept/Decline/Counter) use a soft diagonal gradient of their
-status color (`from-x/20 via-x/10 to-transparent`), not a flat tint.
+Verdict blocks (Accept/Decline/Counter) use a **flat tint** of their status
+color (`bg-x/10`) — the old diagonal gradients left with Phase 3 (only the
+two score-bug gradients exist).
 
 ### Win window tier colors
 
@@ -1560,9 +1599,12 @@ banner chips. Never redefine locally.
 
 |Tier      |Color                                   |
 |----------|----------------------------------------|
-|Contending|Gold (warning amber)                    |
-|Middle    |Cyan (`cyan-600` light / `cyan-400` dark)|
-|Rebuilding|Indigo (`indigo-600` light / `indigo-400` dark)|
+|Contending|Silver (`--tier-contend` — gold left the system in Phase 3)|
+|Middle    |Cyan (`--tier-middle`)                  |
+|Rebuilding|Indigo (`--tier-rebuild`)               |
+
+Rank medals (below) keep gold/silver/bronze — they are ordinal semantics,
+not brand.
 
 ### Rank medals
 
@@ -1581,46 +1623,61 @@ gradient initial circle (hash of team name). Static `<img>` tags only — this
 is not an API call, so it doesn't go through `fetchJSON`. Always render the
 fallback on image error; never let a broken avatar break a card.
 
-### Ambient background glow
+### Ambient background (flat blackout)
 
-The app shell uses the `.app-bg` class (`index.css`): the flat background plus
-two radial glows at the top (accent blue left, violet right) and a fainter
-accent glow lower on the screen, all stronger in dark mode. The fixed app
-header is translucent (`bg-bg-secondary/85 backdrop-blur-md`) so the glow
-reads through it. Bottom sheets and drawers keep their opaque backgrounds.
+The app shell's `.app-bg` (`index.css`) is **flat** — the old blue/violet
+radial glows left with Phase 3. The ONE sanctioned ambient device is a faint
+red conic sweep (`.hero-sweep`, `rgba(216,30,60,.06)`, **dark mode only** —
+on light backgrounds it read as a pink cast) applied to the roots of the
+screens that carry a score-bug hero (The Edge, RosterView; the login screen
+bakes the same sweep into `.login-bg`). The fixed app header stays
+translucent (`bg-bg-secondary/85 backdrop-blur-md`). Bottom sheets and
+drawers keep their opaque backgrounds.
 
-### Hero cards ("stadium lights" treatment)
+### Score-bug heroes + the angle language
 
-The Edge's hero and the Roster view's team header are **full brand-gradient
-cards** (`.hero-card` in `index.css`): deep electric blue → violet base with
-a violet bloom (top-right) and a cyan hint (bottom-left), plus an accent glow
-shadow (stronger in dark mode). All hero content is white-on-gradient: white
-text at varying opacities, `bg-white/15 border-white/20` chips, the marquee
-value in white with a soft text glow (`.hero-value`), trend deltas as
-`bg-white/15` pills with emerald-200/rose-200 text, and the win-window tier
-as a white chip with a tier-colored dot (the standard tinted `TIER_BADGE`
-doesn't read on the gradient). Top-3 value rank shows in `text-amber-300`
-(medal gold).
+The one loud moment per screen. The Edge's hero, the Roster view's team
+header, and the Playoff Odds summary are **red score-bug heroes**: a
+`.bug-red` cap bar (Anton label, e.g. "{team} · Franchise Report", short
+mono dateline right) over a flat near-black `.hero-card` panel (`#101013`,
+1px border) that is **deliberately dark in BOTH themes** — hero content is
+white-on-dark: white text at varying opacities, `bg-white/15
+border-white/20` chips, the marquee value in white mono (no text glow — no
+glows anywhere). The Edge's hero closes with a divider-separated **stat
+strip** (rank / record / window / FAAB, mono micro-labels); tier dots there
+pin the dark-theme tier literals since the panel never changes theme. Top-3
+value rank shows in `text-amber-300` (medal gold).
 
-The treatment rolls through the whole app:
+The angle language rolls through the app:
 
-- **Section headers carry a brand-gradient tick by default** —
-  `SectionHeader`'s `accentBar` prop defaults to its exported `BRAND_TICK`;
-  pass a position/identity color class to override, or `null` for a bare
-  header.
+- **Section headers are silver lower-thirds** — `SectionHeader` renders the
+  label in a `.bug-silver` block with a hard 8px angled trailing cut
+  (`.lower-third`) plus a small identity-colored trailing slash. The bug is
+  ALWAYS silver (structure never takes identity color); `accentBar` (e.g.
+  `POS_BG[pos]`, default `BRAND_TICK` = silver) colors only the slash;
+  `null` renders a bare muted label.
+- **TeamCard carries a score-bug caption bar**: rank ordinal (zero-padded) +
+  Anton team name + tier label; the owner's card's cap goes `.bug-silver`
+  with the red You-badge (and a `border-brand/60` card border — "you" is
+  red).
+- **Action cards cut the bottom-left corner** (10px, `.corner-cut` /
+  `Card`'s `cut` prop) — RosterActionItems, the Trade counter callout.
 - Briefing items (The Edge) and the Roster Analysis button are cards with a
   3px left edge bar + tinted icon medallion in their tone color.
 - Trend chips (The Edge, Market Movers) render as filled tinted pills, not
   bare colored text.
-- "New"/"You" badges are solid accent with white text everywhere.
+- **"New" badges are solid silver with near-black text; "You" badges are
+  solid brand red with white text** — everywhere.
 - Footer/link buttons ("All market movers →", "Full activity feed →",
   manager ledger buttons, the Movers row Trade button) are accent-tinted
   (`border-accent/25 bg-accent/5`), not gray-bordered.
+- **The active sub-tab underline is brand red** (`SubTabBar`, Anton tabs) —
+  the third and last of red's sanctioned surfaces.
 
 ### Section identity colors (side drawer)
 
 Each nav section has an identity hue (defined inline in `SideDrawer.jsx`'s
-`NAV_TREE`): The Edge accent blue · My Team sky · Trade green · League gold ·
+`NAV_TREE`): The Edge accent silver · My Team sky · Trade green · League gold ·
 Draft pink · News violet. Icons always wear the section color; the active child
 gets the matching tinted background and edge bar, and children hang off a
 section-colored guide rail. These are navigation identity only — they carry no
@@ -1630,35 +1687,45 @@ status meaning.
 
 The mark is a crown built from analytics: three ascending rounded bars
 (a rising chart) as the crown's prongs, a jewel dot floating above each tip,
-and a detached base band as the circlet. Brand gradient: `#4F7FFF → #A78BFA`
-(accent blue → violet, same as the hero cards).
+and a detached base band as the circlet. Phase 3 cut: **red crown, silver
+EDGE** — the crown wears the brand-red ramp (`#D81E3C→#7E0E22` dark /
+`#A71930→#711022` light), the app icon grounds it in silver on the red
+score-bug gradient.
 
-- **In-app lockup:** `src/components/shared/DynastyEdgeLogo.jsx` — gradient
-  crown + "DYNASTY**EDGE**" wordmark in Barlow Condensed ("EDGE" in gradient
-  text). Used in the side drawer.
+- **In-app lockup:** `src/components/shared/DynastyEdgeLogo.jsx` — red-ramp
+  crown + "DYNASTY**EDGE**" wordmark in Anton ("EDGE" in the silver
+  structure gradient). Used in the side drawer.
 - **App icon / favicons:** generated by `node scripts/generate-icons.mjs`
   (sharp + png-to-ico, devDependencies) into `public/`:
-  `apple-touch-icon.png` (180px, **full-bleed gradient, no border, no
-  pre-rounded corners** — iOS applies its own mask), `favicon-32x32.png`,
-  `favicon-16x16.png`, `favicon.ico`, `logo.svg` (rounded gradient square).
+  `apple-touch-icon.png` (180px, **full-bleed red gradient + silver crown,
+  no border, no pre-rounded corners** — iOS applies its own mask),
+  `favicon-32x32.png`, `favicon-16x16.png`, `favicon.ico`, `logo.svg`
+  (rounded gradient square).
 - The crown geometry lives in both the component and the script — keep them
   in sync and re-run the script after any change. Never ship an app icon
   with its own border or baked-in rounding (it clips badly on iOS).
 
 ### Typography
 
-- **Display / headers:** `Barlow Condensed` (bold, uppercase for section labels)
-- **Body / data:** `IBM Plex Sans` (clean, monospace-adjacent, great for numbers)
-- **Numbers / values:** `IBM Plex Mono` for FantasyCalc values and scores
+- **Display / headers:** `Anton` — **400 only** (it ships one weight; never
+  pair it with `font-bold`, the synthesized bold distorts it). Uppercase,
+  tracked. Display-only — never body text.
+- **Body / UI:** `Archivo` (400/500/600/700)
+- **Numbers / values:** `IBM Plex Mono` for FantasyCalc values and scores;
+  also the **micro-label "score-bug" voice** — stat eyebrows, badges, chips
+  are IBM Plex Mono 500–600 uppercase with wide tracking
 
-Load from Google Fonts. Both are free.
+Load from Google Fonts (`index.html`). Barlow Condensed and IBM Plex Sans
+left the font request in Phase 3.
 
 ### Spacing and layout
 
 - Content padding: `16px` left/right on mobile
-- Card border radius: `12px`
+- Card border radius: **0** (broadcast panels are square). **Sheets, modals,
+  and the drawer keep their radii** and full gesture contract — the Phase 3
+  repaint never touched sheet mechanics.
 - Side drawer width: `80vw`, max `300px`; respects iPhone safe-area insets
-- Section headers: uppercase, 11px, letter-spacing 0.08em, text-secondary color
+- Section headers: the silver lower-third bug — Anton, 11px, wide tracking
 - Player cards: compact — name + team + value must fit in one row at 390px
 
 ### Motion
@@ -2008,8 +2075,8 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
    standalone, icons 192/512) so iOS draws the app edge-to-edge instead of
    letterboxing it with black bars. The standalone status bar uses the
    **`apple-mobile-web-app-status-bar-style` meta set to
-   `black-translucent`**: the bar is transparent, so app content + the
-   ambient glow paint under it seamlessly — no solid colored band. iOS
+   `black-translucent`**: the bar is transparent, so app content paints
+   under it seamlessly — no solid colored band. iOS
    forces white status text in this mode, so in light mode a fixed dark
    strip (`dark:hidden`, height `env(safe-area-inset-top)`, in both
    `App.jsx`'s AppShell and `LoginScreen.jsx`) sits behind the bar to keep
@@ -2077,8 +2144,6 @@ These are noted so the codebase is structured to support them later.
 Do not implement them until explicitly asked.
 
 - FAAB bid recommender for waiver pickups
-- Claude Design visual refresh — see **Navigation Refactor** above; this is its
-  Phase 3 (repaint the settled structure, after the IA regroup lands)
 - Push notifications for trade offers (requires backend — out of scope for v1;
   note Sleeper's API is read-only and may not even expose *pending* trade
   offers, so this is blocked on data availability, not just architecture)
@@ -2098,3 +2163,5 @@ Do not implement them until explicitly asked.
   Trade Analyzer Layer 3, Trade Partner Finder (buyer/seller flags), and The
   Edge (briefing item)
 - League-wide news feed page → News section (Feature 15)
+- Claude Design visual refresh → the "Primetime Blackout" rebrand
+  (Navigation Refactor Phase 3, shipped 2026-07-20) — see Design System

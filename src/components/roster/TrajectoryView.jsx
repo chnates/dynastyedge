@@ -117,7 +117,7 @@ function TrajectoryChart({ seasons, team, league, peakIdx }) {
               fontSize="10"
               fill="currentColor"
               className="text-text-tertiary"
-              fontFamily="'IBM Plex Sans', system-ui, sans-serif"
+              fontFamily="'Archivo', system-ui, sans-serif"
             >
               {seasons[i]}
             </text>
@@ -130,7 +130,7 @@ function TrajectoryChart({ seasons, team, league, peakIdx }) {
 
 function StatCard({ label, value, valueClass = 'text-text-primary' }) {
   return (
-    <div className="rounded-xl bg-bg-card border border-border-default px-3 py-2.5">
+    <div className="rounded-none bg-bg-card border border-border-default px-3 py-2.5">
       <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-1">
         {label}
       </p>
@@ -222,7 +222,7 @@ export default function TrajectoryView() {
       <div className={`${selectedRosterId ? 'mt-1' : 'mt-4'} flex items-center gap-2.5`}>
         <TeamAvatar owner={roster.owner} size={32} />
         <div className="min-w-0">
-          <h1 className="font-display text-xl font-bold uppercase tracking-wide text-text-primary leading-tight truncate">
+          <h1 className="font-display text-xl uppercase tracking-wide text-text-primary leading-tight truncate">
             {teamName}
           </h1>
           <p className="font-body text-[11px] text-text-secondary">
@@ -232,12 +232,12 @@ export default function TrajectoryView() {
       </div>
 
       {/* Verdict */}
-      <div className={`mt-3 rounded-xl bg-bg-card border border-border-default border-l-[3px] px-3 py-3 ${
+      <div className={`mt-3 rounded-none bg-bg-card border border-border-default border-l-[3px] px-3 py-3 ${
         verdict.tone === 'ascending' ? 'border-l-success' : verdict.tone === 'declining' ? 'border-l-danger' : 'border-l-warning'
       }`}>
         <div className="flex items-center gap-1.5 mb-1">
           <TrendingUp size={13} strokeWidth={2} className={TONE_TEXT[verdict.tone]} />
-          <span className={`font-body text-[11px] font-semibold uppercase tracking-[0.08em] ${TONE_TEXT[verdict.tone]}`}>
+          <span className={`font-mono text-[10px] font-semibold uppercase tracking-[0.12em] ${TONE_TEXT[verdict.tone]}`}>
             Window peaks {verdict.peakSeason}
           </span>
         </div>
@@ -248,7 +248,7 @@ export default function TrajectoryView() {
 
       {/* Forward value chart */}
       <SectionHeader label="Projected Team Value" />
-      <div className="rounded-xl bg-bg-card border border-border-default px-2 py-3">
+      <div className="rounded-none bg-bg-card border border-border-default px-2 py-3">
         <TrajectoryChart
           seasons={trajectory.seasons}
           team={trajectory.totalByYear}
@@ -288,7 +288,7 @@ export default function TrajectoryView() {
 
       {/* Per-position trajectory */}
       <SectionHeader label="By Position" />
-      <div className="rounded-xl bg-bg-card border border-border-default px-3">
+      <div className="rounded-none bg-bg-card border border-border-default px-3">
         {POSITIONS.map((pos, i) => {
           const series = trajectory.byPosition[pos]
           if (!series[0]) return null
@@ -320,7 +320,7 @@ export default function TrajectoryView() {
 
       {/* Per-player projections */}
       <SectionHeader label="Player Projections" count={players.length} />
-      <div className="rounded-xl bg-bg-card border border-border-default px-3">
+      <div className="rounded-none bg-bg-card border border-border-default px-3">
         {players.map(({ player, series }, i) => {
           const pct = deltaPct(series)
           const peak = peakStatusShort(player.position, player.age)
@@ -364,7 +364,7 @@ export default function TrajectoryView() {
       </div>
 
       {/* How this works */}
-      <div className="rounded-xl bg-bg-card border border-border-default mt-4">
+      <div className="rounded-none bg-bg-card border border-border-default mt-4">
         <button onClick={() => setHowToOpen(o => !o)} className="w-full flex items-center justify-between px-3 py-3">
           <span className="font-body text-xs font-semibold uppercase tracking-[0.08em] text-text-secondary">
             How this works

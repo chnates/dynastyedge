@@ -28,7 +28,7 @@ function TargetCard({ target, fairPackage, onTap }) {
         <span className={`shrink-0 text-[9px] font-bold font-body px-1.5 py-0.5 rounded leading-none ${posTag}`}>
           {target.position}
         </span>
-        <span className="flex-1 font-display text-base font-bold uppercase tracking-wide text-text-primary dark:text-text-primary truncate min-w-0">
+        <span className="flex-1 font-display text-base uppercase tracking-wide text-text-primary dark:text-text-primary truncate min-w-0">
           {target.name}
         </span>
         <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary shrink-0 uppercase tracking-wide">
@@ -47,7 +47,7 @@ function TargetCard({ target, fairPackage, onTap }) {
         <span className="font-body text-[11px] text-text-secondary dark:text-text-secondary truncate min-w-0">
           {getTeamName(target.owner)}
         </span>
-        <span className={`shrink-0 font-body text-[10px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 ${POS_TAGS[target.position] ?? 'bg-bg-secondary text-text-secondary'}`}>
+        <span className={`shrink-0 font-body text-[10px] font-bold uppercase tracking-wider rounded-none px-1.5 py-0.5 ${POS_TAGS[target.position] ?? 'bg-bg-secondary text-text-secondary'}`}>
           {target.position}
         </span>
       </div>
@@ -138,7 +138,7 @@ export default function WhatsFair() {
           <Chip
             key={pos}
             active={posFilter === pos}
-            activeClass={POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-white'}
+            activeClass={POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-bg-primary'}
             onClick={() => setPosFilter(pos)}
             className={cn('py-1', posFilter !== pos && 'bg-bg-card dark:bg-bg-card')}
           >

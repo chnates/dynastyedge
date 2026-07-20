@@ -29,7 +29,7 @@ const PICK_CAP_STYLES = {
 }
 
 function PositionChip({ position, variant }) {
-  const base = 'inline-flex items-center rounded px-1.5 py-0.5 font-body text-[10px] font-bold uppercase'
+  const base = 'inline-flex items-center rounded-none px-1.5 py-0.5 font-body text-[10px] font-bold uppercase'
   const color = variant === 'need' ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success'
   return <span className={`${base} ${color}`}>{position}</span>
 }
@@ -127,7 +127,7 @@ function TradePartnerCard({ partner, watchedNames, profile, odds, trajectoryRead
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <badge.Icon size={14} strokeWidth={2} className={`shrink-0 ${badge.textClass}`} />
-          <span className="font-display text-base font-bold uppercase tracking-wide text-text-primary dark:text-text-primary truncate">
+          <span className="font-display text-base uppercase tracking-wide text-text-primary dark:text-text-primary truncate">
             {getTeamName(owner)}
           </span>
         </div>
@@ -281,7 +281,7 @@ export default function TradePartnerFinder() {
           <Chip
             key={tab}
             active={activeFilter === tab}
-            activeClass={POS_CHIP_ACTIVE[tab] ?? 'bg-accent text-white'}
+            activeClass={POS_CHIP_ACTIVE[tab] ?? 'bg-accent text-bg-primary'}
             onClick={() => setActiveFilter(tab)}
             className={cn('py-1', activeFilter !== tab && 'bg-bg-card dark:bg-bg-card')}
           >

@@ -41,9 +41,11 @@ export default function SubTabBar({ tabs }) {
               to={to}
               end={end}
               className={({ isActive }) =>
-                `flex-1 min-w-max whitespace-nowrap px-4 py-2.5 text-center font-body text-xs font-semibold uppercase tracking-wider border-b-2 transition-colors
+                // Active tab: brand-red underline — one of the three sanctioned
+                // red surfaces (phase3-design-brief.md design law 1).
+                `flex-1 min-w-max whitespace-nowrap px-4 py-2.5 text-center font-display text-[12px] uppercase tracking-[0.08em] border-b-2 transition-colors
                 ${isActive
-                  ? 'text-accent border-accent'
+                  ? 'text-text-primary border-brand'
                   : 'text-text-secondary dark:text-text-secondary border-transparent'
                 }`
               }
