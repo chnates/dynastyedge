@@ -14,10 +14,16 @@ import pngToIco from 'png-to-ico'
 
 const PUBLIC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public')
 
+// Primetime Blackout: brand-red ground, silver crown (the two sanctioned
+// gradient families — see docs/design/phase3-design-brief.md).
 const GRADIENT = `
   <linearGradient id="g" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
-    <stop offset="0" stop-color="#4F7FFF"/>
-    <stop offset="1" stop-color="#A78BFA"/>
+    <stop offset="0" stop-color="#C8102E"/>
+    <stop offset="1" stop-color="#7E0E22"/>
+  </linearGradient>
+  <linearGradient id="crown" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#E9EBED"/>
+    <stop offset="1" stop-color="#C9CDD1"/>
   </linearGradient>`
 
 // Crown Crest: three ascending bars (rising chart) as crown prongs, a jewel
@@ -34,11 +40,11 @@ const CROWN = (fill) => `
     <rect x="20" y="66" width="56" height="10" rx="5"/>
   </g>`
 
-// App icon: full-bleed gradient, white crown, no border, no pre-rounding.
+// App icon: full-bleed red gradient, silver crown, no border, no pre-rounding.
 const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
   <defs>${GRADIENT}</defs>
   <rect width="96" height="96" fill="url(#g)"/>
-  ${CROWN('#FFFFFF')}
+  ${CROWN('url(#crown)')}
 </svg>`
 
 // Favicon / browser tab: rounded gradient square so it looks right
@@ -46,7 +52,7 @@ const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
 const faviconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
   <defs>${GRADIENT}</defs>
   <rect width="96" height="96" rx="22" fill="url(#g)"/>
-  ${CROWN('#FFFFFF')}
+  ${CROWN('url(#crown)')}
 </svg>`
 
 async function png(svg, size) {

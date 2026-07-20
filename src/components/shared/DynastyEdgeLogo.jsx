@@ -1,15 +1,19 @@
-// Crown Crest lockup: gradient crown mark (three ascending bars as crown
-// prongs, jewel dots above the tips, detached circlet band) + wordmark.
-// The crown geometry is mirrored in scripts/generate-icons.mjs (app icon /
-// favicons) — keep the two in sync, and re-run that script after changes.
+// Crown Crest lockup: crown mark (three ascending bars as crown prongs,
+// jewel dots above the tips, detached circlet band) + wordmark. Primetime
+// Blackout cut: the crown wears the brand-red ramp (the marquee), "EDGE"
+// wears the silver structure gradient. The crown geometry is mirrored in
+// scripts/generate-icons.mjs (app icon / favicons) — keep the two in sync,
+// and re-run that script after changes.
 
-const GRADIENT_FROM = '#4F7FFF'
-const GRADIENT_TO = '#A78BFA'
+const CROWN_RED = { dark: ['#D81E3C', '#7E0E22'], light: ['#A71930', '#711022'] }
+const EDGE_SILVER = { dark: ['#C9CDD1', '#8F949B'], light: ['#5C6470', '#3E444C'] }
 
 export default function DynastyEdgeLogo({ theme = 'dark', size = 88 }) {
   const markSize = Math.round(size * 0.5)
   const fontSize = Math.round(size * 0.3)
-  const textColor = theme === 'light' ? '#0D0D0F' : '#F0F0F5'
+  const textColor = theme === 'light' ? '#101013' : '#F4F5F7'
+  const [crownFrom, crownTo] = CROWN_RED[theme] ?? CROWN_RED.dark
+  const [edgeFrom, edgeTo] = EDGE_SILVER[theme] ?? EDGE_SILVER.dark
 
   return (
     <div
@@ -21,8 +25,8 @@ export default function DynastyEdgeLogo({ theme = 'dark', size = 88 }) {
       <svg width={markSize} height={markSize} viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <linearGradient id="de-crown-grad" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor={GRADIENT_FROM} />
-            <stop offset="1" stopColor={GRADIENT_TO} />
+            <stop offset="0" stopColor={crownFrom} />
+            <stop offset="1" stopColor={crownTo} />
           </linearGradient>
         </defs>
         <g fill="url(#de-crown-grad)">
@@ -42,7 +46,7 @@ export default function DynastyEdgeLogo({ theme = 'dark', size = 88 }) {
         Dynasty
         <span
           style={{
-            backgroundImage: `linear-gradient(90deg, ${GRADIENT_FROM}, ${GRADIENT_TO})`,
+            backgroundImage: `linear-gradient(90deg, ${edgeFrom}, ${edgeTo})`,
             WebkitBackgroundClip: 'text',
             backgroundClip: 'text',
             color: 'transparent',
