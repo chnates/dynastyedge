@@ -2,7 +2,7 @@
 // move-down package suggestions. Pure functions over cached league and
 // FantasyCalc data; no fetches.
 
-import { findPickValue } from './pickCapital'
+import { findPickValue, findExactSlotValue } from './pickCapital'
 
 const ROUND_SUFFIX = ['', '1st', '2nd', '3rd', '4th']
 
@@ -11,30 +11,15 @@ export function pickRoundLabel(pick) {
   return `${pick.season} ${suffix}`
 }
 
-// Early / Mid / Late ceil-thirds of a round (1–4 / 5–7 / 8–10 in a
-// 10-team league — Early runs through ceil(teams/3)).
-export function slotTier(slot, teams = 10) {
-  if (slot <= Math.ceil(teams / 3)) return 'Early'
-  if (slot <= Math.ceil((2 * teams) / 3)) return 'Mid'
-  return 'Late'
-}
-
-// Slot-aware pick price: FantasyCalc lists picks as "2026 Early 1st" etc., so
-// a known slot maps to its Early/Mid/Late entry. Unknown slot (or no tiered
-// entry) falls back to the round median — the same value pick capital uses
-// everywhere else in the app.
-export function findSlotPickValue({ season, round, slot, teams = 10 }, pickEntries) {
-  if (slot != null) {
-    const suffix = ROUND_SUFFIX[round]
-    if (suffix) {
-      const tier = slotTier(slot, teams)
-      const entry = pickEntries.find(e =>
-        e.name.includes(season) && e.name.includes(suffix) && e.name.includes(tier)
-      )
-      if (entry) return entry.value
-    }
-  }
-  return findPickValue({ season, round }, pickEntries)
+// Slot-aware pick price. FantasyCalc lists exact-slot picks as "2026 Pick 1.09"
+// once a draft season's order is known; a known slot maps to that entry.
+// Unknown slot (or no slot entry — future seasons, or after the generic
+// entries retire) falls back to the round median, the same value pick capital
+// uses everywhere else. (FantasyCalc dropped its old Early/Mid/Late tier names
+// in 2026-07 in favor of exact per-slot entries — hence delegating to the
+// shared `findExactSlotValue`.)
+export function findSlotPickValue({ season, round, slot }, pickEntries) {
+  return findExactSlotValue({ season, round, slot }, pickEntries)
 }
 
 // Rookie-class fallback pricer. FantasyCalc only prices a *generic* rookie
@@ -57,9 +42,9 @@ export function makePickPricer({ pickEntries = [], prospects = [], draftSeason, 
     return vals.length ? vals[Math.floor(vals.length / 2)] : 0
   }
   return ({ season, round, slot = null, overall = null }) => {
-    const generic = slot != null
-      ? findSlotPickValue({ season, round, slot, teams }, pickEntries)
-      : findPickValue({ season, round }, pickEntries)
+    // findSlotPickValue prices an exact slot when known and falls back to the
+    // round median otherwise, so one call covers both.
+    const generic = findSlotPickValue({ season, round, slot }, pickEntries)
     if (generic > 0) return generic
     if (season === draftSeason && ranked.length) {
       const adp = overall ?? (slot != null ? (round - 1) * teams + slot : null)
@@ -73,37 +58,33 @@ export function makePickPricer({ pickEntries = [], prospects = [], draftSeason, 
   }
 }
 
-// Market price board for the header card: per round, the Early/Mid/Late
-// prices (null when FantasyCalc has no tiered entry) plus the round median.
-// When `priceFor` is supplied, the median falls back to rookie-class pricing
-// so a current-season board isn't all dashes between the NFL and league drafts.
+// Market price board for the header card: the round-level reference price for
+// each round (exact per-slot prices live on the pick rows themselves). When
+// `priceFor` is supplied, the median falls back to rookie-class pricing so a
+// current-season board isn't all dashes between the NFL and league drafts.
 export function buildPriceBoard(pickEntries, season, rounds = 4, priceFor = null) {
   const board = []
   for (let round = 1; round <= rounds; round++) {
-    const suffix = ROUND_SUFFIX[round]
-    const matches = pickEntries.filter(e => e.name.includes(season) && e.name.includes(suffix))
-    const tierValue = tier => matches.find(e => e.name.includes(tier))?.value ?? null
     const median = priceFor
       ? priceFor({ season, round })
       : findPickValue({ season, round }, pickEntries)
-    if (!matches.length && !(median > 0)) continue
-    board.push({
-      round,
-      early: tierValue('Early'),
-      mid: tierValue('Mid'),
-      late: tierValue('Late'),
-      median,
-    })
+    if (!(median > 0)) continue
+    board.push({ round, median })
   }
   return board
 }
 
-// Every pick in the target season with its current owner and market value —
-// slot-level when the Sleeper draft order is known, round-level otherwise.
+// Every pick in the target season with its current owner and market value.
 // Each entry keeps the owner's actual roster pick object so analyzer handoffs
-// use the same assets the trade add sheet does (same dedupe id). `priceFor`
-// (from makePickPricer) values each pick, so a current-season pick whose
-// generic FantasyCalc entry has retired still prices via the rookie class.
+// use the same assets the trade add sheet does (same dedupe id).
+//
+// Two paths:
+//  - `draftOrder` present (a live draft board — slot_to_roster_id set):
+//    walk it so in-draft pick trades are honored, pricing each slot exactly.
+//  - otherwise: read the exact slot each pick ALREADY carries (resolved from
+//    the draft order in useLeague, incl. draft_order in pre_draft) and price
+//    at that slot. `priceFor` only backstops a pick whose value came up 0
+//    (generic entries retired between the NFL and league drafts).
 export function buildPickMarket({ allRosters, draftOrder, priceFor, season }) {
   const market = []
 
@@ -129,24 +110,26 @@ export function buildPickMarket({ allRosters, draftOrder, priceFor, season }) {
     return { slotLevel: true, picks: market }
   }
 
+  let slotLevel = false
   allRosters.forEach(r => {
     r.picks
       .filter(p => p.season === season)
       .forEach(p => {
+        if (p.slot != null) slotLevel = true
         market.push({
           season,
           round: p.round,
-          slot: null,
-          slotLabel: null,
-          label: pickRoundLabel(p),
+          slot: p.slot ?? null,
+          slotLabel: p.slotLabel ?? null,
+          label: p.slotLabel ?? pickRoundLabel(p),
           ownerRosterId: r.rosterId,
           rosterPick: p,
-          value: priceFor({ season, round: p.round }),
+          value: p.value > 0 ? p.value : priceFor({ season, round: p.round, slot: p.slot ?? null }),
         })
       })
   })
-  market.sort((a, b) => a.round - b.round || b.value - a.value)
-  return { slotLevel: false, picks: market }
+  market.sort((a, b) => a.round - b.round || (a.slot ?? 99) - (b.slot ?? 99) || b.value - a.value)
+  return { slotLevel, picks: market }
 }
 
 // Suggest up to `count` packages of 1–3 picks whose total lands near

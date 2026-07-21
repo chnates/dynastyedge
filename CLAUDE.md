@@ -958,16 +958,18 @@ Pure logic lives in `utils/pickTrades.js`.
 here (a sibling Trade sub-tab), so the planner is reachable from the start of
 the trade workflow, not just its own tab.
 
-**Slot-level pricing:** FantasyCalc lists picks as "2026 Early 1st" /
-"Mid" / "Late". When Sleeper has set the draft order (`slot_to_roster_id`,
-via `buildDraftOrder` — including in-draft pick trades), every pick maps to
-its exact slot (1.01–4.10) and is priced by its round's Early (slots 1–4) /
-Mid (5–7) / Late (8–10) tier entry — tiers are ceil-thirds of the round
-(`slotTier`: Early runs through `ceil(teams/3)`, i.e. slot 4 in a 10-team
-league). Before the order exists, the market
-falls back to round-level picks at round medians (`findPickValue`) with a
-note that prices upgrade automatically. A price-board card shows each
-round's E/M/L prices on top.
+**Slot-level pricing:** FantasyCalc lists exact-slot picks as "2026 Pick 1.09"
+(round.slot, zero-padded) once a draft season's order is known — the old
+Early/Mid/Late tier naming was dropped in 2026-07. Picks arrive already
+resolved to their exact slot by `useLeague` (from the draft order —
+`slot_to_roster_id` once Sleeper builds the board, else `draft_order` in
+`pre_draft`, so slots are known a month early) and priced at their exact-slot
+value (`findExactSlotValue`). `buildPickMarket` reads that enrichment directly,
+falling back to a live draft board (`buildDraftOrder`) when one exists so
+in-draft pick trades are honored. When no order exists at all, picks fall back
+to round-level medians (`findPickValue`) with a note that prices upgrade
+automatically. A price-board card shows each round's reference (round-median)
+price on top; the exact per-slot price lives on each pick row.
 
 **Move Up:** every opponent-owned pick of the draft season in draft order;
 tap one → up to 3 suggested packages from my pick inventory (this season's
