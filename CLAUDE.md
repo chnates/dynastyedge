@@ -284,8 +284,17 @@ GET https://api.fantasycalc.com/values/current
 
 - Show as whole numbers — no decimals
 - Trend arrow: ↑ green if `trend30Day > 50`, ↓ red if `trend30Day < -50`, → grey if between
-- Pick values also come from FantasyCalc — they appear as players with names
-  like “2026 Mid 1st” — include them in the dataset
+- Pick values also come from FantasyCalc — they appear as entries with names
+  like “2026 1st” (round-level) and “2026 Pick 1.09” (exact slot, once a draft
+  season's order is set) — include them in the dataset.
+  **Classifying player vs. pick (`useFantasyCalc`):** FantasyCalc now stamps
+  its pick entries with **synthetic non-numeric `sleeperId`s** (`FP_2026_1`
+  round-level, `DP_0_8` slot-level) — they used to have none. Real players
+  carry a **numeric** `sleeperId`. So the split is by id *shape*, not mere
+  presence: numeric id → player (into `playerMap`), non-numeric-or-absent →
+  pick (into `pickEntries`). Classifying on presence alone (the pre-2026-07
+  bug) dumped every pick into `playerMap` under a key no roster references,
+  left `pickEntries` empty, and priced every pick at 0 app-wide.
 
 **Rookie ADP rule:** FantasyCalc has no rookie-specific ADP field, and its
 `rookiesOnly` endpoint returns non-rookies — never use it. The Draft section's
@@ -351,6 +360,20 @@ across future seasons.
 - Any pick NOT in traded_picks is still owned by the original team
   (original team = the roster_id that matches the pick’s season/round)
 - Picks in traded_picks belong to `owner_id` in that record
+- **Exact slot resolution:** `useSleeper` also fetches `/league/{id}/drafts`
+  (best-effort — a failure just falls back to round medians). For the upcoming
+  rookie-draft season, `useLeague` resolves each pick to its exact slot from
+  the draft order — `slot_to_roster_id` once Sleeper builds the board, else
+  `draft_order` (set in `pre_draft`, so slots are known a month early) — via
+  `buildDraftSlots` + `slotForRound` (honors snake/linear). A pick sits at its
+  **original owner's** slot. Each enriched pick then carries `slot` +
+  `slotLabel` ("1.09") and is priced at FantasyCalc's exact-slot value
+  (`findExactSlotValue`, e.g. "2026 Pick 1.09"), falling back to the round
+  median when the slot is unknown or has no slot entry (future seasons). This
+  flows to every roster-derived surface — pick badges, roster/team-value
+  totals, and the Trade Analyzer. (League Activity and the Manager ledger price
+  *historical*-trade picks at round medians, as before — they're at today's
+  prices anyway.)
 
 -----
 
@@ -1126,8 +1149,9 @@ happens to list it. The single global accelerant for a feature-dense app.
   same stacking trick The Edge uses for its drawer + article sheet). Closing the
   profile returns to the search results. Nested scroll-locks unwind correctly
   via `useScrollLock`'s save/restore of the previous value.
-- Picks (named like "2026 Mid 1st", no `sleeperId`) aren't in `playerMap`, so
-  player search covers players only — by design.
+- Picks (named like "2026 1st" / "2026 Pick 1.09", with a non-numeric
+  `sleeperId`) aren't in `playerMap`, so player search covers players only —
+  by design.
 
 -----
 

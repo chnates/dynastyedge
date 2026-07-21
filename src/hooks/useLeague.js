@@ -2,7 +2,7 @@ import { useMemo, useCallback } from 'react'
 import { useSleeper } from './useSleeper'
 import { useFantasyCalc } from './useFantasyCalc'
 import { usePlayerDB } from './usePlayerDB'
-import { resolvePickOwnership, findPickValue, computePickCapitalScore } from '../utils/pickCapital'
+import { resolvePickOwnership, findExactSlotValue, buildDraftSlots, slotForRound, computePickCapitalScore } from '../utils/pickCapital'
 import { PICK_YEARS } from '../constants'
 import { useIdentity } from './useIdentity'
 
@@ -23,8 +23,20 @@ export function useLeague() {
   const league = useMemo(() => {
     if (!sleeperData || !fcValues) return null
 
-    const { leagueInfo, rosters, users, tradedPicks } = sleeperData
+    const { leagueInfo, rosters, users, tradedPicks, drafts } = sleeperData
     const { playerMap, pickEntries } = fcValues
+
+    // The upcoming rookie draft (PICK_YEARS[0]). Its order — from
+    // slot_to_roster_id once built, else draft_order in pre_draft — lets us
+    // resolve each of that season's picks to its exact slot (1.09) and price
+    // it at FantasyCalc's slot-level value instead of the round median.
+    const draftSeason = PICK_YEARS[0]
+    const rookieDraft = (drafts ?? []).find(
+      d => String(d.season) === draftSeason && d.type !== 'auction'
+    ) ?? null
+    const draftSlots = buildDraftSlots(rookieDraft, rosters)
+    const draftType = rookieDraft?.type ?? 'linear'
+    const draftTeams = rookieDraft?.settings?.teams ?? rosters.length
 
     // Build user lookup: user_id → user
     const userById = {}
@@ -92,10 +104,20 @@ export function useLeague() {
         }]
       })
 
-      const ownedPicks = (picksByRoster[roster.roster_id] ?? []).map(pk => ({
-        ...pk,
-        value: findPickValue(pk, pickEntries),
-      }))
+      const ownedPicks = (picksByRoster[roster.roster_id] ?? []).map(pk => {
+        // A pick sits at its ORIGINAL owner's draft slot. Only the current
+        // rookie-draft season has a known order + FantasyCalc slot entries;
+        // future seasons fall through to the round median (slot stays null).
+        const slot = pk.season === draftSeason
+          ? slotForRound(draftSlots?.[pk.originalOwner], pk.round, draftType, draftTeams)
+          : null
+        return {
+          ...pk,
+          slot,
+          slotLabel: slot != null ? `${pk.round}.${String(slot).padStart(2, '0')}` : null,
+          value: findExactSlotValue({ season: pk.season, round: pk.round, slot }, pickEntries),
+        }
+      })
       const playerValue = allPlayers.reduce((s, p) => s + p.value, 0)
       const pickValue = ownedPicks.reduce((s, pk) => s + pk.value, 0)
       const pickCapitalScore = computePickCapitalScore(ownedPicks, pickEntries)

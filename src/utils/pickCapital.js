@@ -63,6 +63,59 @@ export function findPickValue(pick, pickEntries) {
   return matches[Math.floor(matches.length / 2)]?.value ?? 0
 }
 
+// Exact per-slot pick price. FantasyCalc lists slot picks as "2026 Pick 1.09"
+// (literal "Pick", zero-padded 2-digit slot) once a draft season's order is
+// known. Falls back to the round median (findPickValue) when the slot is
+// unknown or FantasyCalc carries no slot entry for it (e.g. future seasons,
+// whose order isn't set — only round-level "2027 1st" exists).
+export function findExactSlotValue({ season, round, slot }, pickEntries) {
+  if (slot != null) {
+    const name = `${season} Pick ${round}.${String(slot).padStart(2, '0')}`
+    const entry = pickEntries.find(e => e.name === name)
+    if (entry) return entry.value
+  }
+  return findPickValue({ season, round }, pickEntries)
+}
+
+// A pick's draft slot within its round, honoring snake vs. linear order.
+// `position` is the original owner's first-round draft position (1..teams).
+export function slotForRound(position, round, type, teams) {
+  if (position == null) return null
+  return type === 'snake' && round % 2 === 0 ? teams + 1 - position : position
+}
+
+// Map each roster to its first-round draft position for a rookie draft.
+// Prefers `slot_to_roster_id` (authoritative once Sleeper builds the board);
+// falls back to `draft_order` (user_id → position, set in `pre_draft`) resolved
+// through each roster's owner_id — so exact slots are known a month before the
+// draft. Returns null when neither is available.
+export function buildDraftSlots(draft, rosters) {
+  if (!draft) return null
+
+  const slotToRoster = draft.slot_to_roster_id
+  if (slotToRoster && Object.keys(slotToRoster).length) {
+    const byRoster = {}
+    Object.entries(slotToRoster).forEach(([slot, rid]) => {
+      byRoster[rid] = Number(slot)
+    })
+    return byRoster
+  }
+
+  const order = draft.draft_order // user_id → position
+  if (order && rosters?.length) {
+    const ownerToRoster = {}
+    rosters.forEach(r => { ownerToRoster[r.owner_id] = r.roster_id })
+    const byRoster = {}
+    Object.entries(order).forEach(([userId, position]) => {
+      const rid = ownerToRoster[userId]
+      if (rid != null) byRoster[rid] = Number(position)
+    })
+    return Object.keys(byRoster).length ? byRoster : null
+  }
+
+  return null
+}
+
 const PICK_YEAR_WEIGHTS = { '2026': 3, '2027': 2, '2028': 1 }
 
 export function computePickCapitalScore(picks, pickEntries) {
