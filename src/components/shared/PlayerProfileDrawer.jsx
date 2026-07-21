@@ -341,17 +341,23 @@ export default function PlayerProfileDrawer({
                   <div
                     key={r.sleeperId}
                     className={cn(
-                      'flex items-center gap-2 py-1.5 -mx-1 px-1',
+                      'relative flex items-center gap-2 py-1.5 -mx-3 px-3',
                       i < roomRows.length - 1 && 'border-b border-border-default',
-                      r.isViewed && 'bg-accent/10',
+                      r.isViewed && 'bg-accent/15',
                     )}
                   >
-                    <span className={`font-mono text-[10px] tabular-nums w-4 shrink-0 ${r.isViewed ? 'text-accent' : 'text-text-tertiary'}`}>
+                    {r.isViewed && (
+                      <span className="absolute left-0 top-0 bottom-0 w-1 bg-accent" aria-hidden="true" />
+                    )}
+                    <span className={`font-mono text-[10px] tabular-nums w-4 shrink-0 ${r.isViewed ? 'text-text-primary font-semibold' : 'text-text-tertiary'}`}>
                       {r.roomIndex}
                     </span>
-                    <p className={`font-body text-xs truncate flex-1 min-w-0 ${r.isViewed ? 'font-semibold text-accent' : 'text-text-primary'}`}>
-                      {r.name}
-                    </p>
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className={`font-body text-xs truncate ${r.isViewed ? 'font-bold text-text-primary' : 'text-text-primary'}`}>
+                        {r.name}
+                      </span>
+                      {r.isViewed && <Badge tone="accent" soft className="shrink-0">Viewing</Badge>}
+                    </div>
                     {r.slot && (
                       <span className={`font-mono text-[10px] uppercase tracking-wide shrink-0 ${POS_TEXT[intel.position] ?? 'text-text-tertiary'}`}>
                         {r.slot}

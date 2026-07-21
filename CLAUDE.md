@@ -1776,7 +1776,9 @@ dynastyedge/
 ├── scripts/
 │   ├── fetch-news.mjs          ← multi-source news fetcher (runs in Actions)
 │   ├── snapshot-values.mjs     ← daily FantasyCalc snapshot appender (runs in Actions)
-│   └── snapshot-trade-values.mjs ← permanent trade-time value archiver (runs in Actions)
+│   ├── snapshot-trade-values.mjs ← permanent trade-time value archiver (runs in Actions)
+│   └── dev/
+│       └── screenshot-app.mjs  ← headless-Chromium screenshotter for the running app (390px UI verification — see the dynastyedge-visual-capture skill)
 ├── public/
 │   └── favicon.ico
 ├── src/
