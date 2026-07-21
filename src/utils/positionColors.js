@@ -47,6 +47,17 @@ export const POS_BAR = {
   DEF: 'bg-gradient-to-r from-pos-def/60 to-pos-def',
 }
 
+// Dimmed fill for below-average positional strength bars — keeps the position
+// hue (so a weak WR still reads as WR) but muted vs the full above-average bar,
+// instead of collapsing to grey-on-grey.
+export const POS_BAR_DIM = {
+  QB: 'bg-pos-qb/25',
+  RB: 'bg-pos-rb/25',
+  WR: 'bg-pos-wr/25',
+  TE: 'bg-pos-te/25',
+  DEF: 'bg-pos-def/25',
+}
+
 // CSS color values for SVG fill/stroke (resolve via the theme variables).
 export const POS_SVG = {
   QB: 'rgb(var(--pos-qb))',

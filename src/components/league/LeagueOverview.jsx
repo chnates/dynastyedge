@@ -288,6 +288,12 @@ export default function LeagueOverview() {
           <div className="-mt-4 pb-1">
             <SectionHeader label="All Teams" count={tierFilteredRosters.length} />
           </div>
+          {effectiveSort === 'value' && (
+            <p className="font-body text-[11px] leading-snug text-text-tertiary dark:text-text-tertiary pb-2">
+              Bars = position strength vs league avg
+              <span className="opacity-60"> (marker = average)</span> · arrow = 30-day trend
+            </p>
+          )}
           <div className="flex flex-col gap-2">
           {tierFilteredRosters.map(roster => (
             <TeamCard
