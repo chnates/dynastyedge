@@ -228,7 +228,10 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
                   const fillPct = Math.min(100, Math.round((strength[pos] / (avg * 2)) * 100))
                   const above = strength[pos] >= avg
                   const trend = posTrend[pos]
-                  const arrow = trend > 50 ? '↗' : trend < -50 ? '↘' : '→'
+                  // A plain text → rotated with CSS, NOT the ↗/↘ codepoints:
+                  // iOS gives U+2197/U+2198 default emoji presentation (color
+                  // glyph, ignores our text color), while U+2192 stays text.
+                  const arrowRotate = trend > 50 ? '-rotate-45' : trend < -50 ? 'rotate-45' : ''
                   const trendColor = trend > 50
                     ? 'text-success'
                     : trend < -50
@@ -247,8 +250,8 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
                       <span className={`font-body text-[10px] font-semibold uppercase tracking-wide ${above ? POS_TEXT[pos] : 'text-text-tertiary dark:text-text-tertiary'}`}>
                         {pos}
                       </span>
-                      <span className={`font-body text-[10px] leading-none ${trendColor}`}>
-                        {arrow}
+                      <span className={`font-body text-[10px] leading-none inline-block ${arrowRotate} ${trendColor}`}>
+                        →
                       </span>
                     </div>
                   )
