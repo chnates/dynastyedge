@@ -78,13 +78,13 @@ function PickHeaderRow({ pick, subtitle, expanded, onTap }) {
   )
 }
 
-function PriceBoard({ board, slotLevel }) {
+function PriceBoard({ board }) {
   if (!board.length) return null
   return (
     <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-2.5 mb-1">
       <div className="flex items-center gap-2 mb-1.5">
         <p className="flex-1 font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary">
-          {DRAFT_SEASON} pick prices {slotLevel ? '· slot tiers' : '· round medians'}
+          {DRAFT_SEASON} pick prices · by round
         </p>
       </div>
       {board.map(row => (
@@ -92,19 +92,9 @@ function PriceBoard({ board, slotLevel }) {
           <span className={`w-8 shrink-0 font-mono text-xs font-bold ${ROUND_TEXT[row.round] ?? 'text-text-primary'}`}>
             {ROUND_LABELS[row.round] ?? `R${row.round}`}
           </span>
-          {row.early != null || row.mid != null || row.late != null ? (
-            <span className="flex-1 font-mono text-[11px] text-text-secondary dark:text-text-secondary tabular-nums">
-              E <span className="text-text-primary dark:text-text-primary">{row.early?.toLocaleString() ?? '—'}</span>
-              <span className="mx-1.5 text-text-tertiary">·</span>
-              M <span className="text-text-primary dark:text-text-primary">{row.mid?.toLocaleString() ?? '—'}</span>
-              <span className="mx-1.5 text-text-tertiary">·</span>
-              L <span className="text-text-primary dark:text-text-primary">{row.late?.toLocaleString() ?? '—'}</span>
-            </span>
-          ) : (
-            <span className="flex-1 font-mono text-[11px] text-text-primary dark:text-text-primary tabular-nums">
-              {row.median > 0 ? `~${row.median.toLocaleString()}` : '—'}
-            </span>
-          )}
+          <span className="flex-1 font-mono text-[11px] text-text-primary dark:text-text-primary tabular-nums">
+            {row.median > 0 ? `~${row.median.toLocaleString()}` : '—'}
+          </span>
         </div>
       ))}
     </div>
@@ -210,7 +200,7 @@ export default function PickTradeCalculator() {
         </p>
       </div>
 
-      <PriceBoard board={priceBoard} slotLevel={market.slotLevel} />
+      <PriceBoard board={priceBoard} />
 
       {!market.slotLevel && !sleeperDraft.loading && (
         <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary leading-snug mb-2 flex items-start gap-1.5">

@@ -1,15 +1,11 @@
 // tests/pickTrades.test.mjs — pins documented behavior of src/utils/pickTrades.js.
 //
 // Behaviors pinned (with their doc source):
-//  - slotTier: asserts the CODE's actual boundary — ceil(teams/3) → in a
-//    10-team league Early = slots 1–4, Mid = 5–7, Late = 8–10. This is a
-//    KNOWN doc divergence: CLAUDE.md Feature 13 (and the inline comment) say
-//    "1–3 / 4–7". Per the change-control divergence protocol the code is
-//    what ships, so the tests pin the code; do NOT "fix" either side here —
-//    surface it to the owner instead.
-//  - CLAUDE.md Feature 13: "every pick … is priced by its round's Early/Mid/
-//    Late tier entry. Before the order exists, the market falls back to
-//    round-level picks at round medians (findPickValue)".
+//  - CLAUDE.md Feature 13: "every pick … is priced by its exact slot entry
+//    ("2026 Pick 1.09"). Before the order exists, the market falls back to
+//    round-level picks at round medians (findPickValue)". (FantasyCalc dropped
+//    its old Early/Mid/Late tier naming in 2026-07 for exact per-slot entries;
+//    findSlotPickValue now delegates to the shared findExactSlotValue.)
 //  - CLAUDE.md Feature 13 (Move Up): "Packages are 1–3 picks, each strictly
 //    worth less than the target (equal value = a swap, not a move), totaling
 //    80–145% of the target; undershoot is penalized 1.6× over overshoot".
@@ -17,34 +13,25 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { slotTier, findSlotPickValue, suggestPickPackages } from '../src/utils/pickTrades.js'
-
-test('slotTier: CODE behavior — Early = slots 1–4 in a 10-team league (known divergence from Feature 13\'s "1–3")', () => {
-  assert.equal(slotTier(1), 'Early')
-  assert.equal(slotTier(3), 'Early')
-  assert.equal(slotTier(4), 'Early') // CLAUDE.md says Mid starts at 4; the code says ceil(10/3)=4 is still Early
-  assert.equal(slotTier(5), 'Mid')
-  assert.equal(slotTier(7), 'Mid')
-  assert.equal(slotTier(8), 'Late')
-  assert.equal(slotTier(10), 'Late')
-})
+import { findSlotPickValue, suggestPickPackages } from '../src/utils/pickTrades.js'
 
 const PICK_ENTRIES = [
-  { name: '2026 Early 1st', value: 5200 },
-  { name: '2026 Mid 1st', value: 4100 },
-  { name: '2026 Late 1st', value: 3300 },
+  { name: '2026 1st', value: 4100 },
+  { name: '2026 Pick 1.02', value: 5200 },
+  { name: '2026 Pick 1.09', value: 3300 },
 ]
 
-test('findSlotPickValue: known slot prices at its round\'s Early/Mid/Late tier entry (Feature 13 slot-level pricing)', () => {
+test('findSlotPickValue: known slot prices at its exact FantasyCalc slot entry (Feature 13 slot-level pricing)', () => {
   assert.equal(findSlotPickValue({ season: '2026', round: 1, slot: 2 }, PICK_ENTRIES), 5200)
-  assert.equal(findSlotPickValue({ season: '2026', round: 1, slot: 6 }, PICK_ENTRIES), 4100)
   assert.equal(findSlotPickValue({ season: '2026', round: 1, slot: 9 }, PICK_ENTRIES), 3300)
 })
 
-test('findSlotPickValue: unknown slot falls back to the round median (Feature 13: "round-level picks at round medians")', () => {
-  // No slot → findPickValue's median of the three tier entries = 4100.
+test('findSlotPickValue: unknown slot or no slot entry falls back to the round median (Feature 13: "round-level picks at round medians")', () => {
+  // No slot → the round-level "2026 1st" price.
   assert.equal(findSlotPickValue({ season: '2026', round: 1, slot: null }, PICK_ENTRIES), 4100)
-  // Known slot but no tiered entry for that season → same round-median path (no match → 0 here).
+  // Known slot but no slot entry for it → round median (here the 1st entry).
+  assert.equal(findSlotPickValue({ season: '2026', round: 1, slot: 5 }, PICK_ENTRIES), 4100)
+  // Season FantasyCalc doesn't list at all → 0.
   assert.equal(findSlotPickValue({ season: '2027', round: 1, slot: 2 }, PICK_ENTRIES), 0)
 })
 

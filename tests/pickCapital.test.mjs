@@ -16,7 +16,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { resolvePickOwnership, findPickValue, computePickCapitalScore } from '../src/utils/pickCapital.js'
+import {
+  resolvePickOwnership,
+  findPickValue,
+  findExactSlotValue,
+  buildDraftSlots,
+  slotForRound,
+  computePickCapitalScore,
+} from '../src/utils/pickCapital.js'
 
 const ROSTERS = [{ roster_id: 1 }, { roster_id: 2 }]
 
@@ -86,6 +93,63 @@ test('findPickValue fallback chain: no matching entries or unknown round → 0 (
   assert.equal(findPickValue({ season: '2026', round: 6 }, PICK_ENTRIES), 0)
   // Empty market → 0.
   assert.equal(findPickValue({ season: '2026', round: 1 }, []), 0)
+})
+
+// Exact-slot entries in FantasyCalc's current format ("2026 Pick 1.09"),
+// alongside the round-level "2026 1st" the fallback uses.
+const SLOT_ENTRIES = [
+  { name: '2026 1st', value: 3194 },
+  { name: '2026 Pick 1.01', value: 7037 },
+  { name: '2026 Pick 1.09', value: 2744 },
+  { name: '2026 Pick 1.10', value: 2579 },
+  { name: '2027 1st', value: 2974 },
+]
+
+test('findExactSlotValue: a known slot prices at its exact FantasyCalc slot entry ("2026 Pick 1.09")', () => {
+  assert.equal(findExactSlotValue({ season: '2026', round: 1, slot: 1 }, SLOT_ENTRIES), 7037)
+  assert.equal(findExactSlotValue({ season: '2026', round: 1, slot: 9 }, SLOT_ENTRIES), 2744)
+  // Slot 10 must zero-pad to "1.10" (not "1.1").
+  assert.equal(findExactSlotValue({ season: '2026', round: 1, slot: 10 }, SLOT_ENTRIES), 2579)
+})
+
+test('findExactSlotValue: unknown slot or no slot entry falls back to the round median', () => {
+  // No slot → round median of the "2026 1st" match.
+  assert.equal(findExactSlotValue({ season: '2026', round: 1, slot: null }, SLOT_ENTRIES), 3194)
+  // Future season has only a round-level entry, no slot entry → round median.
+  assert.equal(findExactSlotValue({ season: '2027', round: 1, slot: 5 }, SLOT_ENTRIES), 2974)
+})
+
+const DRAFT_ROSTERS = [
+  { roster_id: 6, owner_id: 'ownerA' },
+  { roster_id: 3, owner_id: 'ownerB' },
+]
+
+test('buildDraftSlots: derives roster → draft position from draft_order in pre_draft', () => {
+  // draft_order maps user_id → position; resolve through owner_id.
+  const draft = { season: '2026', type: 'linear', draft_order: { ownerA: 6, ownerB: 9 } }
+  const slots = buildDraftSlots(draft, DRAFT_ROSTERS)
+  assert.equal(slots[6], 6)
+  assert.equal(slots[3], 9)
+})
+
+test('buildDraftSlots: prefers slot_to_roster_id once Sleeper has built the board', () => {
+  const draft = { season: '2026', slot_to_roster_id: { 1: 6, 2: 3 }, draft_order: { ownerA: 99 } }
+  const slots = buildDraftSlots(draft, DRAFT_ROSTERS)
+  assert.equal(slots[6], 1) // from slot_to_roster_id, not the stale draft_order
+  assert.equal(slots[3], 2)
+})
+
+test('buildDraftSlots: no draft or no order → null (picks fall back to round median)', () => {
+  assert.equal(buildDraftSlots(null, DRAFT_ROSTERS), null)
+  assert.equal(buildDraftSlots({ season: '2026' }, DRAFT_ROSTERS), null)
+})
+
+test('slotForRound: linear keeps the same slot every round; snake reverses even rounds', () => {
+  assert.equal(slotForRound(9, 1, 'linear', 10), 9)
+  assert.equal(slotForRound(9, 2, 'linear', 10), 9)
+  assert.equal(slotForRound(9, 1, 'snake', 10), 9)   // odd round unchanged
+  assert.equal(slotForRound(9, 2, 'snake', 10), 2)   // even round: 10 + 1 - 9
+  assert.equal(slotForRound(null, 1, 'linear', 10), null)
 })
 
 test('computePickCapitalScore: year weights 3×/2×/1× for 2026/2027/2028 (Feature 2 pick capital score)', () => {

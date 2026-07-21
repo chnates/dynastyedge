@@ -26,7 +26,14 @@ function loadValues(force = false) {
 
         data.forEach(entry => {
           const sid = entry.player?.sleeperId
-          if (sid) {
+          // Real players carry a numeric Sleeper id. FantasyCalc now also
+          // stamps its draft-pick entries with synthetic non-numeric ids
+          // ("FP_2026_1" round-level, "DP_0_8" slot-level) — before, picks had
+          // no id at all. Classify by id SHAPE, not mere presence: numeric →
+          // player, anything else (or none) → pick. Without this every pick
+          // lands in playerMap under a key no Sleeper roster references, leaving
+          // pickEntries empty so every pick prices at 0.
+          if (sid != null && /^\d+$/.test(String(sid))) {
             playerMap[String(sid)] = {
               name: entry.player.name,
               position: entry.player.position,
