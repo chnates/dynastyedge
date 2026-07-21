@@ -139,6 +139,14 @@ export default function PlayerSearchSheet({ onClose }) {
         // The visual viewport reaches under the status bar in standalone mode;
         // pad the top by the safe-area inset (+ a small gap) so a long list
         // caps below the notch instead of sliding the header off-screen.
+        //
+        // Unlike the Trade Analyzer add sheet, this only needs the safe-area
+        // inset — NOT the app header's height. This sheet is mounted at the
+        // shell level (App.jsx, a sibling of <header>), so its z-50 shares the
+        // root stacking context with the header's z-30 and paints ABOVE it —
+        // a deliberate full-screen search takeover, never covered. Don't copy
+        // the header-height padding from TradeBuilder here: it would leave a
+        // dead gap of dimmed backdrop at the top and break the takeover.
         paddingTop: 'calc(env(safe-area-inset-top) + 8px)',
       }}
     >

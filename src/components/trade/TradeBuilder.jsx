@@ -265,10 +265,12 @@ function AddAssetSheet({
       style={{
         top: vp.offsetTop,
         height: vp.height,
-        // The visual viewport reaches under the status bar in standalone mode;
-        // pad the top by the safe-area inset (+ a small gap) so a long list
-        // caps below the notch instead of sliding the header off-screen.
-        paddingTop: 'calc(env(safe-area-inset-top) + 8px)',
+        // The fixed app header (z-30, 3rem tall over the safe-area inset) lives
+        // in a higher stacking context than this sheet, so it paints on top of
+        // anything the sheet pushes up behind it. Pad the top past the header
+        // (its height + inset + a small gap) so a long list caps just below the
+        // header instead of sliding its own title/Done button under it.
+        paddingTop: 'calc(3rem + env(safe-area-inset-top) + 8px)',
       }}
     >
       <div ref={sheetRef} className="w-full bg-bg-secondary dark:bg-bg-secondary rounded-t-2xl border-t border-border-default dark:border-border-default flex flex-col max-h-full min-h-0">
