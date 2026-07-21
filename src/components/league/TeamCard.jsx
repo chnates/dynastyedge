@@ -3,7 +3,7 @@ import { useLeagueContext } from '../../context/LeagueContext'
 import { getPositionalStrength } from '../../utils/rosterAnalysis'
 import { TIER_TEXT } from '../../utils/tierColors'
 import { POSITIONS, PICK_YEARS } from '../../constants'
-import { POS_TEXT, POS_BAR } from '../../utils/positionColors'
+import { POS_TEXT, POS_BAR, POS_BAR_DIM } from '../../utils/positionColors'
 import { ROUND_CLASSES, ROUND_TEXT, ROUND_LABELS } from '../../utils/roundColors'
 import { rankClass } from '../../utils/rankColors'
 import TeamAvatar from '../shared/TeamAvatar'
@@ -221,7 +221,7 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
           {(() => {
             const posTrend = getPositionalTrend(roster)
             return (
-              <div className="flex gap-1.5 mb-2.5">
+              <div className="flex gap-2.5 mb-2.5">
                 {POSITIONS.map(pos => {
                   const strength = getPositionalStrength(roster)
                   const avg = leagueAverages?.[pos] ?? 1
@@ -235,17 +235,19 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
                       ? (isMyTeam ? 'text-warning' : 'text-danger')
                       : 'text-text-tertiary'
                   return (
-                    <div key={pos} className="flex flex-col items-center gap-0.5">
-                      <div className="h-1.5 w-8 rounded-full bg-border-default dark:bg-border-default overflow-hidden">
+                    <div key={pos} className="flex flex-col items-center gap-1">
+                      <div className="relative h-2.5 w-12 rounded-full bg-border-default dark:bg-border-default overflow-hidden">
                         <div
-                          className={`h-full rounded-full ${above ? POS_BAR[pos] : 'bg-text-tertiary dark:bg-text-tertiary'}`}
+                          className={`h-full rounded-full ${above ? POS_BAR[pos] : POS_BAR_DIM[pos]}`}
                           style={{ width: `${fillPct}%` }}
                         />
+                        {/* league-average marker — the 50% midpoint of the track */}
+                        <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-black/40 dark:bg-white/50" />
                       </div>
-                      <span className={`font-body text-[9px] font-semibold uppercase tracking-wide ${above ? POS_TEXT[pos] : 'text-text-tertiary dark:text-text-tertiary'}`}>
+                      <span className={`font-body text-[10px] font-semibold uppercase tracking-wide ${above ? POS_TEXT[pos] : 'text-text-tertiary dark:text-text-tertiary'}`}>
                         {pos}
                       </span>
-                      <span className={`font-body text-[8px] leading-none ${trendColor}`}>
+                      <span className={`font-body text-[10px] leading-none ${trendColor}`}>
                         {arrow}
                       </span>
                     </div>
