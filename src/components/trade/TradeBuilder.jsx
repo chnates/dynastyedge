@@ -265,15 +265,22 @@ function AddAssetSheet({
       style={{
         top: vp.offsetTop,
         height: vp.height,
-        // The fixed app header (z-30, 3rem tall over the safe-area inset) lives
-        // in a higher stacking context than this sheet, so it paints on top of
-        // anything the sheet pushes up behind it. Pad the top past the header
-        // (its height + inset + a small gap) so a long list caps just below the
-        // header instead of sliding its own title/Done button under it.
-        paddingTop: 'calc(3rem + env(safe-area-inset-top) + 8px)',
       }}
     >
-      <div ref={sheetRef} className="w-full bg-bg-secondary dark:bg-bg-secondary rounded-t-2xl border-t border-border-default dark:border-border-default flex flex-col max-h-full min-h-0">
+      {/* The fixed app header (z-30, 3rem tall over the safe-area inset) lives in
+          a higher stacking context than this sheet, so it paints on top of
+          anything the sheet pushes up behind it. Cap the panel's own height
+          (viewport − header − 8px gap) so a long list caps just below the header
+          instead of sliding its title/Done button under it. Padding the overlay
+          can't do this: the panel is bottom-anchored (items-end) with a
+          percentage max-height, which WebKit resolves against the full height —
+          so it overflows upward past any top padding. An explicit height cap is
+          the only thing that holds it down. */}
+      <div
+        ref={sheetRef}
+        className="w-full bg-bg-secondary dark:bg-bg-secondary rounded-t-2xl border-t border-border-default dark:border-border-default flex flex-col min-h-0"
+        style={{ maxHeight: `calc(${vp.height}px - 3rem - env(safe-area-inset-top) - 8px)` }}
+      >
 
         {/* Handle bar */}
         <div className="flex justify-center pt-3 pb-1 shrink-0">
