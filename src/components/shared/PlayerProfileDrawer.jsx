@@ -340,9 +340,13 @@ export default function PlayerProfileDrawer({
                 {roomRows.map((r, i) => (
                   <div
                     key={r.sleeperId}
-                    className={`flex items-center gap-2 py-1.5 ${i < roomRows.length - 1 ? 'border-b border-border-default' : ''}`}
+                    className={cn(
+                      'flex items-center gap-2 py-1.5 -mx-1 px-1',
+                      i < roomRows.length - 1 && 'border-b border-border-default',
+                      r.isViewed && 'bg-accent/10',
+                    )}
                   >
-                    <span className="font-mono text-[10px] text-text-tertiary tabular-nums w-4 shrink-0">
+                    <span className={`font-mono text-[10px] tabular-nums w-4 shrink-0 ${r.isViewed ? 'text-accent' : 'text-text-tertiary'}`}>
                       {r.roomIndex}
                     </span>
                     <p className={`font-body text-xs truncate flex-1 min-w-0 ${r.isViewed ? 'font-semibold text-accent' : 'text-text-primary'}`}>
