@@ -228,7 +228,7 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
                   const fillPct = Math.min(100, Math.round((strength[pos] / (avg * 2)) * 100))
                   const above = strength[pos] >= avg
                   const trend = posTrend[pos]
-                  const arrow = trend > 50 ? '↑' : trend < -50 ? '↓' : '→'
+                  const arrow = trend > 50 ? '↗' : trend < -50 ? '↘' : '→'
                   const trendColor = trend > 50
                     ? 'text-success'
                     : trend < -50

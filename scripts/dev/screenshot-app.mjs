@@ -44,6 +44,8 @@
 //
 // Flags: --player NAME | --route PATH | --out PATH | --width N | --height N
 //        --theme dark|light | --full | --url BASE | --wait MS
+// --route accepts any form (/league, league, #/league) — the app is a
+// HashRouter, so it's normalized into the URL hash (see routeSlug below).
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { execFileSync } from 'node:child_process'
@@ -65,6 +67,11 @@ function arg(name, def = null) {
 }
 const player = arg('player')
 const route  = arg('route')
+// The app is a HashRouter — routes live in the URL hash, not the path. A bare
+// path (--route /league) hits Vite's SPA fallback and the router falls back to
+// /edge, so any route must be normalized into the hash. Accept every form
+// (/league, league, #/league) and reduce to a clean slug used below.
+const routeSlug = typeof route === 'string' ? route.replace(/^#?\/*/, '') : null
 const width  = Number(arg('width', 390))
 const height = Number(arg('height', 1600))
 const theme  = arg('theme', 'dark')
@@ -75,7 +82,7 @@ let out      = arg('out')
 if (!out) {
   const dir = join(REPO, '.screenshots')
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-  out = join(dir, `${player ? player.replace(/\s+/g, '-').toLowerCase() : (route || 'app').replace(/\W+/g, '-')}.png`)
+  out = join(dir, `${player ? player.replace(/\s+/g, '-').toLowerCase() : (routeSlug || 'app').replace(/\W+/g, '-')}.png`)
 }
 out = isAbsolute(out) ? out : join(process.cwd(), out)
 
@@ -142,7 +149,8 @@ await ctx.route('**/*', async r => {
 const page = await ctx.newPage()
 page.on('console', m => { if (m.type() === 'error') console.log('PAGE ERR:', m.text().slice(0, 160)) })
 
-const target = route ? new URL(route.replace(/^\//, ''), base).href : base
+// HashRouter: drop the route into the hash (#/league), never the path.
+const target = routeSlug ? new URL(`#/${routeSlug}`, base).href : base
 await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 60000 })
 
 // The app shell's search icon only appears once league data has loaded.
