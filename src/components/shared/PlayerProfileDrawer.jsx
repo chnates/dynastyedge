@@ -10,7 +10,7 @@ import { useLeagueContext } from '../../context/LeagueContext'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { getTeamName } from '../../hooks/useLeague'
 import { POS_TEXT } from '../../utils/positionColors'
-import { Sheet, IconButton, Button, TrendArrow, cn } from '../ui'
+import { Sheet, IconButton, Button, Badge, Card, TrendArrow, cn } from '../ui'
 
 // ── Opportunity grade ────────────────────────────────────────────────────────
 
@@ -206,6 +206,19 @@ export default function PlayerProfileDrawer({
     getComparables(player, resolvedPlayerMap),
   [player, resolvedPlayerMap])
 
+  // Depth-chart room capped for mobile, but the viewed player is always shown
+  // (even if deeper than the cap) with their true room index preserved.
+  const roomRows = useMemo(() => {
+    const room = intel.depthChart?.room ?? []
+    const rows = room.map((r, i) => ({ ...r, roomIndex: i + 1 }))
+    const CAP = 6
+    if (rows.length <= CAP) return rows
+    const top = rows.slice(0, CAP)
+    if (top.some(r => r.isViewed)) return top
+    const viewed = rows.find(r => r.isViewed)
+    return viewed ? [...rows.slice(0, CAP - 1), viewed] : top
+  }, [intel.depthChart])
+
   const myRankings = csvColumns
     .map(col => ({ name: col.name, rank: col.data?.[player.name?.toLowerCase()] ?? null }))
     .filter(r => r.rank != null)
@@ -296,29 +309,70 @@ export default function PlayerProfileDrawer({
                 </div>
               </div>
             )}
-            {(intel.depthChart || peak) && (
-              <div className="mt-2.5 pt-2.5 border-t border-border-default flex flex-col gap-1">
-                {intel.depthChart && (
-                  <p className="font-body text-xs text-text-secondary">
-                    Depth chart:{' '}
-                    <span className="font-semibold text-text-primary">
-                      {intel.depthChart.slot}{intel.depthChart.order ?? ''}
-                    </span>
-                    {player.team ? ` · ${player.team}` : ''}
-                  </p>
-                )}
-                {peak && (
-                  <p className={`font-body text-xs ${
-                    peak.phase === 'ascending' ? 'text-success'
-                      : peak.phase === 'peak' ? 'text-warning'
-                      : 'text-danger'
-                  }`}>
-                    {peak.label}
-                  </p>
-                )}
+            {peak && (
+              <div className="mt-2.5 pt-2.5 border-t border-border-default">
+                <p className={`font-body text-xs ${
+                  peak.phase === 'ascending' ? 'text-success'
+                    : peak.phase === 'peak' ? 'text-warning'
+                    : 'text-danger'
+                }`}>
+                  {peak.label}
+                </p>
               </div>
             )}
           </div>
+
+          {/* Depth Chart — NFL position room, viewed player highlighted.
+              Best-effort: hides entirely when Sleeper has no depth order. */}
+          {roomRows.length > 0 && (
+            <Card padding="sm">
+              <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
+                Depth Chart
+              </p>
+              <div className="flex items-center gap-2 mb-3">
+                <Badge tone="accent" soft>{intel.depthChart.role}</Badge>
+                <span className="font-mono text-xs text-text-secondary tabular-nums">
+                  {intel.depthChart.roomRank ? `${intel.position}${intel.depthChart.roomRank}` : intel.position}
+                  {player.team ? ` · ${player.team}` : ''}
+                </span>
+              </div>
+              <div className="flex flex-col gap-0">
+                {roomRows.map((r, i) => (
+                  <div
+                    key={r.sleeperId}
+                    className={cn(
+                      'relative flex items-center gap-2 py-1.5 -mx-3 px-3',
+                      i < roomRows.length - 1 && 'border-b border-border-default',
+                      r.isViewed && 'bg-accent/15',
+                    )}
+                  >
+                    {r.isViewed && (
+                      <span className="absolute left-0 top-0 bottom-0 w-1 bg-accent" aria-hidden="true" />
+                    )}
+                    <span className={`font-mono text-[10px] tabular-nums w-4 shrink-0 ${r.isViewed ? 'text-text-primary font-semibold' : 'text-text-tertiary'}`}>
+                      {r.roomIndex}
+                    </span>
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className={`font-body text-xs truncate ${r.isViewed ? 'font-bold text-text-primary' : 'text-text-primary'}`}>
+                        {r.name}
+                      </span>
+                      {r.isViewed && <Badge tone="accent" soft className="shrink-0">Viewing</Badge>}
+                    </div>
+                    {r.slot && (
+                      <span className={`font-mono text-[10px] uppercase tracking-wide shrink-0 ${POS_TEXT[intel.position] ?? 'text-text-tertiary'}`}>
+                        {r.slot}
+                      </span>
+                    )}
+                    <span className="w-6 text-right shrink-0">
+                      {r.isStarter
+                        ? <span className="font-mono text-[9px] font-semibold uppercase tracking-wider text-accent">ST</span>
+                        : <span className="font-mono text-[10px] text-text-tertiary">·</span>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {/* Production — recent games in-season, last-season summary otherwise */}
           {(intel.loading || intel.seasonSummary || intel.recentGames.some(g => g.pts != null)) && (

@@ -185,6 +185,54 @@ export function relativeTime(iso) {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
+// ── Depth chart room ─────────────────────────────────────────────────────────
+// Turn Sleeper's raw depth_chart_position/order into a readable role + the
+// player's NFL position room (teammates at the same position, ranked). Pure
+// over the already-cached player DB — no fetch. WRs split across LWR/RWR/SWR
+// slots, each with its own order, so the room sorts by (order, slot): the
+// genuine order-1 starters group at the top and the overall room rank
+// ("WR4") reads correctly. Needs a real order to say starter vs bench, so
+// without one the whole section is skipped (same best-effort contract as the
+// other intel sections — the card just hides).
+
+function depthRole(order) {
+  if (order === 1) return 'Starter'
+  if (order === 2) return 'Rotational'
+  return 'Reserve'
+}
+
+function buildDepthRoom(db, sleeperId, meta) {
+  const { team, position } = meta
+  const order = meta.depth_chart_order
+  if (!db || !team || !position || order == null) return null
+  if (!['QB', 'RB', 'WR', 'TE'].includes(position)) return null
+
+  const id = String(sleeperId)
+  const room = Object.entries(db)
+    .filter(([, p]) =>
+      p.team === team && p.position === position && p.depth_chart_order != null
+    )
+    .map(([pid, p]) => ({
+      sleeperId: pid,
+      name: p.name,
+      slot: p.depth_chart_position ?? null,
+      order: p.depth_chart_order,
+      isStarter: p.depth_chart_order === 1,
+      isViewed: pid === id,
+    }))
+    .sort((a, b) => a.order - b.order || (a.slot ?? '').localeCompare(b.slot ?? ''))
+
+  const roomRank = room.findIndex(r => r.isViewed) + 1
+  return {
+    slot: meta.depth_chart_position ?? null,
+    order,
+    role: depthRole(order),
+    roomRank: roomRank || null,
+    roomSize: room.length,
+    room,
+  }
+}
+
 // ── Production helpers ───────────────────────────────────────────────────────
 
 export const TOUCH_LABEL = { QB: 'att', RB: 'tch', WR: 'tgt', TE: 'tgt' }
@@ -260,9 +308,7 @@ export async function getPlayerIntel(sleeperId, nflState) {
     seasonSummary,                 // { year, pts, gp, ppg, posRank } | null
     recentGames,                   // [{ week, pts, touches }] — in-season only
     news,                          // [{ headline, story, published }]
-    depthChart: meta.depth_chart_position
-      ? { slot: meta.depth_chart_position, order: meta.depth_chart_order ?? null }
-      : null,
+    depthChart: buildDepthRoom(db, sleeperId, meta),
     newsUpdated: meta.news_updated ?? null,
   }
 }
