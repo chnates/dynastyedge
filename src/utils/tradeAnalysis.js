@@ -199,16 +199,23 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
 
   // Draft-grade confidence nudge — when I'm acquiring picks, my rookie-draft
   // hindsight record adjusts confidence in that capital (never the raw value).
-  // Gated at ≥3 graded picks so a one-hit or one-miss history can't swing it.
+  // Keyed to HIT RATE (the share of my rookie picks now worth starting-caliber
+  // value), not slot-delta: at this league's sample (~7 graded picks per owner)
+  // avgDelta is noise-dominated — it flips sign year-to-year for most owners and
+  // even grades a 9-of-11-hit drafter "weak" for taking good players at their
+  // slot — while hit rate is both steadier and closer to what "will this pick
+  // capital pan out?" actually asks. Gated at ≥5 graded picks; still a small
+  // sample, so the copy states the record as fact, not durable skill.
   let draftNote = null
   let draftTone = null
-  if (myDraftGrade && getPicks.length > 0 && (myDraftGrade.count ?? 0) >= 3) {
-    const { count, hits, avgDelta } = myDraftGrade
-    if (avgDelta >= 2) {
-      draftNote = `Your draft record backs this: ${hits} of ${count} rookie picks hit and you beat your slot by ${avgDelta} spots on average — draft capital projects above market in your hands.`
+  if (myDraftGrade && getPicks.length > 0 && (myDraftGrade.count ?? 0) >= 5) {
+    const { count, hits } = myDraftGrade
+    const hitRate = count > 0 ? hits / count : 0
+    if (hitRate >= 0.7) {
+      draftNote = `Your recent rookie picks have hit — ${hits} of ${count} are already worth starting-caliber dynasty value. This pick capital has tended to pan out for you.`
       draftTone = 'success'
-    } else if (avgDelta <= -2) {
-      draftNote = `Caution on the pick: your rookie picks have lagged their slot by ${Math.abs(avgDelta)} spots on average — value it at market, not on upside.`
+    } else if (hitRate <= 0.35) {
+      draftNote = `Caution on the pick: only ${hits} of ${count} of your recent rookie picks have hit — value this capital at market, not on upside.`
       draftTone = 'warning'
     }
   }

@@ -529,11 +529,18 @@ Are you acquiring the right type of asset for where Nix Cage is now?
 - **Draft-grade confidence nudge** (`analyzeTrade`'s optional `myDraftGrade`,
   from my Manager Scouting report card — `useManagerProfiles().my.draft`):
   when I'm **acquiring picks**, my rookie-draft hindsight record adjusts
-  confidence in that capital (never the raw value). A strong drafter (avg slot
-  beat ≥ +2 across ≥ 3 graded picks) gets "draft capital projects above market
-  in your hands"; a weak one (≤ −2) gets "value it at market, not on upside".
-  **Gated at ≥ 3 graded picks** so a one-hit/one-miss history can't swing it;
-  best-effort (renders only once the lazy league-history fetch lands).
+  confidence in that capital (never the raw value). Keyed to **hit rate** — the
+  share of my rookie picks now worth starting-caliber dynasty value (≥ 1000):
+  ≥ 70% hits gets "your recent rookie picks have hit … this pick capital has
+  tended to pan out for you"; ≤ 35% gets "value this capital at market, not on
+  upside". **Gated at ≥ 5 graded picks**; the copy states the record as fact,
+  not durable skill, because the sample is small. (Hit rate replaced the earlier
+  avg-slot-beat trigger: on this league's ~7-picks-per-owner sample, slot-delta
+  is noise — it flips sign year-to-year for most owners and mislabels a
+  9-of-11-hit drafter "weak" for taking good players at their slot — while hit
+  rate is steadier and closer to what "will this pick capital pan out?" asks.
+  See `docs/analysis/trajectory-calibration-2026-07.md`, Item 3.) Best-effort
+  (renders only once the lazy league-history fetch lands).
 
 #### Verdict
 
