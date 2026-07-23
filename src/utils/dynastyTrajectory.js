@@ -27,13 +27,51 @@ export const TRAJECTORY_HORIZON = 3 // seasons projected beyond the current one
 const AGE_MIN = 21
 const AGE_MAX = 39
 const KERNEL_BW = 2.5      // smoothing bandwidth (years) for the market curve
-const PRIOR_WEIGHT = 4     // pseudo-count pulling sparse bins toward the prior
+// Pseudo-count pulling sparse bins toward the prior. Lowered 4→3 (2026-07): the
+// 21–31 core is well-sampled (kernel mass 12–110), where a prior "worth 4
+// players" over-weighted the shape and visibly inflated the young-QB curve
+// (ages 21–23, ~+13–21% above the empirical median) — flattening the market's
+// real young-QB ascent, the crown-jewel Superflex asset. At 3 the young-QB
+// distortion roughly halves while the thin tails (35+, mass 1–4) stay
+// majority-prior, so the old-age survivorship correction the prior exists for is
+// preserved; verified no new tail non-monotonicity, no peak-bin prior-dominance,
+// and no change in clamp-binding rate. A conservative step, not a chase of the
+// unregularized curve — the "right" weight can't be certified until the monthly
+// value archive (snapshot-values-archive.mjs) supports a real multi-year
+// back-test. See docs/analysis/trajectory-calibration-2026-07.md (Item 1 / P3).
+const PRIOR_WEIGHT = 3
 const ROOKIE_ENTRY_AGE = 22
 
 // A single season can't plausibly swing one asset's value beyond these bounds;
 // clamps keep a thin age bin from producing a wild projection.
 const YEAR_RATIO_FLOOR = 0.55
 const YEAR_RATIO_CEIL = 1.18
+
+// Team-level direction cuts (getTrajectoryRead / getTrajectoryVerdict). These
+// classify a whole roster's now→+3 value curve, NOT a single player — and a
+// roster total behaves very differently from a player. Aging decliners and
+// pre-peak risers largely cancel in the sum, and every pick matures UPWARD, so
+// a real 10-team league's 3-yr team totals compress into a narrow, slightly
+// positive band (measured range on this league: −1.9% … +10.2%). The old
+// absolute gates (ascending on peak-year≥+2 OR >+5%; declining on peak-now AND
+// <−8%) were set for a wider swing than roster aggregation ever produces: the
+// −8% floor was unreachable so "selling vets" never fired, and the peak-year≥+2
+// clause fired on nearly every roster (picks alone push the peak to +3), so
+// "building" over-fired. These cuts are keyed to the aggregation instead, on the
+// NET change across the whole horizon (not on when the interim peak lands — pick
+// maturation routinely pushes a roster's peak to +1/+2 even when its core is
+// aging, so the old peak-is-now requirement excluded genuinely-eroding teams):
+//   • DECLINING = the total ends the horizon below today past a small deadband
+//     → the window is genuinely closing (a sell-vets signal).
+//   • ASCENDING = growth clears the structural pick-maturation drift (~+2–3%
+//     that lifts every roster) by a clear margin → genuinely building.
+//   • else BALANCED.
+// Asymmetric (−1% vs +5%) on purpose: picks bias every roster's drift positive,
+// so a NET-negative total after that uplift is a stronger aging signal than an
+// equal-magnitude gain. (seriesDirection's ±5% is unchanged — it classifies
+// individual players, where the symmetric band tests calibrated.)
+const TEAM_DECLINE_CUT = -0.01
+const TEAM_ASCEND_CUT = 0.05
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 
@@ -220,14 +258,14 @@ export function getTrajectoryVerdict(trajectory) {
   const peakSeason = seasons[peakIdx]
   const lastSeason = seasons[seasons.length - 1]
 
-  if (peakIdx === 0 && endPct < -0.08) {
+  if (endPct < TEAM_DECLINE_CUT) {
     return {
       tone: 'declining',
       peakSeason,
-      headline: `Your roster value peaks now and slides through ${lastSeason}. Your window is open — spend future picks on win-now help and sell aging veterans before their value drops.`,
+      headline: `Your roster value is set to slide through ${lastSeason}. Your window is open — spend future picks on win-now help and sell aging veterans before their value drops.`,
     }
   }
-  if (peakIdx >= 2 || endPct > 0.05) {
+  if (endPct > TEAM_ASCEND_CUT) {
     return {
       tone: 'ascending',
       peakSeason,
@@ -256,10 +294,10 @@ export function getTrajectoryRead(trajectory) {
   const lastSeason = seasons[seasons.length - 1]
   const peakSeason = seasons[peakIdx]
 
-  if (peakIdx === 0 && endPct < -0.08) {
-    return { direction: 'declining', pct: endPct, peakSeason, lastSeason, label: `Value peaks now, slides through ${lastSeason} — selling vets` }
+  if (endPct < TEAM_DECLINE_CUT) {
+    return { direction: 'declining', pct: endPct, peakSeason, lastSeason, label: `Value slides through ${lastSeason} — selling vets` }
   }
-  if (peakIdx >= 2 || endPct > 0.05) {
+  if (endPct > TEAM_ASCEND_CUT) {
     return { direction: 'ascending', pct: endPct, peakSeason, lastSeason, label: `Value climbing toward ${peakSeason} — building` }
   }
   return { direction: 'stable', pct: endPct, peakSeason, lastSeason, label: `Value holds near ${peakSeason} — balanced window` }

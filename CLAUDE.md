@@ -237,6 +237,21 @@ architecture as the news pipeline:
   fails, the publish step carries the previous archive forward from the
   branch via git — and aborts the publish entirely if it can't, so the
   archive is never erased.
+- The same workflow also runs `scripts/snapshot-values-archive.mjs`
+  (`continue-on-error`), which keeps a **permanent MONTHLY archive** of values
+  in `values-archive.json` on the same branch — one column per UTC calendar
+  month (same-month re-runs replace that month's column), top 500 players,
+  columns never pruned by time (rows age out only after `INACTIVE_MONTHS = 24`
+  all-null, which bounds the player dimension). Format mirrors
+  `values-history.json` but keyed by `months`. It exists so the multi-*season*
+  Dynasty Trajectory model can eventually be back-tested against realized value
+  (the rolling `values-history.json` prunes past 90 days, so it can't): the
+  first 1-year test becomes possible ~a year after this ships. **The app never
+  fetches it** — it is read only by offline analysis, so it costs the phone
+  nothing (no request, no bundle weight); size grows ~2 KB/month (~26 KB/year,
+  ~220 KB/decade). Same publish contract as the trade archive: the previous
+  file carries forward from the branch on any miss, never force-pushed away.
+  See `docs/analysis/trajectory-calibration-2026-07.md`.
 - **Keepalive step** (first step, before the snapshots, `continue-on-error`):
   GitHub disables scheduled workflows after ~60 days without repo activity,
   and the pipelines' own data-branch force-pushes don't reset that clock —
@@ -529,11 +544,18 @@ Are you acquiring the right type of asset for where Nix Cage is now?
 - **Draft-grade confidence nudge** (`analyzeTrade`'s optional `myDraftGrade`,
   from my Manager Scouting report card — `useManagerProfiles().my.draft`):
   when I'm **acquiring picks**, my rookie-draft hindsight record adjusts
-  confidence in that capital (never the raw value). A strong drafter (avg slot
-  beat ≥ +2 across ≥ 3 graded picks) gets "draft capital projects above market
-  in your hands"; a weak one (≤ −2) gets "value it at market, not on upside".
-  **Gated at ≥ 3 graded picks** so a one-hit/one-miss history can't swing it;
-  best-effort (renders only once the lazy league-history fetch lands).
+  confidence in that capital (never the raw value). Keyed to **hit rate** — the
+  share of my rookie picks now worth starting-caliber dynasty value (≥ 1000):
+  ≥ 70% hits gets "your recent rookie picks have hit … this pick capital has
+  tended to pan out for you"; ≤ 35% gets "value this capital at market, not on
+  upside". **Gated at ≥ 5 graded picks**; the copy states the record as fact,
+  not durable skill, because the sample is small. (Hit rate replaced the earlier
+  avg-slot-beat trigger: on this league's ~7-picks-per-owner sample, slot-delta
+  is noise — it flips sign year-to-year for most owners and mislabels a
+  9-of-11-hit drafter "weak" for taking good players at their slot — while hit
+  rate is steadier and closer to what "will this pick capital pan out?" asks.
+  See `docs/analysis/trajectory-calibration-2026-07.md`, Item 3.) Best-effort
+  (renders only once the lazy league-history fetch lands).
 
 #### Verdict
 
@@ -1213,9 +1235,9 @@ that opens `/roster/trajectory/:rosterId`, so you can scout an opponent's window
 
 **Consumers (all via `getTrajectoryRead`, zero extra fetch):**
 - **Trade Partner Finder:** each opponent card carries a one-line trajectory
-  read — "Value peaks now, slides through {year} — selling vets" / "Value
-  climbing toward {year} — building" / "Value holds near {year} — balanced
-  window". Distinct from the this-season playoff-odds buyer/seller flag.
+  read — "Value slides through {year} — selling vets" / "Value climbing toward
+  {year} — building" / "Value holds near {year} — balanced window". Distinct
+  from the this-season playoff-odds buyer/seller flag.
 - **Trade Analyzer Layer 3** (`analyzeTrade`'s optional `opponentTrajectoryRead`):
   when acquiring the partner's players, a declining team reads as a buy window,
   an ascending one as a caution (see Feature 3).
@@ -1229,9 +1251,12 @@ that opens `/roster/trajectory/:rosterId`, so you can scout an opponent's window
   learn what the dynasty market pays at every age *straight from today's
   FantasyCalc pool*: a Gaussian-kernel-smoothed (bandwidth 2.5y) weighted
   *median* of value by age, blended toward a `peakWindows.js`-shaped prior
-  (pseudo-count 4) so thin age bins stay sane. No hardcoded decay rates — it
+  (pseudo-count 3) so thin age bins stay sane. No hardcoded decay rates — it
   recalibrates every load as the market moves, matching the "never hardcode
-  values" rule.
+  values" rule. (The pseudo-count was 4 before 2026-07; lowered to 3 because the
+  well-sampled 21–31 core over-weighted the shape prior and inflated the young-QB
+  curve, flattening its real ascent — the thin 35+ tails still lean
+  majority-prior. See `docs/analysis/trajectory-calibration-2026-07.md`, P3.)
 - **Projection** — a player's value `n` seasons out is
   `currentValue × curve(age + n) / curve(age)`, clamped per year (0.55×–1.18×).
   The talent residual cancels, so a stud and a scrub ride the same proportional
@@ -1244,9 +1269,21 @@ that opens `/roster/trajectory/:rosterId`, so you can scout an opponent's window
   into the +1/+2 outlook.
 - `buildRosterTrajectory` sums player + pick projections into a
   current→+1→+2→+3 team series plus per-position sub-series.
-  `getTrajectoryVerdict` reads the peak year + 3-yr change into a plain-English
-  window call (ascending / balanced / declining); `seriesDirection` and
-  `peakStatusShort` drive the per-position and per-player tags.
+  `getTrajectoryVerdict` and `getTrajectoryRead` read the **net 3-yr change** of
+  that team total into a plain-English window call: **declining** (net change
+  < −1% → "selling vets"), **ascending** (net change > +5% → "building"), else
+  **balanced**. The cuts are keyed to how a *roster total* behaves, not a single
+  player: aging decliners and pre-peak risers largely cancel in the sum and
+  every pick matures upward, so real 3-yr team totals compress into a narrow,
+  slightly-positive band (~−2% … +10% on this league). Hence the asymmetry
+  (−1% vs +5%) — pick maturation lifts every roster ~+2–3%, so a *net-negative*
+  total is a stronger aging signal than an equal-magnitude gain — and hence the
+  classification is on **net** change, not on when the interim peak lands (pick
+  maturation routinely pushes the peak to +1/+2 even for an eroding roster, so
+  an earlier "peak-is-now" gate left "selling vets" unable to fire). The
+  per-player and per-position tags use `seriesDirection` (symmetric ±5%,
+  unchanged — a single player's curve swings far more than a whole roster's) and
+  `peakStatusShort`.
 
 **UI (`components/roster/TrajectoryView.jsx`):**
 - **Window verdict card** (tone-colored edge bar) — "Window peaks {year}" + a
@@ -1814,6 +1851,7 @@ dynastyedge/
 ├── scripts/
 │   ├── fetch-news.mjs          ← multi-source news fetcher (runs in Actions)
 │   ├── snapshot-values.mjs     ← daily FantasyCalc snapshot appender (runs in Actions)
+│   ├── snapshot-values-archive.mjs ← permanent MONTHLY values archive for trajectory back-testing (app never fetches it)
 │   ├── snapshot-trade-values.mjs ← permanent trade-time value archiver (runs in Actions)
 │   └── dev/
 │       └── screenshot-app.mjs  ← headless-Chromium screenshotter for the running app (390px UI verification — see the dynastyedge-visual-capture skill)

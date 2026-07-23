@@ -392,6 +392,15 @@ export default function TrajectoryView() {
               it can't know breakouts, injuries, or trades. Read the <em>shape</em>: is your window
               opening or closing, and how does it track against the league-average line?
             </p>
+            <p className="font-body text-xs text-text-secondary leading-relaxed">
+              <span className="font-semibold text-text-primary">How much to trust it:</span> the curve
+              matches what the market pays by age <em>today</em>, but its multi-year projections aren't
+              verified against reality yet — that needs several seasons of value history, which this app
+              only recently began banking (the first real check lands around {trajectory.seasons[1]}). And
+              on short horizons it has no proven edge: checked against the last several weeks of actual
+              value moves, its up/down calls were no better than a coin flip — six weeks of news moves
+              value far more than aging does. Trust the <em>direction and shape</em>, not the exact numbers.
+            </p>
           </div>
         )}
       </div>

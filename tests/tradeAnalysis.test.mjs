@@ -301,24 +301,33 @@ test('Layer 3: acquiring a declining player reads as a win-now add', () => {
   assert.ok(a.myTrajectoryNote && /Sutton/.test(a.myTrajectoryNote), 'buying a faller warns the price may not hold')
 })
 
-test('Layer 3: draft-grade nudge fires only when acquiring picks with a large-enough sample', () => {
+test('Layer 3: draft-grade nudge keys on HIT RATE, only when acquiring picks with a large-enough sample', () => {
   const { myRoster, opponentRoster, allRosters } = makeLeague()
   const pick = { type: 'pick', value: 2700, id: 'pk' }
   const give = [{ type: 'player', sleeperId: 'x', name: 'X', position: 'RB', value: 2700 }]
 
+  // ≥70% hit rate → success. (avgDelta is intentionally absent: the trigger is
+  // hit rate now, not slot-delta.)
   const strong = analyzeTrade(give, [pick], myRoster, opponentRoster, allRosters,
-    { myDraftGrade: { count: 5, hits: 3, avgDelta: 3 } })
-  assert.ok(strong.draftNote && strong.draftTone === 'success', 'a strong drafter gets a confidence boost on the pick')
+    { myDraftGrade: { count: 5, hits: 4 } })
+  assert.ok(strong.draftNote && strong.draftTone === 'success', 'a high hit rate gets a confidence boost on the pick')
 
+  // ≤35% hit rate → warning.
   const weak = analyzeTrade(give, [pick], myRoster, opponentRoster, allRosters,
-    { myDraftGrade: { count: 5, hits: 0, avgDelta: -3 } })
-  assert.ok(weak.draftNote && weak.draftTone === 'warning', 'a weak drafter gets a caution')
+    { myDraftGrade: { count: 6, hits: 1 } })
+  assert.ok(weak.draftNote && weak.draftTone === 'warning', 'a low hit rate gets a caution')
 
+  // Middle hit rate (60%) sits in the deadband → no nudge.
+  const middle = analyzeTrade(give, [pick], myRoster, opponentRoster, allRosters,
+    { myDraftGrade: { count: 5, hits: 3 } })
+  assert.equal(middle.draftNote, null, 'a middling hit rate does not nudge either way')
+
+  // Below the ≥5-pick gate → no nudge even at a perfect hit rate.
   const tiny = analyzeTrade(give, [pick], myRoster, opponentRoster, allRosters,
-    { myDraftGrade: { count: 2, hits: 1, avgDelta: 5 } })
-  assert.equal(tiny.draftNote, null, 'a 2-pick history is too small to nudge')
+    { myDraftGrade: { count: 4, hits: 4 } })
+  assert.equal(tiny.draftNote, null, 'a 4-pick history is too small to nudge')
 
   const noPick = analyzeTrade(give, [{ type: 'player', sleeperId: 'y', name: 'Y', position: 'WR', value: 2700 }],
-    myRoster, opponentRoster, allRosters, { myDraftGrade: { count: 5, hits: 3, avgDelta: 3 } })
+    myRoster, opponentRoster, allRosters, { myDraftGrade: { count: 5, hits: 4 } })
   assert.equal(noPick.draftNote, null, 'no acquired pick → no draft nudge')
 })
