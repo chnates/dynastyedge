@@ -1,5 +1,7 @@
 import { computeLeagueAverages, getPositionalDeltas, assignWinWindowTiers } from './rosterAnalysis'
 import { getDeadlineVerdict } from './playoffOdds'
+import { buildValueLineup } from './lineupBuild'
+import { projectPlayerSeries, seriesDirection } from './dynastyTrajectory'
 import { buildGivabilityContext, assetKeepScore, getDeficitPositions, joinAnd, PROTECT_THRESHOLD } from './recommendations'
 
 const PICK_SUFFIXES = ['', '1st', '2nd', '3rd', '4th']
@@ -9,8 +11,15 @@ function pickLabel(pick) {
   return `${pick.season} ${suffix}`
 }
 
-export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, allRosters, myPlayoffPct = null, opponentTrajectoryRead = null) {
+export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, allRosters, opts = {}) {
   if (!myRoster || !opponentRoster || !allRosters?.length) return null
+
+  const {
+    myPlayoffPct = null,
+    opponentTrajectoryRead = null,
+    curves = null,            // dynasty age curves (from buildAgeCurves) — enables the my-players trajectory lens
+    myDraftGrade = null,      // { count, hits, avgDelta } from my Manager Scouting report card
+  } = opts
 
   const giveTotal = giveAssets.reduce((s, a) => s + (a.value || 0), 0)
   const getTotal  = getAssets.reduce((s, a)  => s + (a.value || 0), 0)
@@ -21,26 +30,61 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
   const valuePct  = Math.round(Math.abs(valueDiff) / maxTotal * 100)
   const valueWinner = valuePct <= 5 ? 'even' : valueDiff > 0 ? 'you' : 'them'
 
-  // Layer 2: Roster fit
+  const getPlayers  = getAssets.filter(a => a.type === 'player')
+  const getPicks    = getAssets.filter(a => a.type === 'pick')
+  const givePlayers = giveAssets.filter(a => a.type === 'player')
+
+  // Layer 2: Roster fit — simulated against the ACTUAL post-trade starting
+  // lineup (optimal by dynasty value), not a bare position-tag match. So an
+  // acquired player only "fills" a need if he'd genuinely start, and shipping a
+  // player only "hurts" if it actually drops that position below league average.
   const leagueAverages = computeLeagueAverages(allRosters)
   const myDeltas = getPositionalDeltas(myRoster, leagueAverages)
 
-  const filledNeeds   = []
+  const giveIds = new Set(givePlayers.map(p => String(p.sleeperId)))
+  const addAsPlayer = a => ({
+    sleeperId: String(a.sleeperId), name: a.name, position: a.position,
+    value: a.value || 0, age: a.age, unranked: a.unranked, isIR: false, isTaxi: false,
+  })
+
+  const beforeLineup = buildValueLineup(myRoster.players)
+  const afterPlayers = [
+    ...myRoster.players.filter(p => !giveIds.has(String(p.sleeperId))),
+    ...getPlayers.map(addAsPlayer),
+  ]
+  const afterLineup = buildValueLineup(afterPlayers)
+  const afterDeltas = getPositionalDeltas({ players: afterPlayers }, leagueAverages)
+
+  // Received players: which actually START in the resulting lineup vs. sit as depth?
+  const startingAcquisitions = getPlayers.filter(p => afterLineup.starterIds.has(String(p.sleeperId)))
+  const benchAcquisitions = getPlayers
+    .filter(p => p.position && !afterLineup.starterIds.has(String(p.sleeperId)))
+    .map(p => ({ name: p.name, position: p.position }))
+
+  // Given players: which were STARTERS in my best pre-trade lineup?
+  const starterDepartures = givePlayers
+    .filter(p => p.position && beforeLineup.starterIds.has(String(p.sleeperId)))
+    .map(p => ({ name: p.name, position: p.position }))
+
+  // A need is filled only by a player who (a) starts post-trade and (b) plays a
+  // position where I'm below league average today.
+  const filledNeeds = []
+  startingAcquisitions.forEach(p => {
+    if (p.position && myDeltas[p.position] < 0 && !filledNeeds.includes(p.position))
+      filledNeeds.push(p.position)
+  })
+
+  // A position is hurt when I ship a player there AND the trade actively drops
+  // that position below league average (afterDeltas < 0 and strictly worse than
+  // before) — so dealing a starter out of a surplus that falls below the line
+  // registers, while shedding a benchwarmer that changes nothing does not.
   const hurtStrengths = []
-
-  getAssets
-    .filter(a => a.type === 'player' && a.position)
-    .forEach(p => {
-      if (myDeltas[p.position] < 0 && !filledNeeds.includes(p.position))
-        filledNeeds.push(p.position)
-    })
-
-  giveAssets
-    .filter(a => a.type === 'player' && a.position)
-    .forEach(p => {
-      if (myDeltas[p.position] < 0 && !hurtStrengths.includes(p.position))
-        hurtStrengths.push(p.position)
-    })
+  givePlayers.forEach(p => {
+    const pos = p.position
+    if (!pos) return
+    if (afterDeltas[pos] < 0 && afterDeltas[pos] < myDeltas[pos] && !hurtStrengths.includes(pos))
+      hurtStrengths.push(pos)
+  })
 
   let fitScore = 0
   if (filledNeeds.length > 0 && hurtStrengths.length === 0)      fitScore =  1
@@ -48,13 +92,27 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
   else if (filledNeeds.length > hurtStrengths.length)            fitScore =  1
   else if (hurtStrengths.length > filledNeeds.length)            fitScore = -1
 
+  // Bench note: acquired players who won't crack the starting lineup are depth,
+  // not the upgrade a position-tag read would imply.
+  let benchNote = null
+  if (benchAcquisitions.length > 0) {
+    const names = joinAnd(benchAcquisitions.map(b => b.name))
+    benchNote = `${names} project as ${benchAcquisitions[0].position} depth in your lineup${benchAcquisitions.length > 1 ? '' : ''} — not a starting upgrade.`
+  }
+
+  // Starter-loss note: shipping a lineup regular that did NOT drop the position
+  // below average (so it isn't a hurtStrength) still deserves a heads-up.
+  let starterLossNote = null
+  const softDepartures = starterDepartures.filter(d => !hurtStrengths.includes(d.position))
+  if (softDepartures.length > 0) {
+    const names  = joinAnd(softDepartures.map(d => d.name))
+    const plural = softDepartures.length > 1
+    starterLossNote = `You're dealing ${plural ? 'starters' : 'a starter'} (${names}) from your best lineup — the position stays at or above league average, but make sure the return replaces the production.`
+  }
+
   // Layer 3: Win window fit
   const winWindowTiers = assignWinWindowTiers(allRosters)
   const myTier = winWindowTiers[myRoster.rosterId] ?? 'Middle'
-
-  const getPlayers  = getAssets.filter(a => a.type === 'player')
-  const getPicks    = getAssets.filter(a => a.type === 'pick')
-  const givePlayers = giveAssets.filter(a => a.type === 'player')
 
   let windowScore = 0
   let windowNote  = 'Neutral — fits your current win window'
@@ -118,12 +176,52 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
     }
   }
 
+  // My-players trajectory lens (Dynasty Trajectory over MY side of the deal).
+  // Age is already priced into raw value, so this never rewrites Layer 1 — it's
+  // a separate forward-looking flag. Selling an ascending player (the classic
+  // "trading a young riser") is the sharpest warning; acquiring a declining one
+  // is the milder caution. Only surfaces when age curves are supplied.
+  let myTrajectoryNote = null
+  let myTrajectoryTone = null
+  if (curves) {
+    const ascendingGiven = givePlayers.filter(p => seriesDirection(projectPlayerSeries(p, curves)) === 'ascending')
+    const decliningGotten = getPlayers.filter(p => seriesDirection(projectPlayerSeries(p, curves)) === 'declining')
+    if (ascendingGiven.length > 0) {
+      const names = joinAnd(ascendingGiven.map(p => p.name))
+      myTrajectoryNote = `You're moving ${names}, whose value the model projects to keep climbing — you may be selling an ascending asset before its peak.`
+      myTrajectoryTone = 'warning'
+    } else if (decliningGotten.length > 0) {
+      const names = joinAnd(decliningGotten.map(p => p.name))
+      myTrajectoryNote = `${names} project to shed value over the next few seasons — treat this as a win-now add, not a long-term hold.`
+      myTrajectoryTone = 'warning'
+    }
+  }
+
+  // Draft-grade confidence nudge — when I'm acquiring picks, my rookie-draft
+  // hindsight record adjusts confidence in that capital (never the raw value).
+  // Gated at ≥3 graded picks so a one-hit or one-miss history can't swing it.
+  let draftNote = null
+  let draftTone = null
+  if (myDraftGrade && getPicks.length > 0 && (myDraftGrade.count ?? 0) >= 3) {
+    const { count, hits, avgDelta } = myDraftGrade
+    if (avgDelta >= 2) {
+      draftNote = `Your draft record backs this: ${hits} of ${count} rookie picks hit and you beat your slot by ${avgDelta} spots on average — draft capital projects above market in your hands.`
+      draftTone = 'success'
+    } else if (avgDelta <= -2) {
+      draftNote = `Caution on the pick: your rookie picks have lagged their slot by ${Math.abs(avgDelta)} spots on average — value it at market, not on upside.`
+      draftTone = 'warning'
+    }
+  }
+
   return {
     giveTotal, getTotal, valueDiff, valuePct, valueWinner,
     filledNeeds, hurtStrengths, fitScore,
+    benchAcquisitions, starterDepartures, benchNote, starterLossNote,
     myTier, windowScore, windowNote, myDeltas,
     playoffPct, oddsStance, oddsNote, oddsTone,
     partnerTrajectoryNote, partnerTrajectoryTone,
+    myTrajectoryNote, myTrajectoryTone,
+    draftNote, draftTone,
   }
 }
 

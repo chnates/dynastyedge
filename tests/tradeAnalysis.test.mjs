@@ -167,3 +167,158 @@ test('counter suggestion: no suggestion inside the ±5% even band (Feature 3: co
   const a = analysis({ valueWinner: 'even', valuePct: 3 })
   assert.equal(getCounterSuggestion(a, myRoster, opponentRoster), null)
 })
+
+// ── Layer 2 as a real post-trade lineup sim (Feature 3 Layer 2) ──────────────
+// A roster builder that lets each test control exactly who plays where.
+let uid = 0
+function roster(rosterId, players, extra = {}) {
+  return {
+    rosterId,
+    players: players.map(p => ({ sleeperId: `p${uid++}`, isIR: false, isTaxi: false, ...p })),
+    picks: [],
+    totalValue: players.reduce((s, p) => s + (p.value || 0), 0),
+    pickCapitalScore: 0,
+    avgStarterAge: 26,
+    ...extra,
+  }
+}
+const asset = p => ({ type: 'player', id: p.sleeperId, ...p })
+
+test('Layer 2: an acquired player who would NOT start does not fill the need — it flags him as depth', () => {
+  // My WR corps is deep but mediocre (top-5 = 10,000) while the league WR
+  // average is far higher (deficit). But my RBs consume the FLEX slots, so a
+  // 1,500 WR I acquire sits behind five better WRs — he does NOT start.
+  const mine = roster(1, [
+    { name: 'QB1', position: 'QB', value: 6000 },
+    { name: 'RB1', position: 'RB', value: 5000 },
+    { name: 'RB2', position: 'RB', value: 4800 },
+    { name: 'RB3', position: 'RB', value: 4600 },
+    { name: 'RB4', position: 'RB', value: 4400 },
+    { name: 'WR1', position: 'WR', value: 2200 },
+    { name: 'WR2', position: 'WR', value: 2100 },
+    { name: 'WR3', position: 'WR', value: 2000 },
+    { name: 'WR4', position: 'WR', value: 1900 },
+    { name: 'WR5', position: 'WR', value: 1800 },
+    { name: 'TE1', position: 'TE', value: 2500 },
+    { name: 'TE2', position: 'TE', value: 700 },
+  ])
+  // Two opponents stacked at WR pull the league WR average above mine → deficit.
+  const oppWRs = n => roster(n, [
+    { name: `oQB${n}`, position: 'QB', value: 3000 },
+    ...[3400, 3300, 3200, 3100, 3000].map((v, i) => ({ name: `oWR${n}-${i}`, position: 'WR', value: v })),
+  ])
+  const allRosters = [mine, oppWRs(2), oppWRs(3)]
+
+  const sutton = { sleeperId: 'sutton', name: 'Sutton', position: 'WR', value: 1500, age: 30 }
+  const a = analyzeTrade([], [asset(sutton)], mine, allRosters[1], allRosters)
+
+  assert.ok(a.myDeltas.WR < 0, 'WR is genuinely a deficit position for me')
+  assert.ok(!a.filledNeeds.includes('WR'), 'a benched acquisition must NOT count as filling the WR need')
+  assert.ok(a.benchNote && /Sutton/.test(a.benchNote), 'he is surfaced as depth, not an upgrade')
+})
+
+test('Layer 2: shipping a starter that drops the position below league average flags a real hurt', () => {
+  // Brown is my RB1 and a lineup lock. Giving him drops my RB group from above
+  // the league average to below it → hurtStrengths includes RB, fit turns negative.
+  const brown = { name: 'Brown', position: 'RB', value: 4000 }
+  const mine = roster(1, [
+    { name: 'QB1', position: 'QB', value: 4000 },
+    brown,
+    { name: 'RB2', position: 'RB', value: 1500 },
+    { name: 'RB3', position: 'RB', value: 1000 },
+    { name: 'WR1', position: 'WR', value: 3000 },
+    { name: 'WR2', position: 'WR', value: 2000 },
+    { name: 'TE1', position: 'TE', value: 1500 },
+  ])
+  const brownId = mine.players.find(p => p.name === 'Brown').sleeperId
+  // Opponents' RBs set the league RB average near 5,000: my 6,500 is above it,
+  // but 2,500 after dealing Brown is well below.
+  const oppRB = n => roster(n, [{ name: `oRB${n}`, position: 'RB', value: 4250 }])
+  const allRosters = [mine, oppRB(2), oppRB(3)]
+
+  const a = analyzeTrade([asset({ sleeperId: brownId, ...brown })], [], mine, allRosters[1], allRosters)
+
+  assert.ok(a.hurtStrengths.includes('RB'), 'losing a starter that craters the position must register as a hurt')
+  assert.equal(a.fitScore, -1)
+})
+
+test('Layer 2: shipping a starter that stays above average is a heads-up note, not a hurt', () => {
+  // Brown starts, but my RB room is deep enough that dealing him keeps RB above
+  // the league average → no hurtStrength, but a starter-loss note fires.
+  const brown = { name: 'Brown', position: 'RB', value: 3000 }
+  const mine = roster(1, [
+    { name: 'QB1', position: 'QB', value: 4000 },
+    { name: 'RB1', position: 'RB', value: 5000 },
+    brown,
+    { name: 'RB3', position: 'RB', value: 2500 },
+    { name: 'RB4', position: 'RB', value: 2000 },
+    { name: 'WR1', position: 'WR', value: 3000 },
+    { name: 'WR2', position: 'WR', value: 2000 },
+    { name: 'TE1', position: 'TE', value: 1500 },
+  ])
+  const brownId = mine.players.find(p => p.name === 'Brown').sleeperId
+  const oppRB = n => roster(n, [{ name: `oRB${n}`, position: 'RB', value: 4250 }])
+  const allRosters = [mine, oppRB(2), oppRB(3)]
+
+  const a = analyzeTrade([asset({ sleeperId: brownId, ...brown })], [], mine, allRosters[1], allRosters)
+
+  assert.ok(!a.hurtStrengths.includes('RB'), 'RB stays above average, so it is not a hurt')
+  assert.ok(a.starterLossNote && /Brown/.test(a.starterLossNote), 'but dealing a starter still earns a heads-up')
+})
+
+// ── Layer 3: my-players trajectory lens + draft-grade nudge (Feature 3) ──────
+const CURVE_AGES = Array.from({ length: 19 }, (_, i) => 21 + i)
+const mkCurve = fn => Object.fromEntries(CURVE_AGES.map(age => [age, fn(age)]))
+const CURVES = {
+  RB: mkCurve(age => 1000 + age * 60),   // rising with age → a young RB projects up
+  WR: mkCurve(age => 6000 - age * 90),    // falling with age → an older WR projects down
+  QB: mkCurve(() => 3000),                // flat → stable
+  TE: mkCurve(() => 3000),
+}
+
+test('Layer 3: selling an ascending player raises a trajectory caution (age already priced, so it is a note)', () => {
+  const { myRoster, opponentRoster, allRosters } = makeLeague()
+  const brown = { sleeperId: 'brown', name: 'Brown', position: 'RB', value: 4000, age: 24 }
+  const a = analyzeTrade(
+    [asset(brown)],
+    [{ type: 'pick', value: 4000, id: 'pk' }],
+    myRoster, opponentRoster, allRosters,
+    { curves: CURVES }
+  )
+  assert.ok(a.myTrajectoryNote && /Brown/.test(a.myTrajectoryNote), 'giving a riser flags selling an ascending asset')
+  assert.equal(a.myTrajectoryTone, 'warning')
+})
+
+test('Layer 3: acquiring a declining player reads as a win-now add', () => {
+  const { myRoster, opponentRoster, allRosters } = makeLeague()
+  const sutton = { sleeperId: 'sutton', name: 'Sutton', position: 'WR', value: 1500, age: 31 }
+  const a = analyzeTrade(
+    [{ type: 'pick', value: 1500, id: 'pk' }],   // not a player, so nothing ascending on my give side
+    [asset(sutton)],
+    myRoster, opponentRoster, allRosters,
+    { curves: CURVES }
+  )
+  assert.ok(a.myTrajectoryNote && /Sutton/.test(a.myTrajectoryNote), 'buying a faller warns the price may not hold')
+})
+
+test('Layer 3: draft-grade nudge fires only when acquiring picks with a large-enough sample', () => {
+  const { myRoster, opponentRoster, allRosters } = makeLeague()
+  const pick = { type: 'pick', value: 2700, id: 'pk' }
+  const give = [{ type: 'player', sleeperId: 'x', name: 'X', position: 'RB', value: 2700 }]
+
+  const strong = analyzeTrade(give, [pick], myRoster, opponentRoster, allRosters,
+    { myDraftGrade: { count: 5, hits: 3, avgDelta: 3 } })
+  assert.ok(strong.draftNote && strong.draftTone === 'success', 'a strong drafter gets a confidence boost on the pick')
+
+  const weak = analyzeTrade(give, [pick], myRoster, opponentRoster, allRosters,
+    { myDraftGrade: { count: 5, hits: 0, avgDelta: -3 } })
+  assert.ok(weak.draftNote && weak.draftTone === 'warning', 'a weak drafter gets a caution')
+
+  const tiny = analyzeTrade(give, [pick], myRoster, opponentRoster, allRosters,
+    { myDraftGrade: { count: 2, hits: 1, avgDelta: 5 } })
+  assert.equal(tiny.draftNote, null, 'a 2-pick history is too small to nudge')
+
+  const noPick = analyzeTrade(give, [{ type: 'player', sleeperId: 'y', name: 'Y', position: 'WR', value: 2700 }],
+    myRoster, opponentRoster, allRosters, { myDraftGrade: { count: 5, hits: 3, avgDelta: 3 } })
+  assert.equal(noPick.draftNote, null, 'no acquired pick → no draft nudge')
+})

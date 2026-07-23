@@ -476,11 +476,32 @@ Each team card shows:
 Simple FantasyCalc math. Side A total vs. Side B total.
 Show the % difference clearly: “You’re getting 12% more value” or “You’re overpaying by 8%.”
 
-**Layer 2 — Roster fit**
-Does what you’re getting fill an actual need (a deficit position)?
-Does what you’re giving come from a position where you’re already below
-league average — selling depth you genuinely need?
-Uses the same positional surplus/deficit logic as Trade Partner Finder.
+**Layer 2 — Roster fit (post-trade lineup simulation)**
+Fit is judged against the **actual resulting starting lineup**, not a bare
+position-tag match. `analyzeTrade` re-simulates my optimal starting lineup by
+dynasty value (`buildValueLineup`, the shared slot-fill engine in
+`utils/lineupBuild.js` — the same `ROSTER_SLOTS` fill the in-season Optimizer
+uses, but fed **dynasty value** instead of weekly points, so it works
+year-round) *before* and *after* the swap:
+
+- **A need is filled only by a player who would actually START post-trade** at a
+  position where I'm below league average. A player I acquire who'd sit on the
+  bench does **not** count as filling the gap — he's surfaced as depth
+  (`benchNote`: "Sutton projects as WR depth in your lineup — not a starting
+  upgrade").
+- **Giving a player hurts only when it actually weakens the position** — i.e.
+  the trade drops that position below league average (post-trade delta < 0 and
+  strictly worse than before). So dealing a starter out of a surplus that then
+  falls below the line registers as a hurt, while shedding a benchwarmer that
+  changes nothing does not.
+- **Shipping a lineup regular that does *not* crater the position** is a
+  heads-up note, not a hurt (`starterLossNote`: "You're dealing a starter
+  (Brown) from your best lineup … make sure the return replaces the
+  production").
+
+The league-relative deficit/surplus (top-N-by-value vs league average, shared
+with Trade Partner Finder) is still the yardstick for what counts as a "need";
+the lineup sim adds the "…and does this specific player actually start?" gate.
 
 **Layer 3 — Win window fit**
 Are you acquiring the right type of asset for where Nix Cage is now?
@@ -497,6 +518,22 @@ Are you acquiring the right type of asset for where Nix Cage is now?
   talent"), an ascending team as a caution ("they're building — may resist
   parting with youth"). Always available (no extra fetch); hidden for a
   balanced-window partner.
+- **My-side trajectory lens** (`analyzeTrade`'s optional `curves` from
+  `buildAgeCurves`): a forward-looking read on *my own* pieces, distinct from
+  raw value. Dynasty value already prices age in, so this never rewrites Layer
+  1 — it's a note. Selling a player the model projects to keep **climbing**
+  (`myTrajectoryNote`: "you may be selling an ascending asset before its peak")
+  is the sharpest flag; acquiring one projected to **decline** reads as a
+  win-now add, not a long-term hold. Per-player direction via
+  `projectPlayerSeries` + `seriesDirection`; hidden without curves.
+- **Draft-grade confidence nudge** (`analyzeTrade`'s optional `myDraftGrade`,
+  from my Manager Scouting report card — `useManagerProfiles().my.draft`):
+  when I'm **acquiring picks**, my rookie-draft hindsight record adjusts
+  confidence in that capital (never the raw value). A strong drafter (avg slot
+  beat ≥ +2 across ≥ 3 graded picks) gets "draft capital projects above market
+  in your hands"; a weak one (≤ −2) gets "value it at market, not on upside".
+  **Gated at ≥ 3 graded picks** so a one-hit/one-miss history can't swing it;
+  best-effort (renders only once the lazy league-history fetch lands).
 
 #### Verdict
 
@@ -731,7 +768,8 @@ Star any player from the Player Profile drawer (star icon in the header).
 every completed week.
 
 - Optimal lineup computed from `players_points` in past matchups, filling
-  single-position slots first, then FLEX, then Superflex (see `utils/lineupHistory.js`)
+  single-position slots first, then FLEX, then Superflex (`utils/lineupHistory.js`,
+  which delegates to the shared slot-fill in `utils/lineupBuild.js`)
 - Summary card: efficiency % + total points left on bench
 - Per-week rows: actual, optimal, delta (green ✓ when optimal, amber/red otherwise)
 - Shows during the offseason too (it reviews the completed season)
@@ -1893,7 +1931,8 @@ dynastyedge/
 │   │   ├── rookieAdp.js         ← derived rookie-class ADP for the Draft section
 │   │   ├── pickTrades.js        ← pick trade calculator: slot pricing + packages
 │   │   ├── peakWindows.js       ← position peak-age windows + status helper
-│   │   ├── lineupHistory.js     ← optimal-lineup math for efficiency review
+│   │   ├── lineupBuild.js       ← THE optimal starting-lineup slot-fill (metric-agnostic); fed points (Optimizer) or dynasty value (Trade Analyzer fit sim)
+│   │   ├── lineupHistory.js     ← optimal-lineup POINTS math for efficiency review (delegates to lineupBuild)
 │   │   ├── playoffOdds.js       ← scoring model + Monte Carlo + deadline verdict
 │   │   └── projections.js       ← lineup optimization, matchup quality
 │   ├── context/
@@ -1906,8 +1945,9 @@ dynastyedge/
 │   ├── pickCapital.test.mjs         ← pick ownership resolution, round-median pick values, year weights
 │   ├── pickTrades.test.mjs          ← slot tiers (as coded), slot pricing fallback, package constraints
 │   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
-│   ├── tradeAnalysis.test.mjs       ← verdict ladder, % vs larger side, counter never re-suggests
+│   ├── tradeAnalysis.test.mjs       ← verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge
 │   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
+│   ├── lineupBuild.test.mjs         ← slot-fill order (singles → FLEX → SFLX), IR/taxi excluded, who-starts identity
 │   ├── lineupHistory.test.mjs       ← optimal-lineup slot-fill order (singles → FLEX → SFLX)
 │   ├── matchupWeeks.test.mjs        ← mocked-fetch: one fetch/week across both consumers, all-fail rejection
 │   └── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation

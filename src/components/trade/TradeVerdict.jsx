@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CheckCircle2, XCircle, RefreshCw, CheckCircle, XCircle as XCircleSmall, Circle, AlertTriangle, LineChart } from 'lucide-react'
+import { CheckCircle2, XCircle, RefreshCw, CheckCircle, XCircle as XCircleSmall, Circle, AlertTriangle, LineChart, Target } from 'lucide-react'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { Card, Button } from '../ui'
@@ -153,8 +153,11 @@ export default function TradeVerdict({
   }
 
   const { giveTotal, getTotal, filledNeeds, hurtStrengths, windowScore, windowNote, myTier,
+    benchNote, starterLossNote,
     playoffPct, oddsStance, oddsNote, oddsTone,
-    partnerTrajectoryNote, partnerTrajectoryTone } = analysis
+    partnerTrajectoryNote, partnerTrajectoryTone,
+    myTrajectoryNote, myTrajectoryTone,
+    draftNote, draftTone } = analysis
   const ODDS_TONE_TEXT = { success: 'text-success', warning: 'text-warning', danger: 'text-danger' }
   const bothSides = giveCount > 0 && getCount > 0
   const vs = verdict ? VERDICT_STYLES[verdict.verdict] : null
@@ -242,6 +245,20 @@ export default function TradeVerdict({
               ))}
             </div>
           )}
+          {/* Lineup-sim caveats: an acquired player who won't start, or a
+              starter shipped out that didn't crater the position. */}
+          {benchNote && (
+            <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary leading-relaxed mt-2 flex items-start gap-1.5">
+              <Circle size={10} strokeWidth={2} className="text-text-tertiary shrink-0 mt-0.5" />
+              <span>{benchNote}</span>
+            </p>
+          )}
+          {starterLossNote && (
+            <p className="font-body text-[11px] text-warning leading-relaxed mt-1.5 flex items-start gap-1.5">
+              <AlertTriangle size={11} strokeWidth={2} className="shrink-0 mt-0.5" />
+              <span>{starterLossNote}</span>
+            </p>
+          )}
         </div>
 
         {/* Layer 3: Win window */}
@@ -276,6 +293,20 @@ export default function TradeVerdict({
             <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-relaxed mt-1.5 flex items-start gap-1.5">
               <LineChart size={12} strokeWidth={2} className={`shrink-0 mt-0.5 ${ODDS_TONE_TEXT[partnerTrajectoryTone] ?? 'text-text-tertiary'}`} />
               <span>{partnerTrajectoryNote}</span>
+            </p>
+          )}
+          {/* My side's forward trajectory (selling a riser / buying a faller) */}
+          {myTrajectoryNote && (
+            <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-relaxed mt-1.5 flex items-start gap-1.5">
+              <LineChart size={12} strokeWidth={2} className={`shrink-0 mt-0.5 ${ODDS_TONE_TEXT[myTrajectoryTone] ?? 'text-text-tertiary'}`} />
+              <span>{myTrajectoryNote}</span>
+            </p>
+          )}
+          {/* Draft-grade confidence nudge on acquired picks */}
+          {draftNote && (
+            <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-relaxed mt-1.5 flex items-start gap-1.5">
+              <Target size={12} strokeWidth={2} className={`shrink-0 mt-0.5 ${ODDS_TONE_TEXT[draftTone] ?? 'text-text-tertiary'}`} />
+              <span>{draftNote}</span>
             </p>
           )}
         </div>
