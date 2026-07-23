@@ -27,7 +27,19 @@ export const TRAJECTORY_HORIZON = 3 // seasons projected beyond the current one
 const AGE_MIN = 21
 const AGE_MAX = 39
 const KERNEL_BW = 2.5      // smoothing bandwidth (years) for the market curve
-const PRIOR_WEIGHT = 4     // pseudo-count pulling sparse bins toward the prior
+// Pseudo-count pulling sparse bins toward the prior. Lowered 4→3 (2026-07): the
+// 21–31 core is well-sampled (kernel mass 12–110), where a prior "worth 4
+// players" over-weighted the shape and visibly inflated the young-QB curve
+// (ages 21–23, ~+13–21% above the empirical median) — flattening the market's
+// real young-QB ascent, the crown-jewel Superflex asset. At 3 the young-QB
+// distortion roughly halves while the thin tails (35+, mass 1–4) stay
+// majority-prior, so the old-age survivorship correction the prior exists for is
+// preserved; verified no new tail non-monotonicity, no peak-bin prior-dominance,
+// and no change in clamp-binding rate. A conservative step, not a chase of the
+// unregularized curve — the "right" weight can't be certified until the monthly
+// value archive (snapshot-values-archive.mjs) supports a real multi-year
+// back-test. See docs/analysis/trajectory-calibration-2026-07.md (Item 1 / P3).
+const PRIOR_WEIGHT = 3
 const ROOKIE_ENTRY_AGE = 22
 
 // A single season can't plausibly swing one asset's value beyond these bounds;

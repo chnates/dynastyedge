@@ -1251,9 +1251,12 @@ that opens `/roster/trajectory/:rosterId`, so you can scout an opponent's window
   learn what the dynasty market pays at every age *straight from today's
   FantasyCalc pool*: a Gaussian-kernel-smoothed (bandwidth 2.5y) weighted
   *median* of value by age, blended toward a `peakWindows.js`-shaped prior
-  (pseudo-count 4) so thin age bins stay sane. No hardcoded decay rates — it
+  (pseudo-count 3) so thin age bins stay sane. No hardcoded decay rates — it
   recalibrates every load as the market moves, matching the "never hardcode
-  values" rule.
+  values" rule. (The pseudo-count was 4 before 2026-07; lowered to 3 because the
+  well-sampled 21–31 core over-weighted the shape prior and inflated the young-QB
+  curve, flattening its real ascent — the thin 35+ tails still lean
+  majority-prior. See `docs/analysis/trajectory-calibration-2026-07.md`, P3.)
 - **Projection** — a player's value `n` seasons out is
   `currentValue × curve(age + n) / curve(age)`, clamped per year (0.55×–1.18×).
   The talent residual cancels, so a stud and a scrub ride the same proportional
