@@ -97,7 +97,8 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
   let benchNote = null
   if (benchAcquisitions.length > 0) {
     const names = joinAnd(benchAcquisitions.map(b => b.name))
-    benchNote = `${names} project as ${benchAcquisitions[0].position} depth in your lineup${benchAcquisitions.length > 1 ? '' : ''} — not a starting upgrade.`
+    const projects = benchAcquisitions.length > 1 ? 'project' : 'projects'
+    benchNote = `${names} ${projects} as ${benchAcquisitions[0].position} depth in your lineup — not a starting upgrade.`
   }
 
   // Starter-loss note: shipping a lineup regular that did NOT drop the position
@@ -192,7 +193,8 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
       myTrajectoryTone = 'warning'
     } else if (decliningGotten.length > 0) {
       const names = joinAnd(decliningGotten.map(p => p.name))
-      myTrajectoryNote = `${names} project to shed value over the next few seasons — treat this as a win-now add, not a long-term hold.`
+      const projects = decliningGotten.length > 1 ? 'project' : 'projects'
+      myTrajectoryNote = `${names} ${projects} to shed value over the next few seasons — treat this as a win-now add, not a long-term hold.`
       myTrajectoryTone = 'warning'
     }
   }
