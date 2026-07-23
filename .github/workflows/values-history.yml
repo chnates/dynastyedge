@@ -52,6 +52,9 @@ jobs:
       - name: Archive trade-time values
         continue-on-error: true   # best-effort — publish step preserves the old archive
         run: node scripts/snapshot-trade-values.mjs
+      - name: Archive monthly values snapshot
+        continue-on-error: true   # best-effort — publish step preserves the old archive
+        run: node scripts/snapshot-values-archive.mjs
       - name: Publish snapshots to the values-history branch
         run: |
           mkdir -p /tmp/valuesrepo && cd /tmp/valuesrepo
@@ -88,9 +91,19 @@ jobs:
           elif [ -n "$PREV" ] && git cat-file -e "$PREV:trade-values.json" 2>/dev/null; then
             git checkout "$PREV" -- trade-values.json
           fi
+          # Monthly values archive: same permanent-carry-forward contract as the
+          # trade archive — today's output, else the previous file from the
+          # branch; never force-pushed away just because this run's best-effort
+          # script produced nothing.
+          if [ -f "$GITHUB_WORKSPACE/values-archive.json" ]; then
+            cp "$GITHUB_WORKSPACE/values-archive.json" .
+          elif [ -n "$PREV" ] && git cat-file -e "$PREV:values-archive.json" 2>/dev/null; then
+            git checkout "$PREV" -- values-archive.json
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add values-history.json
           if [ -f trade-values.json ]; then git add trade-values.json; fi
+          if [ -f values-archive.json ]; then git add values-archive.json; fi
           git commit -m "Update values history"
           git push --force "$REMOTE" values-history

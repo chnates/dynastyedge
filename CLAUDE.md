@@ -237,6 +237,21 @@ architecture as the news pipeline:
   fails, the publish step carries the previous archive forward from the
   branch via git — and aborts the publish entirely if it can't, so the
   archive is never erased.
+- The same workflow also runs `scripts/snapshot-values-archive.mjs`
+  (`continue-on-error`), which keeps a **permanent MONTHLY archive** of values
+  in `values-archive.json` on the same branch — one column per UTC calendar
+  month (same-month re-runs replace that month's column), top 500 players,
+  columns never pruned by time (rows age out only after `INACTIVE_MONTHS = 24`
+  all-null, which bounds the player dimension). Format mirrors
+  `values-history.json` but keyed by `months`. It exists so the multi-*season*
+  Dynasty Trajectory model can eventually be back-tested against realized value
+  (the rolling `values-history.json` prunes past 90 days, so it can't): the
+  first 1-year test becomes possible ~a year after this ships. **The app never
+  fetches it** — it is read only by offline analysis, so it costs the phone
+  nothing (no request, no bundle weight); size grows ~2 KB/month (~26 KB/year,
+  ~220 KB/decade). Same publish contract as the trade archive: the previous
+  file carries forward from the branch on any miss, never force-pushed away.
+  See `docs/analysis/trajectory-calibration-2026-07.md`.
 - **Keepalive step** (first step, before the snapshots, `continue-on-error`):
   GitHub disables scheduled workflows after ~60 days without repo activity,
   and the pipelines' own data-branch force-pushes don't reset that clock —
@@ -1833,6 +1848,7 @@ dynastyedge/
 ├── scripts/
 │   ├── fetch-news.mjs          ← multi-source news fetcher (runs in Actions)
 │   ├── snapshot-values.mjs     ← daily FantasyCalc snapshot appender (runs in Actions)
+│   ├── snapshot-values-archive.mjs ← permanent MONTHLY values archive for trajectory back-testing (app never fetches it)
 │   ├── snapshot-trade-values.mjs ← permanent trade-time value archiver (runs in Actions)
 │   └── dev/
 │       └── screenshot-app.mjs  ← headless-Chromium screenshotter for the running app (390px UI verification — see the dynastyedge-visual-capture skill)
