@@ -66,6 +66,36 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
     .filter(p => p.position && beforeLineup.starterIds.has(String(p.sleeperId)))
     .map(p => ({ name: p.name, position: p.position }))
 
+  // "What am I giving up?" — for every position I'm dealing from, the roster's
+  // positional pecking order by dynasty value, marking the piece(s) leaving and
+  // who starts. Grouped by position so dealing two players at one spot shows one
+  // depth chart. Taxi/IR excluded (they can't start), matching the lineup sim.
+  const givePositions = [...new Set(givePlayers.map(p => p.position).filter(Boolean))]
+  const giveContext = givePositions.map(pos => {
+    const dealtIds = new Set(
+      givePlayers.filter(p => p.position === pos).map(p => String(p.sleeperId))
+    )
+    const peers = myRoster.players
+      .filter(q => q.position === pos && !q.isIR && !q.isTaxi)
+      .map(q => ({
+        sleeperId: String(q.sleeperId),
+        name: q.name,
+        value: q.value || 0,
+        unranked: q.unranked,
+        isStarter: beforeLineup.starterIds.has(String(q.sleeperId)),
+        isDealt: dealtIds.has(String(q.sleeperId)),
+      }))
+      .sort((a, b) => b.value - a.value)
+    const dealt = peers
+      .filter(q => q.isDealt)
+      .map(q => ({
+        name: q.name,
+        posRank: peers.findIndex(x => x.sleeperId === q.sleeperId) + 1,
+        isStarter: q.isStarter,
+      }))
+    return { position: pos, count: peers.length, peers, dealt }
+  })
+
   // A need is filled only by a player who (a) starts post-trade and (b) plays a
   // position where I'm below league average today.
   const filledNeeds = []
@@ -225,7 +255,7 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
   return {
     giveTotal, getTotal, valueDiff, valuePct, valueWinner,
     filledNeeds, hurtStrengths, fitScore,
-    benchAcquisitions, starterDepartures, benchNote, starterLossNote,
+    benchAcquisitions, starterDepartures, benchNote, starterLossNote, giveContext,
     myTier, windowScore, windowNote, myDeltas,
     playoffPct, oddsStance, oddsNote, oddsTone,
     partnerTrajectoryNote, partnerTrajectoryTone,

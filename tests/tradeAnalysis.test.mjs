@@ -331,3 +331,79 @@ test('Layer 3: draft-grade nudge keys on HIT RATE, only when acquiring picks wit
     myRoster, opponentRoster, allRosters, { myDraftGrade: { count: 5, hits: 4 } })
   assert.equal(noPick.draftNote, null, 'no acquired pick → no draft nudge')
 })
+
+// giveContext — "what am I giving up": the positional pecking order on my roster
+// for every position I'm dealing from, marking the piece(s) leaving, ranked by
+// dynasty value, with who starts (buildValueLineup) and taxi/IR excluded.
+test('giveContext: dealt player carries his positional rank + the roster pecking order', () => {
+  // My roster: 3 TEs (value gaps so ranks are unambiguous) behind enough RB/WR
+  // to fill every FLEX + Superflex, so only Best TE starts and Gunnar Helm (TE2)
+  // is genuine bench depth. Plus an IR TE that must NOT count in the order.
+  const myRoster = {
+    rosterId: 1,
+    players: [
+      { sleeperId: 'te1', name: 'Best TE',   position: 'TE', value: 5000, isIR: false, isTaxi: false },
+      { sleeperId: 'te2', name: 'Gunnar Helm',position: 'TE', value: 3000, isIR: false, isTaxi: false },
+      { sleeperId: 'te3', name: 'Third TE',  position: 'TE', value: 800,  isIR: false, isTaxi: false, unranked: false },
+      { sleeperId: 'teIR',name: 'Hurt TE',   position: 'TE', value: 9999, isIR: true,  isTaxi: false },
+      { sleeperId: 'q1',  name: 'My QB',     position: 'QB', value: 4000, isIR: false, isTaxi: false },
+      { sleeperId: 'r1',  name: 'RB1',       position: 'RB', value: 4200, isIR: false, isTaxi: false },
+      { sleeperId: 'r2',  name: 'RB2',       position: 'RB', value: 4100, isIR: false, isTaxi: false },
+      { sleeperId: 'r3',  name: 'RB3',       position: 'RB', value: 4000, isIR: false, isTaxi: false },
+      { sleeperId: 'r4',  name: 'RB4',       position: 'RB', value: 3900, isIR: false, isTaxi: false },
+      { sleeperId: 'w1',  name: 'WR1',       position: 'WR', value: 4300, isIR: false, isTaxi: false },
+      { sleeperId: 'w2',  name: 'WR2',       position: 'WR', value: 4200, isIR: false, isTaxi: false },
+      { sleeperId: 'w3',  name: 'WR3',       position: 'WR', value: 4100, isIR: false, isTaxi: false },
+      { sleeperId: 'w4',  name: 'WR4',       position: 'WR', value: 3600, isIR: false, isTaxi: false },
+    ],
+    picks: [],
+    totalValue: 20000, pickCapitalScore: 0, avgStarterAge: 26,
+  }
+  const opp = { rosterId: 2, players: [
+    { sleeperId: 'ow', name: 'Opp WR', position: 'WR', value: 3000, isIR: false, isTaxi: false },
+  ], picks: [], totalValue: 3000, pickCapitalScore: 0, avgStarterAge: 26 }
+  const allRosters = [myRoster, opp, { ...myRoster, rosterId: 3 }, { ...myRoster, rosterId: 4 }]
+
+  // Deal the middle TE (Gunnar Helm).
+  const give = [{ type: 'player', sleeperId: 'te2', name: 'Gunnar Helm', position: 'TE', value: 3000 }]
+  const get  = [{ type: 'player', sleeperId: 'ow', name: 'Opp WR', position: 'WR', value: 3000 }]
+  const a = analyzeTrade(give, get, myRoster, opp, allRosters)
+
+  assert.equal(a.giveContext.length, 1, 'one position dealt from → one group')
+  const g = a.giveContext[0]
+  assert.equal(g.position, 'TE')
+  assert.equal(g.count, 3, 'IR TE excluded from the pecking order')
+  // Ranked by value desc: Best TE, Gunnar Helm, Third TE.
+  assert.deepEqual(g.peers.map(p => p.name), ['Best TE', 'Gunnar Helm', 'Third TE'])
+  assert.equal(g.dealt.length, 1)
+  assert.equal(g.dealt[0].name, 'Gunnar Helm')
+  assert.equal(g.dealt[0].posRank, 2, 'Helm is my TE2 by value')
+  // Best TE is the lone TE starter; the dealt TE2 is bench depth.
+  assert.equal(g.peers.find(p => p.name === 'Best TE').isStarter, true)
+  assert.equal(g.dealt[0].isStarter, false)
+  assert.equal(g.peers.find(p => p.isDealt).name, 'Gunnar Helm')
+})
+
+test('giveContext: two players dealt from one position share a single grouped depth chart', () => {
+  const myRoster = {
+    rosterId: 1,
+    players: [
+      { sleeperId: 'te1', name: 'TE A', position: 'TE', value: 5000, isIR: false, isTaxi: false },
+      { sleeperId: 'te2', name: 'TE B', position: 'TE', value: 3000, isIR: false, isTaxi: false },
+      { sleeperId: 'te3', name: 'TE C', position: 'TE', value: 800,  isIR: false, isTaxi: false },
+      { sleeperId: 'q1',  name: 'My QB',position: 'QB', value: 4000, isIR: false, isTaxi: false },
+    ],
+    picks: [], totalValue: 12800, pickCapitalScore: 0, avgStarterAge: 26,
+  }
+  const opp = { rosterId: 2, players: [], picks: [], totalValue: 0, pickCapitalScore: 0, avgStarterAge: 26 }
+  const allRosters = [myRoster, opp, { ...myRoster, rosterId: 3 }, { ...myRoster, rosterId: 4 }]
+
+  const give = [
+    { type: 'player', sleeperId: 'te2', name: 'TE B', position: 'TE', value: 3000 },
+    { type: 'player', sleeperId: 'te3', name: 'TE C', position: 'TE', value: 800 },
+  ]
+  const a = analyzeTrade(give, [{ type: 'pick', value: 3800 }], myRoster, opp, allRosters)
+  assert.equal(a.giveContext.length, 1, 'both TEs collapse into one TE group')
+  assert.equal(a.giveContext[0].dealt.length, 2)
+  assert.deepEqual(a.giveContext[0].dealt.map(d => d.posRank).sort(), [2, 3])
+})

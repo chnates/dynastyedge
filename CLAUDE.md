@@ -518,6 +518,17 @@ The league-relative deficit/surplus (top-N-by-value vs league average, shared
 with Trade Partner Finder) is still the yardstick for what counts as a "need";
 the lineup sim adds the "…and does this specific player actually start?" gate.
 
+**"Giving Up" depth context** (`analyzeTrade`'s `giveContext`, rendered as its
+own block under Roster Fit): so "what am I actually surrendering?" is concrete,
+for every position I'm dealing from the panel shows my roster's positional
+pecking order by dynasty value — a mini depth chart marking the piece(s)
+leaving (`OUT`), who currently starts (`ST`, from the same `buildValueLineup`
+sim), and each dealt player's standing (e.g. "Gunnar Helm — your TE3 of 4 ·
+depth"). Grouped by position (dealing two TEs shows one chart), taxi/IR excluded
+(they can't start), capped at 6 rows. Unranked players show `—`. This is
+descriptive context, not a verdict input — it never changes the score, it just
+makes the roster cost legible before you confirm.
+
 **Layer 3 — Win window fit**
 Are you acquiring the right type of asset for where Nix Cage is now?
 
