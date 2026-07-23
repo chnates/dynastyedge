@@ -18,6 +18,8 @@ import {
   buildAgeCurves,
   projectPlayer,
   buildRosterTrajectory,
+  getTrajectoryRead,
+  getTrajectoryVerdict,
   TRAJECTORY_HORIZON,
 } from '../src/utils/dynastyTrajectory.js'
 
@@ -77,6 +79,38 @@ test('picks hold at their value until the draft year, then age as a rookie-22 as
   // still holds. 2029: 1 year in → 1000 × (90/100) = 900.
   assert.deepEqual(t.pickByYear, [1000, 1000, 1000, 900])
   assert.deepEqual(t.totalByYear, [1000, 1000, 1000, 900])
+})
+
+// Team-level direction cuts (getTrajectoryRead / getTrajectoryVerdict): classify
+// a whole roster's now→+3 total. CLAUDE.md Feature 17/2: declining = "selling
+// vets", ascending = "building", else "balanced window". Thresholds keyed to
+// roster aggregation: DECLINING if net 3-yr change < −1%, ASCENDING if > +5%.
+const SEASONS = [2026, 2027, 2028, 2029]
+
+test('team direction — ASCENDING only clears the +5% pick-drift bar (getTrajectoryRead/Verdict)', () => {
+  const asc = { totalByYear: [1000, 1050, 1090, 1100], seasons: SEASONS } // +10%
+  assert.equal(getTrajectoryRead(asc).direction, 'ascending')
+  assert.equal(getTrajectoryVerdict(asc).tone, 'ascending')
+  // +4.5% is real growth but below the +5% bar (pick maturation lifts every
+  // roster ~+2–3%) → balanced, NOT ascending. This is the over-fire the old
+  // peakIdx≥2 clause caused.
+  const mild = { totalByYear: [1000, 1030, 1044, 1045], seasons: SEASONS } // +4.5%, peaks at +3
+  assert.equal(getTrajectoryRead(mild).direction, 'stable')
+  assert.equal(getTrajectoryVerdict(mild).tone, 'stable')
+})
+
+test('team direction — DECLINING fires on net erosion regardless of when the interim peak lands (getTrajectoryRead/Verdict)', () => {
+  // The real-league bug: pick maturation pushes the peak to +1, yet the roster
+  // ends the horizon net-negative. It must still read declining — the old
+  // peakIdx===0 requirement hid exactly this case.
+  const peaksLateThenErodes = { totalByYear: [1000, 1002, 995, 981], seasons: SEASONS } // peak at +1, net −1.9%
+  assert.equal(getTrajectoryRead(peaksLateThenErodes).direction, 'declining')
+  assert.equal(getTrajectoryVerdict(peaksLateThenErodes).tone, 'declining')
+  // Within the −1% deadband → balanced, not declining (a barely-easing roster
+  // is not "selling vets").
+  const barelyEases = { totalByYear: [1000, 999, 997, 995], seasons: SEASONS } // −0.5%
+  assert.equal(getTrajectoryRead(barelyEases).direction, 'stable')
+  assert.equal(getTrajectoryVerdict(barelyEases).tone, 'stable')
 })
 
 test('buildAgeCurves produces a full 21–39 curve per position from the FantasyCalc pool (Feature 17 market age curve)', () => {

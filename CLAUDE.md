@@ -1213,9 +1213,9 @@ that opens `/roster/trajectory/:rosterId`, so you can scout an opponent's window
 
 **Consumers (all via `getTrajectoryRead`, zero extra fetch):**
 - **Trade Partner Finder:** each opponent card carries a one-line trajectory
-  read — "Value peaks now, slides through {year} — selling vets" / "Value
-  climbing toward {year} — building" / "Value holds near {year} — balanced
-  window". Distinct from the this-season playoff-odds buyer/seller flag.
+  read — "Value slides through {year} — selling vets" / "Value climbing toward
+  {year} — building" / "Value holds near {year} — balanced window". Distinct
+  from the this-season playoff-odds buyer/seller flag.
 - **Trade Analyzer Layer 3** (`analyzeTrade`'s optional `opponentTrajectoryRead`):
   when acquiring the partner's players, a declining team reads as a buy window,
   an ascending one as a caution (see Feature 3).
@@ -1244,9 +1244,21 @@ that opens `/roster/trajectory/:rosterId`, so you can scout an opponent's window
   into the +1/+2 outlook.
 - `buildRosterTrajectory` sums player + pick projections into a
   current→+1→+2→+3 team series plus per-position sub-series.
-  `getTrajectoryVerdict` reads the peak year + 3-yr change into a plain-English
-  window call (ascending / balanced / declining); `seriesDirection` and
-  `peakStatusShort` drive the per-position and per-player tags.
+  `getTrajectoryVerdict` and `getTrajectoryRead` read the **net 3-yr change** of
+  that team total into a plain-English window call: **declining** (net change
+  < −1% → "selling vets"), **ascending** (net change > +5% → "building"), else
+  **balanced**. The cuts are keyed to how a *roster total* behaves, not a single
+  player: aging decliners and pre-peak risers largely cancel in the sum and
+  every pick matures upward, so real 3-yr team totals compress into a narrow,
+  slightly-positive band (~−2% … +10% on this league). Hence the asymmetry
+  (−1% vs +5%) — pick maturation lifts every roster ~+2–3%, so a *net-negative*
+  total is a stronger aging signal than an equal-magnitude gain — and hence the
+  classification is on **net** change, not on when the interim peak lands (pick
+  maturation routinely pushes the peak to +1/+2 even for an eroding roster, so
+  an earlier "peak-is-now" gate left "selling vets" unable to fire). The
+  per-player and per-position tags use `seriesDirection` (symmetric ±5%,
+  unchanged — a single player's curve swings far more than a whole roster's) and
+  `peakStatusShort`.
 
 **UI (`components/roster/TrajectoryView.jsx`):**
 - **Window verdict card** (tone-colored edge bar) — "Window peaks {year}" + a
