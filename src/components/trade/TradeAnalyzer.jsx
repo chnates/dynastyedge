@@ -7,6 +7,7 @@ import { analyzeTrade, getTradeVerdict, suggestFairPackage, getCounterSuggestion
 import { rankTradePartners } from '../../utils/rosterAnalysis'
 import { buildAgeCurves, buildRosterTrajectory, getTrajectoryRead } from '../../utils/dynastyTrajectory'
 import { usePlayoffOdds } from '../../hooks/usePlayoffOdds'
+import { useManagerProfiles } from '../../hooks/useManagerProfiles'
 import { fetchPlayerNews } from '../../hooks/usePlayerNews'
 import { getPlayerIntel } from '../../hooks/usePlayerIntel'
 import TradeBuilder from './TradeBuilder'
@@ -206,19 +207,34 @@ export default function TradeAnalyzer() {
 
   const bothSides = giveAssets.length > 0 && getAssets.length > 0
 
+  // Dynasty age curves, built once from the cached FantasyCalc pool — shared by
+  // the opponent-trajectory read and the my-players trajectory lens. No fetch.
+  const ageCurves = useMemo(
+    () => (values?.playerMap ? buildAgeCurves(values.playerMap) : null),
+    [values]
+  )
+
   // Opponent's multi-year value direction (Dynasty Trajectory) — feeds Layer 3
-  // so acquiring off a declining team reads as the buy window it is. No extra
-  // fetch; built from the cached FantasyCalc pool.
+  // so acquiring off a declining team reads as the buy window it is.
   const opponentTrajectoryRead = useMemo(() => {
-    if (!opponentRoster || !values?.playerMap) return null
-    const { curves, generic } = buildAgeCurves(values.playerMap)
+    if (!opponentRoster || !ageCurves) return null
     const season = Number(nflState?.season) || new Date().getFullYear()
-    return getTrajectoryRead(buildRosterTrajectory(opponentRoster, season, curves, generic))
-  }, [opponentRoster, values, nflState])
+    return getTrajectoryRead(buildRosterTrajectory(opponentRoster, season, ageCurves.curves, ageCurves.generic))
+  }, [opponentRoster, ageCurves, nflState])
+
+  // My rookie-draft hindsight record — the confidence nudge on acquired picks.
+  // Best-effort: renders only once the lazy league-history fetch lands.
+  const { analysis: managerAnalysis } = useManagerProfiles()
+  const myDraftGrade = managerAnalysis?.my?.draft ?? null
 
   const analysis = useMemo(
-    () => analyzeTrade(giveAssets, getAssets, league?.myRoster, opponentRoster, league?.allRosters, myOdds?.playoffPct ?? null, opponentTrajectoryRead),
-    [giveAssets, getAssets, league, opponentRoster, myOdds, opponentTrajectoryRead]
+    () => analyzeTrade(giveAssets, getAssets, league?.myRoster, opponentRoster, league?.allRosters, {
+      myPlayoffPct: myOdds?.playoffPct ?? null,
+      opponentTrajectoryRead,
+      curves: ageCurves?.curves ?? null,
+      myDraftGrade,
+    }),
+    [giveAssets, getAssets, league, opponentRoster, myOdds, opponentTrajectoryRead, ageCurves, myDraftGrade]
   )
 
   const verdict = useMemo(() => getTradeVerdict(analysis), [analysis])
