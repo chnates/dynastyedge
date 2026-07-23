@@ -288,9 +288,17 @@ here is *expected*, not disqualifying for a multi-*season* claim. What it *does*
 
 ---
 
-## Recommendations (proposals — route through `dynastyedge-change-control`, not applied)
+## Recommendations
 
-Ranked by impact / confidence. None applied; each needs owner approval and a same-commit CLAUDE.md
+> **Status (2026-07-23): all five implemented on branch
+> `claude/dynasty-trajectory-calibration-3v66k9`**, owner-approved one at a time,
+> each with real-data before/after evidence and a same-commit CLAUDE.md update.
+> P1 team-direction thresholds → net-erosion cuts (−1% / +5%); P2 draft nudge →
+> hit-rate trigger + factual copy; P0 monthly `values-archive.json` pipeline;
+> P3 `PRIOR_WEIGHT` 4→3; P4 honesty copy in the Trajectory panel. Not yet merged
+> to `main` at time of writing. The original ranking/rationale is kept below.
+
+Ranked by impact / confidence. Each needs owner approval and a same-commit CLAUDE.md
 update because all four constants are documented behaviour.
 
 ### P1 — Team-level direction thresholds (highest impact) · Item 2
