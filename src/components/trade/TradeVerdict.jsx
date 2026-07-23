@@ -3,6 +3,7 @@ import { CheckCircle2, XCircle, RefreshCw, CheckCircle, XCircle as XCircleSmall,
 import WinWindowBadge from '../shared/WinWindowBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { Card, Button } from '../ui'
+import { POS_TEXT } from '../../utils/positionColors'
 import { relativeTime } from '../../hooks/usePlayerIntel'
 
 const VERDICT_STYLES = {
@@ -127,6 +128,76 @@ function PlayerNewsCard({ intel, onTap }) {
   )
 }
 
+// "What am I giving up?" — a compact positional depth chart per position I'm
+// dealing from, marking the piece(s) leaving so the roster cost is concrete:
+// where the dealt player ranks among my others, who starts, and who's next up.
+function GivingUpBlock({ giveContext }) {
+  if (!giveContext?.length) return null
+
+  return (
+    <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
+      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary mb-2">
+        Giving Up
+      </p>
+      <div className="flex flex-col gap-3">
+        {giveContext.map(g => (
+          <div key={g.position}>
+            {/* Headline: each dealt player + their standing at the position */}
+            <p className="font-body text-xs text-text-primary dark:text-text-primary mb-1.5 leading-snug">
+              {g.dealt.map((d, i) => (
+                <span key={d.name}>
+                  {i > 0 && <span className="text-text-tertiary">, </span>}
+                  <span className="font-semibold">{d.name}</span>
+                  {' — your '}
+                  <span className={`font-mono font-semibold ${POS_TEXT[g.position] ?? 'text-text-secondary'}`}>
+                    {g.position}{d.posRank}
+                  </span>
+                  <span className="text-text-secondary dark:text-text-secondary"> of {g.count} · {d.isStarter ? 'starter' : 'depth'}</span>
+                </span>
+              ))}
+            </p>
+            {/* Positional pecking order by dynasty value — dealt row highlighted */}
+            <div className="flex flex-col gap-px">
+              {g.peers.slice(0, 6).map((q, i) => (
+                <div
+                  key={q.sleeperId}
+                  className={`flex items-center gap-2 px-1.5 py-1 rounded-none ${
+                    q.isDealt ? 'bg-warning/10' : ''
+                  }`}
+                >
+                  <span className="font-mono text-[10px] text-text-tertiary dark:text-text-tertiary w-3 shrink-0">
+                    {i + 1}
+                  </span>
+                  <span className={`font-body text-[11px] truncate flex-1 ${
+                    q.isDealt
+                      ? 'text-text-primary dark:text-text-primary font-semibold'
+                      : 'text-text-secondary dark:text-text-secondary'
+                  }`}>
+                    {q.name}
+                    {q.isStarter && (
+                      <span className="ml-1.5 font-mono text-[9px] uppercase tracking-wide text-text-tertiary dark:text-text-tertiary">
+                        ST
+                      </span>
+                    )}
+                  </span>
+                  {q.isDealt && (
+                    <span className="font-mono text-[9px] uppercase tracking-wide text-warning shrink-0">
+                      out
+                    </span>
+                  )}
+                  <span className="font-mono text-[11px] tabular-nums text-text-secondary dark:text-text-secondary shrink-0">
+                    {q.unranked ? '—' : q.value.toLocaleString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function TradeVerdict({
   analysis,
   verdict,
@@ -153,7 +224,7 @@ export default function TradeVerdict({
   }
 
   const { giveTotal, getTotal, filledNeeds, hurtStrengths, windowScore, windowNote, myTier,
-    benchNote, starterLossNote,
+    benchNote, starterLossNote, giveContext,
     playoffPct, oddsStance, oddsNote, oddsTone,
     partnerTrajectoryNote, partnerTrajectoryTone,
     myTrajectoryNote, myTrajectoryTone,
@@ -260,6 +331,9 @@ export default function TradeVerdict({
             </p>
           )}
         </div>
+
+        {/* Roster cost — where the dealt players stand at their position */}
+        <GivingUpBlock giveContext={giveContext} />
 
         {/* Layer 3: Win window */}
         <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
