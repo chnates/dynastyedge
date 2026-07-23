@@ -238,9 +238,19 @@ export function buildBriefing({
       id: 'draft-prep',
       icon: 'draft',
       tone: 'accent',
-      title: `${draft.season} rookie draft is on the books`,
+      title: `${draft.season} rookie draft is coming up`,
       body: 'Review your board and pick strategy before the clock starts.',
       action: { type: 'route', to: '/draft/board' },
+    })
+  } else if (draftStatus === 'complete') {
+    // 3b. Draft is done — the prep item resolves into a recap pointer.
+    items.push({
+      id: 'draft-recap',
+      icon: 'draft',
+      tone: 'accent',
+      title: `${draft.season} rookie draft is complete`,
+      body: 'See the recap — value drafted, biggest steals, and full results.',
+      action: { type: 'route', to: '/draft/tracker' },
     })
   }
 
