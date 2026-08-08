@@ -2150,6 +2150,8 @@ dynastyedge/
 │   ├── App.jsx
 │   └── main.jsx
 ├── docs/                        ← durable analysis + design records (not shipped)
+│   ├── open-items.md                ← THE living "what's next" backlog — deferred work + trigger conditions
+│   ├── project-status-2026-08.md    ← dated status snapshot (superseded by newer dated files)
 │   ├── repo-review-2026-07.md       ← full read-only audit + ranked backlog (all items landed)
 │   ├── analysis/                    ← model calibration + research notes
 │   └── design/                      ← Phase 3 "Primetime Blackout" brief + reference render
@@ -2465,6 +2467,13 @@ showing a dead season and never surfaces the new third year.
 -----
 
 ## Future Features (Do Not Build Yet)
+
+> **"What's next?" is answered by `docs/open-items.md`** — the living backlog
+> of deferred work, each item with the trigger condition that makes it ready.
+> Read it before proposing next steps. Some items are **not** ready work and
+> say so explicitly (rolling `PICK_YEARS` before the rookie draft runs actively
+> breaks the Draft Tracker). The list below is the longer-horizon feature
+> backlog; `open-items.md` is the near-term one.
 
 These are noted so the codebase is structured to support them later.
 Do not implement them until explicitly asked.

@@ -25,6 +25,13 @@ references were verified against the repo **as of 2026-07-05**.
 
 ## When NOT to use this skill
 
+> **If the question is literally "what's next?", read `docs/open-items.md`
+> FIRST.** That is the living backlog of concrete deferred work — known bugs,
+> scheduled maintenance, in-flight tasks — each with the trigger condition that
+> makes it ready. This skill covers *open research problems*, which is a
+> different and longer-horizon thing. Answering "what's next" from this file
+> alone will miss committed work the owner is waiting on.
+
 - **Routine feature work** (a new view, a UI fix, a data-contract change) →
   CLAUDE.md is the doc of record; gate the change through
   `dynastyedge-change-control`.

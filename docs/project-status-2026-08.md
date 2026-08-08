@@ -6,6 +6,12 @@ shipped, what's closed, and what the calendar is about to force. Durable
 architecture facts live in CLAUDE.md; this file is the perishable layer, kept
 in `docs/` deliberately so it can't rot inside the doc of record.
 
+> **Looking for "what's next?" → `docs/open-items.md`.** That is the *living*
+> backlog with trigger conditions, edited in place forever. This file is a
+> point-in-time snapshot and will be superseded; open work must not live here
+> alone. The two items §4 and §5 describe are tracked there as **OPEN-2** and
+> **OPEN-1**.
+
 ---
 
 ## 1. Shipped surface
@@ -116,6 +122,8 @@ explicit owner ask.
 
 Supersede this file with a new dated snapshot rather than editing it in place
 once its facts age (a new season, a completed draft, a closed research item).
+**Before superseding it, check that every open item it mentions is already
+tracked in `docs/open-items.md`** — that list is the one that persists.
 Re-verify §3 with:
 
 ```bash
