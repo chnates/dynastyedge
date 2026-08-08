@@ -5,7 +5,8 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-08-08 (ACTIVE-1 closed; trigger sweep + pre-draft
+**Last reviewed:** 2026-08-08 (ACTIVE-2 opened — rookie research back-test;
+ACTIVE-1 closed; trigger sweep + pre-draft
 slot-tier verification recorded below).
 
 **How to use it:**
@@ -21,7 +22,38 @@ slot-tier verification recorded below).
 
 ## 1. Active
 
-**Nothing is currently active.** ACTIVE-1 closed 2026-08-08; it is retained
+### ACTIVE-2 — Draft › Research module (back-test done, build not started)
+
+**Status: approved in outline, not built.** The owner asked for a rookie-draft
+research tool on 2026-08-08 and approved its shape: a new **Draft › Research**
+sub-tab backed by a **third GitHub Actions pipeline** (nflverse is CORS-blocked
+and its depth-chart file is 39MB, so a small derived JSON gets published to a
+data branch, same shape as `values-history.yml`). The owner directed that the
+signal back-test land **first** so the on-screen numbers are defensible.
+
+**The back-test is done** — `docs/analysis/rookie-research-signals-2026-08.md`,
+reproducible via `node scripts/dev/rookie-signal-backtest.mjs --preseason`.
+Headlines, so nobody re-derives them:
+
+- **Preseason production is a trap** (rho **−0.195**): the best rookies sit in
+  August. Do not build a preseason leaderboard — it is the feature a reasonable
+  person builds first, and it inverts.
+- **Week-1 depth rank + NFL draft capital, blended 0.3/0.7, gives rho +0.664**
+  over n=396 drafted skill rookies across 2021–2025, against +0.598 for draft
+  capital alone. The blend curve is flat from w=0.2–0.5.
+- Depth-rank value is **position-specific** (QB is binary, RB degrades gently,
+  WR falls off a cliff after rank 1). A position-blind score returns a top-8
+  "undervalued" list of eight backup tight ends.
+
+**Next step:** build it, or park it. Nothing further is blocked on research.
+The one deliberately unscored input is **camp movement** (depth-chart climb
+since March) — computable for 2026 but not back-testable, because nflverse's
+2025 charts start 2025-08-03. Display it; do not score it until a season of it
+exists.
+
+### ACTIVE-1 — closed
+
+ACTIVE-1 closed 2026-08-08; it is retained
 below in full because what it found — three silent live-API contract breaks —
 is the durable part, and the re-verification commands are needed again next
 season.
