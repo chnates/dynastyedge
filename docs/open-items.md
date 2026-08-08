@@ -5,7 +5,8 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-08-08 (ACTIVE-1 closed).
+**Last reviewed:** 2026-08-08 (ACTIVE-1 closed; trigger sweep + pre-draft
+slot-tier verification recorded below).
 
 **How to use it:**
 - Each item states its **trigger** — the condition that makes it ready. An item
@@ -24,6 +25,94 @@ with a reason belongs here, or it will be forgotten.
 below in full because what it found — three silent live-API contract breaks —
 is the durable part, and the re-verification commands are needed again next
 season.
+
+### Trigger sweep — 2026-08-08
+
+Every deferred item's trigger checked against the live API. **None has fired**,
+so there is no ready work. Re-run this sweep rather than re-deriving it.
+
+| Item | Trigger | State on 2026-08-08 |
+|---|---|---|
+| OPEN-1 | ~4–6 weeks of 2026 waivers | `/state/nfl` → `season_type: pre` — no regular-season waivers exist |
+| OPEN-2 | 2026 rookie draft done + picks spent | draft `status: pre_draft`, **0 picks made** — rolling now breaks the Tracker |
+| OPEN-3 | owner ask + live 2026 waiver data | neither |
+| OPEN-5 | Week 1 | ~1 month out (`season_start_date: 2026-08-06` is *preseason*) |
+
+Health at sweep time: `npm ci` → **107/107 tests**, lint clean. All four
+published feeds live — `news.json` (100 items, 3 sources), `values-history.json`
+(59 days / 579 players), `trade-values.json`, `values-archive.json`
+(2026-07, 2026-08). The three ACTIVE-1 contract fixes still hold (commands in
+ACTIVE-1 below; all three returned the expected results).
+
+### Verified 2026-08-08 — exact-slot pick pricing, against a real draft order
+
+**Why this was worth doing once:** the 2026 rookie draft order was only just
+set, so `useLeague`'s exact-slot pricing path — and in particular
+`buildDraftSlots`' **second** tier — had never run against real data. Until
+now the `draft_order` fallback existed only under synthetic fixtures, and it is
+the tier that carries the app for the weeks before Sleeper builds the board.
+
+Live state: draft `pre_draft`, `type: linear`, 4 rounds, 22 in-draft traded
+picks, 0 picks made, **`start_time: null`** — the draft is imminent but
+unscheduled, so the Tracker's one day a year can arrive without warning.
+
+Replaying `useLeague`'s enrichment (`resolvePickOwnership` → `buildDraftSlots`
+→ `slotForRound` → `findExactSlotValue`) under plain Node against live Sleeper
++ FantasyCalc:
+
+- **Both slot-resolution tiers agree on all 10 rosters** — `slot_to_roster_id`
+  and the `draft_order`-through-`owner_id` fallback produce identical maps.
+  The fallback is real-data validated for the first time.
+- **All 40 of the 2026 picks priced at their exact slot**; zero fell back to a
+  round median. FantasyCalc carries 48 slot-level entries (`DP_0_0` …) plus
+  round-level entries for 2026–2029.
+- Round-1 slot prices are monotonically non-increasing (7169 → 2581), and pick
+  counts reconcile: 40 = 10 teams × 4 rounds.
+
+So slot-accurate pick capital is correct on every roster-derived surface today.
+
+Note for OPEN-2: FantasyCalc already lists 2029 round-level picks, but
+`PICK_YEARS` must still not roll until the 2026 draft runs and its picks are
+spent.
+
+### Verified 2026-08-08 — draft render rehearsal
+
+The data layer above proves the numbers; this proves the *components render
+them*. Both halves were run, because they answer different questions.
+
+**Half 1 — the real 2026 order, no overrides.** Screenshotting the running app
+against live APIs, all three slot-consuming surfaces agree with the Node
+replay, value for value:
+
+| Surface | Rendered |
+|---|---|
+| Draft Tracker › My Draft Capital | `1.06 3,413` · `3.06 1,158` · `4.06 870` · `4.10 803` · `Taxi 2/5` |
+| My Team › Pick Capital | 2026 as `1.06 · 3.06 · 4.10 (via Ministry Of Touchdowns) · 4.06`; 2027/2028 fall back to `1st…4th` — correct, no order exists for those seasons |
+| Trade › Pick Trades | every opponent pick at its exact slot (`1.01` = 7,169, matching FantasyCalc); my own picks correctly absent from "picks you could target" |
+
+**Half 2 — the synthetic walk** (`replay-live.mjs --scenario draft`), covering
+the three states that cannot exist yet: **7/7 assertions passed** across
+`pre` → `clock` → `mid` → `complete`. On-the-clock banner ("YOU'RE ON THE
+CLOCK · 1.04"), Best Available (best overall + top-need), the picks-until-yours
+countdown, and the completion recap (team totals, my row in brand red with the
+You chip, full results) all render.
+
+> ⚠ **Replay artifact — do not chase it as a bug.** In the `clock`/`mid`
+> captures the capital card shows `2.04` and `2.09` with **no value**, while
+> `1.04` shows one. Cause: the replay overrides `/league/{id}/drafts`, so
+> `useLeague` prices off the 2025 fixture board — but pick *ownership* still
+> comes from real 2026 `traded_picks`. The fixture says I hold two 2nd-rounders;
+> my real 2026 inventory has none, so `buildMyCapital`'s join on
+> `round` + `originalOwner` (`utils/draftLive.js`) misses and falls to
+> `value: 0`, which `DraftTracker.jsx:120` renders as blank via
+> `{c.value > 0 && …}`. The real-order capture (Half 1) joins all four picks
+> correctly — that is the discriminator. Any future replay mixing a fixture
+> board with live ownership will show this.
+
+**Remaining gap, honestly stated:** the rehearsal proves the components render
+the live path; it does not prove Sleeper will behave on the day. The API
+contracts are the fragile part (they changed once already, unannounced) — so
+re-run the ACTIVE-1 curl checks above if draft day looks wrong.
 
 ### ACTIVE-1 — Season-readiness tests (draft day + Week 1)
 
