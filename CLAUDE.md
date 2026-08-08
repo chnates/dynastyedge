@@ -117,7 +117,7 @@ No authentication required. Read-only. Stay under 1,000 API calls per minute.
 |Weekly projections             |`/projections/nfl/regular/{year}/{week}`         |
 |Weekly stats                   |`/stats/nfl/regular/{year}/{week}`               |
 |Season stats (player intel)    |`/stats/nfl/regular/{year}` (lazy, once per session)|
-|NFL schedule                   |`/schedule/nfl/regular/{year}`                   |
+|NFL schedule                   |`/schedule/nfl/regular/{year}` — **NOT under `/v1`** (see below)|
 |League drafts (rookie draft sync)|`/league/1313933520715907072/drafts`           |
 |Live draft picks / in-draft pick trades|`/draft/{draft_id}/picks` · `/draft/{draft_id}/traded_picks`|
 |League history (manager scouting)|`/league/{id}` → `previous_league_id` chain, then per past season: users · rosters · transactions · drafts + picks (lazy, once per session, via `useLeagueHistory`)|
@@ -128,6 +128,20 @@ data (which includes a `sleeperId` field). This is the bridge between the two AP
 Always use `sleeperId` as the join key (normalized to strings). Players FantasyCalc
 doesn't rank fall back to the shared player DB for name/position and display `—`
 as their value.
+
+**Critical schedule note:** the NFL schedule is the ONE Sleeper endpoint that
+does **not** live under `/v1` — ``/v1/schedule/nfl/regular/{year}`` 404s for every
+season (verified 2026-08-08 against 2024/2025/2026). Use `SLEEPER_ROOT`
+(`https://api.sleeper.app`, no `/v1`). Its payload also uses **`home` / `away`**,
+not `home_team` / `away_team`. Both mistakes fail *silently* — the wrong field
+names simply yield "no games", killing bye detection and opponent lookup — which
+is why they survived until the Week 1 rehearsal (see `docs/open-items.md`).
+
+**Critical stats note:** `/stats/nfl/regular/{year}/{week}` entries carry **no
+`pos` / `opp` / `tm`** — all three are `null` on every entry in every season
+checked (2022–2026). Anything needing a player's position, team, or opponent
+must join to the shared player DB (`usePlayerDB` keeps `position` + `team`) and
+to the schedule. The stats payload supplies points and nothing else.
 
 **Standings note:** Win/loss records and points for/against come from
 `roster.settings` (`wins`, `losses`, `ties`, `fpts`, `fpts_against`) on the
@@ -660,8 +674,8 @@ win window); Season Review remains available on its own tab.*
 |----------------------------|--------------------------------------------------------------------------------------------------|
 |Weekly point projections    |Sleeper `/projections/nfl/regular/{year}/{week}`                                                  |
 |Injury / availability status|Sleeper player data (injury_status field)                                                         |
-|Bye weeks                   |Sleeper `/schedule/nfl/regular/{year}`                                                            |
-|Matchup quality             |Computed from Sleeper `/stats/nfl/regular/{year}/{week}` — rank each NFL defense vs. each position|
+|Bye weeks                   |Sleeper `/schedule/nfl/regular/{year}` (off `/v1` — `SLEEPER_ROOT`; fields `home`/`away`)          |
+|Matchup quality             |Sleeper `/stats/nfl/regular/{year}/{week}` for points, joined to the player DB (position + team) and the schedule (opponent) — those stats carry no `pos`/`opp`/`tm`|
 |Dynasty value (secondary)   |FantasyCalc (already cached)                                                                      |
 
 #### Main view
@@ -702,8 +716,21 @@ Shown on every player in both starting lineup and bench:
 - ⚪ **Neutral** — middle third
 - 🔴 **Tough** — top third
 
-Compute rankings fresh each week from Sleeper defensive stats.
+Rankings are computed fresh each week by `computeDefenseRankings`
+(`utils/projections.js`) from the previous week's stats: **total** half-PPR
+points each defense allowed to each position — totalled, not averaged over the
+players faced, since the stats payload includes every rostered player and an
+average would punish a defense merely for facing a deep bench of zero-point
+players. The stats endpoint carries no position/team/opponent, so those come
+from the shared player DB and the schedule (see the Critical stats note).
 Update when the user manually refreshes or opens the Lineup tab.
+
+**Week 1 degrades honestly:** no prior week has been played, so Sleeper returns
+`{}` and every player reads ⚪ Neutral rather than a ranking invented from an
+empty sample. The schedule and prior-week stats are both **best-effort** —
+either failing leaves byes/matchup quality degraded but must never blank the
+Optimizer behind an `ErrorState` (it renders that check *before* the offseason
+check, so a rejected fetch would take the whole tab down for the season).
 
 -----
 
@@ -868,7 +895,20 @@ grey out and amber badges show the latest of my remaining picks where each
 prospect is still projected available (by derived rookie ADP).
 
 **Tracker — synced via `useSleeperDraft`:** the 2026 rookie draft comes from
-`/league/{id}/drafts` → `/draft/{draft_id}/picks` + `/draft/{draft_id}/traded_picks`.
+`/league/{id}/drafts` → `/draft/{draft_id}` + `/draft/{draft_id}/picks` +
+`/draft/{draft_id}/traded_picks`.
+**The single-draft call is load-bearing:** `/league/{id}/drafts` **omits
+`slot_to_roster_id` entirely** (verified 2026-08-08), and only `/draft/{draft_id}`
+carries it. Without it `buildDraftOrder` returns `null`, which silently disables
+the entire order-driven live path — on-the-clock banner, "N picks until yours",
+Best Available, and slot-accurate capital all vanish with no error. The fetch
+merges the single-draft object over the listed one and falls back to
+`draft_order` + rosters (same two-tier contract as pick capital, Feature 1) so
+the board still resolves in `pre_draft`.
+All live-path derivation is **pure logic in `utils/draftLive.js`**
+(`deriveDraftState`, `buildBestAvailable`, `buildMyCapital`, `buildRecap`) —
+extracted from the component so `tests/draftLive.test.mjs` can replay a real
+past draft pick by pick.
 Real draft order (`slot_to_roster_id` + in-draft pick trades), live pick feed,
 on-the-clock banner, "N picks until yours", a My Draft Capital card (real pick
 slots + FantasyCalc pick values + taxi usage), and an on-the-clock **Best
@@ -2140,6 +2180,7 @@ dynastyedge/
 │   │   ├── rookieAdp.js         ← derived rookie-class ADP for the Draft section
 │   │   ├── pickTrades.js        ← pick trade calculator: slot pricing + packages
 │   │   ├── peakWindows.js       ← position peak-age windows + status helper
+│   │   ├── draftLive.js         ← THE rookie draft live path (on the clock, countdown, Best Available, capital, recap) — pure, extracted from DraftTracker so it is testable
 │   │   ├── lineupBuild.js       ← THE optimal starting-lineup slot-fill (metric-agnostic); fed points (Optimizer) or dynasty value (Trade Analyzer fit sim)
 │   │   ├── lineupHistory.js     ← optimal-lineup POINTS math for efficiency review (delegates to lineupBuild)
 │   │   ├── playoffOdds.js       ← scoring model + Monte Carlo + deadline verdict
@@ -2156,6 +2197,11 @@ dynastyedge/
 │   ├── analysis/                    ← model calibration + research notes
 │   └── design/                      ← Phase 3 "Primetime Blackout" brief + reference render
 ├── tests/                       ← plain-Node test suite (node:test + node:assert/strict, zero deps)
+│   ├── fixtures/
+│   │   └── draft-2025.json          ← this league's REAL 2025 rookie draft (board, 40 picks, 24 traded picks) — replayed by truncation to synthesize every mid-draft state
+│   ├── draftLive.test.mjs           ← draft live path: order resolution (both tiers), real traded-pick replay, on-the-clock/countdown at all 40 board positions, Best Available, capital, recap steal/reach banding
+│   ├── sleeperDraft.test.mjs        ← mocked-fetch: single-draft endpoint merged over the list (slot_to_roster_id), session cache, best-effort sub-fetch degradation
+│   ├── projections.test.mjs         ← Week 1 lineup engine: defense rankings joined via player DB + schedule, home/away fields, Week-1 empty-stats contract, red/yellow/green flags, best bench
 │   ├── playoffOdds.test.mjs         ← fixed-seed determinism, Σ odds = playoff teams, verdict thresholds
 │   ├── pickCapital.test.mjs         ← pick ownership resolution, round-median pick values, year weights
 │   ├── pickTrades.test.mjs          ← slot tiers (as coded), slot pricing fallback, package constraints
@@ -2181,13 +2227,17 @@ honestly:** instead of "cannot find module" it prints `# tests 47 / # pass 44 /
 the ones transitively importing `react` (`tradeAnalysis.js` →
 `recommendations.js` → `useLeague.js`, plus `matchupWeeks` and `transactions`
 loading their hooks) — the file fails to load, so its tests never run and the
-count silently drops from **72** to 47. `npm run build` in the same state fails
-with `sh: 1: vite: not found`. **If the test count isn't 72, run `npm ci`
+count silently drops from **107** to 47. `npm run build` in the same state fails
+with `sh: 1: vite: not found`. **If the test count isn't 107, run `npm ci`
 before debugging anything.**
 
 **Tests:** `npm test` runs the `tests/` suite — plain `.mjs` scripts on Node's
 built-in `node:test` runner with `node:assert/strict`, zero new dependencies
-(the sanctioned no-deps pattern). The script registers the module-resolver hook
+(the sanctioned no-deps pattern). One committed fixture,
+`tests/fixtures/draft-2025.json`, holds this league's real 2025 rookie draft;
+truncating its pick list to the first N picks synthesizes every intermediate
+draft state, so the live path is tested against genuine payload shapes rather
+than invented ones. The script registers the module-resolver hook
 at `.claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs` so
 `src/utils`' extensionless imports load under plain Node. Scope is the **pure
 analytical utils** plus the **module-level fetch loaders**
@@ -2198,6 +2248,24 @@ failing test is either a code regression or doc drift, never a mystery. The
 suite runs on synthetic fixtures — it proves the logic is deterministic and
 threshold-correct, not that the models are well-calibrated (that bar is
 real-data verification).
+
+**Live-surface rehearsals:** `scripts/dev/replay-live.mjs` drives the real
+running app in headless Chromium while overlaying a synthetic world on a few
+endpoints, so the two once-a-year surfaces can be exercised before they happen:
+
+```bash
+npm run dev &
+node scripts/dev/replay-live.mjs --scenario draft            # pre → clock → mid → complete
+node scripts/dev/replay-live.mjs --scenario week1            # Week 1, offseason gates open
+node scripts/dev/replay-live.mjs --scenario week1 --week 6   # mid-season (real matchup quality)
+```
+
+It reuses `screenshot-app.mjs`'s request-interception approach (see the
+`dynastyedge-visual-capture` skill for the three sandbox gotchas), fakes only
+the draft/state/matchup endpoints, and leaves everything else on the live API.
+Screenshots land in `.screenshots/replay-<scenario>/`. It complements the
+`tests/` suite rather than replacing it: the tests pin the pure logic, this
+proves the components actually render it.
 
 **Lint:** `npm run lint` runs ESLint 9 (flat config, `eslint.config.js`) over
 `src/` and `scripts/` — `@eslint/js` recommended rules plus

@@ -10,6 +10,11 @@ export const MY_USERNAME = 'chnates'
 export const MY_TEAM_NAME = 'Nix Cage'
 
 export const SLEEPER_BASE = 'https://api.sleeper.app/v1'
+// The NFL schedule is the ONE Sleeper endpoint that does not live under /v1 —
+// `/v1/schedule/nfl/regular/{year}` 404s for every season (verified 2026-08-08
+// against 2024/2025/2026). Its payload also uses `home`/`away`, not
+// `home_team`/`away_team`.
+export const SLEEPER_ROOT = 'https://api.sleeper.app'
 export const FANTASYCALC_BASE = 'https://api.fantasycalc.com'
 // Unofficial ESPN API — no auth; used only for per-player news, degrades silently
 export const ESPN_BASE = 'https://site.api.espn.com'

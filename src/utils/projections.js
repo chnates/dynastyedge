@@ -10,28 +10,52 @@ export function getProjPts(sleeperId, projMap) {
   return projMap[sleeperId]?.pts_half_ppr ?? 0
 }
 
-// Rank each NFL defense vs each position based on pts they allowed last week.
-// Returns { QB: { 'NE': 'Easy'|'Neutral'|'Tough', ... }, RB: {...}, ... }
-export function computeDefenseRankings(defStatsRaw) {
-  if (!defStatsRaw) return {}
+// Map each NFL team to its opponent for a given week.
+// Sleeper's schedule payload uses `home`/`away` (NOT `home_team`/`away_team`).
+export function buildOpponentMap(schedule, week) {
+  const opp = {}
+  ;(Array.isArray(schedule) ? schedule : []).forEach(g => {
+    if (g.week !== week || !g.home || !g.away) return
+    opp[g.home] = g.away
+    opp[g.away] = g.home
+  })
+  return opp
+}
 
+// Rank each NFL defense vs each position by the fantasy points it allowed in
+// the given week. Returns { QB: { 'NE': 'Easy'|'Neutral'|'Tough', ... }, ... }.
+//
+// Sleeper's `/stats/nfl/regular/{y}/{w}` entries carry NO `pos`/`opp`/`tm` —
+// they are null on every entry in every season checked (2022–2026, verified
+// 2026-08-08). So position and team come from the shared player DB and the
+// opponent comes from the schedule; the stats payload supplies only the
+// points. With no stats (a week not yet played) every position ranks empty and
+// `getMatchupQuality` reports 'Neutral' — the honest answer, not a guess.
+export function computeDefenseRankings(defStatsRaw, { playerDB, schedule, week } = {}) {
+  if (!defStatsRaw || !playerDB) return {}
+
+  const oppByTeam = buildOpponentMap(schedule, week)
   const allowed = {}
   POSITIONS.forEach(pos => { allowed[pos] = {} })
 
-  Object.values(defStatsRaw).forEach(entry => {
-    const { pos, opp, pts_half_ppr } = entry
-    if (!pos || !opp || pts_half_ppr == null || !allowed[pos]) return
-    if (!allowed[pos][opp]) allowed[pos][opp] = { total: 0, count: 0 }
-    allowed[pos][opp].total += pts_half_ppr
-    allowed[pos][opp].count += 1
+  Object.entries(defStatsRaw).forEach(([sleeperId, entry]) => {
+    const pts = entry?.pts_half_ppr
+    if (pts == null) return
+    const player = playerDB[String(sleeperId)]
+    const pos = player?.position
+    const opp = oppByTeam[player?.team]
+    if (!pos || !opp || !allowed[pos]) return
+    allowed[pos][opp] = (allowed[pos][opp] ?? 0) + pts
   })
 
   const rankings = {}
   POSITIONS.forEach(pos => {
-    const defenses = allowed[pos]
-    const sorted = Object.entries(defenses)
-      .map(([team, { total, count }]) => ({ team, avg: count > 0 ? total / count : 0 }))
-      .sort((a, b) => b.avg - a.avg) // most pts allowed = easiest matchup
+    // TOTAL points allowed to the position, not a per-player average: the
+    // stats payload includes every rostered player, so averaging would punish
+    // a defense merely for facing a deep bench of zero-point players.
+    const sorted = Object.entries(allowed[pos])
+      .map(([team, pts]) => ({ team, pts }))
+      .sort((a, b) => b.pts - a.pts) // most pts allowed = easiest matchup
 
     const n = sorted.length
     if (n === 0) { rankings[pos] = {}; return }
@@ -55,11 +79,11 @@ export function getMatchupQuality(playerTeam, playerPosition, currentWeek, sched
   if (!playerTeam || !playerPosition || !schedule?.length || !defenseRankings) return 'Neutral'
 
   const game = schedule.find(
-    g => g.week === currentWeek && (g.home_team === playerTeam || g.away_team === playerTeam)
+    g => g.week === currentWeek && (g.home === playerTeam || g.away === playerTeam)
   )
   if (!game) return 'Neutral'
 
-  const opponent = game.home_team === playerTeam ? game.away_team : game.home_team
+  const opponent = game.home === playerTeam ? game.away : game.home
   return defenseRankings[playerPosition]?.[opponent] ?? 'Neutral'
 }
 

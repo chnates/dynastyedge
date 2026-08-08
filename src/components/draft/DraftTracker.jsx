@@ -7,6 +7,7 @@ import { useLeagueContext } from '../../context/LeagueContext'
 import { useRookieADP } from '../../hooks/useRookieADP'
 import { buildRookieProspects } from '../../utils/rookieAdp'
 import { useSleeperDraft, buildDraftOrder, DRAFT_SEASON } from '../../hooks/useSleeperDraft'
+import { deriveDraftState, buildBestAvailable, buildMyCapital, buildRecap } from '../../utils/draftLive'
 import { getTeamName } from '../../hooks/useLeague'
 import { Sheet, Modal, Button } from '../ui'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
@@ -363,31 +364,24 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects, my
     })
   }, [])
 
-  const order = useMemo(() => buildDraftOrder(draft, tradedPicks), [draft, tradedPicks])
-  const orderKnown = order != null
-  const teams = draft.settings?.teams ?? FALLBACK_TEAMS
-  const totalPicks = order?.length ?? (draft.settings?.rounds ?? FALLBACK_ROUNDS) * teams
-
-  const sortedPicks = useMemo(
-    () => [...picks].sort((a, b) => a.pick_no - b.pick_no),
-    [picks]
+  // Order resolves from slot_to_roster_id, else draft_order joined to rosters —
+  // the list endpoint omits the former, so rosters are required (see
+  // buildDraftOrder). All live-path derivation is pure: src/utils/draftLive.js.
+  const allRosters = league?.allRosters
+  const order = useMemo(
+    () => buildDraftOrder(draft, tradedPicks, allRosters ?? []),
+    [draft, tradedPicks, allRosters]
   )
-  const draftedIds = useMemo(
-    () => new Set(sortedPicks.map(p => String(p.player_id))),
-    [sortedPicks]
+  const {
+    orderKnown, teams, totalPicks, sortedPicks, draftedIds,
+    picksMade, isComplete, isLive, nextPick, isOnClock, picksUntilMine,
+  } = useMemo(
+    () => deriveDraftState({
+      draft, order, picks, myRosterId,
+      fallbackRounds: FALLBACK_ROUNDS, fallbackTeams: FALLBACK_TEAMS,
+    }),
+    [draft, order, picks, myRosterId]
   )
-
-  const isComplete = draft.status === 'complete' ||
-    (totalPicks > 0 && sortedPicks.length >= totalPicks)
-  const isLive = draft.status === 'drafting' || draft.status === 'paused'
-  const nextPick = !isComplete && orderKnown ? order[sortedPicks.length] ?? null : null
-  const isOnClock = isLive && nextPick?.rosterId === myRosterId
-  const myUpcoming = orderKnown
-    ? order.slice(sortedPicks.length).filter(p => p.rosterId === myRosterId)
-    : []
-  const picksUntilMine = myUpcoming.length > 0
-    ? myUpcoming[0].overall - sortedPicks.length - 1
-    : null
 
   const boardRankMap = useMemo(() => {
     const boardOrder = readJSON(BOARD_ORDER_KEY, [])
@@ -427,27 +421,13 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects, my
 
   // My pick capital: order-driven when the real order is known; values come
   // from league pick data (already FantasyCalc-priced in useLeague).
-  const capital = useMemo(() => {
-    const leaguePicks = (league?.myRoster?.picks ?? []).filter(p => p.season === DRAFT_SEASON)
-    if (orderKnown) {
-      return order
-        .filter(p => p.rosterId === myRosterId)
-        .map(p => ({
-          key: p.label,
-          label: p.label,
-          used: p.overall <= sortedPicks.length,
-          value: leaguePicks.find(lp =>
-            lp.round === p.round && lp.originalOwner === p.originalRosterId
-          )?.value ?? 0,
-        }))
-    }
-    return leaguePicks.map(p => ({
-      key: `${p.round}-${p.originalOwner}`,
-      label: `Rd ${p.round}`,
-      used: false,
-      value: p.value ?? 0,
-    }))
-  }, [order, orderKnown, league, sortedPicks.length, myRosterId])
+  const capital = useMemo(() => buildMyCapital({
+    order,
+    orderKnown,
+    leaguePicks: (league?.myRoster?.picks ?? []).filter(p => p.season === DRAFT_SEASON),
+    picksMade,
+    myRosterId,
+  }), [order, orderKnown, league, picksMade, myRosterId])
 
   const taxiSlots = leagueInfo?.settings?.taxi_slots ?? null
   const taxiUsed = useMemo(
@@ -455,45 +435,16 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects, my
     [league]
   )
 
-  const bestAvailable = useMemo(() => {
-    if (!isOnClock) return []
-    const avail = prospects.filter(p => !draftedIds.has(p.sleeperId))
-    const rankOf = boardRankMap
-      ? p => boardRankMap[p.sleeperId] ?? 9999
-      : p => p.adp ?? 9999
-    const sorted = [...avail].sort((a, b) => rankOf(a) - rankOf(b))
-    const rows = []
-    if (sorted[0]) rows.push({ tag: 'Best overall', player: sorted[0] })
-    needPositions.forEach(pos => {
-      const top = sorted.find(p =>
-        p.position === pos && !rows.some(r => r.player.sleeperId === p.sleeperId)
-      )
-      if (top) rows.push({ tag: `Top ${pos} · need`, player: top })
-    })
-    return rows
-  }, [isOnClock, prospects, draftedIds, boardRankMap, needPositions])
+  const bestAvailable = useMemo(
+    () => buildBestAvailable({ isOnClock, prospects, draftedIds, boardRankMap, needPositions }),
+    [isOnClock, prospects, draftedIds, boardRankMap, needPositions]
+  )
 
   // ── Recap data (complete draft) ────────────────────────────────────────────
-  const recap = useMemo(() => {
-    if (!isComplete) return null
-    const totals = {}
-    const entries = sortedPicks.map(pick => {
-      const player = resolvePick(pick)
-      const adp = adpById[String(pick.player_id)] ?? null
-      const delta = adp != null ? pick.pick_no - adp : null
-      if (!totals[pick.roster_id]) totals[pick.roster_id] = { rosterId: pick.roster_id, total: 0, count: 0 }
-      totals[pick.roster_id].total += player.value ?? 0
-      totals[pick.roster_id].count += 1
-      return { pick, player, delta }
-    })
-    const withDelta = entries.filter(e => e.delta != null)
-    return {
-      entries,
-      teamTotals: Object.values(totals).sort((a, b) => b.total - a.total),
-      steals: [...withDelta].sort((a, b) => b.delta - a.delta).filter(e => e.delta >= 2).slice(0, 3),
-      reaches: [...withDelta].sort((a, b) => a.delta - b.delta).filter(e => e.delta <= -2).slice(0, 3),
-    }
-  }, [isComplete, sortedPicks, resolvePick, adpById])
+  const recap = useMemo(
+    () => buildRecap({ isComplete, sortedPicks, resolvePick, adpById }),
+    [isComplete, sortedPicks, resolvePick, adpById]
+  )
 
   const recentPicks = useMemo(
     () => [...sortedPicks].reverse(),
