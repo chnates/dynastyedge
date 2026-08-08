@@ -16,13 +16,13 @@ description: >
 
 This repo's machine gates (verified 2026-08-08) are `npm run lint` (ESLint 9
 flat config, error severity) + `npm test` (`tests/*.test.mjs` on Node's
-built-in `node:test`, **107 passing**) + `npm run build` — enforced by `ci.yml`
+built-in `node:test`, **120 passing**) + `npm run build` — enforced by `ci.yml`
 on every branch push/PR and by `deploy.yml` before publishing.
 
 > **Run `npm ci` first.** A fresh clone (what every remote session gets) has
 > no `node_modules`, and `npm test` reports that as `# tests 47 / # pass 44 /
 > # fail 3` rather than a missing-module error — it looks like a regression.
-> **A run that doesn't say 107 is an environment problem, not a code problem**;
+> **A run that doesn't say 120 is an environment problem, not a code problem**;
 > full mechanism in `dynastyedge-build-and-env` §7. Never report those 3 as
 > failing tests without checking dependencies first.
 

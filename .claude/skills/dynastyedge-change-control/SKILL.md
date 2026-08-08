@@ -79,7 +79,7 @@ Run top to bottom before any merge to `main`:
 cd /home/user/dynastyedge
 npm ci                 # STEP 0 — see the trap below. Never `npm install`.
 npm run lint           # ESLint 9 flat config over src/ + scripts/, error severity
-npm test               # tests/*.test.mjs on node:test (107 passing as of 2026-08-08)
+npm test               # tests/*.test.mjs on node:test (120 passing as of 2026-08-08)
 npm run build          # must end "✓ built in …"
 ```
 
@@ -90,9 +90,9 @@ npm run build          # must end "✓ built in …"
 > files (`tradeAnalysis`, `matchupWeeks`, `transactions`) are the ones that
 > transitively import `react` — `tradeAnalysis.js → recommendations.js →
 > useLeague.js`, and the two hook loaders directly — so their whole file fails
-> to load and its tests never run, silently dropping the count from 107 to 47.
+> to load and its tests never run, silently dropping the count from 120 to 47.
 > `npm run build` in the same state fails with `sh: 1: vite: not found`.
-> **If the test count is not 107, install dependencies before debugging
+> **If the test count is not 120, install dependencies before debugging
 > anything.** (Observed 2026-08-08.)
 
 1. **Lint + tests + build green.** All three verified working as of

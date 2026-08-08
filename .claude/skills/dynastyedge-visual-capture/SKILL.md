@@ -42,7 +42,22 @@ Flags: `--player NAME` (opens global search → clicks the match → shoots the
 profile drawer) · `--route PATH` (navigates an app route — any form works,
 `/league`, `league`, or `#/league`) · `--out PATH` · `--width N` (default 390)
 · `--height N` · `--theme dark|light` · `--full` (full page, not just the
-sheet) · `--url BASE` · `--wait MS`.
+sheet) · `--url BASE` · `--wait MS` · `--stub SUBSTRING=FILE` (serve a local
+file for any external URL containing SUBSTRING; repeatable).
+
+**`--stub` is how you screenshot a feature whose Actions feed doesn't exist
+yet.** A data branch is only created by its workflow's first run, so on a
+feature branch the feed 404s and you'd only ever capture the empty state.
+Point the stub at a local dry run of the snapshot script to see the real UI —
+and capture the 404 path too, since that's what ships first:
+
+```bash
+node scripts/snapshot-rookie-intel.mjs                # writes ./rookie-intel.json
+node scripts/dev/screenshot-app.mjs --route /draft/research \
+  --stub rookie-intel.json=/tmp/rookie-intel.json     # populated
+node scripts/dev/screenshot-app.mjs --route /draft/research \
+  --stub rookie-intel.json=/nonexistent.json          # degraded state
+```
 
 ## The gotchas — already solved, do not rediscover
 

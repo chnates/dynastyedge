@@ -5,7 +5,8 @@ description: >
   symptom is reported or observed: app stuck on spinner, blank screen, infinite
   loading, sign-in / login broken, player shows "—" instead of a value, player
   missing from roster view, wrong numbers, pick valued at 0, trade totals look
-  wrong, FAAB not counted, sparkline missing, news section gone, stale news or
+  wrong, FAAB not counted, sparkline missing, news section gone, rookie
+  research empty or unscored, stale news or
   values as an in-app symptom (this playbook is the first stop for symptom
   triage; operating/re-running the pipelines is dynastyedge-run-and-operate,
   measuring feed freshness is dynastyedge-diagnostics-and-tooling), section
@@ -172,6 +173,11 @@ Silent-hide contracts. If the symptom is on this list, close the ticket.
 | Buy-Low / Sell-High sections show a one-line hint | Deliberate: these two *never* vanish silently; Risers/Fallers/Watching *do* hide when empty | `src/components/league/MarketMovers.jsx` |
 | Playoff-odds buyer/seller flags absent | Odds consumers degrade silently offseason | `usePlayoffOdds` consumers (Analyzer L3, Partner cards, Edge) |
 | Rookie "Rk ADP" shows `—` | Rookie with no FantasyCalc rank sorts to bottom by design | `src/utils/rookieAdp.js` |
+| Draft › Research shows "Rookie intel hasn't published yet" | Class B feed; the `rookie-intel` branch does not exist until `rookie-intel.yml`'s first run. Board falls back to dynasty-value order | `src/hooks/useRookieIntel.js` (`intelFailed` latch) |
+| A rookie on the Research board reads "No depth-chart or draft record yet", score `—` | `noData` contract: absence may be a feed gap, so he is shown but never scored or ranked — scoring him at the bottom would invent information | `buildRookieResearch`, `src/utils/rookieResearch.js` |
+| An undrafted rookie outranks a late-round pick | Deliberate: UDFA floors at `UDFA_SCORE`, not 0, so a rank-1 UDFA beats a buried day-three pick | `src/utils/rookieResearch.js` |
+| Market vs Model lists are short or empty | Divergence is computed **within position** at `minGap` 5; small honest disagreement sets are the expected output, not a bug | `splitDivergence`, `src/utils/rookieResearch.js` |
+| No preseason stats anywhere in Draft › Research | Deliberate: preseason production predicts a rookie season at rho −0.195 (good rookies sit in August) | `docs/analysis/rookie-research-signals-2026-08.md` |
 
 ## 5. iOS-PWA symptom family
 

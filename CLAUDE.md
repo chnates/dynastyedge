@@ -292,6 +292,50 @@ architecture as the news pipeline:
 
 -----
 
+### Rookie intel pipeline (GitHub Actions + nflverse)
+
+The two signals that actually predict a rookie season live in **nflverse**
+CSVs, which are CORS-blocked *and* ~39MB — so they are aggregated server-side
+in Actions and served as a static file, same architecture as news and values:
+
+- `.github/workflows/rookie-intel.yml` runs daily (cron `23 10 * * *`, plus
+  `workflow_dispatch`). It runs `scripts/snapshot-rookie-intel.mjs`, which
+  reads three nflverse release files — `draft_picks.csv` (NFL draft capital),
+  `roster_{season}.csv` (the **`sleeper_id` crosswalk**), and
+  `depth_charts_{season}.csv` (daily depth-chart snapshots) — plus Sleeper's
+  `/state/nfl` and `/players/nfl`, and **force-pushes a single-commit
+  `rookie-intel` branch** containing `rookie-intel.json` (~52KB).
+- **The messy join is resolved server-side**, exactly as the news pipeline
+  resolves `athleteIds`: the app receives clean Sleeper player IDs and never
+  name-matches. `roster_{season}.csv`'s `sleeper_id` column is authoritative;
+  names backfill the rest (suffix-stripped, plus an unambiguous
+  initial+surname key for nicknames — "Matthew Hibner" vs "Matt Hibner").
+  **Every name-based match is position-guarded.** Without that guard Jordan
+  Love (QB, GB) resolves onto Jeremiyah Love (RB, ARI), because the name
+  indices are built from rookies only, so a veteran looks unambiguous.
+- Format is columnar: `{ updatedAt, season, asOf, dates: ['YYYY-MM-DD', …],
+  players: { sleeperId: { name, pos, team, round, pick, rank, slot, ranks,
+  ahead } } }` — `ranks` aligned to `dates`, **one column per ISO week**
+  (daily columns would be ~7× the bytes for no extra signal).
+- No keepalive step: `values-history.yml`'s keepalive commits to `main`, which
+  resets the 60-day cron-disable clock for **every** workflow in the repo.
+- Publish contract matches `values-history.yml` — a missing output is
+  recovered from the branch via git and the publish aborts rather than
+  force-push an empty feed, so a bad run leaves yesterday's data in place.
+- The app reads it lazily once per session via `useRookieIntel` — **Class B /
+  best-effort**: a missing branch (it does not exist until the first run) or a
+  failed fetch shows Draft › Research's "hasn't published yet" explainer, never
+  an `ErrorState`.
+
+**Preseason stats are deliberately NOT in this pipeline.** Sleeper *does*
+expose them (`/stats/nfl/pre/{year}/{week}` — real box scores, 217 fields
+including `off_snp`/`tm_off_snp`), but they predict a rookie season at
+**rho −0.195**: the best rookies are protected in August, so preseason usage
+measures job insecurity, not talent. See
+`docs/analysis/rookie-research-signals-2026-08.md`.
+
+-----
+
 ### FantasyCalc API
 
 **Base URL:** `https://api.fantasycalc.com`
@@ -918,6 +962,8 @@ board prep carries into draft day. Rows open the Player Profile drawer (with
 notes). When the draft completes: recap with per-team value drafted, biggest
 steals/reaches (pick slot vs rookie ADP), and full results.
 
+**Rookie Research** is the third Draft sub-tab — see Feature 19.
+
 **Refresh model:** Board and Tracker share one session-cached fetch
 (`useSleeperDraft` module cache). A manual Refresh button refetches on demand;
 the hook also refetches when the tab regains focus (aggressively while the
@@ -1447,6 +1493,65 @@ truth. Use `myRosterId` from `LeagueContext` / `useIdentity`.
 
 -----
 
+### Feature 19 — Rookie Research (Draft › Research)
+
+**Purpose:** "which rookies become something?" — the question a dynasty
+*value* number can't answer, because value prices consensus, not opportunity.
+Sits between the Board (what do I think?) and the Tracker (what's happening
+now?) as the **Research** sub-tab (`/draft/research`).
+
+**One new data source** — the rookie intel feed above; everything else
+composes `LeagueContext` and the existing `useRookieADP` rookie class.
+
+**The model (`utils/rookieResearch.js`, pure):** an **opportunity score**
+(0–100 on screen, 0–1 internally) blending **30% depth-chart standing / 70%
+NFL draft capital**. Calibrated in
+`docs/analysis/rookie-research-signals-2026-08.md` against **n=396 drafted
+skill rookies, 2021–2025** (`node scripts/dev/rookie-signal-backtest.mjs`,
+which **imports the shipped constants** so the analysis and the app cannot
+drift):
+
+- Draft capital alone rho **+0.598**, depth rank alone **+0.541**, blended
+  **+0.664**. The blend curve is flat from w=0.2–0.5, so `DEPTH_WEIGHT` is not
+  knife-edge and needs no annual re-tuning.
+- `DEPTH_VALUE` is the measured median rookie-season half-PPR by position ×
+  depth rank — observed medians, not hand-tuned weights. **Re-derive them from
+  the back-test rather than nudging by feel**; the script prints a drift check.
+- **All depth scores share ONE points scale** (`DEPTH_MAX`, the largest cell).
+  Scaling per-position was tried and is wrong: it made a TE2 (41 median pts)
+  score 0.40 while a WR2 (43 — the same outcome) scored 0.28, which put five
+  backup tight ends in the top six of the undervalued list.
+- Off the depth chart folds into the rank-4+ bucket — for a rookie, "not
+  listed" and "listed fourth" are the same fact.
+- Undrafted floors at `UDFA_SCORE` rather than 0, so a rank-1 UDFA still
+  outranks a buried day-three pick.
+
+**Market vs Model** is the product: market rank (FantasyCalc value) against
+model rank, **computed WITHIN POSITION**. Cross-position ranking is not a fair
+comparison — a FantasyCalc value already prices Superflex QB scarcity and the
+shallow TE pool, while the model prices expected points, so comparing the two
+orderings across positions measures the difference between *yardsticks* and
+flags every tight end as undervalued. Default `minGap` is 5, tuned to
+within-position group sizes (~8–30 players).
+
+**Camp movement is shown, not scored** — a rookie's depth-chart climb since
+March is computable for the current class but **could not be back-tested**
+(nflverse's 2025 depth charts begin 2025-08-03, so the historical window has
+no pre-camp baseline). Display it; don't let it move the score until a season
+of it exists.
+
+**UI (`components/draft/RookieResearchView.jsx`):** the Market vs Model
+divergence cards (corner-cut, tone edge bar, with plain-English reasons), then
+an Opportunity Board with search, position chips, and a sort toggle
+(Opportunity / Market / Camp movers). Rows show the score, a position-aware
+depth read ("Backup behind Kirk Cousins"), capital, alignment slot, and a
+movement chip; tap → `PlayerProfileDrawer`. Dynasty value sorts as the
+tiebreaker, which is what keeps the board useful in the degraded state. A
+collapsible "How this works" states the model, its back-test, and why
+preseason stats are absent. Unranked rookies show `—` and are never dropped.
+
+-----
+
 ### The recommendation engine (`utils/recommendations.js`)
 
 **Purpose:** the assistant-GM "brain" — the one place that decides *how willing
@@ -1535,7 +1640,7 @@ Side drawer sections:
 |2  |My Team |My Roster · Lineup · Season Review · Trajectory          |
 |3  |Trade   |Partners · Analyzer · Targets · Managers · Pick Trades (+ deadline banner)|
 |4  |League  |Overview · Free Agents · Activity · Movers · Playoffs    |
-|5  |Draft   |Board · Tracker                                          |
+|5  |Draft   |Board · Research · Tracker                               |
 |6  |News    |League-wide aggregated news feed (browsable — leaf)      |
 
 Sections with multiple views use a sub-tab bar pinned under the app header —
@@ -1548,9 +1653,9 @@ while the row overflows.
 The drawer also holds a **per-source data-status block**, manual Refresh, and
 the theme toggle.
 
-**Data status — four rows** (Rosters · Values · News · History), each showing
-the app-side "last refreshed" age of that source. The two Actions-published
-feeds (News, History) additionally show their **publish age** from the feed's
+**Data status — five rows** (Rosters · Values · News · History · Rookies), each showing
+the app-side "last refreshed" age of that source. The three Actions-published
+feeds (News, History, Rookies) additionally show their **publish age** from the feed's
 own `updatedAt` — labelled separately, because that's the number that only
 moves when the cron publishes, and it's how a dead pipeline becomes visible.
 Amber when news > 2h or values > 36h stale; a feed age hides entirely when
@@ -1558,7 +1663,7 @@ that feed never loaded (standard best-effort contract — never an error).
 Reads the session caches via `loadNewsFeed` / `loadHistory` on drawer open —
 zero extra requests.
 
-**Refresh** is one button over four independent sources fired in parallel and
+**Refresh** is one button over five independent sources fired in parallel and
 non-blocking: a `phase` state drives the button (idle → refreshing → done)
 while each source tracks its own loading/done/error tick. Live APIs keep
 cached data on screen while refetching (stale-while-revalidate), so no view
@@ -1573,7 +1678,7 @@ The app header shows the active section name.
 standalone routes (no sub-tab bar; header reads "League"):
 `/league/teams/:rosterId` (any roster) and `/league/trajectory/:rosterId` (any
 team's trajectory). Trade adds `/trade/pick-trades`; Draft is just
-`/draft/board` + `/draft/tracker`. Every moved/renamed path keeps a redirect
+`/draft/board` + `/draft/research` + `/draft/tracker`. Every moved/renamed path keeps a redirect
 (see Navigation Refactor below) so saved deep-links and Edge briefing items
 keep working: `/roster*` → `/my-team*` (or `/league*` for the team list /
 drill-downs / free agents), `/lineup*` → `/my-team/*`, `/draft/trades` →
@@ -1637,7 +1742,7 @@ it repaints the settled structure; it does not restructure.
 |My Team   |My Roster · Lineup · Season Review · Trajectory             |
 |Trade     |Partners · Analyzer · Targets · Managers · Pick Trades      |
 |League    |Overview *(fused with All Teams)* · Free Agents · Activity · Movers · Playoffs|
-|Draft     |Board · Tracker                                            |
+|Draft     |Board · Research · Tracker                                 |
 |News      |*(feed — leaf)*                                            |
 
 Principle: **My Team = my squad · Trade = only things that help build a trade ·
@@ -2056,15 +2161,18 @@ dynastyedge/
 │       ├── deploy.yml          ← GitHub Actions auto-deploy (lint + test gate before build)
 │       ├── ci.yml              ← lint + test + build on branch pushes / PRs (no deploy)
 │       ├── news.yml            ← twice-hourly news aggregation → news-data branch
-│       └── values-history.yml  ← daily value snapshot + trade archive → values-history branch
+│       ├── values-history.yml  ← daily value snapshot + trade archive → values-history branch
+│       └── rookie-intel.yml   ← daily rookie depth-chart + draft-capital feed → rookie-intel branch
 ├── scripts/
 │   ├── fetch-news.mjs          ← multi-source news fetcher (runs in Actions)
 │   ├── snapshot-values.mjs     ← daily FantasyCalc snapshot appender (runs in Actions)
 │   ├── snapshot-values-archive.mjs ← permanent MONTHLY values archive for trajectory back-testing (app never fetches it)
 │   ├── snapshot-trade-values.mjs ← permanent trade-time value archiver (runs in Actions)
+│   ├── snapshot-rookie-intel.mjs ← daily nflverse → Sleeper rookie intel feed (runs in Actions)
 │   └── dev/
 │       ├── screenshot-app.mjs  ← headless-Chromium screenshotter for the running app (390px UI verification — see the dynastyedge-visual-capture skill)
-│       └── faab-corpus.mjs     ← analysis-only: pulls the league's full FAAB bid corpus (see docs/analysis/faab-bid-corpus-2026-08.md); nothing imports it
+│       ├── faab-corpus.mjs     ← analysis-only: pulls the league's full FAAB bid corpus (see docs/analysis/faab-bid-corpus-2026-08.md); nothing imports it
+│       └── rookie-signal-backtest.mjs ← analysis-only: grades the SHIPPED rookie model against 2021–2025 (imports src/utils/rookieResearch.js so it cannot drift)
 ├── public/
 │   └── favicon.ico
 ├── src/
@@ -2120,6 +2228,7 @@ dynastyedge/
 │   │   ├── draft/
 │   │   │   ├── DraftLayout.jsx      ← sub-tabs: Board / Tracker
 │   │   │   ├── DraftBoard.jsx       ← rookie board: tiers, My Board, CSV columns
+│   │   │   ├── RookieResearchView.jsx ← Draft › Research: opportunity score, market-vs-model divergence
 │   │   │   ├── DraftTracker.jsx     ← Sleeper-synced live tracker + manual fallback
 │   │   │   ├── PickTradeCalculator.jsx ← move-up/move-down pick package planner (routed under Trade › Pick Trades; file stays here)
 │   │   │   └── boardStorage.js      ← shared draft-section localStorage keys
@@ -2156,6 +2265,7 @@ dynastyedge/
 │   │   ├── useLeagueNews.js     ← news feed matched to my roster + watchlist
 │   │   ├── useNewsFeed.js       ← full aggregated feed for the News section
 │   │   ├── useValueHistory.js   ← daily value snapshots for sparklines (best-effort)
+│   │   ├── useRookieIntel.js    ← rookie depth-chart + draft-capital feed (best-effort)
 │   │   ├── usePlayerIntel.js    ← production stats + depth chart + ESPN news
 │   │   ├── useScrollLock.js     ← freezes <main> while a bottom sheet is open
 │   │   ├── useSheetDrag.js      ← swipe-down-to-dismiss gesture for bottom sheets
@@ -2178,6 +2288,7 @@ dynastyedge/
 │   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation
 │   │   ├── pickCapital.js       ← pick ownership resolution logic
 │   │   ├── rookieAdp.js         ← derived rookie-class ADP for the Draft section
+│   │   ├── rookieResearch.js    ← rookie opportunity model: depth × capital, market-vs-model divergence
 │   │   ├── pickTrades.js        ← pick trade calculator: slot pricing + packages
 │   │   ├── peakWindows.js       ← position peak-age windows + status helper
 │   │   ├── draftLive.js         ← THE rookie draft live path (on the clock, countdown, Best Available, capital, recap) — pure, extracted from DraftTracker so it is testable
@@ -2211,6 +2322,7 @@ dynastyedge/
 │   ├── lineupBuild.test.mjs         ← slot-fill order (singles → FLEX → SFLX), IR/taxi excluded, who-starts identity
 │   ├── lineupHistory.test.mjs       ← optimal-lineup slot-fill order (singles → FLEX → SFLX)
 │   ├── matchupWeeks.test.mjs        ← mocked-fetch: one fetch/week across both consumers, all-fail rejection
+│   ├── rookieResearch.test.mjs      ← opportunity blend, shared points scale (the backup-TE trap), within-position divergence, best-effort feed degradation
 │   └── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
 ├── index.html
 ├── eslint.config.js             ← ESLint 9 flat config (recommended + react-hooks, src/ + scripts/)
@@ -2227,8 +2339,8 @@ honestly:** instead of "cannot find module" it prints `# tests 47 / # pass 44 /
 the ones transitively importing `react` (`tradeAnalysis.js` →
 `recommendations.js` → `useLeague.js`, plus `matchupWeeks` and `transactions`
 loading their hooks) — the file fails to load, so its tests never run and the
-count silently drops from **107** to 47. `npm run build` in the same state fails
-with `sh: 1: vite: not found`. **If the test count isn't 107, run `npm ci`
+count silently drops from **120** to 47. `npm run build` in the same state fails
+with `sh: 1: vite: not found`. **If the test count isn't 120, run `npm ci`
 before debugging anything.**
 
 **Tests:** `npm test` runs the `tests/` suite — plain `.mjs` scripts on Node's

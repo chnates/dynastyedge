@@ -1,6 +1,6 @@
 ---
 name: dynastyedge-diagnostics-and-tooling
-description: Measurement tools for DynastyEdge — load when you need to measure app behavior instead of eyeballing it. Run the pure analytical models (playoff Monte Carlo, dynasty trajectory, trade analysis) outside the browser under plain Node; probe the live Sleeper league for sanity; measure feed freshness (the news / values-history / trade-values static feeds); quantify bundle size before/after a change. Owns THE Node resolver hook that makes src/utils' extensionless ESM imports work under node — siblings that need to import repo modules use it too.
+description: Measurement tools for DynastyEdge — load when you need to measure app behavior instead of eyeballing it. Run the pure analytical models (playoff Monte Carlo, dynasty trajectory, trade analysis) outside the browser under plain Node; probe the live Sleeper league for sanity; measure feed freshness (the news / values-history / trade-values / rookie-intel static feeds); quantify bundle size before/after a change. Owns THE Node resolver hook that makes src/utils' extensionless ESM imports work under node — siblings that need to import repo modules use it too.
 ---
 
 # DynastyEdge diagnostics & tooling
@@ -200,12 +200,17 @@ Sandboxed sessions typically get proxy 403s — use --fixture offline instead.
 
 ## Tool 2 — `check-feeds.mjs` (feed freshness; network — reachable even in this sandbox)
 
-**What it measures:** the three static JSON feeds served from orphan branches
+**What it measures:** the four static JSON feeds served from orphan branches
 (URLs read from `src/constants.js`, falling back to hardcoded copies):
 news item count + newest-item age vs the twice-hourly cron; values-history
 date range / column count / player count vs the daily 09:41 UTC cron;
-trade-values archive entry count. Per-feed graceful failure; exits 1 only if
-all three are unreachable.
+trade-values archive entry count; rookie-intel player/column counts and
+snapshot date vs the daily 10:23 UTC cron. Per-feed graceful failure; exits 1
+only if all four are unreachable.
+
+> A 404 on **rookie-intel** is the expected state before that workflow's first
+> run — the branch does not exist until then, and the app renders its
+> "hasn't published yet" explainer. Not an incident.
 
 ```bash
 node $SKILL/scripts/check-feeds.mjs

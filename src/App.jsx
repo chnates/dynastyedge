@@ -32,6 +32,7 @@ const NewsView          = lazy(() => import('./components/news/NewsView'))
 const DraftLayout       = lazy(() => import('./components/draft/DraftLayout'))
 const DraftBoard        = lazy(() => import('./components/draft/DraftBoard'))
 const DraftTracker      = lazy(() => import('./components/draft/DraftTracker'))
+const RookieResearch    = lazy(() => import('./components/draft/RookieResearchView'))
 const PickTradeCalculator = lazy(() => import('./components/draft/PickTradeCalculator'))
 const PlayerSearchSheet = lazy(() => import('./components/shared/PlayerSearchSheet'))
 
@@ -200,6 +201,7 @@ function AppShell({ leagueData }) {
             <Route path="/draft" element={<DraftLayout />}>
               <Route index element={<Navigate to="board" replace />} />
               <Route path="board" element={<DraftBoard />} />
+              <Route path="research" element={<RookieResearch />} />
               <Route path="tracker" element={<DraftTracker />} />
             </Route>
 

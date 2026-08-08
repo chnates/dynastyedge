@@ -5,7 +5,8 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-08-08 (ACTIVE-1 closed; trigger sweep + pre-draft
+**Last reviewed:** 2026-08-08 (ACTIVE-2 built — Draft › Research shipped;
+ACTIVE-1 closed; trigger sweep + pre-draft
 slot-tier verification recorded below).
 
 **How to use it:**
@@ -21,7 +22,36 @@ slot-tier verification recorded below).
 
 ## 1. Active
 
-**Nothing is currently active.** ACTIVE-1 closed 2026-08-08; it is retained
+### ACTIVE-2 — Draft › Research: verify the first pipeline run
+
+**Built and merged.** The module ships as Draft › Research (Feature 19), backed
+by `rookie-intel.yml` → the `rookie-intel` branch. Signal work is closed:
+`docs/analysis/rookie-research-signals-2026-08.md` (n=396, 2021–2025), and
+`scripts/dev/rookie-signal-backtest.mjs` now **imports the shipped constants**
+so the analysis and the app cannot drift — it prints a drift check on every run.
+
+**What remains is one verification, and its trigger has not fired yet:** the
+`rookie-intel` branch does not exist until the workflow's first run. Until then
+the page shows its "hasn't published yet" explainer and the board falls back to
+market order (verified by screenshot). **After the first run lands:**
+
+1. Confirm the branch and `rookie-intel.json` exist and `meta.published` is
+   ~236 with ~80 carrying draft capital (the numbers from the local dry run on
+   2026-08-08).
+2. Open Draft › Research and confirm the Market vs Model lists populate — the
+   local dry run gave 7 undervalued / 7 overvalued at the default `minGap` 5.
+3. Check the drawer's new **Rookies** data-status row shows a fresh publish age.
+
+**Next season's chore:** re-run the back-test and reconcile `DEPTH_VALUE`
+against its drift output. Two things are deliberately deferred until then —
+**camp movement is displayed but not scored** (nflverse's 2025 depth charts
+begin 2025-08-03, so the historical window has no pre-camp baseline to
+validate a climb signal against), and combine athleticism is unused (the 2026
+`combine.csv` ships with empty `forty`/`vertical`).
+
+### ACTIVE-1 — closed
+
+ACTIVE-1 closed 2026-08-08; it is retained
 below in full because what it found — three silent live-API contract breaks —
 is the durable part, and the re-verification commands are needed again next
 season.

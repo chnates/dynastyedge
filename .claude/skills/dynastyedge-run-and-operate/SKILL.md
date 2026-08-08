@@ -3,14 +3,16 @@ name: dynastyedge-run-and-operate
 description: >
   DynastyEdge operations runbook: run the app locally (npm run dev / preview,
   the /dynastyedge/ base path), deploy to GitHub Pages (deploy.yml anatomy,
-  status checks, rollback = revert on main), and operate the two data
-  pipelines (news.yml → news-data branch, values-history.yml →
+  status checks, rollback = revert on main), and operate the three data
+  pipelines (news.yml → news-data branch, rookie-intel.yml → rookie-intel
+  branch, values-history.yml →
   values-history branch). Load when: starting the app locally; deploying or
   checking why the live site is stale or serving an old bundle; operating,
   re-running, or fixing the pipelines behind a stale news feed or stale
   value-history sparklines; re-running or re-enabling a
   scheduled workflow (60-day cron auto-disable); manually triggering
-  workflow_dispatch; investigating the news-data / values-history branches;
+  workflow_dispatch; investigating the news-data / values-history /
+  rookie-intel branches;
   or running scripts/*.mjs locally for debugging.
 ---
 
@@ -128,13 +130,13 @@ after — the owner's phone is on the live URL.
 
 ## 3. Data pipeline operations
 
-Two cron workflows publish **orphan, single-commit, force-pushed branches**.
+Three cron workflows publish **orphan, single-commit, force-pushed branches**.
 Design rationale: each run does `git init` in a temp dir, one commit,
 `git push --force` — so the branch always has exactly one commit. Without
 this, news alone would add ~48 commits/day of JSON churn to the repo history,
 unboundedly. Consequence: **the workflow owns those branches.** Never push to
-`news-data` or `values-history` by hand — the next scheduled run
-force-pushes and clobbers whatever you put there.
+`news-data`, `values-history`, or `rookie-intel` by hand — the next scheduled
+run force-pushes and clobbers whatever you put there.
 
 GitHub Actions cron is **UTC**.
 
@@ -189,17 +191,50 @@ GitHub Actions cron is **UTC**.
   `https://raw.githubusercontent.com/chnates/dynastyedge/values-history/values-history.json`
   and `.../values-history/trade-values.json`.
 
+### 3c. Rookie intel pipeline (`.github/workflows/rookie-intel.yml`)
+
+- **Schedule:** `23 10 * * *` — daily at **10:23 UTC** = 6:23 AM New York
+  (EDT) / 5:23 AM (EST), 3:23 AM Pacific (PDT). Plus `workflow_dispatch`.
+  Offset from news (:17/:47) and values (9:41) so the three don't collide.
+- **Step — `scripts/snapshot-rookie-intel.mjs`** (failure fails the run):
+  reads Sleeper `/state/nfl` (season) and `/players/nfl` (the rookie class),
+  then three nflverse release CSVs — `draft_picks.csv` (NFL draft capital),
+  `roster_{season}.csv` (the **`sleeper_id` crosswalk**), and
+  `depth_charts_{season}.csv` (~39MB of daily depth-chart snapshots). Emits
+  one **ISO-week** column per depth-chart week, capped at `MAX_WEEKS = 26`.
+  Exits 1 if the rookie class is empty, the depth charts are unavailable (the
+  primary signal), or no rookie carries any signal.
+- **Publish:** force-pushes branch **`rookie-intel`** with
+  `rookie-intel.json`. Same recovery contract as values-history: a missing
+  output is restored from the branch via `git checkout`, and the publish
+  **aborts** rather than push an empty feed — so a bad run leaves yesterday's
+  data in place and the next run self-heals.
+- **No keepalive step**, deliberately: `values-history.yml` pushes the empty
+  bot commit to `main`, and that one commit resets the 60-day cron-disable
+  clock for *every* workflow in the repo.
+- **Consumed at:**
+  `https://raw.githubusercontent.com/chnates/dynastyedge/rookie-intel/rookie-intel.json`
+  → `useRookieIntel` → Draft › Research (Feature 19) + the drawer's Rookies
+  data-status row.
+- **The branch does not exist until the first run.** That is a normal state,
+  not an incident: Draft › Research shows its "hasn't published yet"
+  explainer and the board falls back to dynasty-value order.
+
 ### Manual trigger (workflow_dispatch)
 
-- **Web UI:** repo → Actions → select "Refresh news feed" or "Snapshot
-  dynasty values" → "Run workflow" dropdown → branch `main` → Run.
+- **Web UI:** repo → Actions → select "Refresh news feed", "Snapshot dynasty
+  values", or "Snapshot rookie intel" → "Run workflow" dropdown → branch
+  `main` → Run. **The workflow must exist on `main` to appear in that list** —
+  a workflow added on a feature branch is invisible until the PR merges.
 - **`gh` CLI** (if available; not in this sandbox):
   `gh workflow run news.yml --repo chnates/dynastyedge` /
-  `gh workflow run values-history.yml --repo chnates/dynastyedge`
+  `gh workflow run values-history.yml --repo chnates/dynastyedge` /
+  `gh workflow run rookie-intel.yml --repo chnates/dynastyedge`
 - **MCP:** `actions_run_trigger` (github MCP server).
 
 Safe to re-run anytime: news fully regenerates; values replaces today's
-column; trade archive never overwrites existing entries.
+column; trade archive never overwrites existing entries; rookie intel is
+rebuilt wholesale from upstream.
 
 ### Verifying feed freshness (requires open network)
 
@@ -209,16 +244,21 @@ curl -s https://raw.githubusercontent.com/chnates/dynastyedge/news-data/news.jso
 
 # values: updatedAt should be today (UTC); last date in `dates` = today
 curl -s https://raw.githubusercontent.com/chnates/dynastyedge/values-history/values-history.json | head -c 300
+
+# rookie intel: updatedAt today, asOf within a day or two, meta.published ~236
+curl -s https://raw.githubusercontent.com/chnates/dynastyedge/rookie-intel/rookie-intel.json \
+  | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.updatedAt,j.asOf,JSON.stringify(j.meta))})'
 ```
 
 Or check the branch's single commit date: repo → branch selector →
-`news-data` / `values-history` (or `gh api repos/chnates/dynastyedge/branches/news-data --jq .commit.commit.committer.date`,
+`news-data` / `values-history` / `rookie-intel` (or
+`gh api repos/chnates/dynastyedge/branches/news-data --jq .commit.commit.committer.date`,
 or MCP `list_commits` with `sha: news-data`).
 
 ### The 60-day cron auto-disable (KNOWN RISK)
 
 GitHub **disables scheduled workflows after ~60 days without repo activity**.
-Symptoms: both feeds go stale simultaneously, workflows show "This scheduled
+Symptoms: all three feeds go stale simultaneously, workflows show "This scheduled
 workflow is disabled" banners in the Actions UI. Cure: **any push to the
 repo re-enables them**, or Actions → the workflow → "Enable workflow"
 button. If the app has been untouched for weeks, check this *first* when a
@@ -226,7 +266,8 @@ feed is stale.
 
 ## 4. Running the pipeline scripts locally (debugging)
 
-All three scripts are plain Node ≥18 (global `fetch`, `AbortSignal.timeout`),
+All the snapshot scripts are plain Node ≥18 (global `fetch`,
+`AbortSignal.timeout`),
 **zero npm dependencies, no `GITHUB_WORKSPACE` or env-var reliance** — they
 write their output JSON to the **current working directory**. So they run
 anywhere, but **require open network** (blocked in this Claude sandbox —

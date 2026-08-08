@@ -5,7 +5,8 @@ description: >
   endpoints the app calls (URL templates, owning hooks, cache discipline,
   fields consumed, quirks), the FantasyCalc /values/current contract and its
   four immutable query params, the static JSON feeds published by GitHub
-  Actions (news.json, values-history.json, trade-values.json — exact schemas),
+  Actions (news.json, values-history.json, trade-values.json,
+  rookie-intel.json — exact schemas),
   the unofficial ESPN endpoints, every dynastyedge_* localStorage/sessionStorage
   key, constants.js, and runtime static assets (public/rankings.json). Load
   this when touching any fetch, hook, or feed; adding or changing a data
@@ -258,9 +259,9 @@ and `pickEntries` (`{name, value}` for entries with no sleeperId — picks like
 
 ## 3. Static feeds (GitHub Actions → orphan branches → raw.githubusercontent.com)
 
-All three URLs live in constants.js. raw.githubusercontent.com sends
+All four URLs live in constants.js. raw.githubusercontent.com sends
 `Access-Control-Allow-Origin: *` and has a **~5-minute CDN cache** — a
-just-pushed feed can serve stale for a few minutes. All three readers are
+just-pushed feed can serve stale for a few minutes. All four readers are
 **strictly best-effort**: fetch failure / missing branch / bad shape ⇒
 `null`/`[]`, UI hides, no error, no retry, and a per-session `failed` flag
 prevents re-fetch loops.
@@ -358,6 +359,63 @@ median-of-round from named FantasyCalc pick entries at archive time. Reader:
 or `null` when the trade isn't archived **or any non-FAAB asset is missing**
 (partial totals would mislead). FAAB assets skip valuation.
 
+### 3d. `ROOKIE_INTEL_URL` → rookie-intel.json (branch `rookie-intel`)
+
+Writer: `scripts/snapshot-rookie-intel.mjs`
+(`.github/workflows/rookie-intel.yml`, daily `23 10 * * *`). Reader:
+`src/hooks/useRookieIntel.js` → Draft › Research (Feature 19) and the side
+drawer's data-status block.
+
+**Upstream is nflverse, not an API the app can call.** Three GitHub release
+CSVs — `draft_picks.csv`, `roster_{season}.csv`, `depth_charts_{season}.csv`
+(~39MB) — plus Sleeper `/state/nfl` and `/players/nfl`. They are CORS-blocked
+and far too large for a phone, which is the whole reason the workflow exists.
+
+**The nflverse→Sleeper join is resolved in the writer**, so the app only ever
+sees Sleeper player IDs:
+
+1. `roster_{season}.csv`'s **`sleeper_id` column** is authoritative (covers
+   the drafted class; UDFAs lack it).
+2. Normalized-name fallback, with suffixes stripped (`Jr`/`II`/…) and an
+   initial+surname key for nicknames (`Matthew Hibner` → `Matt Hibner`).
+3. **Every name-based match is position-guarded.** The name indices are built
+   from rookies only, so a veteran sharing a surname and first initial looks
+   unambiguous — Jordan Love (QB, GB) resolved onto Jeremiyah Love (RB, ARI)
+   before the guard existed. A gsis hit needs no guard.
+
+Schema (columnar, one column per **ISO week**; ~52KB for a full class):
+
+```json
+{
+  "updatedAt": "ISO-8601",
+  "season": "2026",
+  "asOf": "YYYY-MM-DD",
+  "dates": ["YYYY-MM-DD", "..."],
+  "players": {
+    "<sleeperId>": {
+      "name": "Jeremiyah Love", "pos": "RB", "team": "ARI",
+      "round": 1, "pick": 3,
+      "rank": 1, "slot": "RB",
+      "ranks": [2, 2, 1, null],
+      "ahead": ["Trey Benson"]
+    }
+  },
+  "meta": { "rookieClass": 439, "published": 236, "withCapital": 80, "withDepth": 235 }
+}
+```
+
+`ranks` is aligned to `dates` (null = no snapshot that week); `rank`/`slot`
+are the latest observed standing; `ahead` lists up to 3 teammates ranked above
+him at his alignment slot. `pick`/`round` are null for undrafted players — the
+model floors them at `UDFA_SCORE`, not 0. A rookie carrying neither a
+depth-chart row nor a draft pick is omitted entirely rather than padding the
+file.
+
+**Deliberately absent: preseason stats.** Sleeper exposes them at
+`/stats/nfl/pre/{year}/{week}` (real box scores, 217 fields), but they predict
+a rookie season at **rho −0.195** — the best rookies sit in August. See
+`docs/analysis/rookie-research-signals-2026-08.md`. Do not add them here.
+
 -----
 
 ## 4. ESPN unofficial endpoints (best-effort bonus only)
@@ -428,7 +486,7 @@ pattern; storage failure must degrade to in-memory behavior, never crash.
 | `MY_ROSTER_ID` (6) / `MY_USERNAME` / `MY_TEAM_NAME` | **Legacy — original-owner reference only.** Runtime identity comes from `useIdentity` (localStorage `dynastyedge_identity_v1`, set on the login screen); "am I this team?" checks use `myRosterId` from LeagueContext. Do not write new code against `MY_ROSTER_ID` |
 | `SLEEPER_BASE` / `FANTASYCALC_BASE` | API bases |
 | `ESPN_BASE` / `ESPN_WEB_BASE` | Unofficial ESPN bases (best-effort news only) |
-| `NEWS_FEED_URL` / `VALUES_HISTORY_URL` / `TRADE_VALUES_URL` | The three static feeds (section 3) |
+| `NEWS_FEED_URL` / `VALUES_HISTORY_URL` / `TRADE_VALUES_URL` / `ROOKIE_INTEL_URL` | The four static feeds (section 3) |
 | `FANTASYCALC_PARAMS` | The four immutable market params (section 2) |
 | `PICK_YEARS` | `['2026','2027','2028']` — pick-capital horizon; `PICK_YEARS[0]` is `DRAFT_SEASON` (useSleeperDraft, DraftTracker storage key). Rolls forward once a year |
 | `POSITIONS` | `['QB','RB','WR','TE']` |

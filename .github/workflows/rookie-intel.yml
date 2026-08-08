@@ -1,0 +1,58 @@
+name: Snapshot rookie intel
+
+on:
+  schedule:
+    - cron: '23 10 * * *'   # daily, offset from the news (:17/:47) and values (9:41) runs
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# One run at a time — overlapping runs would race their force-pushes of the
+# rookie-intel branch and one could clobber the other's snapshot.
+concurrency:
+  group: rookie-intel
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No keepalive step here on purpose: values-history.yml already pushes
+      # the empty bot commit to main when it goes 45+ days quiet, and that one
+      # commit resets the 60-day cron-disable clock for EVERY workflow in the
+      # repo. A second keepalive would just double-push the same day.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build today's rookie intel feed
+        run: node scripts/snapshot-rookie-intel.mjs
+      - name: Publish to the rookie-intel branch
+        run: |
+          mkdir -p /tmp/rookierepo && cd /tmp/rookierepo
+          git init -b rookie-intel .
+          REMOTE="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          # Same contract as values-history.yml: a missing output is recovered
+          # from the existing branch via git — a different failure domain than
+          # the nflverse/Sleeper sources the script reads — so a bad run leaves
+          # yesterday's feed in place instead of force-pushing an empty one.
+          # Any git failure below aborts the step (bash -e): the branch stays
+          # untouched today and the next run self-heals.
+          PREV="$(git ls-remote "$REMOTE" refs/heads/rookie-intel)"
+          PREV="${PREV%%[[:space:]]*}"   # previous head sha; '' if the branch doesn't exist yet
+          if [ -n "$PREV" ]; then
+            git fetch --depth 1 "$REMOTE" rookie-intel
+          fi
+          if [ -f "$GITHUB_WORKSPACE/rookie-intel.json" ]; then
+            cp "$GITHUB_WORKSPACE/rookie-intel.json" .
+          elif [ -n "$PREV" ] && git cat-file -e "$PREV:rookie-intel.json" 2>/dev/null; then
+            git checkout "$PREV" -- rookie-intel.json
+          else
+            echo "no rookie-intel.json produced and none recoverable from the branch — aborting publish" >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add rookie-intel.json
+          git commit -m "Update rookie intel"
+          git push --force "$REMOTE" rookie-intel
