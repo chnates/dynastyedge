@@ -128,11 +128,18 @@ export default function LineupOptimizer() {
     if (!league?.myRoster || !lineupData.projMap || !fcValues) return null
 
     const { myRoster } = league
-    const { projMap, playerStatuses, playingTeams, defStatsRaw, nflState, schedule } = lineupData
+    const { projMap, playerStatuses, playingTeams, defStatsRaw, statsWeek, nflState, schedule } = lineupData
 
     const bench = myRoster.players.filter(p => !p.isStarter && !p.isTaxi && !p.isIR)
-    const defenseRankings = computeDefenseRankings(defStatsRaw ?? {})
     const currentWeek = nflState?.week ?? 1
+    // `playerStatuses` IS the shared trimmed player DB (position + team), which
+    // is where defense rankings get the position and team the stats payload no
+    // longer carries. `statsWeek` pairs those stats with that week's opponents.
+    const defenseRankings = computeDefenseRankings(defStatsRaw ?? {}, {
+      playerDB: playerStatuses,
+      schedule,
+      week: statsWeek ?? Math.max(1, currentWeek - 1),
+    })
 
     const starterSlots = (myRoster.starterOrder ?? [])
       .map((sleeperId, idx) => {

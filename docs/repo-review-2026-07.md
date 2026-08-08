@@ -31,9 +31,10 @@
 > `index.html`.
 >
 > **What remains genuinely open from §4** is the unverified-hypotheses
-> appendix — above all **item 5** (in-season UI branches never exercised) and
-> **item 3** (playoff-odds calibration). Both are gated on live regular-season
-> data. See `docs/project-status-2026-08.md`.
+> appendix — above all **item 3** (playoff-odds calibration), gated on live
+> regular-season data. **Item 5** (in-season UI branches never exercised)
+> closed 2026-08-08, and closing it found three live contract breaks the
+> code-read audit had missed. See `docs/open-items.md`.
 
 **Scope:** full read-only audit — performance & network efficiency, model math,
 correctness, dependencies & CI security, plus guardrail-gap proposals.
@@ -576,9 +577,17 @@ none of these are findings:
 4. **Age-curve accuracy on the real FantasyCalc pool** and any multi-year
    trajectory accuracy — first honestly testable ~mid-2027 when the
    snapshot archive is a year deep.
-5. **In-season UI branches unexercised.** It is the offseason; matchups,
-   lineup optimizer, deadline banner, and live playoff-odds surfaces were
-   audited by code-reading only.
+5. ~~**In-season UI branches unexercised.**~~ **RESOLVED 2026-08-08.** The
+   code-reading-only audit had in fact missed three live-API contract breaks
+   in exactly these branches (the schedule endpoint's base URL and field
+   names, `/league/{id}/drafts` omitting `slot_to_roster_id`, and weekly
+   stats carrying no `pos`/`opp`/`tm`) — one of which would have taken the
+   Lineup Optimizer down for the whole season. All three are fixed and
+   pinned; the branches are now exercised by `tests/projections.test.mjs`,
+   `tests/draftLive.test.mjs`, `tests/sleeperDraft.test.mjs`, and driven
+   end-to-end by `scripts/dev/replay-live.mjs`. See `docs/open-items.md`
+   §1 (ACTIVE-1). **This is the strongest available argument that
+   "audited by code-reading only" is not a substitute for execution.**
 6. **Prototype-pollution via hostile keys in the pipeline scripts** — no
    exploit constructible (per-object bracket assignment, no global
    pollution); `Object.create(null)` would remove even the theoretical case.

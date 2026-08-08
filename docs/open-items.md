@@ -5,7 +5,7 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-08-08.
+**Last reviewed:** 2026-08-08 (ACTIVE-1 closed).
 
 **How to use it:**
 - Each item states its **trigger** — the condition that makes it ready. An item
@@ -20,31 +20,48 @@ with a reason belongs here, or it will be forgotten.
 
 ## 1. Active
 
+**Nothing is currently active.** ACTIVE-1 closed 2026-08-08; it is retained
+below in full because what it found — three silent live-API contract breaks —
+is the durable part, and the re-verification commands are needed again next
+season.
+
 ### ACTIVE-1 — Season-readiness tests (draft day + Week 1)
 
-**Status:** next up. **Trigger:** fired — the rookie draft is imminent and Week
-1 is ~5 weeks out (as of 2026-08-08).
+**Status:** ✅ closed 2026-08-08 — see §3. Kept here in expanded form because
+what it *found* is the durable part.
 
-The app's entire live/in-season half has only ever been code-read, never
-executed against real data (`docs/repo-review-2026-07.md` §4, item 5). Two
-one-shot deadlines:
+The exercise was not academic: running it turned up **three live contract
+breaks** that months of code-reading had missed, all of which would have fired
+for the first time on the two deadlines themselves.
 
-1. **Draft day.** The 2026 rookie draft is set up but unfired (`pre_draft`, 0
-   picks, order set). `useSleeperDraft` and the Tracker's live path — polling,
-   on-the-clock banner, "N picks until yours", Best Available, in-draft pick
-   trades, the completion recap — have never run against a real Sleeper draft.
-   It is the Draft section's one live moment per year; there is no second
-   chance until 2027. **22 of 40 2026 picks have been traded**, so pick
-   ownership resolution and slot pricing carry unusual weight that day.
-2. **Week 1.** Everything gated on `season_type === 'regular'` switches on for
-   the first time: Lineup Optimizer, matchup quality from live defensive
-   stats, weekly projections, the deadline banner, League Overview matchups,
-   and Playoff Odds' *active* state (the Monte Carlo has never simulated a
-   real remaining schedule).
+| # | Break | Would have surfaced as |
+|---|---|---|
+| P0 | `/v1/schedule/nfl/regular/{y}` **404s for every season**; the endpoint lives off `/v1` and uses `home`/`away`, not `home_team`/`away_team` | Unguarded in a `Promise.all`, so Week 1 flipped the Lineup Optimizer to `ErrorState` (rendered *before* the offseason check) — no lineup, all season |
+| P0 | `/league/{id}/drafts` **omits `slot_to_roster_id`**; only `/draft/{draft_id}` carries it, and the hook read only the list endpoint | `buildDraftOrder` returned `null` always → no on-the-clock banner, no "N picks until yours", no Best Available, no slot-accurate capital, on the one day they exist |
+| P1 | `/v1/stats/nfl/regular/{y}/{w}` carries **no `pos`/`opp`/`tm`** (null in 2022–2026) | `computeDefenseRankings` returned `{}` → every player's matchup quality read ⚪ Neutral forever, silently |
 
-**First step:** align on test strategy for each before writing anything —
-replay a past draft, synthetic fixtures, or a mocked-fetch harness in the style
-of `tests/matchupWeeks.test.mjs`. Evidence bar: `dynastyedge-validation-and-qa`.
+All three are fixed and pinned. The general lesson is worth keeping: **every one
+of them degraded silently or was gated behind a flag that had never flipped**,
+which is exactly the class of bug a green build and a careful read cannot catch.
+
+**What now guards them**
+
+- `tests/projections.test.mjs`, `tests/draftLive.test.mjs`,
+  `tests/sleeperDraft.test.mjs` — suite went 72 → 107.
+- `tests/fixtures/draft-2025.json` — the league's real 2025 rookie draft
+  (board + 40 picks + 24 traded picks). Truncating its pick list synthesizes
+  every mid-draft state, so the live path is tested on real payload shapes.
+- `scripts/dev/replay-live.mjs` — drives the real app in headless Chromium
+  against a synthetic draft / regular season. Re-runnable any time.
+
+**Re-verify the API contracts before next season** (they are the fragile part —
+Sleeper changed them once already, without notice):
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' 'https://api.sleeper.app/schedule/nfl/regular/2026'   # expect 200
+curl -s -o /dev/null -w '%{http_code}\n' 'https://api.sleeper.app/v1/schedule/nfl/regular/2026' # expect 404
+curl -s 'https://api.sleeper.app/v1/league/1313933520715907072/drafts' | grep -c slot_to_roster_id # expect 0
+```
 
 ---
 
@@ -152,3 +169,4 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 | July 2026 repo-review backlog B1–B11 | 2026-07/08 | All eleven landed — mapping in `docs/repo-review-2026-07.md`'s status banner |
 | Navigation Refactor Phases 1–3 | 2026-07-20 | Consolidation → `/my-team` + `/league` rename → "Primetime Blackout" visual pass |
 | Frontier Item 2 blocking question (are losing FAAB bids visible?) | 2026-08-08 | Verified yes; see `docs/analysis/faab-bid-corpus-2026-08.md`. Superseded by OPEN-3 |
+| ACTIVE-1 — season-readiness tests (draft day + Week 1) | 2026-08-08 | Three live contract breaks found and fixed (schedule endpoint, draft `slot_to_roster_id`, stats `pos`/`opp`); 35 new tests (72 → 107) + `scripts/dev/replay-live.mjs`. Detail retained in §1 |

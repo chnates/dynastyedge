@@ -104,6 +104,18 @@ remember the `#/`.
   sheets render as `[role="dialog"]`. If a capture hangs on `waitFor`, re-grep
   these in `src/App.jsx` / the target component — a label may have changed.
 
+## Sibling: rehearsing the live surfaces
+
+`scripts/dev/replay-live.mjs` reuses this script's interception approach but
+overlays a *synthetic world* on a few endpoints, so the once-a-year surfaces
+can be driven on demand: the rookie draft Tracker (`--scenario draft` walks
+pre_draft → on the clock → mid → complete against a replay of the real 2025
+draft) and the offseason-gated in-season views (`--scenario week1`, plus
+`--week N` for a mid-season state with real matchup quality). It screenshots
+each stage into `.screenshots/replay-<scenario>/` and asserts on the rendered
+text. Reach for it when the question is "will this work on draft day / in
+Week 1?" rather than "does this card look right?".
+
 ## When NOT to use this
 
 - Pure-logic changes (utils, hooks with no visual output) → `npm test` is the

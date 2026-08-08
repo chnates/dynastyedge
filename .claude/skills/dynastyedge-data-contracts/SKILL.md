@@ -94,16 +94,17 @@ League ID: `1313933520715907072` (constant `LEAGUE_ID`).
 | `/state/nfl` | `useSleeper` · `useLineupData` | Once/load (useSleeper); per-mount (useLineupData) |
 | `/league/{LEAGUE_ID}/matchups/{week}` | `useSleeper` (current week, in-season only) · `useLineupHistory` (weeks 1..lastWeek) · `usePlayoffOdds` (weeks 1..`playoff_week_start`−1) | useSleeper: once/load. useLineupHistory: session cache keyed `${rosterId}:${lastWeek}`. usePlayoffOdds: session cache keyed by season; each week `.catch(() => [])` |
 | `/league/{id}/transactions/{week}` | `useTransactions` (current league) · `useLeagueHistory` (past seasons) | All 18 buckets in parallel, each `.catch(() => [])`; session module cache |
-| `/league/{id}/drafts` | `useSleeperDraft` · `useLeagueHistory` | useSleeperDraft: session cache + manual refresh + focus refetch (stale > 10 s while `drafting`/`paused`, > 5 min otherwise) + 30 s poll while `drafting` and tab visible |
+| `/league/{id}/drafts` | `useSleeperDraft` · `useLeagueHistory` | useSleeperDraft: session cache + manual refresh + focus refetch (stale > 10 s while `drafting`/`paused`, > 5 min otherwise) + 30 s poll while `drafting` and tab visible. **Omits `slot_to_roster_id` — see below** |
+| `/draft/{draft_id}` | `useSleeperDraft` | Best-effort `.catch(() => null)`, merged OVER the listed object. **The only source of `slot_to_roster_id`** |
 | `/draft/{draft_id}/picks` | `useSleeperDraft` · `useLeagueHistory` | Best-effort `.catch(() => [])` |
 | `/draft/{draft_id}/traded_picks` | `useSleeperDraft` | Best-effort `.catch(() => [])` |
 | `/players/nfl` (~5–8 MB) | `usePlayerDB` (`loadPlayerDB`) | **Once per session**, module cache; raw response trimmed then discarded (see field list below). Never fetch anywhere else |
 | `/players/nfl/{playerId}` | `usePlayerNews` (`fetchPlayerNews`) | Per-player Map cache; failure → green flag, silent |
 | `/user/{username}` | `LoginScreen.jsx` (sign-in only) | On submit only; reads `user_id` |
 | `/projections/nfl/regular/{season}/{week}` | `useLineupData` | Per-mount, in-season only |
-| `/schedule/nfl/regular/{season}` | `useLineupData` | Per-mount, in-season only |
+| `/schedule/nfl/regular/{season}` | `useLineupData` | Per-mount, in-season only. **`SLEEPER_ROOT` — NOT under `/v1`** (the `/v1` path 404s for every season). Best-effort `.catch(() => [])` |
 | `/stats/nfl/regular/{year}` | `usePlayerIntel` (`loadSeasonStats`) | Lazy (first profile open), session cache per year |
-| `/stats/nfl/regular/{year}/{week}` | `useLineupData` (prev week, defense ranks) · `usePlayerIntel` (last 3 weeks) | useLineupData per-mount; usePlayerIntel session cache per `${year}-${week}` |
+| `/stats/nfl/regular/{year}/{week}` | `useLineupData` (prev week, defense ranks) · `usePlayerIntel` (last 3 weeks) | useLineupData per-mount, best-effort `.catch(() => ({}))`; usePlayerIntel session cache per `${year}-${week}`. **Carries no `pos`/`opp`/`tm` — see below** |
 
 ### Response fields the code actually consumes
 
@@ -138,7 +139,8 @@ League ID: `1313933520715907072` (constant `LEAGUE_ID`).
   `settings.waiver_bid` (winning FAAB bid), `roster_ids[]`.
 - **`/drafts`**: `draft_id`, `season`, `type` (`'snake'`/`'auction'` —
   useSleeperDraft skips auctions), `status` (`pre_draft`/`drafting`/`paused`/
-  `complete`), `slot_to_roster_id` (null until Sleeper sets the order),
+  `complete`), `slot_to_roster_id` (**absent from the `/drafts` LIST endpoint
+  entirely** — only `/draft/{draft_id}` carries it),
   `settings.rounds` (default 4), `settings.teams`, `draft_order` (fallback
   when `slot_to_roster_id` missing — used by managerAnalysis).
 - **`/draft/{id}/picks`**: pick list with `round`, `draft_slot`, `pick_no`,
@@ -159,12 +161,31 @@ League ID: `1313933520715907072` (constant `LEAGUE_ID`).
 - **`/stats/nfl/regular/{year}[/{week}]`**: `pts_half_ppr`, `gp`,
   `gms_active`, `pass_att`, `rush_att`, `rec_tgt`. Positional finishes are
   ranked **client-side** from `pts_half_ppr`.
-- **`/projections/nfl/regular/{season}/{week}`** and
-  **`/schedule/nfl/regular/{season}`** (`week`, `home_team`, `away_team` —
-  bye detection = teams absent from that week's games): consumed by
-  `useLineupData` / `utils/projections.js`.
+- **`/projections/nfl/regular/{season}/{week}`**: `pts_half_ppr` (present for
+  ~1,000 of ~9,400 entries — the rest are ADP-only rows).
+- **`/schedule/nfl/regular/{season}`**: `week`, **`home`, `away`** — NOT
+  `home_team`/`away_team`, and NOT under `/v1`. Bye detection = teams absent
+  from that week's games. Consumed by `useLineupData` / `utils/projections.js`.
 
 ### Sleeper quirks that cause real bugs
+
+- **The schedule endpoint is not under `/v1`.** `/v1/schedule/nfl/regular/{y}`
+  404s for every season (verified 2026-08-08 against 2024/2025/2026); the
+  working path is `https://api.sleeper.app/schedule/...` (`SLEEPER_ROOT`). Its
+  fields are `home`/`away`. Both mistakes fail *silently* — wrong field names
+  just yield "no games" — and together they took out bye detection, opponent
+  lookup, and (because the fetch was unguarded) the whole Lineup Optimizer.
+- **Weekly stats carry no `pos`/`opp`/`tm`.** All three are `null` on every
+  entry in every season checked (2022–2026). Anything needing a player's
+  position, team, or opponent must join to `usePlayerDB` (which keeps
+  `position` + `team`) and to the schedule. `computeDefenseRankings` does
+  exactly this; keying off the stats fields returns an empty ranking and every
+  matchup silently reads "Neutral".
+- **`/league/{id}/drafts` omits `slot_to_roster_id`.** Only `/draft/{draft_id}`
+  has it, so `useSleeperDraft` fetches both and merges. Without it
+  `buildDraftOrder` returns `null`, which disables the Tracker's entire live
+  path (on-the-clock banner, pick countdown, Best Available, slot pricing) with
+  no error anywhere.
 
 - **IDs flip between string and number by endpoint.** Always `String(id)`
   at ingestion. `useLeague.resolveRoster` also filters out `'0'` (empty

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchJSON } from '../utils/fetchJSON'
 import { SLEEPER_BASE, LEAGUE_ID, PICK_YEARS } from '../constants'
+import { buildDraftSlots } from '../utils/pickCapital'
 
 // The upcoming rookie draft season — same convention as the pick tracker.
 export const DRAFT_SEASON = PICK_YEARS[0]
@@ -19,22 +20,37 @@ async function fetchDraftData() {
     `${SLEEPER_BASE}/league/${LEAGUE_ID}/drafts`,
     { label: 'Sleeper drafts' }
   )
-  const draft = (drafts ?? []).find(
+  const listed = (drafts ?? []).find(
     d => String(d.season) === DRAFT_SEASON && d.type !== 'auction'
   ) ?? null
-  if (!draft) return { draft: null, picks: [], tradedPicks: [] }
+  if (!listed) return { draft: null, picks: [], tradedPicks: [] }
 
-  // Both are best-effort: a draft with no picks yet returns [].
-  const [picks, tradedPicks] = await Promise.all([
-    fetchJSON(`${SLEEPER_BASE}/draft/${draft.draft_id}/picks`, { label: 'Draft picks' })
+  // `/league/{id}/drafts` OMITS `slot_to_roster_id` entirely — only the
+  // single-draft endpoint carries it (verified 2026-08-08 against the 2025 and
+  // 2026 drafts). Without it buildDraftOrder returns null, which silently
+  // disables the entire order-driven live path: the on-the-clock banner,
+  // "N picks until yours", Best Available, and slot-accurate pick capital.
+  // Best-effort: if this call fails we keep the listed object and fall back to
+  // `draft_order`, which the list endpoint does include.
+  const [full, picks, tradedPicks] = await Promise.all([
+    fetchJSON(`${SLEEPER_BASE}/draft/${listed.draft_id}`, { label: 'Draft' })
+      .catch(() => null),
+    fetchJSON(`${SLEEPER_BASE}/draft/${listed.draft_id}/picks`, { label: 'Draft picks' })
       .catch(() => []),
-    fetchJSON(`${SLEEPER_BASE}/draft/${draft.draft_id}/traded_picks`, { label: 'Draft trades' })
+    fetchJSON(`${SLEEPER_BASE}/draft/${listed.draft_id}/traded_picks`, { label: 'Draft trades' })
       .catch(() => []),
   ])
-  return { draft, picks: picks ?? [], tradedPicks: tradedPicks ?? [] }
+  return {
+    draft: { ...listed, ...(full ?? {}) },
+    picks: picks ?? [],
+    tradedPicks: tradedPicks ?? [],
+  }
 }
 
-function loadDraft(force = false) {
+// Exported for tests (same contract as matchupWeeks): the session cache and
+// the best-effort merge of the list + single-draft endpoints are what the
+// live path depends on, so they are pinned directly.
+export function loadDraft(force = false) {
   if (!force && cache.data) return Promise.resolve(cache.data)
   if (inflight) return inflight
   inflight = fetchDraftData()
@@ -46,12 +62,28 @@ function loadDraft(force = false) {
   return inflight
 }
 
+// Full invalidation — used by tests; the app refreshes via loadDraft(true).
+export function resetDraftCache() {
+  cache = { data: null, fetchedAt: 0 }
+  inflight = null
+}
+
 // Full draft order, resolved against in-draft pick trades.
-// Returns null while Sleeper has no draft order set (slot_to_roster_id null).
+// Returns null only when Sleeper knows no order at all.
 // Entries: { round, slot, overall, rosterId, originalRosterId, label }.
-export function buildDraftOrder(draft, tradedPicks = []) {
-  const slotToRoster = draft?.slot_to_roster_id
-  if (!slotToRoster) return null
+//
+// Slots resolve two ways, same two-tier contract as pick capital
+// (CLAUDE.md Feature 1): `slot_to_roster_id` once Sleeper builds the board,
+// else `draft_order` (owner_id → slot, set in `pre_draft`, so slots are known
+// a month early) joined to rosters. `buildDraftSlots` owns both, so there is
+// one source of truth; it returns rosterId → slot, which we invert here.
+export function buildDraftOrder(draft, tradedPicks = [], rosters = []) {
+  if (!draft) return null
+  const byRoster = buildDraftSlots(draft, rosters)
+  if (!byRoster || !Object.keys(byRoster).length) return null
+  const slotToRoster = {}
+  Object.entries(byRoster).forEach(([rid, slot]) => { slotToRoster[slot] = Number(rid) })
+
   const rounds = draft.settings?.rounds ?? 4
   const teams = draft.settings?.teams ?? (Object.keys(slotToRoster).length || 10)
 
