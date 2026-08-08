@@ -1,5 +1,40 @@
 # DynastyEdge Repository Review — July 2026
 
+> ## STATUS (updated 2026-08-08): CLOSED — the entire B1–B11 backlog has landed.
+>
+> This document is now a **historical record**, not a work queue. Do not treat
+> §3 as open work. Item-by-item, with the commit that closed it:
+>
+> | Item | Fixes | Landed in |
+> |---|---|---|
+> | B1 — values-history can't wipe itself | F1 | `a1cbfe2` (abort on non-404 history load failure) |
+> | B2 — trade archive preserved via `git fetch`; `concurrency` guards | F2, F11 | same PR + workflow guards (all four workflows now carry `concurrency`) |
+> | B3 — zero-dependency test suite | guardrail | `dca8014` (`tests/`, 10 files on `node:test`) |
+> | B4 — ESLint 9 + CI gate | guardrail | `aaf3110` (+ `ci.yml`; lint+test gate `deploy.yml` too) |
+> | B5 — pipeline-health visibility | guardrail | `cfa196d` (drawer feed ages + keepalive step) |
+> | B6 — fetch the playoff schedule once | F3 | `2516604` |
+> | B7 — one Monte Carlo per data change | F4 | `41be5de` |
+> | B8 — vite patch, retry identity, preconnects, storage guards | F13, F6, F10 | `45322b4`, `adf00a3`, `76272ea`, `c6beae4` |
+> | B9 — counter picks the nearest bridging asset | F8 | `bea7f84` |
+> | B10 — shared matchup-weeks cache + all-fail ErrorState | F5, F7 | `48d0c46` |
+> | B11 — documentation truth-up | F16a/c + drifts | `724b5ef`, `1a0b1af`, `8fc80a4` |
+>
+> **Deliberately still open** (accepted risk, recorded so nobody re-flags them
+> as new): **F12** (client-side news-link scheme validation — defense-in-depth
+> only; pipeline-side validation is correct and the exploit needs repo write
+> access), **F15** (exact standings ties resolve by roster-array order —
+> vanishingly rare with fractional scoring), **F16b** (the "↪ flipped" ledger
+> marker needs strictly-greater timestamps, so date-less trade pairs miss it;
+> the net-value wash is arithmetic-invariant and unaffected). **F16c** is moot:
+> `useTheme` no longer sets a `theme-color` meta at all — the 2026-07-20
+> status-bar rework moved that to static `prefers-color-scheme` metas in
+> `index.html`.
+>
+> **What remains genuinely open from §4** is the unverified-hypotheses
+> appendix — above all **item 5** (in-season UI branches never exercised) and
+> **item 3** (playoff-odds calibration). Both are gated on live regular-season
+> data. See `docs/project-status-2026-08.md`.
+
 **Scope:** full read-only audit — performance & network efficiency, model math,
 correctness, dependencies & CI security, plus guardrail-gap proposals.
 **Date:** 2026-07-17, against branch `claude/dynastyedge-repo-audit-bjh1oi`

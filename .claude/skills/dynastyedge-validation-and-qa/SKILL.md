@@ -14,10 +14,19 @@ description: >
 
 # DynastyEdge Validation & QA
 
-This repo's machine gates (verified 2026-07-19) are `npm run lint` (ESLint 9
+This repo's machine gates (verified 2026-08-08) are `npm run lint` (ESLint 9
 flat config, error severity) + `npm test` (`tests/*.test.mjs` on Node's
-built-in `node:test`, 55 passing) + `npm run build` — enforced by `ci.yml`
-on every branch push/PR and by `deploy.yml` before publishing. But there is
+built-in `node:test`, **72 passing**) + `npm run build` — enforced by `ci.yml`
+on every branch push/PR and by `deploy.yml` before publishing.
+
+> **Run `npm ci` first.** A fresh clone (what every remote session gets) has
+> no `node_modules`, and `npm test` reports that as `# tests 47 / # pass 44 /
+> # fail 3` rather than a missing-module error — it looks like a regression.
+> **A run that doesn't say 72 is an environment problem, not a code problem**;
+> full mechanism in `dynastyedge-build-and-env` §7. Never report those 3 as
+> failing tests without checking dependencies first.
+
+But there is
 still **no typecheck**, and the suite pins only the pure `src/utils` logic
 and the module fetch loaders on synthetic fixtures — no component or hook
 rendering, no model calibration, no visuals. For everything the suite
