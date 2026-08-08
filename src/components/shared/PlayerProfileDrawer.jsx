@@ -115,6 +115,108 @@ function getComparables(player, playerMap) {
     .slice(0, 4)
 }
 
+// ── Rookie opportunity (Draft › Research) ────────────────────────────────────
+// Rendered only when the drawer is opened from Draft › Research, which hands in
+// the row it was showing. The scouting read the user just tapped is the reason
+// they opened the sheet, so it leads the body — a value number alone doesn't
+// answer "is he going to play?".
+
+const OPP_TIER = {
+  strong: { text: 'text-success', label: 'Strong opportunity' },
+  fair:   { text: 'text-warning', label: 'Fair opportunity' },
+  weak:   { text: 'text-text-tertiary', label: 'Thin opportunity' },
+}
+const OPP_REASON_TONE = {
+  good: 'text-success',
+  flat: 'text-text-secondary',
+  bad:  'text-danger',
+}
+
+function RookieOpportunity({ research }) {
+  const { score, tier, depthText, reasons = [], move, pick, round, slot, rank } = research
+  const tone = OPP_TIER[tier] ?? OPP_TIER.weak
+  const capital = pick == null
+    ? (research.noData ? 'No NFL draft record in the feed' : 'Undrafted free agent')
+    : `Round ${round ?? '—'} · pick ${pick} of the NFL draft`
+
+  return (
+    <Card padding="sm">
+      <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
+        Rookie Opportunity
+      </p>
+
+      {score == null ? (
+        <p className="font-body text-sm text-text-secondary leading-snug">
+          No depth-chart or NFL draft record for him yet, so there's no opportunity
+          score — the daily rookie feed hasn't placed him.
+        </p>
+      ) : (
+        <>
+          <div className="flex items-baseline gap-3">
+            <span className={cn('font-mono text-3xl font-semibold tabular-nums', tone.text)}>
+              {Math.round(score * 100)}
+            </span>
+            <div>
+              <p className={cn('font-body text-sm font-semibold', tone.text)}>{tone.label}</p>
+              <p className="font-body text-[10px] text-text-tertiary">out of 100 · chance he lands a real role</p>
+            </div>
+          </div>
+
+          <p className="font-body text-sm text-text-primary mt-2.5 leading-snug">{depthText}</p>
+          <p className="font-body text-xs text-text-secondary mt-0.5">{capital}</p>
+          {slot && (
+            <p className="font-body text-xs text-text-tertiary mt-0.5">
+              Listed {slot}{rank != null ? ` ${rank}` : ''} on his NFL depth chart
+            </p>
+          )}
+
+          {move && (
+            <p className={cn('font-body text-xs mt-1.5', move.direction === 'up' ? 'text-success' : 'text-danger')}>
+              {move.direction === 'up' ? 'Climbed' : 'Slipped'} {Math.abs(move.delta)}{' '}
+              {Math.abs(move.delta) === 1 ? 'spot' : 'spots'} since the feed started tracking
+              {' '}(#{move.from} → #{move.to}) — shown for context, not scored
+            </p>
+          )}
+
+          {reasons.length > 0 && (
+            <ul className="mt-2.5 pt-2.5 border-t border-border-default space-y-1">
+              {reasons.map((r, i) => (
+                <li key={i} className={cn('font-body text-xs leading-snug', OPP_REASON_TONE[r.tone])}>
+                  · {r.text}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {research.divergence != null && (
+            <p className="font-body text-xs text-text-secondary mt-2.5 pt-2.5 border-t border-border-default leading-snug">
+              Among {research.position}s in this class the market has him{' '}
+              <span className="font-mono text-text-primary">#{research.marketRank}</span> and this model has him{' '}
+              <span className="font-mono text-text-primary">#{research.modelRank}</span>
+              {research.divergence === 0
+                ? ' — they agree.'
+                : research.divergence > 0
+                  ? ` — the model likes him ${research.divergence} spots more.`
+                  : ` — the market likes him ${Math.abs(research.divergence)} spots more.`}
+            </p>
+          )}
+
+          {research.fitReasons?.length > 0 && (
+            <div className="mt-2.5 pt-2.5 border-t border-border-default">
+              <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-1">
+                For your roster
+              </p>
+              {research.fitReasons.map((r, i) => (
+                <p key={i} className="font-body text-xs text-text-primary leading-snug">· {r}</p>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  )
+}
+
 // ── Slot label ───────────────────────────────────────────────────────────────
 
 function slotLabel(rosterPlayer) {
@@ -130,7 +232,7 @@ function slotLabel(rosterPlayer) {
 export default function PlayerProfileDrawer({
   player, onClose, playerMap = {}, csvColumns = [],
   isDraftContext = false, note = '', onNoteChange = null,
-  fpNotesMap = {},
+  fpNotesMap = {}, research = null,
 }) {
   const navigate = useNavigate()
   const ctx = useLeagueContext()
@@ -282,6 +384,8 @@ export default function PlayerProfileDrawer({
         </div>
 
         <div className="px-4 pb-6 pt-3 flex flex-col gap-4">
+
+          {research && <RookieOpportunity research={research} />}
 
           {/* Player Status */}
           <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">

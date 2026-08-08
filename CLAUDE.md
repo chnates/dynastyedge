@@ -1540,15 +1540,49 @@ March is computable for the current class but **could not be back-tested**
 no pre-camp baseline). Display it; don't let it move the score until a season
 of it exists.
 
-**UI (`components/draft/RookieResearchView.jsx`):** the Market vs Model
-divergence cards (corner-cut, tone edge bar, with plain-English reasons), then
-an Opportunity Board with search, position chips, and a sort toggle
-(Opportunity / Market / Camp movers). Rows show the score, a position-aware
-depth read ("Backup behind Kirk Cousins"), capital, alignment slot, and a
-movement chip; tap → `PlayerProfileDrawer`. Dynasty value sorts as the
+**Roster fit (`buildTeamFit` / `topTargets`)** answers the second question — the
+model above is league-agnostic ("which rookies become something?"), this is
+"which of them should *I* take?". It is a **re-ranking over the back-tested
+score, never a change to it**: `fit` blends the opportunity score with the
+market price (`FIT_MARKET_WEIGHT` 0.45 — opportunity alone leads the board with
+a well-placed day-three flier over a consensus 1.01, a fine *divergence*
+finding and a bad *draft plan*), then adds bonuses for a position I'm below
+league average at (`FIT_NEED_BONUS`), a ≥5-spot model-over-market gap, and a
+win-window lean (a contender wants a rookie already listed first; a rebuilder
+can let top-64 capital develop). Deficits come from `getDeficitPositions` and
+the tier from `getWinWindowTier`, so "you need a TE" means exactly what it
+means in Free Agents and the Trade Analyzer. An **unscored rookie gets
+`fit: null` and never appears as a target** — same contract as the score:
+absence of feed data is not evidence of a bad fit — but `fitsNeed` still marks
+his position, so the need badge survives the degraded state.
+
+**UI (`components/draft/RookieResearchView.jsx`):** an always-visible
+"Scout the rookie class" explainer (what an opportunity score is, plus the
+three-step read order — this page shipped without one and was unusable),
+**Your Targets** (the roster-fit shortlist, stating my deficits and win window
+in plain English, with per-card fit reasons), the Market vs Model divergence
+cards (corner-cut, tone edge bar, plain-English reasons plus a sentence
+spelling out the rank gap), then an Opportunity Board with search, position
+chips, a score legend, and a sort toggle (Best for me / Opportunity / Dynasty
+value / Camp risers, default **Best for me**) with a line under it naming what
+the active sort means. Rows show the score, a position-aware depth read
+("Backup behind Kirk Cousins"), capital, alignment slot, a movement chip, and a
+"Your need" badge; tap → `PlayerProfileDrawer`. Dynasty value sorts as the
 tiebreaker, which is what keeps the board useful in the degraded state. A
-collapsible "How this works" states the model, its back-test, and why
-preseason stats are absent. Unranked rookies show `—` and are never dropped.
+collapsible "How this works" states the model, its back-test, that the fit
+re-ranking is a judgement call rather than a back-tested one, and why preseason
+stats are absent. Unranked rookies show `—` and are never dropped.
+
+**The drawer carries the research read.** Rows are handed to
+`PlayerProfileDrawer` as its `research` prop, which renders a **Rookie
+Opportunity** card at the top of the sheet (score/100 + tier, depth read, NFL
+capital, camp move, the score's reasons, the within-position market-vs-model
+sentence, and the roster-fit reasons) — a value number alone doesn't answer
+"is he going to play?", which is why the user opened the sheet. The row shape
+therefore also carries `positionRank` and `age`, which the model itself does
+not use: the drawer grades from `positionRank ?? 99`, so the first shipped
+shape (which dropped both) stamped **every** rookie opened from this page
+"D — Deep Stash" with no age, no position rank, and no peak-window line.
 
 -----
 
@@ -2322,7 +2356,7 @@ dynastyedge/
 │   ├── lineupBuild.test.mjs         ← slot-fill order (singles → FLEX → SFLX), IR/taxi excluded, who-starts identity
 │   ├── lineupHistory.test.mjs       ← optimal-lineup slot-fill order (singles → FLEX → SFLX)
 │   ├── matchupWeeks.test.mjs        ← mocked-fetch: one fetch/week across both consumers, all-fail rejection
-│   ├── rookieResearch.test.mjs      ← opportunity blend, shared points scale (the backup-TE trap), within-position divergence, best-effort feed degradation
+│   ├── rookieResearch.test.mjs      ← opportunity blend, shared points scale (the backup-TE trap), within-position divergence, roster-fit re-ranking (need/window bonuses, score untouched), drawer hand-off fields, best-effort feed degradation
 │   └── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
 ├── index.html
 ├── eslint.config.js             ← ESLint 9 flat config (recommended + react-hooks, src/ + scripts/)
@@ -2334,14 +2368,15 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 47 / # pass 44 /
-# fail 3`, which reads like a code regression. The three files that fail are
-the ones transitively importing `react` (`tradeAnalysis.js` →
-`recommendations.js` → `useLeague.js`, plus `matchupWeeks` and `transactions`
-loading their hooks) — the file fails to load, so its tests never run and the
-count silently drops from **120** to 47. `npm run build` in the same state fails
-with `sh: 1: vite: not found`. **If the test count isn't 120, run `npm ci`
-before debugging anything.**
+honestly:** instead of "cannot find module" it prints `# tests 78 / # pass 73 /
+# fail 5`, which reads like a code regression. The five files that fail are the
+ones transitively importing `react` (`tradeAnalysis.js` → `recommendations.js`
+→ `useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
+`draftLive` loading their hooks) — the file fails to load, so its tests never
+run and the count silently drops from **126** to 78. `npm run build` in the
+same state fails with `sh: 1: vite: not found`. **If the test count isn't 126,
+run `npm ci` before debugging anything.** (Both numbers re-measured 2026-08-08
+by renaming `node_modules` aside; the previously documented 47/44/3 was stale.)
 
 **Tests:** `npm test` runs the `tests/` suite — plain `.mjs` scripts on Node's
 built-in `node:test` runner with `node:assert/strict`, zero new dependencies
@@ -2397,6 +2432,17 @@ publishes. Both workflows run Node 22 — the test script's
 workflows back to Node 20 (the news/values pipelines, which run no tests,
 still use 20).
 
+**Action runtimes are a separate axis from `node-version`.** `node-version`
+picks the Node that runs *our* scripts; the `uses:` tag picks the Node the
+*action itself* runs on. GitHub deprecated the Node 20 action runtime, so every
+workflow pins `actions/checkout@v5` + `actions/setup-node@v5` and `deploy.yml`
+uses `actions/deploy-pages@v5` — all four declare `using: node24`. Don't
+downgrade them to v4 (that's the deprecation warning coming back).
+`actions/configure-pages` is knowingly left at **v4**: its v5 is *also* node20,
+so bumping it fixes nothing. `actions/upload-pages-artifact@v3` is a composite
+action and has no Node runtime at all. Re-check both when GitHub ships a node24
+`configure-pages`.
+
 -----
 
 ## GitHub Pages Deployment
@@ -2432,8 +2478,8 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -2446,7 +2492,7 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
-      - uses: actions/deploy-pages@v4
+      - uses: actions/deploy-pages@v5
         id: deployment
 ```
 

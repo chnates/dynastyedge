@@ -155,6 +155,13 @@ export function buildRookieResearch(prospects, intel) {
       team: p.maybeTeam ?? p.team ?? entry?.team ?? null,
       value: p.value ?? null,
       overallRank: p.overallRank ?? null,
+      // positionRank and age are not used by the model — they are carried so a
+      // row can be handed straight to PlayerProfileDrawer, which grades and
+      // labels a player from them. Dropping them (the shape shipped first) made
+      // the drawer read `positionRank ?? 99` and stamp every rookie opened from
+      // this page "D — Deep Stash", with no age in the header.
+      positionRank: p.positionRank ?? null,
+      age: p.age ?? null,
       trend30Day: p.trend30Day ?? null,
       adp: p.adp ?? null,
       rank,
@@ -221,6 +228,73 @@ export function buildRookieResearch(prospects, intel) {
 // at 12 with a median of 2. A gap of 5 is roughly the top quartile — it
 // yields a handful of names per side rather than a wall of noise (minGap 8,
 // carried over from cross-position ranking, surfaced only three players).
+// ── Roster fit ───────────────────────────────────────────────────────────────
+// Everything above is league-agnostic: it answers "which rookies become
+// something?" This layer answers the question that actually decides a pick —
+// "which of them should *I* take?" — by weighing the opportunity score against
+// what my roster is short of and where my win window is.
+//
+// This is a RANKING over the back-tested score, not a new predictive claim.
+// Nothing here changes `score`; the bonuses only reorder the board for one
+// roster. The deficit definition is the same one every other recommendation
+// surface uses (recommendations.js → getDeficitPositions), so "you need a TE"
+// means the same thing here as it does in Free Agents and the Trade Analyzer.
+
+// Half the ranking is the market's price. Opportunity alone would lead the
+// board with a well-placed day-three flier over a consensus 1.01, which is a
+// fine *divergence* finding and a bad *draft plan* — you still have to spend a
+// real pick, and the market prices talent this model deliberately ignores.
+export const FIT_MARKET_WEIGHT = 0.45
+export const FIT_NEED_BONUS = 0.22
+export const FIT_DIVERGENCE_BONUS = 0.1
+export const FIT_WINDOW_BONUS = 0.08
+// Day one and two of the NFL draft — the capital a rebuilder can afford to let
+// develop behind a starter.
+const EARLY_CAPITAL = 64
+
+export function buildTeamFit(rows, { deficits, tier } = {}) {
+  if (!Array.isArray(rows)) return []
+  const needs = deficits instanceof Set ? deficits : new Set(deficits ?? [])
+  const maxValue = rows.reduce((m, r) => Math.max(m, r.value ?? 0), 0)
+
+  return rows.map(row => {
+    const fitsNeed = row.position != null && needs.has(row.position)
+    // An unscored rookie (no intel entry) gets no fit — same contract as the
+    // score itself: absence of data is not evidence of a bad fit.
+    if (row.score == null) return { ...row, fit: null, fitReasons: [], fitsNeed }
+
+    const market = maxValue > 0 ? (row.value ?? 0) / maxValue : 0
+    let fit = (1 - FIT_MARKET_WEIGHT) * row.score + FIT_MARKET_WEIGHT * market
+    const fitReasons = []
+
+    if (fitsNeed) {
+      fit += FIT_NEED_BONUS
+      fitReasons.push(`Fills your ${row.position} need`)
+    }
+    if (row.divergence != null && row.divergence >= 5) {
+      fit += FIT_DIVERGENCE_BONUS
+      fitReasons.push(`Model rates him ${row.divergence} spots above the market`)
+    }
+    if (tier === 'Contending' && depthBucket(row.rank) === 1) {
+      fit += FIT_WINDOW_BONUS
+      fitReasons.push('In line to play right away — you\'re contending')
+    } else if (tier === 'Rebuilding' && row.pick != null && row.pick <= EARLY_CAPITAL) {
+      fit += FIT_WINDOW_BONUS
+      fitReasons.push('Early NFL capital worth developing — you\'re rebuilding')
+    }
+
+    return { ...row, fit, fitReasons, fitsNeed }
+  })
+}
+
+// The shortlist: who to target with the picks you actually hold.
+export function topTargets(rows, { limit = 4 } = {}) {
+  return rows
+    .filter(r => r.fit != null)
+    .sort((a, b) => b.fit - a.fit || (b.value ?? 0) - (a.value ?? 0))
+    .slice(0, limit)
+}
+
 export function splitDivergence(rows, { minGap = 5, limit = 6 } = {}) {
   const scored = rows.filter(r => r.divergence != null)
   const undervalued = scored

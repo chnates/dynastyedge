@@ -17,7 +17,7 @@ jobs:
   snapshot:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Keepalive — reset the 60-day cron-disable clock
         # GitHub disables scheduled workflows after ~60 days without repo
         # activity, and this workflow's own force-pushes to the data branches
@@ -44,7 +44,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git commit --allow-empty -m "chore: keepalive commit so scheduled workflows stay enabled"
           git push origin HEAD:main
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
       - name: Append today's FantasyCalc snapshot

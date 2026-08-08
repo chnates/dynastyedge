@@ -8,7 +8,7 @@ import {
   DEPTH_VALUE, DEPTH_WEIGHT, UDFA_SCORE,
   depthBucket, depthScore, capitalScore, opportunityScore,
   campMove, depthLabel, scoreReasons,
-  buildRookieResearch, splitDivergence,
+  buildRookieResearch, buildTeamFit, topTargets, splitDivergence,
 } from '../src/utils/rookieResearch.js'
 
 test('the blend weight is the back-tested 0.3 depth / 0.7 capital', () => {
@@ -188,4 +188,112 @@ test('splitDivergence only surfaces genuine disagreements', () => {
   // Default gap is tuned for within-position group sizes (~8-30 players).
   assert.deepEqual(splitDivergence(rows).undervalued.map(r => r.sleeperId), ['a', 'b'])
   assert.equal(splitDivergence(rows).overvalued.length, 1)
+})
+
+// ── Drawer hand-off ──────────────────────────────────────────────────────────
+
+test('rows carry the fields PlayerProfileDrawer grades a player from', () => {
+  // The drawer reads `positionRank ?? 99` for its A–D grade and `age` for its
+  // header. The first shipped row shape dropped both, so every rookie opened
+  // from Draft › Research was stamped "D — Deep Stash" with no age.
+  const rows = buildRookieResearch(
+    [{ sleeperId: '1', name: 'Starter WR', position: 'WR', value: 3000, positionRank: 4, age: 22.3, overallRank: 61 }],
+    intel,
+  )
+  assert.equal(rows[0].positionRank, 4)
+  assert.equal(rows[0].age, 22.3)
+  assert.equal(rows[0].overallRank, 61)
+  // Absent upstream stays null rather than undefined, so `?? 99` still fires.
+  const bare = buildRookieResearch([{ sleeperId: '1', name: 'X', position: 'WR', value: 10 }], intel)
+  assert.equal(bare[0].positionRank, null)
+  assert.equal(bare[0].age, null)
+})
+
+// ── buildTeamFit / topTargets ────────────────────────────────────────────────
+
+const fitRows = () => buildRookieResearch(prospects, intel)
+
+test('roster fit rewards deficit positions without touching the model score', () => {
+  const neutral = buildTeamFit(fitRows(), { deficits: new Set(), tier: null })
+  const needsWR = buildTeamFit(fitRows(), { deficits: new Set(['WR']), tier: null })
+  const base = fitRows()
+
+  for (const row of [...neutral, ...needsWR]) {
+    const original = base.find(r => r.sleeperId === row.sleeperId)
+    assert.equal(row.score, original.score, 'fit re-ranks; it never rewrites the score')
+  }
+  const starterNeutral = neutral.find(r => r.sleeperId === '1')
+  const starterNeed = needsWR.find(r => r.sleeperId === '1')
+  assert.ok(starterNeed.fit > starterNeutral.fit, 'a needed position lifts fit')
+  assert.equal(starterNeed.fitsNeed, true)
+  assert.ok(starterNeed.fitReasons.some(r => /Fills your WR need/.test(r)))
+  assert.equal(starterNeutral.fitsNeed, false)
+  assert.deepEqual(starterNeutral.fitReasons, [], 'no roster signal, no roster claim')
+  // A plain array of positions is accepted as well as a Set.
+  assert.equal(buildTeamFit(fitRows(), { deficits: ['WR'] }).find(r => r.sleeperId === '1').fitsNeed, true)
+})
+
+test('an unscored rookie gets no fit, but still reads as a positional need', () => {
+  // Same contract as the score: absence of feed data is not evidence of a bad
+  // fit, so he is never ranked — but "you are thin at RB" is still true.
+  const rows = buildTeamFit(fitRows(), { deficits: new Set(['RB']), tier: 'Rebuilding' })
+  const missing = rows.find(r => r.sleeperId === '3')
+  assert.equal(missing.fit, null)
+  assert.deepEqual(missing.fitReasons, [])
+  assert.equal(missing.fitsNeed, true)
+  assert.equal(missing.name, 'No Feed', 'still never dropped')
+})
+
+test('the win window leans the fit toward what that roster can use', () => {
+  // A contender wants a rookie already listed first; a rebuilder can afford to
+  // let early NFL capital develop behind a starter.
+  const rows = [
+    { sleeperId: 'now',   name: 'Plays Now', position: 'WR', value: 3000 },
+    { sleeperId: 'later', name: 'Sits Now',  position: 'WR', value: 3000 },
+  ]
+  const feed = { players: {
+    now:   { pos: 'WR', pick: 120, round: 4, rank: 1, ranks: [1] },
+    later: { pos: 'WR', pick: 20,  round: 1, rank: 3, ranks: [3] },
+  } }
+  const built = () => buildRookieResearch(rows, feed)
+  const contending = buildTeamFit(built(), { deficits: new Set(), tier: 'Contending' })
+  const rebuilding = buildTeamFit(built(), { deficits: new Set(), tier: 'Rebuilding' })
+
+  assert.ok(contending.find(r => r.sleeperId === 'now').fitReasons.some(t => /right away/.test(t)))
+  assert.equal(contending.find(r => r.sleeperId === 'later').fitReasons.length, 0)
+  assert.ok(rebuilding.find(r => r.sleeperId === 'later').fitReasons.some(t => /developing/.test(t)))
+  assert.equal(rebuilding.find(r => r.sleeperId === 'now').fitReasons.length, 0)
+  // No tier (league still loading) means no window claim either way.
+  const unknown = buildTeamFit(built(), { deficits: new Set(), tier: null })
+  assert.ok(unknown.every(r => r.fitReasons.length === 0))
+})
+
+test('topTargets ranks by fit and never surfaces an unscored rookie', () => {
+  const rows = buildTeamFit(fitRows(), { deficits: new Set(['WR']), tier: null })
+  const targets = topTargets(rows)
+  assert.ok(targets.every(r => r.fit != null))
+  assert.ok(!targets.some(r => r.sleeperId === '3'), 'the no-feed rookie is not a target')
+  for (let i = 1; i < targets.length; i++) {
+    assert.ok(targets[i - 1].fit >= targets[i].fit, 'sorted by fit, descending')
+  }
+  assert.equal(topTargets(rows, { limit: 1 }).length, 1)
+  assert.deepEqual(topTargets([]), [])
+})
+
+test('fit keeps the market in the ranking so the board stays draftable', () => {
+  // Opportunity alone would lead with a well-placed day-three flier over a
+  // consensus early pick — a fine divergence finding and a bad draft plan.
+  const rows = [
+    { sleeperId: 'stud',  name: 'Consensus 1.01', position: 'WR', value: 6000 },
+    { sleeperId: 'flier', name: 'Day-3 Starter',  position: 'WR', value: 400 },
+  ]
+  const feed = { players: {
+    stud:  { pos: 'WR', pick: 45,  round: 2, rank: 4, ranks: [4] },
+    flier: { pos: 'WR', pick: 100, round: 4, rank: 1, ranks: [1] },
+  } }
+  const fitted = buildTeamFit(buildRookieResearch(rows, feed), { deficits: new Set(), tier: null })
+  const stud = fitted.find(r => r.sleeperId === 'stud')
+  const flier = fitted.find(r => r.sleeperId === 'flier')
+  assert.ok(flier.score > stud.score, 'the model does prefer the flier on opportunity')
+  assert.ok(stud.fit > flier.fit, 'but the target board still leads with the stud')
 })
