@@ -2432,6 +2432,17 @@ publishes. Both workflows run Node 22 — the test script's
 workflows back to Node 20 (the news/values pipelines, which run no tests,
 still use 20).
 
+**Action runtimes are a separate axis from `node-version`.** `node-version`
+picks the Node that runs *our* scripts; the `uses:` tag picks the Node the
+*action itself* runs on. GitHub deprecated the Node 20 action runtime, so every
+workflow pins `actions/checkout@v5` + `actions/setup-node@v5` and `deploy.yml`
+uses `actions/deploy-pages@v5` — all four declare `using: node24`. Don't
+downgrade them to v4 (that's the deprecation warning coming back).
+`actions/configure-pages` is knowingly left at **v4**: its v5 is *also* node20,
+so bumping it fixes nothing. `actions/upload-pages-artifact@v3` is a composite
+action and has no Node runtime at all. Re-check both when GitHub ships a node24
+`configure-pages`.
+
 -----
 
 ## GitHub Pages Deployment
@@ -2467,8 +2478,8 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -2481,7 +2492,7 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
-      - uses: actions/deploy-pages@v4
+      - uses: actions/deploy-pages@v5
         id: deployment
 ```
 

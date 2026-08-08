@@ -17,12 +17,12 @@ jobs:
   snapshot:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # No keepalive step here on purpose: values-history.yml already pushes
       # the empty bot commit to main when it goes 45+ days quiet, and that one
       # commit resets the 60-day cron-disable clock for EVERY workflow in the
       # repo. A second keepalive would just double-push the same day.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
       - name: Build today's rookie intel feed
