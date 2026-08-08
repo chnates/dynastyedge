@@ -26,8 +26,9 @@ export function useLeague() {
     const { leagueInfo, rosters, users, tradedPicks, drafts } = sleeperData
     const { playerMap, pickEntries } = fcValues
 
-    // The upcoming rookie draft (PICK_YEARS[0]). Its order — from
-    // slot_to_roster_id once built, else draft_order in pre_draft — lets us
+    // The upcoming rookie draft (PICK_YEARS[0]). Its order — in practice always
+    // from draft_order, since the `/league/{id}/drafts` list endpoint never
+    // returns slot_to_roster_id (only `/draft/{draft_id}` does) — lets us
     // resolve each of that season's picks to its exact slot (1.09) and price
     // it at FantasyCalc's slot-level value instead of the round median.
     const draftSeason = PICK_YEARS[0]

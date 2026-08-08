@@ -81,8 +81,11 @@ function normalizeSeasons(history, currentLeague) {
 // exactly the season the traded pick references. Built directly from the
 // pick list (no dependency on declared round counts); the slot → roster map
 // falls back to draft_order (user → slot) joined with that season's
-// user → roster mapping when Sleeper omits slot_to_roster_id, which is
-// common on older drafts.
+// user → roster mapping when Sleeper omits slot_to_roster_id. That is not an
+// edge case here: `/league/{id}/drafts` — the endpoint useLeagueHistory reads —
+// NEVER returns slot_to_roster_id (only `/draft/{draft_id}` does), so this
+// fallback is the live path for every season. Verified 2026-08-08 to reproduce
+// the authoritative board exactly for 2025 and 2026.
 function buildPickIndex(seasons) {
   const idx = {}
   seasons.forEach(s => {
