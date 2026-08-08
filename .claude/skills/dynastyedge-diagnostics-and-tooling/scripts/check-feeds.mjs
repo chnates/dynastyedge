@@ -1,9 +1,10 @@
-// check-feeds.mjs — NETWORK REQUIRED. Freshness check for the three static
+// check-feeds.mjs — NETWORK REQUIRED. Freshness check for the four static
 // JSON feeds the app serves from orphan branches via raw.githubusercontent.com:
 //
 //   NEWS_FEED_URL       (news-data branch, refreshed twice hourly by Actions)
 //   VALUES_HISTORY_URL  (values-history branch, one column per UTC day)
 //   TRADE_VALUES_URL    (values-history branch, permanent trade-time archive)
+//   ROOKIE_INTEL_URL    (rookie-intel branch, one column per ISO week)
 //
 // Prints per-feed: item counts, newest-item age, values-history date range /
 // column count / player count, and staleness verdicts (news > 2h old? values
@@ -18,10 +19,12 @@ import path from 'node:path'
 let NEWS_FEED_URL = 'https://raw.githubusercontent.com/chnates/dynastyedge/news-data/news.json'
 let VALUES_HISTORY_URL = 'https://raw.githubusercontent.com/chnates/dynastyedge/values-history/values-history.json'
 let TRADE_VALUES_URL = 'https://raw.githubusercontent.com/chnates/dynastyedge/values-history/trade-values.json'
+let ROOKIE_INTEL_URL = 'https://raw.githubusercontent.com/chnates/dynastyedge/rookie-intel/rookie-intel.json'
 try {
   const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..')
   const c = await import(path.join(repoRoot, 'src/constants.js'))
   NEWS_FEED_URL = c.NEWS_FEED_URL; VALUES_HISTORY_URL = c.VALUES_HISTORY_URL; TRADE_VALUES_URL = c.TRADE_VALUES_URL
+  ROOKIE_INTEL_URL = c.ROOKIE_INTEL_URL ?? ROOKIE_INTEL_URL
 } catch { /* fall back to literals above */ }
 
 async function getJSON(url) {
@@ -80,8 +83,30 @@ try {
   console.log('verdict:      no staleness rule — archive only gains entries when trades happen.')
 } catch (err) { failures++; console.log(`FEED UNREACHABLE: ${err.message} — best-effort feed; the app hides its UI line when missing.`) }
 
-if (failures === 3) {
-  console.error('\nAll three feeds unreachable — almost certainly no outbound network')
+// ── Rookie intel ─────────────────────────────────────────────────────────────
+console.log('\n=== rookie-intel.json (rookie-intel branch) ===')
+try {
+  const r = await getJSON(ROOKIE_INTEL_URL)
+  const players = Object.keys(r.players ?? {}).length
+  const cols = (r.dates ?? []).length
+  console.log(`season:       ${r.season ?? 'n/a'}`)
+  console.log(`players:      ${players}${r.meta ? `  (capital ${r.meta.withCapital}, depth ${r.meta.withDepth})` : ''}`)
+  console.log(`week columns: ${cols}${cols ? `  ${r.dates[0]} → ${r.dates[cols - 1]}` : ''}`)
+  console.log(`asOf:         ${r.asOf ?? 'n/a'}  (latest depth-chart snapshot)`)
+  console.log(`updatedAt:    ${r.updatedAt ?? 'n/a'}`)
+  const age = r.updatedAt ? hoursAgo(r.updatedAt) : Infinity
+  console.log(`verdict:      ${age < 36
+    ? 'FRESH'
+    : 'STALE — daily cron at 10:23 UTC has not published in 36h+. Check .github/workflows/rookie-intel.yml.'}`)
+} catch (err) {
+  failures++
+  console.log(`FEED UNREACHABLE: ${err.message} — expected BEFORE the workflow's first run`)
+  console.log('              (the branch does not exist until then). Draft › Research shows its')
+  console.log("              \"hasn't published yet\" explainer; this is not an incident.")
+}
+
+if (failures === 4) {
+  console.error('\nAll four feeds unreachable — almost certainly no outbound network')
   console.error('(sandboxed sessions get proxy 403 on raw.githubusercontent.com).')
   console.error('Run from an environment with real network access.')
   process.exit(1)

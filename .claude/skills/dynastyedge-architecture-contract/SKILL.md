@@ -8,7 +8,8 @@ description: >
   are asking "why is it built this way?" or "can I add a backend / dependency
   / fetch here?". Also load when a change touches fetchJSON, LeagueContext,
   useLeague, useFantasyCalc, usePlayerDB, useIdentity, the src/utils purity
-  boundary, or the GitHub-Actions data branches (news-data, values-history).
+  boundary, or the GitHub-Actions data branches (news-data, values-history,
+  rookie-intel).
 ---
 
 # DynastyEdge Architecture Contract
@@ -66,13 +67,21 @@ chain; each link **forces** the next:
    the no-backend architecture:
 5. **GitHub Actions as the "server", static JSON as the "database".**
    Scheduled workflows (`.github/workflows/news.yml` twice-hourly,
-   `values-history.yml` daily) run Node scripts (`scripts/fetch-news.mjs`,
-   `scripts/snapshot-values.mjs`, `scripts/snapshot-trade-values.mjs`) and
-   **force-push single-commit orphan branches** (`news-data`,
-   `values-history`) whose files the client fetches from
+   `values-history.yml` daily, `rookie-intel.yml` daily) run Node scripts
+   (`scripts/fetch-news.mjs`, `scripts/snapshot-values.mjs`,
+   `scripts/snapshot-trade-values.mjs`, `scripts/snapshot-rookie-intel.mjs`)
+   and **force-push single-commit orphan branches** (`news-data`,
+   `values-history`, `rookie-intel`) whose files the client fetches from
    `raw.githubusercontent.com` (which sends `Access-Control-Allow-Origin: *`).
    URLs live in `src/constants.js` (`NEWS_FEED_URL`, `VALUES_HISTORY_URL`,
-   `TRADE_VALUES_URL`).
+   `TRADE_VALUES_URL`, `ROOKIE_INTEL_URL`).
+
+   **The pipeline also exists to do work the phone shouldn't.** `rookie-intel`
+   is the clearest case: it reads three nflverse CSVs (~39MB, no CORS) and
+   ships a ~52KB derived file. It also resolves the nflverse→Sleeper join
+   server-side — the app receives clean Sleeper player IDs and never
+   name-matches — exactly as the news pipeline resolves `athleteIds`. When a
+   new source needs a fuzzy join, resolve it in the workflow, not the client.
 6. **Anything published this way is inherently best-effort** (a branch can be
    missing, a cron can be disabled, a run can fail) → the client contract for
    these feeds is *degrade silently, never error* (section 5).
@@ -129,6 +138,7 @@ until a full page reload.
 | Player intel (season stats per year, weekly stats per year-week, ESPN per-player news, aggregated news feed) | `src/hooks/usePlayerIntel.js` | module (promise maps: `seasonStatsPromises`, `weekStatsPromises`, `espnNewsCache`, `newsFeedPromise`) | lazy, first profile open / first news consumer | never |
 | Value history (daily snapshots, columnar) | `src/hooks/useValueHistory.js` | module + **`historyFailed` latch** | lazy, first sparkline consumer | never; one failure = silent give-up for the session |
 | Trade-time value archive | `src/hooks/useTradeTimeValues.js` | module + `archiveFailed` latch | lazy (scouting ledger) | same latch pattern |
+| Rookie intel (depth chart + NFL draft capital, columnar by ISO week) | `src/hooks/useRookieIntel.js` | module + `intelFailed` latch | lazy (Draft › Research; the drawer's data-status block also reads it) | `loadRookieIntel(true)` from the drawer Refresh; otherwise never |
 | Matchup weeks (`/matchups/{week}` full entries — shared by playoff odds AND lineup history, one fetch per week per session) | `src/hooks/matchupWeeks.js` (consumed by `usePlayoffOdds.js` weeks 1..playoff_week_start−1 and `useLineupHistory.js` weeks 1..17 / 1..current−1) | module, per-week + per-range promise latches | lazy (first consumer of either feature) | `resetMatchupWeeks()` (the Playoffs retry path); a week failing degrades to empty entries, EVERY requested week failing rejects (nothing cached, retry refetches) |
 | Playoff odds derived results (model + 10k-iteration sim) | `src/hooks/usePlayoffOdds.js` (`derivedCache`) | module, keyed by `league`/`perWeek` reference identity + `playoffTeams`/`firstPlayoffWeek` | computed on first consumer with data; the four consumers share one sim run | recomputes when the league or schedule reference changes (new fetch / identity switch); `myOdds` stays per-instance |
 | Rookie draft sync | `src/hooks/useSleeperDraft.js` | module `{data, fetchedAt}` | lazy (Board/Tracker share it) | manual Refresh; focus refetch (10 s threshold while `drafting`, 5 min idle); 30 s poll while live + visible |
@@ -256,6 +266,7 @@ forever, or retry-loop. On any failure the UI surface simply hides.**
 | ESPN per-player fallback endpoints | `usePlayerIntel.js` (`espnNewsCache`) | unofficial, CORS-blocked in practice; degrades silently |
 | Value history / sparklines | `useValueHistory.js` | `historyFailed` latch → `getSeries` returns `null`; < 4 points also `null` (a 2-point "line" reads as broken) |
 | Trade-time value archive | `useTradeTimeValues.js` | `archiveFailed` latch; missing entry ⇒ "at trade time" line hides |
+| Rookie intel | `useRookieIntel.js` | `intelFailed` latch; a missing branch (it does not exist until the workflow's first run) renders Draft › Research's "hasn't published yet" explainer, and the board falls back to dynasty-value order — never an `ErrorState` |
 | Per-week transaction/matchup buckets | `useTransactions.js`, `useLeagueHistory.js`, `matchupWeeks.js` | each week `.catch(() => [])` so one bad bucket can't sink the set — EXCEPT `useTransactions.js` and `matchupWeeks.js` reject when *every* requested bucket failed (a total outage is Class A: ErrorState, not an empty feed / fake preseason) |
 
 **Rule for new work:** anything fed by an Actions-published branch or an
@@ -363,14 +374,16 @@ task legitimately touches them.
    ErrorState; a silent *shape* change is guarded only by the two throws in
    `useFantasyCalc.js`. Treat any FantasyCalc schema drift as a P1; see
    `dynastyedge-data-contracts`.
-6. **The data branches are force-pushed single commits.** `news-data` and
-   `values-history` have no git history of their own — the server-side
+6. **The data branches are force-pushed single commits.** `news-data`,
+   `values-history`, and `rookie-intel` have no git history of their own — the server-side
    "history of the history" is exactly the 90-day rolling window inside
    `values-history.json` plus the permanent (never-pruned) `trade-values.json`
    archive. A buggy snapshot run can corrupt the rolling file with no branch
    history to revert to (the workflow's re-fetch-previous-archive step
    protects only `trade-values.json`). Be paranoid when touching
-   `scripts/snapshot-*.mjs`.
+   `scripts/snapshot-*.mjs`. `rookie-intel.json` is regenerated wholesale from
+   upstream each day, so a bad run costs a day rather than an archive — and
+   its publish step still carries the previous file forward from the branch.
 7. **localStorage schema has no migration story.** Verified key inventory:
    only `dynastyedge_identity_v1` and `dynastyedge_watchlist_v1` are
    versioned; `dynastyedge_theme`, `_action_dismissals`, `_edge_last_visit`,
