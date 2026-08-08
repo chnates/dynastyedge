@@ -2171,6 +2171,18 @@ dynastyedge/
 └── package.json
 ```
 
+**Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
+the lockfile). A fresh clone has no `node_modules`, and every session on a
+remote/cloud runner starts from one. **`npm test` does not report that
+honestly:** instead of "cannot find module" it prints `# tests 47 / # pass 44 /
+# fail 3`, which reads like a code regression. The three files that fail are
+the ones transitively importing `react` (`tradeAnalysis.js` →
+`recommendations.js` → `useLeague.js`, plus `matchupWeeks` and `transactions`
+loading their hooks) — the file fails to load, so its tests never run and the
+count silently drops from **72** to 47. `npm run build` in the same state fails
+with `sh: 1: vite: not found`. **If the test count isn't 72, run `npm ci`
+before debugging anything.**
+
 **Tests:** `npm test` runs the `tests/` suite — plain `.mjs` scripts on Node's
 built-in `node:test` runner with `node:assert/strict`, zero new dependencies
 (the sanctioned no-deps pattern). The script registers the module-resolver hook

@@ -77,10 +77,23 @@ Run top to bottom before any merge to `main`:
 
 ```bash
 cd /home/user/dynastyedge
+npm ci                 # STEP 0 — see the trap below. Never `npm install`.
 npm run lint           # ESLint 9 flat config over src/ + scripts/, error severity
-npm test               # tests/*.test.mjs on node:test (55 passing as of 2026-07-19)
+npm test               # tests/*.test.mjs on node:test (72 passing as of 2026-08-08)
 npm run build          # must end "✓ built in …"
 ```
+
+> **Trap — a fresh clone has no `node_modules`, and `npm test` lies about it.**
+> Remote sessions start from a fresh clone. Skip `npm ci` and you do *not* get
+> a clean "cannot find module" error — you get **`# tests 47 / # pass 44 /
+> # fail 3`**, which reads exactly like a code regression. The three failing
+> files (`tradeAnalysis`, `matchupWeeks`, `transactions`) are the ones that
+> transitively import `react` — `tradeAnalysis.js → recommendations.js →
+> useLeague.js`, and the two hook loaders directly — so their whole file fails
+> to load and its tests never run, silently dropping the count from 72 to 47.
+> `npm run build` in the same state fails with `sh: 1: vite: not found`.
+> **If the test count is not 72, install dependencies before debugging
+> anything.** (Observed 2026-08-08.)
 
 1. **Lint + tests + build green.** All three verified working as of
    2026-07-19; `ci.yml` runs them on every branch push and PR, and
