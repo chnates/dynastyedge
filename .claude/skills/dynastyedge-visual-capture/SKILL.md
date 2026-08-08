@@ -44,9 +44,11 @@ profile drawer) · `--route PATH` (navigates an app route — any form works,
 · `--height N` · `--theme dark|light` · `--full` (full page, not just the
 sheet) · `--url BASE` · `--wait MS`.
 
-## The three gotchas — already solved, do not rediscover
+## The gotchas — already solved, do not rediscover
 
-These cost real turns to figure out the first time. The script bakes in all three.
+These cost real turns to figure out the first time. The script bakes in the
+first three; the fourth is a flag whose name misleads, so read it before
+reaching for `--full`.
 
 ### 1. The app is LOCAL. There is no public URL for your branch.
 
@@ -87,6 +89,30 @@ the capture succeeds and looks fine, but it's the wrong screen.
 `/league`, `league`, or `#/league` and all three become `#/league`. Deep paths
 (`/league/teams/6`) work too. If you ever build a URL by hand for `--url`,
 remember the `#/`.
+
+### 4. `--full` does NOT get you a long page — `<main>` is the scroll container.
+
+Playwright's `fullPage: true` extends the capture to the *document* height. But
+this app's body never scrolls (CLAUDE.md rule 15: `<main>` is the scroll
+container), so the document is exactly one viewport tall and `--full` returns
+the same 390×1600 you'd get without it — silently. Symptom: you screenshot a
+long view (roster, League overview) and it's cut off at the fold with no error.
+
+**The fix:** raise the viewport instead — `--height 5200`. Beware the output
+gets big fast (390×5200 at `deviceScaleFactor: 2` is a 780×10400 PNG, which is
+downscaled hard when read back and may be unreadable).
+
+**Often better than a tall screenshot:** pull the *rendered text* and assert on
+it. Stronger evidence than pixels for "does this value render", and immune to
+downscaling:
+
+```js
+const text = await page.locator('main').innerText()   // then grep the lines
+```
+
+(Verified 2026-08-08 while confirming roster pick badges rendered real draft
+slots — a 10400px PNG proved useless where six lines of `innerText` were
+decisive.)
 
 ## Other things the script handles
 

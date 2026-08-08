@@ -70,15 +70,49 @@ Replaying `useLeague`'s enrichment (`resolvePickOwnership` → `buildDraftSlots`
   counts reconcile: 40 = 10 teams × 4 rounds.
 
 So slot-accurate pick capital is correct on every roster-derived surface today.
-**Not covered:** the *render* half — no one has confirmed the Tracker's capital
-card, pick badges, and Best Available display these slots in the real app off
-the real order. `scripts/dev/replay-live.mjs --scenario draft` and the
-screenshot harness cover it; that rehearsal is the one piece of optional
-pre-draft work outstanding.
 
 Note for OPEN-2: FantasyCalc already lists 2029 round-level picks, but
 `PICK_YEARS` must still not roll until the 2026 draft runs and its picks are
 spent.
+
+### Verified 2026-08-08 — draft render rehearsal
+
+The data layer above proves the numbers; this proves the *components render
+them*. Both halves were run, because they answer different questions.
+
+**Half 1 — the real 2026 order, no overrides.** Screenshotting the running app
+against live APIs, all three slot-consuming surfaces agree with the Node
+replay, value for value:
+
+| Surface | Rendered |
+|---|---|
+| Draft Tracker › My Draft Capital | `1.06 3,413` · `3.06 1,158` · `4.06 870` · `4.10 803` · `Taxi 2/5` |
+| My Team › Pick Capital | 2026 as `1.06 · 3.06 · 4.10 (via Ministry Of Touchdowns) · 4.06`; 2027/2028 fall back to `1st…4th` — correct, no order exists for those seasons |
+| Trade › Pick Trades | every opponent pick at its exact slot (`1.01` = 7,169, matching FantasyCalc); my own picks correctly absent from "picks you could target" |
+
+**Half 2 — the synthetic walk** (`replay-live.mjs --scenario draft`), covering
+the three states that cannot exist yet: **7/7 assertions passed** across
+`pre` → `clock` → `mid` → `complete`. On-the-clock banner ("YOU'RE ON THE
+CLOCK · 1.04"), Best Available (best overall + top-need), the picks-until-yours
+countdown, and the completion recap (team totals, my row in brand red with the
+You chip, full results) all render.
+
+> ⚠ **Replay artifact — do not chase it as a bug.** In the `clock`/`mid`
+> captures the capital card shows `2.04` and `2.09` with **no value**, while
+> `1.04` shows one. Cause: the replay overrides `/league/{id}/drafts`, so
+> `useLeague` prices off the 2025 fixture board — but pick *ownership* still
+> comes from real 2026 `traded_picks`. The fixture says I hold two 2nd-rounders;
+> my real 2026 inventory has none, so `buildMyCapital`'s join on
+> `round` + `originalOwner` (`utils/draftLive.js`) misses and falls to
+> `value: 0`, which `DraftTracker.jsx:120` renders as blank via
+> `{c.value > 0 && …}`. The real-order capture (Half 1) joins all four picks
+> correctly — that is the discriminator. Any future replay mixing a fixture
+> board with live ownership will show this.
+
+**Remaining gap, honestly stated:** the rehearsal proves the components render
+the live path; it does not prove Sleeper will behave on the day. The API
+contracts are the fragile part (they changed once already, unannounced) — so
+re-run the ACTIVE-1 curl checks above if draft day looks wrong.
 
 ### ACTIVE-1 — Season-readiness tests (draft day + Week 1)
 
