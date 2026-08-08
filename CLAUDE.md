@@ -168,6 +168,14 @@ context, peak-window status, and recent news. Sources:
   last completed season's summary.
 - **Depth chart / news recency:** `depth_chart_position`, `depth_chart_order`,
   `news_updated`, and `espn_id` are kept in the trimmed `usePlayerDB` cache.
+  `buildDepthRoom` turns the first two into the player's **NFL position room**
+  — teammates at his position ranked by depth order, viewed player highlighted,
+  the card hidden entirely when Sleeper has no order. Every room row carries
+  **that teammate's dynasty value**, joined on `sleeperId` to the cached
+  FantasyCalc `playerMap` (the drawer's prop, context as fallback) — the room
+  alone doesn't say much, since "WR2 behind a 1,100 WR1" reads nothing like
+  "WR2 behind a 7,000 one". Zero extra fetch; unranked teammates show `—`
+  (rule 7).
 - **Peak window:** `utils/peakWindows.js` (shared with Roster Analysis).
 - All fetches are lazy (first profile open) and session-cached — nothing at
   app load.
@@ -2544,6 +2552,7 @@ export const ESPN_WEB_BASE = 'https://site.web.api.espn.com'
 export const NEWS_FEED_URL      = '…/dynastyedge/news-data/news.json'
 export const VALUES_HISTORY_URL = '…/dynastyedge/values-history/values-history.json'
 export const TRADE_VALUES_URL   = '…/dynastyedge/values-history/trade-values.json'
+export const ROOKIE_INTEL_URL   = '…/dynastyedge/rookie-intel/rookie-intel.json'
 
 export const FANTASYCALC_PARAMS = {
   isDynasty: true,
@@ -2560,7 +2569,7 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 export const ROSTER_SLOTS = [ /* QB · RB×2 · WR×2 · TE · FLEX×3 · SFLX · DEF */ ]
 ```
 
-(The three feed URLs are elided above for width — they are full
+(The four feed URLs are elided above for width — they are full
 `raw.githubusercontent.com/chnates/…` URLs in the real file.)
 
 **`PICK_YEARS` is a manual, season-scoped constant.** It drives pick capital

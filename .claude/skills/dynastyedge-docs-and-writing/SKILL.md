@@ -227,28 +227,27 @@ through the change-control divergence protocol.
 | Feature locations vs routes | `grep -n 'path=\|Navigate' src/App.jsx \| head -50` vs the Navigation route map | Every route in App.jsx appears in the doc's route map or redirect list |
 | Future Features vs reality | Read "Future Features"; for each bullet, `grep -rn` a distinctive term in `src/` | Nothing listed as "do not build yet" already exists |
 
-### Open findings from the 2026-07-06 run
+### Open findings — re-run 2026-08-08
 
-1. **OMISSION:** `dynastyedge_identity_v1` (set in
-   `src/hooks/useIdentity.js:3`) is absent from the Rules storage-key list
-   (the doc describes useIdentity as "localStorage store" but never names the
-   key). Needs a one-line addition to the storage-key rule.
-2. **OMISSION:** the Constants File snippet lags `src/constants.js` — the real
-   file also exports `ESPN_BASE`, `ESPN_WEB_BASE`, `NEWS_FEED_URL`,
-   `VALUES_HISTORY_URL`, `TRADE_VALUES_URL`, `ROSTER_SLOTS`, plus the
-   "identity is now runtime state" comment qualifying `MY_ROSTER_ID`. The
-   League Context table still says "always use this when fetching my roster"
-   for roster 6, which the constants.js comment now softens.
-3. **OMISSION:** `src/utils/recommendations.js` exists but is missing from the
-   File Structure tree.
+**Clean.** The full audit above (storage keys, constants, `src/utils` +
+`src/hooks` file structure) reports no undocumented keys, constants, or files:
 
-All three are omissions (doc gaps, low blast radius). The two
-**contradictions** that run also found — rule 16 vs `index.html:18` (see
-Exhibit A) and the Feature 13 / `pickTrades.js` slot-tier boundary (code
-computes ceil-thirds: Early 1–4 / Mid 5–7 / Late 8–10) — were **fixed by the
-owner-approved docs commit of 2026-07-19** (doc + comments updated to match
-the code; no code changed). When you fix a remaining item, remove it from
-this list in the same session — see §6.
+```bash
+for k in $(grep -rhoE 'dynastyedge_[a-z0-9_]+' src | sort -u); do grep -q "$k" CLAUDE.md || echo "UNDOCUMENTED: $k"; done
+for c in $(grep -oE '^export const [A-Z_]+' src/constants.js | awk '{print $3}'); do grep -q "$c" CLAUDE.md || echo "UNDOCUMENTED CONST: $c"; done
+for f in $(ls src/utils src/hooks); do grep -q "$f" CLAUDE.md || echo "UNDOCUMENTED FILE: $f"; done
+```
+
+The three omissions from the 2026-07-06 run (`dynastyedge_identity_v1`, the
+lagging Constants File snippet, `src/utils/recommendations.js`) have all since
+been documented; the one this run found — `ROOKIE_INTEL_URL` missing from the
+Constants File snippet, added by the rookie-intel pipeline — was fixed in the
+same commit that recorded this line. The two **contradictions** the 2026-07-06
+run found — rule 16 vs `index.html:18` (see Exhibit A) and the Feature 13 /
+`pickTrades.js` slot-tier boundary — were fixed by the owner-approved docs
+commit of 2026-07-19 (doc + comments updated to match the code; no code
+changed). When you fix a remaining item, remove it from this list in the same
+session — see §6.
 
 ---
 
