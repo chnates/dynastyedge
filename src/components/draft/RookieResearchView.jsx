@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react'
-import { ChevronDown, TrendingUp, TrendingDown, Info } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
+import { ChevronDown, TrendingUp, TrendingDown, Info, Target } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useRookieADP } from '../../hooks/useRookieADP'
 import { useRookieIntel } from '../../hooks/useRookieIntel'
 import { buildRookieProspects } from '../../utils/rookieAdp'
-import { buildRookieResearch, splitDivergence } from '../../utils/rookieResearch'
+import { buildRookieResearch, buildTeamFit, topTargets, splitDivergence } from '../../utils/rookieResearch'
+import { getDeficitPositions, joinAnd } from '../../utils/recommendations'
+import { getWinWindowTier } from '../../utils/rosterAnalysis'
 import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import {
@@ -12,10 +14,13 @@ import {
 } from '../ui'
 
 const POS_FILTERS = ['ALL', 'QB', 'RB', 'WR', 'TE']
+// Plain-English sort labels: "Market" and "Camp movers" read as jargon on a
+// page whose whole problem was that nobody could tell what it was for.
 const SORTS = [
+  { id: 'fit',    label: 'Best for me' },
   { id: 'score',  label: 'Opportunity' },
-  { id: 'market', label: 'Market' },
-  { id: 'move',   label: 'Camp movers' },
+  { id: 'market', label: 'Dynasty value' },
+  { id: 'move',   label: 'Camp risers' },
 ]
 
 const TIER_TEXT = {
@@ -66,6 +71,7 @@ function RookieRow({ row, onOpen }) {
               {row.position}
             </span>
             {row.team && <span className="font-mono text-[10px] text-text-tertiary">{row.team}</span>}
+            {row.fitsNeed && <Badge tone="success" soft>Your need</Badge>}
           </div>
           <div className="text-xs text-text-secondary dark:text-text-secondary mt-0.5 truncate">
             {row.noData ? 'No depth-chart or draft record yet' : row.depthText}
@@ -80,6 +86,7 @@ function RookieRow({ row, onOpen }) {
           <div className="font-mono text-sm text-text-primary dark:text-text-primary">
             {row.value ? row.value.toLocaleString() : '—'}
           </div>
+          <div className="font-mono text-[9px] uppercase tracking-wider text-text-tertiary mt-0.5">value</div>
           {row.divergence != null && Math.abs(row.divergence) >= 8 && (
             <div className={`font-mono text-[10px] mt-0.5 ${row.divergence > 0 ? 'text-success' : 'text-danger'}`}>
               {row.divergence > 0 ? '+' : ''}{row.divergence}
@@ -87,6 +94,37 @@ function RookieRow({ row, onOpen }) {
           )}
         </div>
       </div>
+    </Card>
+  )
+}
+
+// The roster-aware shortlist. Every other card on this page ranks the class in
+// the abstract; this one answers "who should I take with my picks?".
+function TargetCard({ row, onOpen }) {
+  return (
+    <Card padding="sm" cut accent="bg-pos-qb" interactive onClick={() => onOpen(row)} className="w-full text-left">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="font-semibold text-sm text-text-primary dark:text-text-primary truncate">{row.name}</span>
+        <span className={`font-mono text-xs shrink-0 ${TIER_TEXT[row.tier] ?? 'text-text-tertiary'}`}>
+          {pct(row.score)} opp
+        </span>
+      </div>
+      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+        <span className={`font-mono text-[10px] uppercase ${POS_TEXT[row.position] ?? ''}`}>{row.position}</span>
+        {row.team && <span className="font-mono text-[10px] text-text-tertiary">{row.team}</span>}
+        <span className="font-mono text-[10px] text-text-tertiary">
+          {row.value ? `${row.value.toLocaleString()} value` : 'unranked'}
+          {row.adp != null ? ` · rookie ADP ${row.adp}` : ''}
+        </span>
+      </div>
+      <p className="text-xs text-text-secondary dark:text-text-secondary mt-1 leading-snug">{row.depthText}</p>
+      {row.fitReasons.length > 0 && (
+        <ul className="mt-1.5 space-y-0.5">
+          {row.fitReasons.map((r, i) => (
+            <li key={i} className="text-[11px] leading-snug text-success">· {r}</li>
+          ))}
+        </ul>
+      )}
     </Card>
   )
 }
@@ -115,6 +153,11 @@ function DivergenceCard({ row, onOpen, kind }) {
           market #{row.marketRank} · model #{row.modelRank}
         </span>
       </div>
+      <p className="text-[11px] text-text-secondary dark:text-text-secondary mt-1 leading-snug">
+        {up
+          ? `The model has him ${row.divergence} spots higher than the market does among ${row.position}s.`
+          : `The market has him ${Math.abs(row.divergence)} spots higher than the model does among ${row.position}s.`}
+      </p>
       <ul className="mt-1.5 space-y-0.5">
         {row.reasons.map((r, i) => (
           <li key={i} className={`text-[11px] leading-snug ${REASON_TONE[r.tone]}`}>· {r.text}</li>
@@ -125,21 +168,36 @@ function DivergenceCard({ row, onOpen, kind }) {
 }
 
 export default function RookieResearchView() {
-  const { loading: leagueLoading, error, retry, values } = useLeagueContext()
+  const { loading: leagueLoading, error, retry, values, league } = useLeagueContext()
   const { rookieMap, loading: rookiesLoading } = useRookieADP()
   const { intel, loading: intelLoading } = useRookieIntel()
 
   const [query, setQuery] = useState('')
   const [pos, setPos] = useState('ALL')
-  const [sort, setSort] = useState('score')
+  const [sort, setSort] = useState('fit')
   const [selected, setSelected] = useState(null)
   const [showHow, setShowHow] = useState(false)
+  const boardRef = useRef(null)
+
+  // My roster's shape, from the same helpers every other recommendation
+  // surface uses — so "you need a TE" means the same thing here as it does in
+  // Free Agents and the Trade Analyzer.
+  const { deficits, tier } = useMemo(() => {
+    const myRoster = league?.myRoster
+    const allRosters = league?.allRosters
+    if (!myRoster || !allRosters?.length) return { deficits: new Set(), tier: null }
+    return {
+      deficits: getDeficitPositions(myRoster, allRosters),
+      tier: getWinWindowTier(myRoster.rosterId, allRosters),
+    }
+  }, [league])
 
   const rows = useMemo(() => {
     const prospects = buildRookieProspects(rookieMap, values?.playerMap)
-    return buildRookieResearch(prospects, intel)
-  }, [rookieMap, values, intel])
+    return buildTeamFit(buildRookieResearch(prospects, intel), { deficits, tier })
+  }, [rookieMap, values, intel, deficits, tier])
 
+  const targets = useMemo(() => topTargets(rows), [rows])
   const { undervalued, overvalued } = useMemo(() => splitDivergence(rows), [rows])
 
   const visible = useMemo(() => {
@@ -154,6 +212,7 @@ export default function RookieResearchView() {
     const byScore = (a, b) =>
       (b.score ?? -1) - (a.score ?? -1) || (b.value ?? -1) - (a.value ?? -1)
     if (sort === 'market') return filtered.sort((a, b) => (b.value ?? -1) - (a.value ?? -1))
+    if (sort === 'fit') return filtered.sort((a, b) => (b.fit ?? -1) - (a.fit ?? -1) || byScore(a, b))
     if (sort === 'move') {
       return filtered
         .filter(r => r.move)
@@ -166,14 +225,41 @@ export default function RookieResearchView() {
   if (leagueLoading || rookiesLoading || intelLoading) return <Spinner />
 
   const asOf = intel?.asOf ?? null
+  const needList = [...deficits]
 
   return (
     <div className="px-4 pb-8">
+      {/* What this page is, in the fewest words that actually work. It stays
+          open: the page's original failure was that nothing on screen said
+          what an "opp" number meant or where to start. */}
+      <Card padding="sm" accent="bg-accent" className="mt-4">
+        <div className="text-sm font-semibold text-text-primary dark:text-text-primary">
+          Scout the rookie class
+        </div>
+        <p className="text-xs text-text-secondary dark:text-text-secondary mt-1 leading-relaxed">
+          Dynasty value tells you what a rookie <em>costs</em>. This page scores what he
+          might <em>become</em>: an <span className="text-text-primary dark:text-text-primary font-semibold">opportunity
+          score</span> from 0–100 built on where he sits on his NFL depth chart and what his
+          team spent to draft him — the two things a value number doesn't price.
+        </p>
+        <ol className="text-xs text-text-secondary dark:text-text-secondary mt-2 space-y-1 leading-relaxed">
+          <li><span className="font-mono text-[10px] text-accent mr-1.5">1</span>
+            <span className="text-text-primary dark:text-text-primary font-semibold">Your Targets</span> — who fits
+            your roster's holes. Start here.</li>
+          <li><span className="font-mono text-[10px] text-accent mr-1.5">2</span>
+            <span className="text-text-primary dark:text-text-primary font-semibold">Market vs Model</span> — where
+            the price and the opportunity disagree. That gap is the edge.</li>
+          <li><span className="font-mono text-[10px] text-accent mr-1.5">3</span>
+            <span className="text-text-primary dark:text-text-primary font-semibold">Tap any player</span> for the
+            full scouting card — depth chart, capital, news, and what he'd mean for you.</li>
+        </ol>
+      </Card>
+
       {/* The feed is best-effort by construction (Actions-published branch), so
           a missing file is an expected state with an explanation — never an
           ErrorState, which would imply the user can retry into a fix. */}
       {!intel && (
-        <Card padding="sm" accent="bg-warning" className="mt-4">
+        <Card padding="sm" accent="bg-warning" className="mt-3">
           <div className="text-sm font-semibold text-text-primary dark:text-text-primary">
             Rookie intel hasn't published yet
           </div>
@@ -185,17 +271,53 @@ export default function RookieResearchView() {
         </Card>
       )}
 
+      {targets.length > 0 && (
+        <>
+          <SectionHeader label="Your Targets" />
+          <p className="text-xs text-text-secondary dark:text-text-secondary -mt-0.5 mb-2 leading-relaxed">
+            {needList.length > 0
+              ? <>Your roster is below league average at{' '}
+                  <span className="text-text-primary dark:text-text-primary font-semibold">{joinAnd(needList)}</span>
+                  {tier ? `, and you're ${tier.toLowerCase()}` : ''} — so these rookies are ranked by
+                  opportunity <em>and</em> what they'd fix.</>
+              : <>You're at or above league average everywhere{tier ? `, and you're ${tier.toLowerCase()}` : ''} —
+                  with no hole to fill, these are ranked on opportunity and market price.</>}
+          </p>
+          <div className="space-y-2 mb-1">
+            {targets.map(r => (
+              <TargetCard key={r.sleeperId} row={r} onOpen={setSelected} />
+            ))}
+          </div>
+          <Button
+            variant="tinted"
+            size="sm"
+            fullWidth
+            className="mt-2"
+            onClick={() => {
+              setSort('fit'); setPos('ALL'); setQuery('')
+              // The board it re-ranks is below two full sections — without the
+              // scroll the tap changes state the user can't see.
+              boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }}
+            icon={<Target size={13} aria-hidden="true" />}
+          >
+            See the whole class ranked for my roster
+          </Button>
+        </>
+      )}
+
       {(undervalued.length > 0 || overvalued.length > 0) && (
         <>
           <SectionHeader label="Market vs Model" />
           <p className="text-xs text-text-secondary dark:text-text-secondary -mt-0.5 mb-2 leading-relaxed">
-            Where this model and the dynasty market disagree most. The number is
-            the gap between market rank and model rank.
+            Where this model and the dynasty market disagree most. The number is how many
+            spots apart they rank him — compared only against other rookies at his own
+            position, which is the only fair comparison.
           </p>
           {undervalued.length > 0 && (
             <>
               <div className="font-mono text-[10px] uppercase tracking-wider text-success mb-1.5">
-                Model likes them more
+                Model likes them more — buy candidates
               </div>
               <div className="space-y-2 mb-3">
                 {undervalued.map(r => (
@@ -207,7 +329,7 @@ export default function RookieResearchView() {
           {overvalued.length > 0 && (
             <>
               <div className="font-mono text-[10px] uppercase tracking-wider text-danger mb-1.5">
-                Market likes them more
+                Market likes them more — priced ahead of the role
               </div>
               <div className="space-y-2">
                 {overvalued.map(r => (
@@ -219,7 +341,15 @@ export default function RookieResearchView() {
         </>
       )}
 
-      <SectionHeader label="Opportunity Board" count={visible.length} />
+      <div ref={boardRef} className="scroll-mt-4">
+        <SectionHeader label="Opportunity Board" count={visible.length} />
+      </div>
+      <p className="text-xs text-text-secondary dark:text-text-secondary -mt-0.5 mb-2 leading-relaxed">
+        Every rookie, with the opportunity score on the left and dynasty value on the right.
+        <span className="text-success"> 62+ strong</span> ·
+        <span className="text-warning"> 38–61 fair</span> ·
+        <span className="text-text-tertiary"> under 38 thin</span>.
+      </p>
 
       <SearchInput
         value={query}
@@ -240,13 +370,20 @@ export default function RookieResearchView() {
           </Chip>
         ))}
       </div>
-      <div className="flex gap-1.5 overflow-x-auto scrollbar-none mb-3">
+      <div className="flex gap-1.5 overflow-x-auto scrollbar-none mb-1">
         {SORTS.map(s => (
           <Chip key={s.id} size="sm" active={sort === s.id} onClick={() => setSort(s.id)}>
             {s.label}
           </Chip>
         ))}
       </div>
+      <p className="text-[11px] text-text-tertiary dark:text-text-tertiary mb-3">
+        Sorted by {SORTS.find(s => s.id === sort)?.label.toLowerCase()}
+        {sort === 'fit' && ' — opportunity and value, weighted toward your roster holes'}
+        {sort === 'score' && ' — the raw model score, ignoring your roster'}
+        {sort === 'market' && ' — what the dynasty market charges, ignoring the model'}
+        {sort === 'move' && ' — biggest depth-chart movers since the feed started tracking'}
+      </p>
 
       {visible.length === 0 ? (
         <p className="text-sm text-text-secondary dark:text-text-secondary py-6 text-center">
@@ -297,6 +434,13 @@ export default function RookieResearchView() {
             opportunity.
           </p>
           <p>
+            <span className="text-text-primary dark:text-text-primary font-semibold">Your Targets</span> re-ranks
+            that score for your roster: it adds the market price back in, then leans toward
+            positions where you're below league average and toward the kind of rookie your
+            win window wants. It never changes a player's opportunity score — it only
+            changes the order. That re-ranking is a judgement call, not a back-tested one.
+          </p>
+          <p>
             <span className="text-text-primary dark:text-text-primary font-semibold">Camp movement is shown, not scored.</span> It
             can't be back-tested yet (the historical depth-chart feed starts in August,
             so there's no pre-camp baseline to measure against).
@@ -320,6 +464,7 @@ export default function RookieResearchView() {
           playerMap={values?.playerMap ?? {}}
           onClose={() => setSelected(null)}
           isDraftContext
+          research={selected}
         />
       )}
     </div>

@@ -95,6 +95,7 @@ const NAV_TREE = [
     text: 'text-pos-qb', activeBg: 'bg-pos-qb/10', bar: 'bg-pos-qb', rail: 'bg-pos-qb/25',
     children: [
       { to: '/draft/board', label: 'Board' },
+      { to: '/draft/research', label: 'Research' },
       { to: '/draft/tracker', label: 'Tracker' },
     ],
   },
