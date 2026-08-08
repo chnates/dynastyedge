@@ -28,7 +28,7 @@ lineup optimization with matchup context, and a full league-wide competitive lan
 |----------|----------------|-----------------------------------|
 |Framework |React (via Vite)|Functional components + hooks only |
 |Styling   |Tailwind CSS    |Dark mode default, mobile-first    |
-|Navigation|React Router v7 |Side drawer menu, 7 sections       |
+|Navigation|React Router v7 |Side drawer menu, 6 sections       |
 |Build tool|Vite            |Outputs to `dist/` for GitHub Pages|
 |Deployment|GitHub Pages    |Auto-deploys via GitHub Actions    |
 |CI/CD     |GitHub Actions  |Every push to `main`: lint + test, then deploy|
@@ -61,8 +61,14 @@ lineup optimization with matchup context, and a full league-wide competitive lan
 |Trade review         |None — executes immediately                    |
 |My team name         |Nix Cage                                       |
 |My Sleeper username  |chnates                                        |
-|My roster ID         |**6** — always use this when fetching my roster|
+|My roster ID         |**6** — original-owner reference only (see below)|
 |My owner ID          |965787707299430400                             |
+
+**Identity is runtime state, not a constant.** The signed-in roster comes from
+the `useIdentity` store (set on the login screen — see Feature 18), so
+`MY_ROSTER_ID` is no longer the source of truth. Every "is this me?" check
+reads `myRosterId` from `LeagueContext` / `useIdentity`; the constants above
+remain only as this league's original-owner reference.
 
 ### Roster slots
 
@@ -337,6 +343,24 @@ across future seasons.
   color-coded by round (see color system below)
 - Each pick shows original owner if different from current owner
 - Total roster value score at top (sum of all player values + pick values)
+- **Action Items** (`RosterActionItems`, shared with The Edge — see Feature 12):
+  generated roster alerts, each with an urgency tone and an optional deep-link
+  action. Four types, all derived from live data:
+  1. **Taxi deadline** (red) — any taxi player with `years_exp >= 2` must be
+     activated before the regular season (see League Context taxi rules).
+  2. **Bloated QB room** (amber) — 4+ rostered QBs. Names the most expendable
+     QB (lowest dynasty value) and, via `suggestSellMove`, a concrete partner
+     and return; the action deep-links into the Analyzer with `preloadTrade`
+     already filling both sides.
+  3. **IR slot opportunity** (blue) — an active player whose `injury_status`
+     is `Out` or `PUP` and who isn't on IR yet.
+  4. **Missing future 1st** (red) — no 1st-round pick in a `PICK_YEARS` season
+     later than the current one; deep-links to Trade Partners.
+
+  Items are **dismissible**, persisted in `dynastyedge_action_dismissals`
+  against a `conditionSnapshot` — a dismissal only holds while the condition
+  is unchanged, so a re-bloated QB room or a newly injured player re-surfaces
+  rather than staying silently hidden forever.
 - **Roster Analysis button** (below Action Items) → bottom sheet
   (`RosterAnalysisSheet`): age chart with one lane per position (QB/RB/WR/TE),
   each lane shaded with its position-specific peak window (RB 23–26, WR 24–28,
@@ -355,8 +379,12 @@ across future seasons.
 - **Free Agents** now lives under **League** (League › Free Agents): search +
   position filter + **Upgrades Only** and **Hide Rookies** toggles (both default
   off; rookie detection = Sleeper `years_exp === 0` with the age≤25 fallback,
-  same logic as the Rookie badge)
-- Tap any team card → full roster + picks drill-down (`/roster/teams/:rosterId`)
+  same logic as the Rookie badge). Above the list, **Recommended Pickups** (top
+  4 from `recommendFreeAgents` — see The recommendation engine below) turns the
+  list from a filter into actual advice: each row carries plain-English reasons
+  ("fills your TE deficit", "rising 30-day trend"). Respects the position
+  filter; hidden while searching.
+- Tap any team card → full roster + picks drill-down (`/league/teams/:rosterId`)
 - League › Overview team cards also drill into the same view; the back button
   returns to wherever you came from with filters preserved
 
@@ -609,7 +637,7 @@ sessionStorage, but there is no multi-trade history — that lives in Sleeper.
 **Purpose:** Optimize the weekly starting lineup using live projections,
 injury status, bye weeks, and matchup quality.
 
-*The Optimizer is the **Lineup** sub-tab under **My Team** (`/roster/lineup`),
+*The Optimizer is the **Lineup** sub-tab under **My Team** (`/my-team/lineup`),
 a sibling of My Roster, Season Review (Feature 9), and Trajectory. The
 standalone Lineup section is gone — `/lineup` redirects here.*
 
@@ -676,8 +704,8 @@ Update when the user manually refreshes or opens the Lineup tab.
 **Purpose:** State-of-the-league dashboard. Understand the full competitive
 landscape before making any move. **This is the single all-10-teams list** —
 the old Roster › All Teams view was fused in here (it was a strict subset of
-this richer dashboard); its `/roster/teams` list route now redirects to
-`/league`, while the `/roster/teams/:rosterId` drill-down stays.
+this richer dashboard); the old `/roster/teams` list route now redirects to
+`/league`, and the drill-down lives at `/league/teams/:rosterId`.
 
 #### Top section — Current matchups *(in-season only)*
 
@@ -795,7 +823,7 @@ Star any player from the Player Profile drawer (star icon in the header).
 
 -----
 
-### Feature 9 — Lineup Efficiency (Lineup › Season Review)
+### Feature 9 — Lineup Efficiency (My Team › Season Review)
 
 "How many points did I leave on the bench?" — actual vs optimal lineup for
 every completed week.
@@ -810,7 +838,7 @@ every completed week.
   matchup-weeks cache (`src/hooks/matchupWeeks.js`, shared with Playoff Odds —
   one fetch per week per session across both). If every week fails to load,
   the page shows an error + retry instead of "no data"
-- **Its own sub-tab** under **My Team** (`/roster/season-review`), a sibling of
+- **Its own sub-tab** under **My Team** (`/my-team/season-review`), a sibling of
   My Roster, the Optimizer, and Trajectory — not stacked inside the Optimizer's
   scroll. It renders as a standalone padded page with its own header.
   (`/lineup/season-review` redirects here.)
@@ -983,7 +1011,7 @@ logic lives in `utils/edgeBriefing.js`.
   opponent (record rank trails value rank by ≥ 4, same gap as League
   Overview) → their roster drill-down; **closing-window opponent** (the most
   valuable team whose Dynasty Trajectory is declining — likely to move win-now
-  talent) → their `/roster/trajectory/:rosterId`; playoff-odds standing
+  talent) → their `/league/trajectory/:rosterId`; playoff-odds standing
   (in-season, "N% · Buyer/Seller" from `usePlayoffOdds`) → League › Playoffs.
 - **Headlines:** news-feed items matched to my roster + watchlist players
   (≤ 5), "New" badge when published after the last visit; tap opens the
@@ -1228,7 +1256,7 @@ happens to list it. The single global accelerant for a feature-dense app.
 
 -----
 
-### Feature 17 — Dynasty Trajectory (Roster › Trajectory)
+### Feature 17 — Dynasty Trajectory (My Team › Trajectory)
 
 **Purpose:** the app's one forward-looking lens. Everything else is a snapshot
 of *now* (current values, current odds, *historical* trade grades); a dynasty
@@ -1239,9 +1267,9 @@ and offseason alike. **Zero new data sources** — pure logic over caches
 `LeagueContext` already holds.
 
 **Location:** a **My Team sub-tab** (My Roster · Lineup · Season Review ·
-**Trajectory**, `/roster/trajectory`), and **roster-agnostic** — the team
+**Trajectory**, `/my-team/trajectory`), and **roster-agnostic** — the team
 drill-down (`RosterView` for `:rosterId`) carries a "Dynasty Trajectory →" card
-that opens `/roster/trajectory/:rosterId`, so you can scout an opponent's window
+that opens `/league/trajectory/:rosterId`, so you can scout an opponent's window
 ("this contender's value slams shut after 2026 — they'll sell").
 
 **Consumers (all via `getTrajectoryRead`, zero extra fetch):**
@@ -1254,7 +1282,7 @@ that opens `/roster/trajectory/:rosterId`, so you can scout an opponent's window
   an ascending one as a caution (see Feature 3).
 - **The Edge:** a "closing-window opponent" briefing item — the most valuable
   team whose trajectory is declining — deep-links to their
-  `/roster/trajectory/:rosterId` (see Feature 12).
+  `/league/trajectory/:rosterId` (see Feature 12).
 
 **The model (`utils/dynastyTrajectory.js`, pure):**
 
@@ -1313,6 +1341,101 @@ that opens `/roster/trajectory/:rosterId`, so you can scout an opponent's window
 
 -----
 
+### Feature 18 — Sign-in & Identity
+
+**Purpose:** answer "which team am I?" at runtime instead of at build time, so
+the app is no longer hardcoded to roster 6. Gates the entire app — nothing
+renders until an identity is set.
+
+**Zero new data sources.** Sign-in reads `useLeague`'s Sleeper-only
+`signInRosters` (rosters + owners), plus one `/user/{username}` lookup on
+submit. **Never gate sign-in on FantasyCalc** — a FantasyCalc outage must not
+be able to lock the owner out of his own app (rule 4).
+
+**"Login" is read-only identity resolution** against a public Sleeper
+endpoint — no password, no token, no OAuth; it never touches the user's Sleeper
+account.
+
+**`LoginScreen`** (`components/auth/`): enter a Sleeper username → resolve to a
+`user_id` → match it against this league's rosters. Two failure messages, both
+recoverable rather than dead ends — unknown username ("Check the spelling or
+pick your team below") and valid-but-not-in-this-league ("Pick your team
+below") — because the **tap-to-pick team list is always shown as a fallback**.
+The screen owns its own full-viewport scroller (the document body never
+scrolls, so it would otherwise clip below the fold) and carries the
+`.login-bg` sweep.
+
+**`useIdentity`** (hook): a tiny `useSyncExternalStore` store (same pattern as
+`useWatchlist`) so the App gate and the side drawer re-render together the
+moment identity is set or cleared. Persisted in `dynastyedge_identity_v1` as
+`{ userId, rosterId }`; a stored value is only valid with a **numeric
+`rosterId`** — that's the join key every "is this me?" check uses — and
+anything else reads as logged-out. Storage failures degrade to an in-memory
+identity rather than crashing.
+
+**Switching identity wipes roster-scoped state.** `setIdentity` and
+`clearIdentity` both clear `dynastyedge_action_dismissals` (localStorage) and
+`dynastyedge_trade_draft` (sessionStorage), so a teammate signing in on the
+same device never inherits dismissed action items or a half-built trade.
+League-wide caches (transactions, history, draft) are **not** roster-specific
+and are deliberately left alone.
+
+**Sign out / Switch team** lives at the bottom of the side drawer.
+
+`MY_ROSTER_ID` / `MY_USERNAME` / `MY_TEAM_NAME` in `constants.js` remain only
+as the league's original-owner reference — nothing reads them as the source of
+truth. Use `myRosterId` from `LeagueContext` / `useIdentity`.
+
+-----
+
+### The recommendation engine (`utils/recommendations.js`)
+
+**Purpose:** the assistant-GM "brain" — the one place that decides *how willing
+we should be to part with each asset*, so every recommendation surface reasons
+about the roster the same way. It is not a screen; it is shared pure logic.
+**Zero new data sources** — composes caches `LeagueContext` already holds.
+
+**The core idea — a keep score, not a value.** `assetKeepScore` returns 0
+(very expendable) → 1 (untouchable core) for each of my assets, built from
+`buildGivabilityContext` (my positional surpluses/deficits, my win-window
+tier, and each player's depth rank within his position). The rules that
+matter:
+
+- **`CORE_DEPTH` = QB 2 · RB 3 · WR 3 · TE 1** — the starters protected
+  hardest in this 10-team Superflex Half-PPR league (QB doubles up via the
+  Superflex slot; 3 FLEX spots make RB/WR depth matter). Beyond that rank, a
+  player decays toward expendable.
+- **A deficit protects everyone at the position; a surplus only unlocks the
+  depth pieces** (rank ≥ `CORE_DEPTH`). A surplus must *never* discount a core
+  starter — one elite player (a top-1 TE with no backup) inflates the
+  position's summed value and makes a thin spot read as deep. We don't trade
+  the stud because he makes the bin look full.
+- **Cliff protection:** my best at a position with a steep drop to the
+  next-best is protected regardless of how the summed positional value reads.
+  This is what keeps an elite, backup-less starter out of auto-suggested
+  packages.
+- **Win-window lean on age:** a contender cashes picks and young fliers; a
+  rebuilder hoards youth and picks and sells aging vets.
+- **`PROTECT_THRESHOLD` = 0.9** — assets at or above this keep score are never
+  *auto-*included in a suggested package. The user can still add them manually.
+
+**Consumers:**
+- **Feature 1 / Feature 12 — Action Items:** `suggestSellMove` turns "you have
+  a surplus" into the actual move — the partner who most needs that position
+  (or, if nobody is below average, the team weakest there), plus a concrete
+  one-for-one when they own a comparable-value player at one of my deficit
+  spots. Returns nav-ready `preloadTrade` state for the Analyzer.
+- **League › Free Agents (Feature 1) and The Edge's `pickup` briefing item
+  (Feature 12):** `recommendFreeAgents` ranks available players by what they'd
+  do for *my* roster — fill a deficit, beat my replacement level at the
+  position (my `CORE_DEPTH`-th best), ride a rising trend, fit my win window —
+  and returns only players that genuinely move the needle, each with reasons.
+- **Feature 3 — Trade Analyzer:** `buildGivabilityContext`, `assetKeepScore`,
+  and `getDeficitPositions` back the "Giving Up" depth context and the fair
+  package suggestions.
+
+-----
+
 ### Trade deadline banner
 
 The Trade section shows a persistent banner under the sub-tabs during the
@@ -1326,6 +1449,10 @@ regular season (deadline week comes from league settings — Week 13):
 -----
 
 ## Navigation
+
+**The app is gated by sign-in** (Feature 18): until an identity is set, `App`
+renders `LoginScreen` instead of the router — no route is reachable, and the
+drawer's footer carries the "Switch team" / "Sign out" affordance.
 
 **There is NO bottom tab bar.** Navigation is a side drawer (hamburger menu, top-left),
 opened by tap or by swiping right from the left screen edge. This is a deliberate
@@ -1359,12 +1486,24 @@ min-w-max`, so the row fills the width when the tabs fit and scrolls
 horizontally when they don't (long labels never wrap to a second line). The
 active tab scrolls into view on navigation, and a right-edge fade appears only
 while the row overflows.
-The drawer also holds: data freshness timestamp, a feed-age line for the two
-Actions-published feeds ("News 26m · Values 12h", from each feed's
-`updatedAt` — amber when news > 2h or values > 36h stale, a segment hides
-entirely when its feed never loaded; reads the session caches via
-`loadNewsFeed` / `loadHistory` on drawer open, zero extra requests), manual
-Refresh, and the theme toggle.
+The drawer also holds a **per-source data-status block**, manual Refresh, and
+the theme toggle.
+
+**Data status — four rows** (Rosters · Values · News · History), each showing
+the app-side "last refreshed" age of that source. The two Actions-published
+feeds (News, History) additionally show their **publish age** from the feed's
+own `updatedAt` — labelled separately, because that's the number that only
+moves when the cron publishes, and it's how a dead pipeline becomes visible.
+Amber when news > 2h or values > 36h stale; a feed age hides entirely when
+that feed never loaded (standard best-effort contract — never an error).
+Reads the session caches via `loadNewsFeed` / `loadHistory` on drawer open —
+zero extra requests.
+
+**Refresh** is one button over four independent sources fired in parallel and
+non-blocking: a `phase` state drives the button (idle → refreshing → done)
+while each source tracks its own loading/done/error tick. Live APIs keep
+cached data on screen while refetching (stale-while-revalidate), so no view
+blanks.
 The app header shows the active section name.
 
 **Route map (post-refactor).** My-squad views live under `/my-team`
@@ -1975,6 +2114,7 @@ dynastyedge/
 │   │   ├── edgeBriefing.js      ← The Edge: signals, briefing items, GM line
 │   │   ├── managerAnalysis.js   ← manager scouting: ledgers, tendencies, draft grades
 │   │   ├── rosterAnalysis.js    ← positional strength, win window tiers
+│   │   ├── recommendations.js   ← THE assistant-GM brain: keep/givability scores, FA pickups, sell moves
 │   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation
 │   │   ├── pickCapital.js       ← pick ownership resolution logic
 │   │   ├── rookieAdp.js         ← derived rookie-class ADP for the Draft section
@@ -1986,9 +2126,13 @@ dynastyedge/
 │   │   └── projections.js       ← lineup optimization, matchup quality
 │   ├── context/
 │   │   └── LeagueContext.jsx
-│   ├── constants.js             ← league ID, my roster ID, API base URLs
+│   ├── constants.js             ← league ID, API base URLs, feed URLs, PICK_YEARS, ROSTER_SLOTS
 │   ├── App.jsx
 │   └── main.jsx
+├── docs/                        ← durable analysis + design records (not shipped)
+│   ├── repo-review-2026-07.md       ← full read-only audit + ranked backlog (all items landed)
+│   ├── analysis/                    ← model calibration + research notes
+│   └── design/                      ← Phase 3 "Primetime Blackout" brief + reference render
 ├── tests/                       ← plain-Node test suite (node:test + node:assert/strict, zero deps)
 │   ├── playoffOdds.test.mjs         ← fixed-seed determinism, Σ odds = playoff teams, verdict thresholds
 │   ├── pickCapital.test.mjs         ← pick ownership resolution, round-median pick values, year weights
@@ -2119,12 +2263,24 @@ This only needs to be set once. After that, every push auto-deploys.
 
 ```js
 export const LEAGUE_ID = '1313933520715907072'
+
+// Identity is runtime state, not a constant — the signed-in roster comes from
+// the `useIdentity` store (see Feature 18). These remain only as the league's
+// original-owner reference; nothing reads them as the source of truth.
 export const MY_ROSTER_ID = 6
 export const MY_USERNAME = 'chnates'
 export const MY_TEAM_NAME = 'Nix Cage'
 
 export const SLEEPER_BASE = 'https://api.sleeper.app/v1'
 export const FANTASYCALC_BASE = 'https://api.fantasycalc.com'
+// Unofficial ESPN API — no auth; per-player news only, degrades silently
+export const ESPN_BASE = 'https://site.api.espn.com'
+export const ESPN_WEB_BASE = 'https://site.web.api.espn.com'
+
+// Static feeds published by GitHub Actions to their data branches
+export const NEWS_FEED_URL      = '…/dynastyedge/news-data/news.json'
+export const VALUES_HISTORY_URL = '…/dynastyedge/values-history/values-history.json'
+export const TRADE_VALUES_URL   = '…/dynastyedge/values-history/trade-values.json'
 
 export const FANTASYCALC_PARAMS = {
   isDynasty: true,
@@ -2135,7 +2291,20 @@ export const FANTASYCALC_PARAMS = {
 
 export const PICK_YEARS = ['2026', '2027', '2028']
 export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
+
+// Ordered roster slots — indices match Sleeper's `starters` array positions.
+// The shared slot-fill engine (utils/lineupBuild.js) reads this.
+export const ROSTER_SLOTS = [ /* QB · RB×2 · WR×2 · TE · FLEX×3 · SFLX · DEF */ ]
 ```
+
+(The three feed URLs are elided above for width — they are full
+`raw.githubusercontent.com/chnates/…` URLs in the real file.)
+
+**`PICK_YEARS` is a manual, season-scoped constant.** It drives pick capital
+everywhere, and `useSleeperDraft`'s `DRAFT_SEASON = PICK_YEARS[0]` points the
+Draft Tracker at the upcoming rookie draft. It must be rolled forward by hand
+once a rookie draft completes and its picks are spent — otherwise the app keeps
+showing a dead season and never surfaces the new third year.
 
 -----
 
@@ -2226,6 +2395,7 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
    Default to `dark` if no preference is stored. Apply theme class to `<html>` element.
    All theme logic lives in the `useTheme` hook — never duplicate it.
 1. **localStorage / sessionStorage keys** (all prefixed `dynastyedge_`):
+   `dynastyedge_identity_v1` (signed-in roster — see Feature 18) ·
    `dynastyedge_theme` (theme) · `dynastyedge_watchlist_v1` (starred players) ·
    `dynastyedge_action_dismissals` (roster action items) ·
    `dynastyedge_edge_last_visit` (The Edge's last-visit timestamp) ·
@@ -2235,6 +2405,10 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
    sessionStorage `dynastyedge_league_sort` / `dynastyedge_league_pos` /
    `dynastyedge_league_tier` (League tab filters, preserved across drill-downs) ·
    sessionStorage `dynastyedge_trade_draft` (in-progress trade).
+   **Roster-scoped keys** — `dynastyedge_action_dismissals` and
+   `dynastyedge_trade_draft` — are wiped by `useIdentity` on any identity
+   change; league-wide caches are not. Add a new key to that wipe list if it
+   is tied to *which team you are*.
 1. **Shared components:** `ErrorState`, `SectionHeader`, and `SubTabBar` live in
    `src/components/shared/` — import them, never redefine them locally. Section
    sub-navigation is always `SubTabBar` (pass it a `tabs` array); never
@@ -2277,7 +2451,7 @@ Do not implement them until explicitly asked.
 - League transaction feed with FAAB bids → League › Activity
 - Market movers / buy-low / sell-high → League › Movers
 - Watchlist (star players, surfaced in Trade Partners) → `useWatchlist`
-- Lineup efficiency season review → Lineup › Season Review
+- Lineup efficiency season review → My Team › Season Review
 - Playoff odds / rest-of-season simulator (engine + page) → League › Playoffs
   (Feature 14); strength-of-schedule outlook is subsumed by it. Odds feed
   Trade Analyzer Layer 3, Trade Partner Finder (buyer/seller flags), and The
