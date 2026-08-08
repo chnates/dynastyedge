@@ -150,10 +150,35 @@ campaign's findings first).
 
 ## Item 2 — FAAB bid recommender: the research track (build is gated)
 
-**Status: open (research only).** CLAUDE.md lists the FAAB bid recommender
-under Future Features — **do not build the feature without an explicit owner
-ask**. The research below is analysis-only and is exactly what should exist
-*before* anyone builds it.
+**Status: MEASURED 2026-08-08 — corpus pulled, rule spec drafted, build still
+gated.** Full write-up: `docs/analysis/faab-bid-corpus-2026-08.md`; every
+number re-runnable via `node scripts/dev/faab-corpus.mjs`. CLAUDE.md still
+lists the FAAB bid recommender under Future Features — **do not build the
+feature without an explicit owner ask**.
+
+**What the 2026-08-08 pass established (read this before re-doing the work):**
+- **The blocking question is answered: failed waiver claims ARE returned with
+  intact bid amounts** — 194 of them across 2023–25. The "unverified" flag
+  below is resolved.
+- **But `status: failed` is not "outbid."** 81% of failed claims sit in a
+  waiver run where the *same manager also won* — Sleeper fails a manager's
+  remaining batched claims once roster spots/budget are consumed, regardless of
+  bid size (observed: bids of 51 and 41 failing while 7, 1 and 0 succeeded in
+  the same run). We have the bid *distribution*, not clean auction outcomes.
+- **Genuine auctions are rare:** 238 clean player-week auctions, only **81
+  contested (34%)**. Uncontested claims clear at a **1%-of-budget** median. The
+  binary "will anyone else bid?" dominates the "how much?" question.
+- **Contested clearing prices** (% of budget): p50 11 · p80 23 · p90 36.
+  Runner-up bids: p50 2 · p80 15.
+- **The pre-registered bar failed** on held-out 2025 — and was **mis-specified**
+  (winning 80% of sealed-bid auctions at ≤ the *median winner's* price is a
+  contradiction). Corrected bars are in the memo's §6.
+- **The league's FAAB budget changed $100 → $1000 for 2026.** All history is on
+  the old scale; percentages port, behavior may not.
+- Conditioning on value tier or week did not beat flat-percent at this N.
+
+**Next step when revisited:** ~6 weeks of live 2026 waiver data on the $1000
+scale is the first evidence that tests the memo's rule spec without hindsight.
 
 **Problem.** When a player worth bidding on hits waivers, what's the smallest
 bid that wins? Overbid and you starve future claims; underbid and you lose the
@@ -176,37 +201,33 @@ currently offers no bid guidance at all.
 - `values-history.json` gives the player's market value near claim time (for
   claims after the pipeline started), so bids can be normalized to value tier.
 
-**Known data gap (flag prominently).** Both `useTransactions.js` and
-`useLeagueHistory.js` filter to `tx.status === 'complete'` at ingestion
-(verified) — **losing bids are invisible to the app today**. Sleeper's
-transaction buckets may include *failed* waiver claims (status `failed`) with
-their bid amounts; if true, that's the difference between modeling only
-clearing prices and modeling the full bid distribution. **This is unverified
-— confirm against the live API** (this sandbox blocks fantasy APIs; a session
-with network access should hit
-`/league/1313933520715907072/transactions/{week}` and inspect non-complete
-entries before designing anything around them).
+**Known data gap — RESOLVED 2026-08-08.** Both `useTransactions.js` and
+`useLeagueHistory.js` filter to `tx.status === 'complete'` at ingestion, so
+losing bids are invisible *to the app* — but they are present in the API and
+the corpus script reads them directly. The former "may include failed claims"
+speculation is now verified fact (see the status block above). What remains
+genuinely limiting is not availability but **semantics**: a failed claim's
+status conflates "outbid", "insufficient budget", and "batch casualty", and the
+third dominates.
 
-**First three concrete steps (analysis-only).**
-1. Extract the historical winning-bid table: for every waiver claim in league
-   history, record (season, week, bid, player, player's value tier at claim
-   time where values-history covers it, winning owner). Pure read of existing
-   caches/feeds; no app changes.
-2. Characterize the market: winning-bid distribution by value tier; per-owner
-   aggression profiles (does owner X systematically pay 2× median for RBs?);
-   budget-depletion curves over the season (late-season bids should clear
-   cheaper).
-3. **[live-data check]** Verify whether failed claims with bids are available
-   (see gap above). Then define the backtest: a bid rule
-   `f(value tier, week, remaining budgets of aggressive owners)` evaluated by
-   replaying historical claims.
+**Remaining open work (analysis-only).**
+1. **Live-season validation.** Re-run `scripts/dev/faab-corpus.mjs` once 2026
+   has ~6 weeks of waiver data and test the memo's §6 rule against the two
+   corrected bars (efficiency: cost-per-contested-win ≤ league median; win
+   rate: ≥75% of entered contested auctions). This is the first hindsight-free
+   test.
+2. **Contest prediction.** The dominant open question is Part A of the spec —
+   *will a given player be contested at all?* (34% base rate). Value tier gave
+   a weak, hindsight-contaminated signal; a live-season test using the
+   FantasyCalc value available at claim time would be clean.
+3. **Per-owner aggression**, deliberately deferred: `buildFaabStats` already
+   derives it, but at ~8 contested auctions per owner per season the per-owner
+   split is not yet powered.
 
-**You have a result when** a candidate bid rule, backtested on held-out
-seasons, **would have won ≥ K% of the claims that were historically won at ≤
-the median dollars actually spent** (pre-register K — 80% is a reasonable
-opening ask), with the caveat honestly stated if only winning bids were
-observable (a clearing-price model, not a full auction model). That memo —
-not code — is what the owner sees before any build decision.
+**You have a result when** the memo's rule spec is tested against live 2026
+data on the corrected bars — or when a further season's corpus shows the
+contest-prediction step is unlearnable at this N, which parks the item with
+evidence. Nothing ships without an explicit owner ask regardless.
 
 ---
 
@@ -424,10 +445,16 @@ discipline and `dynastyedge-analysis-toolkit` mechanics; record dead ends in
   `useTradeTimeValues.js`, `useLastVisit.js`,
   `scripts/snapshot-values.mjs`, `scripts/snapshot-trade-values.mjs`, and
   CLAUDE.md (Features 11, 12, 14, 17; Future Features).
-- **Marked speculative in the text and to be re-verified live:** whether
-  Sleeper returns failed waiver claims with bid amounts (Item 2); every
-  clause of the iOS Web Push row (Item 5, option D). This sandbox could not
-  reach fantasy APIs; nothing in this file was prototyped against live data.
+- **Updated 2026-08-08:** Item 2 moved *open → measured* against live data
+  (corpus + rule spec: `docs/analysis/faab-bid-corpus-2026-08.md`,
+  `scripts/dev/faab-corpus.mjs`). Its formerly-speculative data-gap clause is
+  now verified fact. Also recorded there: this league's FAAB budget changed
+  **$100 → $1000 for 2026**, which invalidates dollar-denominated history and
+  makes percent-of-budget the only portable unit — relevant to any future
+  bidding work.
+- **Still marked speculative and to be re-verified live:** every clause of the
+  iOS Web Push row (Item 5, option D). Items 1, 3, 4 remain un-prototyped
+  against live data.
 - **Maintain this file when:** an item produces a result (change its Status
   to *measured* with a one-line finding + date, or move the write-up to the
   analysis notes and link it); the owner green-lights or rejects a build

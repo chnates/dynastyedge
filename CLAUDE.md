@@ -59,10 +59,18 @@ lineup optimization with matchup context, and a full league-wide competitive lan
 |Rushing/Receiving TDs|6 pts                                          |
 |Trade deadline       |Week 13                                        |
 |Trade review         |None — executes immediately                    |
+|FAAB budget          |**$1000 for 2026** — was $100 in 2023–25 (see below)|
+|Playoff teams        |6, starting Week 15                            |
 |My team name         |Nix Cage                                       |
 |My Sleeper username  |chnates                                        |
 |My roster ID         |**6** — original-owner reference only (see below)|
 |My owner ID          |965787707299430400                             |
+
+**The FAAB budget changed 10× for 2026** ($100 → $1000, from
+`league.settings.waiver_budget`). Always read it from league settings — never
+assume 100. Historical bids are on the old scale, so any cross-season bid
+comparison must normalize to **percent of budget**
+(see `docs/analysis/faab-bid-corpus-2026-08.md`).
 
 **Identity is runtime state, not a constant.** The signed-in roster comes from
 the `useIdentity` store (set on the login screen — see Feature 18), so
@@ -930,6 +938,17 @@ there and profiles cover fewer seasons.
   average — rendered as chips.
 - **FAAB efficiency:** dollars spent vs today's value of waiver pickups
   (value per $100), claims, FA move count.
+  > ⚠ **Known issue — activates during 2026.** `buildFaabStats` sums **raw
+  > dollars across seasons with no budget normalization**
+  > (`managerAnalysis.js` — `e.dollars += bid`). The league's budget went
+  > $100 → $1000 for 2026, so as 2026 waiver spend accumulates, `valuePer100`
+  > collapses ~10× for active managers, `avgBid` (and the "Aggressive bidder"
+  > / "Bargain hunter" tendency chips that compare against `leagueAvgBid`)
+  > mixes two scales, and the `faab.dollars >= 20` coaching gate — meant as
+  > "spent ≥20% of a budget" — now trips at 2%. **Fix is to normalize bids to
+  > percent-of-budget** using each season's `waiver_budget` before
+  > aggregating. Not yet done; no live 2026 waiver history to verify against
+  > yet (11 claims as of 2026-08-08).
 - **Rookie draft grades:** every rookie pick scored as slot vs the player's
   current-value rank within that draft class (delta ≥ +5 = Steal, ≤ −5 =
   Reach; value ≥ 1000 today = "hit"). Startup drafts (> 6 rounds) excluded.
@@ -2004,7 +2023,8 @@ dynastyedge/
 │   ├── snapshot-values-archive.mjs ← permanent MONTHLY values archive for trajectory back-testing (app never fetches it)
 │   ├── snapshot-trade-values.mjs ← permanent trade-time value archiver (runs in Actions)
 │   └── dev/
-│       └── screenshot-app.mjs  ← headless-Chromium screenshotter for the running app (390px UI verification — see the dynastyedge-visual-capture skill)
+│       ├── screenshot-app.mjs  ← headless-Chromium screenshotter for the running app (390px UI verification — see the dynastyedge-visual-capture skill)
+│       └── faab-corpus.mjs     ← analysis-only: pulls the league's full FAAB bid corpus (see docs/analysis/faab-bid-corpus-2026-08.md); nothing imports it
 ├── public/
 │   └── favicon.ico
 ├── src/
@@ -2437,7 +2457,12 @@ showing a dead season and never surfaces the new third year.
 These are noted so the codebase is structured to support them later.
 Do not implement them until explicitly asked.
 
-- FAAB bid recommender for waiver pickups
+- FAAB bid recommender for waiver pickups — **research done, build still
+  gated.** The bid corpus, the "failed ≠ outbid" finding, and a proposed rule
+  spec live in `docs/analysis/faab-bid-corpus-2026-08.md` (re-runnable via
+  `node scripts/dev/faab-corpus.mjs`). Do not build it without an explicit ask.
+  Note for whoever does: the league's FAAB budget changed **$100 → $1000 for
+  2026**, so all historical bids must be normalized to percent-of-budget.
 - Push notifications for trade offers (requires backend — out of scope for v1;
   note Sleeper's API is read-only and may not even expose *pending* trade
   offers, so this is blocked on data availability, not just architecture)

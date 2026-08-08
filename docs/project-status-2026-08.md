@@ -71,22 +71,48 @@ showing a dead season and never surface the new third year. **Not yet stale —
 do not roll it before the draft runs.** Documented in CLAUDE.md's Constants
 File section.
 
-## 5. Open research
+## 5. Known issue found this session — FAAB scale mixing (not yet fixed)
+
+The league's FAAB budget changed **$100 → $1000 for 2026**.
+`useLeague` reads it from league settings correctly, so roster-level FAAB
+display is fine. But `managerAnalysis.js`'s `buildFaabStats` aggregates **raw
+dollars across seasons with no budget normalization**, which breaks three
+things as 2026 waiver spend accumulates:
+
+| Symptom | Mechanism |
+|---|---|
+| "Value / $100 FAAB" collapses ~10× for active managers | `valuePer100 = valueAcquired / dollars × 100`, denominator now 10× larger |
+| "Aggressive bidder" / "Bargain hunter" chips misfire | `avgBid` mixes $100- and $1000-scale bids, compared against a mixed `leagueAvgBid` |
+| Coaching gate trips 10× too easily | `me.faab.dollars >= 20` meant "spent ≥20% of budget"; on the new scale that's 2% |
+
+**Fix:** normalize each bid to percent-of-budget using that season's
+`waiver_budget` before aggregating. **Deliberately not done in this pass** — it
+is a behavior change needing its own commit and real-data verification, and
+there are only 11 2026 waiver claims so far to verify against. Documented in
+CLAUDE.md Feature 11.
+
+## 6. Open research
 
 The forward map is `dynastyedge-research-frontier` (Items 1–5), plus
 `dynastyedge-model-quality-campaign` for calibration. Almost all of it is
 gated on live season data that does not exist yet — Week 1 starts that clock.
 
-**Item 2 (FAAB bid recommender) is the exception**, and its blocking question
-was resolved this session: Sleeper *does* expose failed waiver claims with
-their bid amounts, so the losing side of the auction is observable. See
-`docs/analysis/faab-bid-corpus-2026-08.md`. The recommender itself remains
-under CLAUDE.md's **Future Features (Do Not Build Yet)** — research only until
-an explicit owner ask.
+**Item 2 (FAAB bid recommender) is the exception** — it moved *open →
+measured* this session. Its blocking question is resolved (Sleeper *does*
+return failed waiver claims with intact bids), but the follow-on finding
+matters more: **`status: failed` is not "outbid"** — 81% of failed claims sit
+in a waiver run where the same manager also won, i.e. they are batch/roster-
+capacity casualties. Genuine head-to-head auctions are rarer than expected (81
+contested of 238 clean), the pre-registered acceptance bar failed *and was
+mis-specified*, and a corrected rule spec now exists. Full write-up:
+`docs/analysis/faab-bid-corpus-2026-08.md`; re-runnable via
+`node scripts/dev/faab-corpus.mjs`. The recommender itself remains under
+CLAUDE.md's **Future Features (Do Not Build Yet)** — research only until an
+explicit owner ask.
 
 ---
 
-## Maintenance
+## 7. Maintenance
 
 Supersede this file with a new dated snapshot rather than editing it in place
 once its facts age (a new season, a completed draft, a closed research item).
