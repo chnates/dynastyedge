@@ -312,14 +312,21 @@ export default function PlayerProfileDrawer({
   // (even if deeper than the cap) with their true room index preserved.
   const roomRows = useMemo(() => {
     const room = intel.depthChart?.room ?? []
-    const rows = room.map((r, i) => ({ ...r, roomIndex: i + 1 }))
+    // Dynasty value per teammate — the room alone doesn't say much ("WR2 behind
+    // a 1,100 WR1" reads nothing like "WR2 behind a 7,000 WR1"). Joined on the
+    // cached FantasyCalc map; unranked teammates show — (rule 7).
+    const rows = room.map((r, i) => ({
+      ...r,
+      roomIndex: i + 1,
+      value: resolvedPlayerMap[r.sleeperId]?.value ?? null,
+    }))
     const CAP = 6
     if (rows.length <= CAP) return rows
     const top = rows.slice(0, CAP)
     if (top.some(r => r.isViewed)) return top
     const viewed = rows.find(r => r.isViewed)
     return viewed ? [...rows.slice(0, CAP - 1), viewed] : top
-  }, [intel.depthChart])
+  }, [intel.depthChart, resolvedPlayerMap])
 
   const myRankings = csvColumns
     .map(col => ({ name: col.name, rank: col.data?.[player.name?.toLowerCase()] ?? null }))
@@ -440,6 +447,15 @@ export default function PlayerProfileDrawer({
                   {player.team ? ` · ${player.team}` : ''}
                 </span>
               </div>
+              {/* Column header — spacers mirror the row's column widths so the
+                  label sits directly over the value column. */}
+              <div className="flex items-center gap-2 mb-1 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">
+                <span className="w-4 shrink-0" />
+                <span className="flex-1 min-w-0" />
+                <span className="w-11 text-right shrink-0">Value</span>
+                <span className="w-8 shrink-0" />
+                <span className="w-6 shrink-0" />
+              </div>
               <div className="flex flex-col gap-0">
                 {roomRows.map((r, i) => (
                   <div
@@ -462,10 +478,18 @@ export default function PlayerProfileDrawer({
                       </span>
                       {r.isViewed && <Badge tone="accent" soft className="shrink-0">Viewing</Badge>}
                     </div>
-                    {r.slot && (
-                      <span className={`font-mono text-[10px] uppercase tracking-wide shrink-0 ${POS_TEXT[intel.position] ?? 'text-text-tertiary'}`}>
+                    <span className={cn(
+                      'font-mono text-[10px] tabular-nums w-11 text-right shrink-0',
+                      r.isViewed ? 'text-text-primary font-semibold' : 'text-text-secondary',
+                    )}>
+                      {r.value != null ? Math.round(r.value).toLocaleString() : '—'}
+                    </span>
+                    {r.slot ? (
+                      <span className={`font-mono text-[10px] uppercase tracking-wide w-8 text-right shrink-0 ${POS_TEXT[intel.position] ?? 'text-text-tertiary'}`}>
                         {r.slot}
                       </span>
+                    ) : (
+                      <span className="w-8 shrink-0" />
                     )}
                     <span className="w-6 text-right shrink-0">
                       {r.isStarter
