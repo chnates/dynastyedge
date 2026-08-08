@@ -16,20 +16,23 @@ description: >
 
 This repo's machine gates (verified 2026-08-08) are `npm run lint` (ESLint 9
 flat config, error severity) + `npm test` (`tests/*.test.mjs` on Node's
-built-in `node:test`, **72 passing**) + `npm run build` — enforced by `ci.yml`
+built-in `node:test`, **107 passing**) + `npm run build` — enforced by `ci.yml`
 on every branch push/PR and by `deploy.yml` before publishing.
 
 > **Run `npm ci` first.** A fresh clone (what every remote session gets) has
 > no `node_modules`, and `npm test` reports that as `# tests 47 / # pass 44 /
 > # fail 3` rather than a missing-module error — it looks like a regression.
-> **A run that doesn't say 72 is an environment problem, not a code problem**;
+> **A run that doesn't say 107 is an environment problem, not a code problem**;
 > full mechanism in `dynastyedge-build-and-env` §7. Never report those 3 as
 > failing tests without checking dependencies first.
 
 But there is
-still **no typecheck**, and the suite pins only the pure `src/utils` logic
-and the module fetch loaders on synthetic fixtures — no component or hook
-rendering, no model calibration, no visuals. For everything the suite
+still **no typecheck**, and the suite pins the pure `src/utils` logic
+and the module fetch loaders — mostly on synthetic fixtures, plus one real
+captured payload (`tests/fixtures/draft-2025.json`, the league's 2025 rookie
+draft, replayed by truncation). No component or hook rendering, no model
+calibration, no visuals — though `scripts/dev/replay-live.mjs` now drives the
+real app through the draft and regular-season surfaces the suite can't reach. For everything the suite
 doesn't pin, the burden of proof is on YOU, and this skill defines what
 proof means here. The app is a static React SPA
 for one real Sleeper dynasty league, used daily on an iPhone at 390px. A wrong

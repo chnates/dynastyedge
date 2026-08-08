@@ -36,9 +36,9 @@ landed.** See that file's status banner for the item-by-item mapping and for
 the findings deliberately left open (accepted risk, not oversight).
 
 The two guardrails that didn't exist in July now do: a zero-dependency
-`tests/` suite on `node:test` (10 files) and an ESLint 9 flat config, both
-enforced by `ci.yml` on every branch push/PR and by `deploy.yml` before
-anything publishes.
+`tests/` suite on `node:test` (13 files, 107 tests) and an ESLint 9 flat
+config, both enforced by `ci.yml` on every branch push/PR and by `deploy.yml`
+before anything publishes.
 
 ## 3. Where the season actually is
 
@@ -58,14 +58,25 @@ Two consequences:
 
 1. **The rookie draft is imminent and unfired.** It is the Draft section's one
    live moment per year, and with 22 traded picks it leans hard on pick
-   ownership resolution and slot pricing.
-2. **The app is still in offseason mode.** Everything gated on
-   `season_type === 'regular'` — Lineup Optimizer, matchup quality, weekly
-   projections, the deadline banner, League Overview matchups, and Playoff
-   Odds' *active* (simulating) state — is hidden and has never executed
-   against live regular-season data. The July review flagged exactly this in
-   its unverified-hypotheses appendix (item 5): those branches were audited by
-   code-reading only.
+   ownership resolution and slot pricing. Rehearsed 2026-08-08 by replaying
+   the real 2025 draft through the Tracker
+   (`node scripts/dev/replay-live.mjs --scenario draft`).
+2. **The app is still in offseason mode**, but the in-season branches are no
+   longer unexercised. Everything gated on `season_type === 'regular'` —
+   Lineup Optimizer, matchup quality, weekly projections, the deadline banner,
+   League Overview matchups, and Playoff Odds' *active* (simulating) state —
+   is still hidden in the live app, but is now driven end-to-end by
+   `scripts/dev/replay-live.mjs` and pinned by tests.
+
+   **Doing that on 2026-08-08 found three live-API contract breaks** that the
+   July review's code-reading audit had missed (it flagged exactly this risk
+   in unverified-hypotheses item 5): the schedule endpoint's base URL *and*
+   field names were both wrong (which would have taken the Lineup Optimizer
+   down for the entire season, since it renders `ErrorState` before its
+   offseason check), `/league/{id}/drafts` omits `slot_to_roster_id` (which
+   silently disabled the Draft Tracker's whole live path), and weekly stats
+   carry no `pos`/`opp`/`tm` (so matchup quality had never worked). All three
+   are fixed; detail in `docs/open-items.md` §1.
 
 ## 4. Known season-rollover item
 
@@ -131,3 +142,6 @@ curl -s 'https://api.sleeper.app/v1/state/nfl'
 curl -s 'https://api.sleeper.app/v1/league/1313933520715907072' | head -c 400
 curl -s 'https://api.sleeper.app/v1/draft/1313933520720138240/picks' | head -c 200
 ```
+
+Re-verify the fragile API contracts (they changed once already, silently) with
+the three commands in `docs/open-items.md` §1.
