@@ -43,6 +43,7 @@
 //   node scripts/dev/screenshot-app.mjs --player "Bijan Robinson" --out /tmp/b.png --theme light
 //
 // Flags: --player NAME | --route PATH | --out PATH | --width N | --height N
+//        --stub SUBSTRING=FILE (serve a local file for a matching external URL)
 //        --theme dark|light | --full | --url BASE | --wait MS
 // --route accepts any form (/league, league, #/league) — the app is a
 // HashRouter, so it's normalized into the URL hash (see routeSlug below).
@@ -78,6 +79,17 @@ const theme  = arg('theme', 'dark')
 const full   = Boolean(arg('full', false))
 const base   = arg('url', 'http://localhost:5173/dynastyedge/')
 const settle = Number(arg('wait', 2500))
+// --stub SUBSTRING=FILE serves a local file for any external URL containing
+// SUBSTRING. Needed to see a feature whose Actions-published feed branch does
+// not exist yet (the data branch is only created by the workflow's first run),
+// and generally to pin a feed to a fixture. Repeatable.
+const stubs = process.argv.reduce((acc, a, i) => {
+  if (a !== '--stub') return acc
+  const spec = process.argv[i + 1]
+  const eq = spec ? spec.indexOf('=') : -1
+  if (eq > 0) acc.push({ match: spec.slice(0, eq), file: spec.slice(eq + 1) })
+  return acc
+}, [])
 let out      = arg('out')
 if (!out) {
   const dir = join(REPO, '.screenshots')
@@ -129,6 +141,14 @@ await ctx.route('**/*', async r => {
   const req = r.request()
   const url = req.url()
   if (url.includes('localhost') || url.includes('127.0.0.1')) return r.continue()
+  const stub = stubs.find(st => url.includes(st.match))
+  if (stub) {
+    return r.fulfill({
+      status: existsSync(stub.file) ? 200 : 404,
+      headers: { 'access-control-allow-origin': '*', 'content-type': 'application/json' },
+      body: existsSync(stub.file) ? readFileSync(stub.file) : '{}',
+    })
+  }
   if (req.method() !== 'GET') {
     return r.fulfill({ status: 200, headers: { 'access-control-allow-origin': '*' }, body: '' })
   }

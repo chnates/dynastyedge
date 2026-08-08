@@ -5,7 +5,7 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-08-08 (ACTIVE-2 opened — rookie research back-test;
+**Last reviewed:** 2026-08-08 (ACTIVE-2 built — Draft › Research shipped;
 ACTIVE-1 closed; trigger sweep + pre-draft
 slot-tier verification recorded below).
 
@@ -22,34 +22,32 @@ slot-tier verification recorded below).
 
 ## 1. Active
 
-### ACTIVE-2 — Draft › Research module (back-test done, build not started)
+### ACTIVE-2 — Draft › Research: verify the first pipeline run
 
-**Status: approved in outline, not built.** The owner asked for a rookie-draft
-research tool on 2026-08-08 and approved its shape: a new **Draft › Research**
-sub-tab backed by a **third GitHub Actions pipeline** (nflverse is CORS-blocked
-and its depth-chart file is 39MB, so a small derived JSON gets published to a
-data branch, same shape as `values-history.yml`). The owner directed that the
-signal back-test land **first** so the on-screen numbers are defensible.
+**Built and merged.** The module ships as Draft › Research (Feature 19), backed
+by `rookie-intel.yml` → the `rookie-intel` branch. Signal work is closed:
+`docs/analysis/rookie-research-signals-2026-08.md` (n=396, 2021–2025), and
+`scripts/dev/rookie-signal-backtest.mjs` now **imports the shipped constants**
+so the analysis and the app cannot drift — it prints a drift check on every run.
 
-**The back-test is done** — `docs/analysis/rookie-research-signals-2026-08.md`,
-reproducible via `node scripts/dev/rookie-signal-backtest.mjs --preseason`.
-Headlines, so nobody re-derives them:
+**What remains is one verification, and its trigger has not fired yet:** the
+`rookie-intel` branch does not exist until the workflow's first run. Until then
+the page shows its "hasn't published yet" explainer and the board falls back to
+market order (verified by screenshot). **After the first run lands:**
 
-- **Preseason production is a trap** (rho **−0.195**): the best rookies sit in
-  August. Do not build a preseason leaderboard — it is the feature a reasonable
-  person builds first, and it inverts.
-- **Week-1 depth rank + NFL draft capital, blended 0.3/0.7, gives rho +0.664**
-  over n=396 drafted skill rookies across 2021–2025, against +0.598 for draft
-  capital alone. The blend curve is flat from w=0.2–0.5.
-- Depth-rank value is **position-specific** (QB is binary, RB degrades gently,
-  WR falls off a cliff after rank 1). A position-blind score returns a top-8
-  "undervalued" list of eight backup tight ends.
+1. Confirm the branch and `rookie-intel.json` exist and `meta.published` is
+   ~236 with ~80 carrying draft capital (the numbers from the local dry run on
+   2026-08-08).
+2. Open Draft › Research and confirm the Market vs Model lists populate — the
+   local dry run gave 7 undervalued / 7 overvalued at the default `minGap` 5.
+3. Check the drawer's new **Rookies** data-status row shows a fresh publish age.
 
-**Next step:** build it, or park it. Nothing further is blocked on research.
-The one deliberately unscored input is **camp movement** (depth-chart climb
-since March) — computable for 2026 but not back-testable, because nflverse's
-2025 charts start 2025-08-03. Display it; do not score it until a season of it
-exists.
+**Next season's chore:** re-run the back-test and reconcile `DEPTH_VALUE`
+against its drift output. Two things are deliberately deferred until then —
+**camp movement is displayed but not scored** (nflverse's 2025 depth charts
+begin 2025-08-03, so the historical window has no pre-camp baseline to
+validate a climb signal against), and combine athleticism is unused (the 2026
+`combine.csv` ships with empty `forty`/`vertical`).
 
 ### ACTIVE-1 — closed
 

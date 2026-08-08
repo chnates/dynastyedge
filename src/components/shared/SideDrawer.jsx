@@ -12,6 +12,7 @@ import { useIdentity } from '../../hooks/useIdentity'
 import { getTeamName } from '../../hooks/useLeague'
 import { loadNewsFeed, getNewsFeedUpdatedAt, getNewsFeedFetchedAt } from '../../hooks/usePlayerIntel'
 import { loadHistory, getHistoryFetchedAt } from '../../hooks/useValueHistory'
+import { loadRookieIntel, getRookieIntelFetchedAt } from '../../hooks/useRookieIntel'
 
 // Feed-age readout for the two Actions-published feeds. Both die silently by
 // design (the client hides stale feeds), so the drawer is the one place their
@@ -117,7 +118,10 @@ export default function SideDrawer({
   // publish time (updatedAt — news twice/hour, values daily); `fetched` = when
   // this session last pulled it. The live APIs (Sleeper/FC) carry their own
   // fetch time via context, so only the feed stamps live in local state.
-  const [feed, setFeed] = useState({ newsPub: null, valuesPub: null, newsFetched: null, historyFetched: null })
+  const [feed, setFeed] = useState({
+    newsPub: null, valuesPub: null, rookiePub: null,
+    newsFetched: null, historyFetched: null, rookieFetched: null,
+  })
   function readFeedStamps() {
     setFeed(f => ({ ...f, newsPub: getNewsFeedUpdatedAt(), newsFetched: getNewsFeedFetchedAt() }))
   }
@@ -130,12 +134,15 @@ export default function SideDrawer({
     loadHistory().then(h => {
       if (!cancelled) setFeed(f => ({ ...f, valuesPub: h?.updatedAt ?? null, historyFetched: getHistoryFetchedAt() }))
     })
+    loadRookieIntel().then(r => {
+      if (!cancelled) setFeed(f => ({ ...f, rookiePub: r?.updatedAt ?? null, rookieFetched: getRookieIntelFetchedAt() }))
+    })
     return () => { cancelled = true }
   }, [isOpen])
 
-  // Per-source status rows: app-side "last refreshed" for all four, plus the
-  // publish age for the two feeds (that's the number that only moves when the
-  // cron publishes — labelled "feed" so it reads as a separate thing).
+  // Per-source status rows: app-side "last refreshed" for all five, plus the
+  // publish age for the three Actions feeds (that's the number that only moves
+  // when the cron publishes — labelled "feed" so it reads as a separate thing).
   const dataStatus = [
     { key: 'sleeper', label: 'Rosters', refreshed: formatAgo(sleeperFetchedAt) },
     { key: 'fc', label: 'Values', refreshed: formatAgo(fcFetchedAt) },
@@ -149,10 +156,16 @@ export default function SideDrawer({
       feedAge: formatFeedAge(feed.valuesPub),
       feedStale: Date.now() - Date.parse(feed.valuesPub ?? '') > VALUES_STALE_MS,
     },
+    {
+      // Same daily cadence as the values snapshot, so it shares the threshold.
+      key: 'rookies', label: 'Rookies', refreshed: formatAgo(feed.rookieFetched),
+      feedAge: formatFeedAge(feed.rookiePub),
+      feedStale: Date.now() - Date.parse(feed.rookiePub ?? '') > VALUES_STALE_MS,
+    },
   ]
 
   // ── Refresh coordinator ────────────────────────────────────────────────────
-  // One button, four independent sources fired in parallel and non-blocking.
+  // One button, five independent sources fired in parallel and non-blocking.
   // `phase` drives the button (idle → refreshing → done → idle); `sources`
   // tracks each source's 'loading'|'done'|'error' for the per-source ticks.
   const [phase, setPhase] = useState('idle')
@@ -165,7 +178,7 @@ export default function SideDrawer({
     if (doneTimer.current) { clearTimeout(doneTimer.current); doneTimer.current = null }
     const startedAt = Date.now()
     setPhase('refreshing')
-    setSources({ sleeper: 'loading', fc: 'loading', news: 'loading', history: 'loading' })
+    setSources({ sleeper: 'loading', fc: 'loading', news: 'loading', history: 'loading', rookies: 'loading' })
     const mark = (key, ok) => setSources(s => ({ ...s, [key]: ok ? 'done' : 'error' }))
 
     const jobs = [
@@ -183,6 +196,10 @@ export default function SideDrawer({
       loadHistory(true).then(
         h => { setFeed(f => ({ ...f, valuesPub: h?.updatedAt ?? null, historyFetched: getHistoryFetchedAt() })); mark('history', true) },
         () => mark('history', false),
+      ),
+      loadRookieIntel(true).then(
+        r => { setFeed(f => ({ ...f, rookiePub: r?.updatedAt ?? null, rookieFetched: getRookieIntelFetchedAt() })); mark('rookies', true) },
+        () => mark('rookies', false),
       ),
     ]
     // Hold "Refreshing…" for at least MIN_REFRESH_MS so the animation is always

@@ -34,6 +34,12 @@ export const VALUES_HISTORY_URL = 'https://raw.githubusercontent.com/chnates/dyn
 // the scouting ledger's "at trade time" line simply hides.
 export const TRADE_VALUES_URL = 'https://raw.githubusercontent.com/chnates/dynastyedge/values-history/trade-values.json'
 
+// Rookie research feed published by .github/workflows/rookie-intel.yml to the
+// rookie-intel branch — NFL draft capital plus weekly depth-chart standing for
+// the current rookie class, joined to Sleeper IDs server-side. Best-effort:
+// when missing, Draft › Research shows its "feed hasn't published yet" state.
+export const ROOKIE_INTEL_URL = 'https://raw.githubusercontent.com/chnates/dynastyedge/rookie-intel/rookie-intel.json'
+
 export const FANTASYCALC_PARAMS = {
   isDynasty: true,
   numQbs: 2,

@@ -25,6 +25,11 @@
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+// The SHIPPED model, imported rather than re-implemented: this script grades
+// the constants the app actually uses, so the analysis and the product cannot
+// silently drift apart. src/utils is pure ESM with no imports of its own, so
+// it loads under plain node with no resolver hook.
+import { DEPTH_VALUE, DEPTH_WEIGHT, depthScore, capitalScore } from '../../src/utils/rookieResearch.js'
 
 const NFLVERSE = 'https://github.com/nflverse/nflverse-data/releases/download'
 const SLEEPER = 'https://api.sleeper.app/v1'
@@ -196,24 +201,41 @@ for (const pos of ['QB', 'RB', 'WR', 'TE']) {
   console.log(line)
 }
 
-// ── Blend search ─────────────────────────────────────────────────────────────
-// Depth score = the position's own calibration row, normalized to its own max,
-// so a rank means what it is WORTH at that position rather than its ordinal.
-const maxByPos = Object.fromEntries(['QB', 'RB', 'WR', 'TE'].map(p =>
-  [p, Math.max(...[1, 2, 3, 4].map(b => table.get(`${p}|${b}`) ?? 0), 1)]))
-const depthScore = r => (table.get(`${r.pos}|${Math.min(D(r), 4)}`) ?? 0) / maxByPos[r.pos]
-const capScore = r => Math.max(0, 1 - Math.log(r.pick) / Math.log(260))
+// ── Drift check against the shipped constants ────────────────────────────────
+// src/utils/rookieResearch.js hardcodes the table above. If a future season
+// moves these medians materially, the app is running on stale calibration —
+// so compare rather than silently re-derive.
+console.log('\n=== shipped DEPTH_VALUE vs freshly measured ===')
+let drift = 0
+for (const pos of ['QB', 'RB', 'WR', 'TE']) {
+  const diffs = [1, 2, 3, 4].map(b => {
+    const measured = table.get(`${pos}|${b}`)
+    const shipped = DEPTH_VALUE[pos]?.[b]
+    if (measured == null || shipped == null) return `${b}:—`
+    const d = measured - shipped
+    if (Math.abs(d) > 1) drift++
+    return `${b}:${d >= 0 ? '+' : ''}${d.toFixed(0)}`
+  })
+  console.log(`  ${pos}  ${diffs.join('  ')}`)
+}
+console.log(drift === 0
+  ? '  in sync — the shipped table matches this run exactly'
+  : `  ${drift} cell(s) drifted — update DEPTH_VALUE in src/utils/rookieResearch.js`)
 
-console.log('\n=== blend search ===')
+// ── Blend search, using the SHIPPED scorers ──────────────────────────────────
+console.log('\n=== blend search (shipped depthScore/capitalScore) ===')
 let best = { w: 0, rho: -Infinity }
 for (let i = 0; i <= 10; i++) {
   const w = i / 10
-  const { rho } = spearman(rows.map(r => [w * depthScore(r) + (1 - w) * capScore(r), r.pts]))
+  const { rho } = spearman(rows.map(r =>
+    [w * depthScore(r.pos, r.rank) + (1 - w) * capitalScore(r.pick), r.pts]))
   if (rho > best.rho) best = { w, rho }
   console.log(`  w_depth=${w.toFixed(1)}  w_capital=${(1 - w).toFixed(1)}   rho=${rho.toFixed(3)}`)
 }
 console.log(`\n  BEST: w_depth=${best.w.toFixed(1)} -> rho=${best.rho.toFixed(3)}` +
   `  (capital alone ${capRho.rho.toFixed(3)}, depth alone ${depthRho.rho.toFixed(3)})`)
+console.log(`  SHIPPED DEPTH_WEIGHT = ${DEPTH_WEIGHT}` +
+  (best.w === DEPTH_WEIGHT ? ' — matches the empirical optimum' : ' — DIFFERS from this run\'s optimum'))
 console.log('  NOTE: the curve is flat across w=0.2–0.5, so the weight is not knife-edge.')
 
 // ── Optional: the preseason trap ─────────────────────────────────────────────
