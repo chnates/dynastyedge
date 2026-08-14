@@ -68,6 +68,11 @@ function arg(name, def = null) {
 }
 const player = arg('player')
 const route  = arg('route')
+// --drawer opens the side drawer (the app's only navigation) before shooting.
+// It is the one surface with no route of its own, so it is otherwise
+// unreachable from this script — and it carries the per-source data-status
+// block, which is how a dead Actions feed becomes visible.
+const drawer = Boolean(arg('drawer', false))
 // The app is a HashRouter — routes live in the URL hash, not the path. A bare
 // path (--route /league) hits Vite's SPA fallback and the router falls back to
 // /edge, so any route must be normalized into the hash. Accept every form
@@ -178,6 +183,15 @@ await page.getByLabel('Search players').waitFor({ state: 'visible', timeout: 600
 console.log('app loaded')
 
 let shotTarget = page
+if (drawer) {
+  await page.getByLabel('Open navigation menu').click()
+  // The status rows resolve their feed ages asynchronously (loadNewsFeed /
+  // loadHistory / loadRookieIntel fire on open), so wait the full settle
+  // budget — a short wait renders "—" for a feed that is merely still in
+  // flight, which reads exactly like a dead pipeline.
+  await page.waitForTimeout(settle)
+  console.log('side drawer open')
+}
 if (player) {
   await page.getByLabel('Search players').click()
   const input = page.getByPlaceholder('Search players & features…')

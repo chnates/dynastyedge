@@ -5,9 +5,9 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-08-08 (ACTIVE-2 built — Draft › Research shipped;
-ACTIVE-1 closed; trigger sweep + pre-draft
-slot-tier verification recorded below).
+**Last reviewed:** 2026-08-14 (ACTIVE-2 closed — the rookie-intel pipeline
+published its first run and was verified end to end; trigger sweep re-run, none
+of OPEN-1/2/3/5 has fired).
 
 **How to use it:**
 - Each item states its **trigger** — the condition that makes it ready. An item
@@ -22,32 +22,62 @@ slot-tier verification recorded below).
 
 ## 1. Active
 
-### ACTIVE-2 — Draft › Research: verify the first pipeline run
+**Nothing is active.** ACTIVE-1 and ACTIVE-2 are both closed (§3); every
+deferred item's trigger was re-checked on 2026-08-14 and none has fired. The
+next work here is calendar-driven: the rookie draft (OPEN-2) and Week 1
+(OPEN-5), neither of which has a date yet.
 
-**Built and merged.** The module ships as Draft › Research (Feature 19), backed
-by `rookie-intel.yml` → the `rookie-intel` branch. Signal work is closed:
-`docs/analysis/rookie-research-signals-2026-08.md` (n=396, 2021–2025), and
-`scripts/dev/rookie-signal-backtest.mjs` now **imports the shipped constants**
-so the analysis and the app cannot drift — it prints a drift check on every run.
+### Verified 2026-08-14 — ACTIVE-2 closed: the rookie-intel pipeline's first run
 
-**What remains is one verification, and its trigger has not fired yet:** the
-`rookie-intel` branch does not exist until the workflow's first run. Until then
-the page shows its "hasn't published yet" explainer and the board falls back to
-market order (verified by screenshot). **After the first run lands:**
+`rookie-intel.yml` published for the first time on **2026-08-14 11:12Z**, which
+fired ACTIVE-2's trigger. All three verification steps pass.
 
-1. Confirm the branch and `rookie-intel.json` exist and `meta.published` is
-   ~236 with ~80 carrying draft capital (the numbers from the local dry run on
-   2026-08-08).
-2. Open Draft › Research and confirm the Market vs Model lists populate — the
-   local dry run gave 7 undervalued / 7 overvalued at the default `minGap` 5.
-3. Check the drawer's new **Rookies** data-status row shows a fresh publish age.
+**1 — Feed shape.** `meta` = `{ rookieClass: 440, published: 235, withCapital:
+80, withDepth: 234 }`, matching the 2026-08-08 local dry run (~236 / ~80). 22
+weekly columns, `2026-03-16` … `2026-08-10`; `asOf: 2026-08-14`; 53,740 bytes
+(the ~52KB the pipeline was sized for).
 
-**Next season's chore:** re-run the back-test and reconcile `DEPTH_VALUE`
-against its drift output. Two things are deliberately deferred until then —
-**camp movement is displayed but not scored** (nflverse's 2025 depth charts
-begin 2025-08-03, so the historical window has no pre-camp baseline to
-validate a climb signal against), and combine athleticism is unused (the 2026
-`combine.csv` ships with empty `forty`/`vertical`).
+**2 — Market vs Model populates.** Replaying the shipped path under Node
+(`buildRookieProspects` → `buildRookieResearch` → `splitDivergence`) against
+the live feed + live Sleeper/FantasyCalc: 440 prospects → 235 scored → 71
+divergence-eligible (the FantasyCalc-valued subset). **8 undervalued / 7
+overvalued** raw at the default `minGap` 5, displayed as 6/6 (`splitDivergence`'s
+`limit`). The gap distribution is exactly what the calibration memo predicted
+for within-position ranking: median |gap| 2, max 12.
+
+The rendered page agrees value-for-value with the Node replay — Nate
+Boerkircher +10, Sam Roush +10, Caleb Douglas +7, Mike Washington +6, Brenen
+Thompson +6, Colbie Young +6; Cyrus Allen −12, Malik Benson −6, Justin Joly −6.
+Your Targets resolves against real deficits (WR, Contending): Carnell Tate,
+Jeremiyah Love, Jordyn Tyson, Fernando Mendoza. No backup tight ends lead the
+undervalued list — the shared-points-scale trap the model was built to avoid
+stayed avoided on live data.
+
+**3 — Drawer status row.** The **Rookies** row reads `just now · feed 8h`.
+
+Health: `npm ci` → **126/126 tests**, lint clean.
+
+> ⚠ **Capture artifact — do not chase it as a bug.** In that same drawer
+> capture, **News and History read `—`** while Rookies resolves, and it persists
+> at a 9s settle. It is the screenshot harness, not the app: `screenshot-app.mjs`
+> serves external requests with **synchronous** `execFileSync` curl calls, so
+> the multi-MB `/players/nfl` fetch blocks Node's event loop past `fetchJSON`'s
+> 10s AbortController timeout for the feeds racing it on The Edge. `loadNewsFeed`
+> memoizes the *promise* and a failure resolves to `[]` with `newsFeedFetchedAt`
+> never set, so the drawer's later call gets the cached empty result and the row
+> stays `—` for the session. Discriminator: `/news` renders the feed normally
+> (97 fresh items), and the drawer's Refresh button passes `force`. Recorded as
+> gotcha 5 in the `dynastyedge-visual-capture` skill.
+
+**Next season's chore** (unchanged): re-run the back-test and reconcile
+`DEPTH_VALUE` against its drift output. Combine athleticism stays unused (the
+2026 `combine.csv` ships with empty `forty`/`vertical`), and **camp movement
+stays displayed-but-not-scored** — but its blocker now has an end date. The
+reason it could not be scored was that nflverse's 2025 depth charts begin
+2025-08-03, leaving no pre-camp baseline to validate a climb against. The 2026
+feed carries weekly columns from **2026-03-16**, so this class is accumulating
+exactly that baseline; a camp-movement signal becomes back-testable once the
+2026 rookie season's outcomes exist (i.e. during the 2027 pre-draft window).
 
 ### ACTIVE-1 — closed
 
@@ -55,6 +85,23 @@ ACTIVE-1 closed 2026-08-08; it is retained
 below in full because what it found — three silent live-API contract breaks —
 is the durable part, and the re-verification commands are needed again next
 season.
+
+### Trigger sweep — 2026-08-14
+
+Re-run against the live API. **None has fired**, so there is still no ready
+work beyond the ACTIVE-2 verification above.
+
+| Item | Trigger | State on 2026-08-14 |
+|---|---|---|
+| OPEN-1 | ~4–6 weeks of 2026 waivers | `/state/nfl` → `season_type: pre`, `week: 1` — no regular-season waivers exist |
+| OPEN-2 | 2026 rookie draft done + picks spent | draft still `pre_draft`, **0 picks made**, `start_time: null` |
+| OPEN-3 | owner ask + live 2026 waiver data | neither |
+| OPEN-5 | Week 1 | still preseason (`season_start_date: 2026-08-06` is *preseason*) |
+
+All four published feeds live and fresh on the day: `news.json` (2026-08-14
+19:16Z), `values-history.json` (10:39Z), `trade-values.json` (10:39Z — 172
+bytes, correct: it archives only trades completed in the last 8 days, and there
+have been none), `rookie-intel.json` (11:12Z, first run).
 
 ### Trigger sweep — 2026-08-08
 
@@ -289,3 +336,4 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 | Navigation Refactor Phases 1–3 | 2026-07-20 | Consolidation → `/my-team` + `/league` rename → "Primetime Blackout" visual pass |
 | Frontier Item 2 blocking question (are losing FAAB bids visible?) | 2026-08-08 | Verified yes; see `docs/analysis/faab-bid-corpus-2026-08.md`. Superseded by OPEN-3 |
 | ACTIVE-1 — season-readiness tests (draft day + Week 1) | 2026-08-08 | Three live contract breaks found and fixed (schedule endpoint, draft `slot_to_roster_id`, stats `pos`/`opp`); 35 new tests (72 → 107) + `scripts/dev/replay-live.mjs`. Detail retained in §1 |
+| ACTIVE-2 — Draft › Research: verify the first pipeline run | 2026-08-14 | Pipeline published 2026-08-14 11:12Z; feed shape, Market vs Model output, and the drawer's Rookies row all verified against live data. Detail retained in §1 |
