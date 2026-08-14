@@ -6,7 +6,7 @@ description: >
   dark or light mode. Load when asked to "screenshot", "show me", "what does it
   look like", "verify the UI/card/drawer", or to confirm an unmerged branch
   change renders correctly on the phone. Owns the reusable harness
-  (scripts/dev/screenshot-app.mjs) and the three sandbox gotchas it already
+  (scripts/dev/screenshot-app.mjs) and the five sandbox gotchas it already
   solves: the app is local-only (no public URL serves your branch), headless
   Chromium can't reach the Sleeper/FantasyCalc APIs through the agent proxy
   (curl can), and the app is a HashRouter so --route goes in the URL hash — so
@@ -65,7 +65,8 @@ node scripts/dev/screenshot-app.mjs --route /draft/research \
 
 These cost real turns to figure out the first time. The script bakes in the
 first three; the fourth is a flag whose name misleads, so read it before
-reaching for `--full`.
+reaching for `--full`; the fifth makes healthy data feeds look dead, so read it
+before filing a pipeline bug off a capture.
 
 ### 1. The app is LOCAL. There is no public URL for your branch.
 

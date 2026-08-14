@@ -100,9 +100,11 @@ try {
     : 'STALE — daily cron at 10:23 UTC has not published in 36h+. Check .github/workflows/rookie-intel.yml.'}`)
 } catch (err) {
   failures++
-  console.log(`FEED UNREACHABLE: ${err.message} — expected BEFORE the workflow's first run`)
-  console.log('              (the branch does not exist until then). Draft › Research shows its')
-  console.log("              \"hasn't published yet\" explainer; this is not an incident.")
+  console.log(`FEED UNREACHABLE: ${err.message}`)
+  console.log('              The pipeline first published 2026-08-14, so this is no longer the')
+  console.log('              expected pre-first-run state — check the rookie-intel branch and')
+  console.log('              .github/workflows/rookie-intel.yml. The app still degrades safely')
+  console.log("              (Draft > Research shows its \"hasn't published yet\" explainer).")
 }
 
 if (failures === 4) {

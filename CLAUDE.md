@@ -331,9 +331,13 @@ in Actions and served as a static file, same architecture as news and values:
   recovered from the branch via git and the publish aborts rather than
   force-push an empty feed, so a bad run leaves yesterday's data in place.
 - The app reads it lazily once per session via `useRookieIntel` — **Class B /
-  best-effort**: a missing branch (it does not exist until the first run) or a
-  failed fetch shows Draft › Research's "hasn't published yet" explainer, never
-  an `ErrorState`.
+  best-effort**: a missing branch or a failed fetch shows Draft › Research's
+  "hasn't published yet" explainer, never an `ErrorState`. **The pipeline
+  published its first run 2026-08-14** (235 rookies, 80 carrying draft capital,
+  weekly columns back to 2026-03-16) and was verified end to end against live
+  data — see `docs/open-items.md`. Until that day the explainer was the only
+  state the page had ever rendered, so treat any "it has never published"
+  phrasing in older notes as history.
 
 **Preseason stats are deliberately NOT in this pipeline.** Sleeper *does*
 expose them (`/stats/nfl/pre/{year}/{week}` — real box scores, 217 fields
@@ -2212,7 +2216,8 @@ dynastyedge/
 │   ├── snapshot-trade-values.mjs ← permanent trade-time value archiver (runs in Actions)
 │   ├── snapshot-rookie-intel.mjs ← daily nflverse → Sleeper rookie intel feed (runs in Actions)
 │   └── dev/
-│       ├── screenshot-app.mjs  ← headless-Chromium screenshotter for the running app (390px UI verification — see the dynastyedge-visual-capture skill)
+│       ├── screenshot-app.mjs  ← headless-Chromium screenshotter for the running app (390px UI verification; --route, --player, --drawer — see the dynastyedge-visual-capture skill)
+│       ├── replay-live.mjs     ← drives the running app against a SYNTHETIC draft / regular season, so the two once-a-year surfaces can be rehearsed on demand
 │       ├── faab-corpus.mjs     ← analysis-only: pulls the league's full FAAB bid corpus (see docs/analysis/faab-bid-corpus-2026-08.md); nothing imports it
 │       └── rookie-signal-backtest.mjs ← analysis-only: grades the SHIPPED rookie model against 2021–2025 (imports src/utils/rookieResearch.js so it cannot drift)
 ├── public/

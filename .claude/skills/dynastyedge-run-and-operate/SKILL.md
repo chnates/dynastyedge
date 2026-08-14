@@ -216,9 +216,12 @@ GitHub Actions cron is **UTC**.
   `https://raw.githubusercontent.com/chnates/dynastyedge/rookie-intel/rookie-intel.json`
   → `useRookieIntel` → Draft › Research (Feature 19) + the drawer's Rookies
   data-status row.
-- **The branch does not exist until the first run.** That is a normal state,
-  not an incident: Draft › Research shows its "hasn't published yet"
-  explainer and the board falls back to dynasty-value order.
+- **First published 2026-08-14** (235 rookies, 80 with draft capital). Before
+  that the branch did not exist at all — and a missing branch remains a normal
+  state, not an incident: Draft › Research shows its "hasn't published yet"
+  explainer and the board falls back to dynasty-value order. So a 404 here now
+  means the pipeline *stopped*, which is worth investigating; it is no longer
+  the expected steady state.
 
 ### Manual trigger (workflow_dispatch)
 

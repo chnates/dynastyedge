@@ -227,6 +227,21 @@ through the change-control divergence protocol.
 | Feature locations vs routes | `grep -n 'path=\|Navigate' src/App.jsx \| head -50` vs the Navigation route map | Every route in App.jsx appears in the doc's route map or redirect list |
 | Future Features vs reality | Read "Future Features"; for each bullet, `grep -rn` a distinctive term in `src/` | Nothing listed as "do not build yet" already exists |
 
+### Open findings — re-run 2026-08-14
+
+**Clean.** The three audit loops below (storage keys, constants, `src/utils` +
+`src/hooks`) report nothing undocumented, and the `scripts/dev/` loop is clean
+too. One **omission** was found and fixed in the same commit that recorded this
+line: `scripts/dev/replay-live.mjs` was documented in CLAUDE.md's prose
+("Live-surface rehearsals") but missing from the **File Structure** tree — the
+per-file grep the audit uses can't catch that class, because it only asks
+whether the filename appears *somewhere* in the doc. **When auditing the tree,
+check the tree specifically**, not just `grep -q "$f" CLAUDE.md`.
+
+Also refreshed: CLAUDE.md's rookie-intel bullet no longer says the data branch
+"does not exist until the first run" — it published 2026-08-14 (see
+`docs/open-items.md`).
+
 ### Open findings — re-run 2026-08-08
 
 **Clean.** The full audit above (storage keys, constants, `src/utils` +
@@ -321,7 +336,7 @@ reference implementation):
 6. Close with **"Provenance and maintenance"**: when facts were verified and a
    table of one-line re-verification commands per fact class.
 
-**Sibling inventory** (all 16 exist on disk as of 2026-07-07; cross-reference
+**Sibling inventory** (all 17 exist on disk as of 2026-08-14; cross-reference
 these by name; verify with `ls .claude/skills/`): design-review ·
 dynasty-fantasy-reference · dynastyedge-analysis-toolkit ·
 dynastyedge-architecture-contract · dynastyedge-build-and-env ·
@@ -330,8 +345,10 @@ dynastyedge-debugging-playbook · dynastyedge-diagnostics-and-tooling ·
 dynastyedge-docs-and-writing (this file) · dynastyedge-failure-archaeology ·
 dynastyedge-model-quality-campaign · dynastyedge-research-frontier ·
 dynastyedge-research-methodology · dynastyedge-run-and-operate ·
-dynastyedge-validation-and-qa. If you cite a sibling, confirm it exists on
-disk first.
+dynastyedge-validation-and-qa · dynastyedge-visual-capture. If you cite a
+sibling, confirm it exists on disk first. (Two repo-agnostic skills,
+`frontend-design` and `web-design-guidelines`, also sit in the directory and
+are deliberately outside the `dynastyedge-` inventory.)
 
 **Adding a skill:** check the inventory for overlap first — extend the owning
 skill rather than fork a near-duplicate. New skills are commits like any
