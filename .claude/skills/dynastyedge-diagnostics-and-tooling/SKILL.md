@@ -208,9 +208,11 @@ trade-values archive entry count; rookie-intel player/column counts and
 snapshot date vs the daily 10:23 UTC cron. Per-feed graceful failure; exits 1
 only if all four are unreachable.
 
-> A 404 on **rookie-intel** is the expected state before that workflow's first
-> run — the branch does not exist until then, and the app renders its
-> "hasn't published yet" explainer. Not an incident.
+> **rookie-intel first published 2026-08-14**, so a 404 there is no longer the
+> expected state — it now means the pipeline stopped, and the branch should be
+> checked. The app still degrades correctly either way (the "hasn't published
+> yet" explainer, never an `ErrorState`), so a 404 is not a user-facing
+> incident — just a silent one.
 
 ```bash
 node $SKILL/scripts/check-feeds.mjs

@@ -240,7 +240,26 @@ evidence. Nothing ships without an explicit owner ask regardless.
 
 ## Item 3 — Trade-acceptance modeling: what offer structure does each manager say yes to?
 
-**Status: open.**
+**Status: PARKED WITH EVIDENCE 2026-08-14 — step 2 ran and DISCONFIRMED the
+premise.** Full report: `docs/analysis/trade-structure-stability-2026-08.md`.
+On the complete 4-season corpus (95 trades, 176 sides, 9 qualifying managers,
+91 holdout sides — powered, not underpowered), per-manager structure profiles
+scored **39.0%** against a 50% null, permutation p = 0.42, with only 2 of 9
+managers above 50%. The own-manager profile was **worse than the league
+baseline**, because between-manager MAD is **0.000** for two of the three
+features: seven of nine managers have identical fit medians (a value-symmetric
+swap with no picks received). There is no between-manager signal in the median
+to profile.
+
+**Standing ruling:** do not re-attempt this as a per-manager centroid scored by
+distance to a pooled baseline. The one live lead — the signal, if any, lives in
+distribution shape or tails rather than the center — needs its own
+pre-registration and faces the same N. Step 3 (wiring into
+`suggestFairPackage` / `getCounterSuggestion`) is **closed**, not pending: the
+step-2 gate it depended on failed.
+
+The original framing is retained below because it is still the correct framing
+for any revival.
 
 **Problem.** The Trade Analyzer answers "is this trade good for me?"
 (`tradeAnalysis.js` → `analyzeTrade`). The assistant-GM question is one step

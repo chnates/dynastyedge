@@ -38,11 +38,16 @@ Context you must hold (all as of 2026-07-05):
   experiment on `main` is a broken app in the owner's pocket.
 - Owner's laws: **real-data verification · always-shippable main ·
   CLAUDE.md updated in the same commit · no new dependencies.**
-- **This sandbox cannot reach the fantasy APIs** (proxy 403 on
-  api.sleeper.app / api.fantasycalc.com). Never claim a live-data run you did
-  not actually do; label such steps "requires network — not run here" and
-  hand them to the network runbook in `dynastyedge-run-and-operate` /
-  `dynastyedge-validation-and-qa`.
+- **Sandbox network posture varies by session — test it, do not assume.** This
+  was recorded as "cannot reach the fantasy APIs (proxy 403)" on 2026-07-05, but
+  on **2026-08-14** a session reached `api.sleeper.app`, `api.fantasycalc.com`,
+  and `raw.githubusercontent.com` from both `curl` and Node `fetch`, and built
+  the full 4-season trade corpus live (`docs/analysis/trade-structure-stability-2026-08.md`).
+  Probe first (`curl -s -o /dev/null -w '%{http_code}' https://api.sleeper.app/v1/state/nfl`).
+  The unchanged half of this rule is the important half: **never claim a
+  live-data run you did not actually do** — if the probe fails, label the step
+  "requires network — not run here" and hand it to the runbook in
+  `dynastyedge-run-and-operate` / `dynastyedge-validation-and-qa`.
 
 ## When NOT to use this skill
 
@@ -397,7 +402,7 @@ failed>", with commands and numbers for every attack you ran.
 | **Changing two things at once** | Tiny N gives you zero statistical attribution; isolation is the only attribution you get | The Navigation Refactor deliberately split IA restructure (Phases 1–2, `59627db`…`f7df308`) from the visual repaint (Phase 3, still unbuilt) — CLAUDE.md states the reason: "so we don't restructure and restyle at once". |
 | **Claiming without explaining the negatives** | Two half-explanations hide a wrong model; the unexplained case is where it bites | First PWA status-bar fix `cfd9ad0` addressed the observed symptom via the (wrong) theme-color-override diagnosis, reverted `3083f0c` same day; accepted fix `78b6c29` — restore `black-translucent` + light-mode-only dark strip, since iOS standalone ignores live theme-color — covered all observations in both themes. |
 | **Experiment lingering half-landed on main** | main auto-deploys to the owner's phone — a half-experiment is a broken pocket app; violates always-shippable | House rule from the lifecycle: candidate logic lives in scratch/skill scripts until it passes refutation; multi-step adoptions land as independently-shippable phases with CLAUDE.md status lines (`d4f9e75` pattern). Same-day-revert culture (`aa0892b`, `3083f0c`) exists precisely so nothing lingers. |
-| **Claiming live-data runs from this sandbox** | Fantasy APIs are proxy-blocked (403) here; a fabricated "verified against live rosters" poisons the whole evidence chain | Standing sandbox fact (verified 2026-07-05). Write "requires network — not run here" and route through the runbook instead. |
+| **Claiming live-data runs you did not run** | A fabricated "verified against live rosters" poisons the whole evidence chain | Network posture varies by session — proxy-blocked 2026-07-05, fully reachable 2026-08-14 (see §context). Probe, then either run it for real or write "requires network — not run here" and route through the runbook. |
 | **Skipping the grounding check** | You will re-fight a settled battle and possibly re-land a reverted change | `dynastyedge-failure-archaeology` carries standing rulings on sheets, PWA metas, pick pricing, and glow effects that exist because sessions DID retry these. |
 
 -----

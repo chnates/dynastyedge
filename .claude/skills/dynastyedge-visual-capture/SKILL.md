@@ -6,7 +6,7 @@ description: >
   dark or light mode. Load when asked to "screenshot", "show me", "what does it
   look like", "verify the UI/card/drawer", or to confirm an unmerged branch
   change renders correctly on the phone. Owns the reusable harness
-  (scripts/dev/screenshot-app.mjs) and the three sandbox gotchas it already
+  (scripts/dev/screenshot-app.mjs) and the five sandbox gotchas it already
   solves: the app is local-only (no public URL serves your branch), headless
   Chromium can't reach the Sleeper/FantasyCalc APIs through the agent proxy
   (curl can), and the app is a HashRouter so --route goes in the URL hash — so
@@ -40,7 +40,9 @@ to view it, or `SendUserFile` it to the owner.
 
 Flags: `--player NAME` (opens global search → clicks the match → shoots the
 profile drawer) · `--route PATH` (navigates an app route — any form works,
-`/league`, `league`, or `#/league`) · `--out PATH` · `--width N` (default 390)
+`/league`, `league`, or `#/league`) · `--drawer` (opens the side drawer — the
+one surface with no route of its own; carries the per-source data-status block,
+but read gotcha 5 first) · `--out PATH` · `--width N` (default 390)
 · `--height N` · `--theme dark|light` · `--full` (full page, not just the
 sheet) · `--url BASE` · `--wait MS` · `--stub SUBSTRING=FILE` (serve a local
 file for any external URL containing SUBSTRING; repeatable).
@@ -63,7 +65,8 @@ node scripts/dev/screenshot-app.mjs --route /draft/research \
 
 These cost real turns to figure out the first time. The script bakes in the
 first three; the fourth is a flag whose name misleads, so read it before
-reaching for `--full`.
+reaching for `--full`; the fifth makes healthy data feeds look dead, so read it
+before filing a pipeline bug off a capture.
 
 ### 1. The app is LOCAL. There is no public URL for your branch.
 
@@ -128,6 +131,28 @@ const text = await page.locator('main').innerText()   // then grep the lines
 (Verified 2026-08-08 while confirming roster pick badges rendered real draft
 slots — a 10400px PNG proved useless where six lines of `innerText` were
 decisive.)
+
+### 5. Feeds can read as DEAD in a capture when they are merely losing a race.
+
+The side drawer's data-status rows (`--drawer`) showed **News `—` and History
+`—`** while Rookies resolved — and stayed that way at a 9s settle, which looks
+exactly like two broken pipelines. Both feeds were live and fresh.
+
+Cause: gotcha 2's fix serves every external request with a **synchronous**
+`execFileSync` curl call, which blocks Node's event loop. The multi-MB
+`/players/nfl` fetch holds it long enough that the feeds racing it at app load
+blow `fetchJSON`'s AbortController timeout (10s for news). Then the memoization
+makes it stick for the whole session: `loadNewsFeed` caches the *promise*, and a
+failure resolves to `[]` with `newsFeedFetchedAt` never set — so the drawer's
+later call gets the cached empty result and the row shows `—` forever.
+
+**Discriminator before you file a bug:** load the feed's own page — `/news`
+renders the aggregated feed, `/draft/research` the rookie intel. If those
+populate, the feed is fine and you are looking at this artifact. `curl` the feed
+URL for a second opinion. Rookies escapes the race only because nothing on The
+Edge consumes it, so its first fetch happens at drawer open with a free loop.
+
+(Verified 2026-08-14 while closing ACTIVE-2's drawer verification.)
 
 ## Other things the script handles
 

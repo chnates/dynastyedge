@@ -11,3 +11,4 @@ values-history.json
 values-archive.json
 trade-values.json
 rookie-intel.json
+.cache/
