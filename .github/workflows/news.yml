@@ -21,7 +21,38 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 20
+      - name: Fetch the previously published feed
+        # The feed ACCUMULATES: each run merges into the last one's output, so
+        # a source like RotoWire (25 player items per pull) compounds across 48
+        # runs a day instead of being flushed by one general-interest source.
+        # That makes the previous feed an input, not just an artifact.
+        #
+        # Read it from the branch via git rather than the raw.githubusercontent
+        # CDN the app reads — the CDN caches ~5 minutes and would hand a run
+        # back its own grandparent, silently dropping a window of items.
+        #
+        # A branch that exists but won't yield the file is a hard failure: the
+        # job stops, nothing is force-pushed, the published feed keeps its
+        # accumulated window, and the next run self-heals. Only a branch that
+        # has never existed (first run) proceeds with no previous feed.
+        run: |
+          REMOTE="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          PREV="$(git ls-remote "$REMOTE" refs/heads/news-data)"
+          PREV="${PREV%%[[:space:]]*}"
+          if [ -z "$PREV" ]; then
+            echo "news-data branch does not exist yet — starting a fresh feed"
+            exit 0
+          fi
+          mkdir -p /tmp/newsprev && cd /tmp/newsprev
+          git init -b news-data .
+          git fetch --depth 1 "$REMOTE" news-data
+          git checkout FETCH_HEAD -- news.json
+          cp news.json "$GITHUB_WORKSPACE/news-prev.json"
+          echo "carried forward $(node -e 'console.log(JSON.parse(require("fs").readFileSync("news.json")).items.length)') items"
       - name: Fetch news from all sources
+        # Exits non-zero only when no source returned anything AND nothing was
+        # retained. The job then fails before the publish step, so the branch
+        # keeps the feed it already has.
         run: node scripts/fetch-news.mjs
       - name: Publish news.json to the news-data branch
         run: |

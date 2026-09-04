@@ -115,12 +115,17 @@ export function normalizeName(s) {
   return (s ?? '').toLowerCase().replace(/[.'’-]/g, '').replace(/\s+/g, ' ').trim()
 }
 
-function matchFeedItems(items, name, espnId) {
+function matchFeedItems(items, sleeperId, name, espnId) {
   const id = espnId != null ? Number(espnId) : null
+  const sid = sleeperId != null ? String(sleeperId) : null
   const n = normalizeName(name)
   const usable = n.length >= 6 && n.includes(' ')  // full names only — avoid false hits
   return items
     .filter(item =>
+      // `playerIds` is the feed's own server-side resolution (see
+      // scripts/fetch-news.mjs) and the only join that works for the majority
+      // of rostered players, who carry no espn_id in Sleeper's player DB.
+      (sid != null && item.playerIds?.includes(sid)) ||
       (id != null && item.athleteIds?.includes(id)) ||
       (usable && normalizeName(item.headline).includes(n))
     )
@@ -350,7 +355,7 @@ export async function getPlayerIntel(sleeperId, nflState) {
     // Aggregated feed first; direct ESPN per-player call as a bonus fallback
     loadNewsFeed()
       .then(items => {
-        const matches = matchFeedItems(items, meta.name, meta.espn_id)
+        const matches = matchFeedItems(items, sleeperId, meta.name, meta.espn_id)
         return matches.length > 0 ? matches : loadEspnNews(meta.espn_id)
       })
       .catch(() => []),

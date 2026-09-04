@@ -43,8 +43,11 @@ export default function NewsArticleSheet({ article, onClose, onViewPlayer = null
           </p>
         )}
 
-        {/* Roundup note: multi-player articles are tagged to everyone mentioned */}
-        {player && article.athleteIds?.length > 2 && (
+        {/* Roundup note: multi-player articles are tagged to everyone mentioned.
+            `playerIds` (the feed's own resolution) counts more players than
+            `athleteIds` does, because most players carry no espn_id — so read
+            whichever list is longer. */}
+        {player && Math.max(article.playerIds?.length ?? 0, article.athleteIds?.length ?? 0) > 2 && (
           <p className="font-body text-[11px] text-text-tertiary leading-snug">
             This is a multi-player story — {player.name} is mentioned in the
             full article, which may lead with a different player.

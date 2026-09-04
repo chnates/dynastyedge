@@ -42,8 +42,13 @@ overturned.
   are reachable only through the DEF chip/slot and carry no dynasty framing —
   you roster exactly one, so the app must never suggest adding them (now
   League Context doctrine in CLAUDE.md). 163 tests, lint + build clean.
-- **Phase 2** — news coverage: FantasyPros' feed is dead (HTTP 404) and only
-  3 of 25 rostered players appear in the live feed. Pre-registered target: ≥12.
+- **Phase 2 — SHIPPED 2026-09-04, acceptance test MISSED (10 of 25 vs a target
+  of 12) — see NEWS-1 below and `docs/analysis/news-sources-2026-09.md`.**
+  FantasyPros dropped (all three endpoints dead); ten sources probed and
+  adopted, ten rejected; the feed now accumulates across runs (7d player / 48h
+  general) instead of being a 20-hour snapshot; and items carry `playerIds`
+  (Sleeper ids resolved server-side) because `espn_id` is null for 17 of the
+  owner's 26 rostered spots. Coverage doubled, 5 → 10.
 - **Phase 3** — rookie research split into "impact now" vs "long-term stash",
   adding age + athleticism from nflverse and (gated on a key) college
   production. **3c is a hard gate:** if the long-term score doesn't beat draft
@@ -62,6 +67,33 @@ overturned.
   players whose position-mate was ruled Out beat their projection by +1.13
   against a +0.98 control (n=318). Sleeper had already raised their projections.
   See the plan's §9c.
+
+### NEWS-1 — re-measure news coverage after a week of accumulation
+
+**Trigger:** `news.yml` has been running with the accumulating feed for ~7 days
+(i.e. on or after **2026-09-11**).
+
+Phase 2's pre-registered acceptance test — ≥12 of 25 rostered players resolved
+in a fresh pull — **missed at 10**. It was measured on a *cold* feed, before
+any accumulation had happened, which is not the shipped design: the window
+holds 240 player items and a single cold pull only produces 127.
+
+Two facts bound what more work could buy, and both argue for measuring before
+building:
+
+- The app now resolves **every** player the matcher can find (achieved =
+  ceiling). No further matching work can move the number.
+- All 15 misses are **genuine absence** — each was verified present in the
+  player index and absent from the feed's entire text. There simply was no
+  news about Jordan James or Jalen Royals in any of eleven sources on
+  2026-09-04, in the preseason.
+
+**Do this:** run `node scripts/dev/news-coverage.mjs` (no argument reads the
+live feed). If a saturated window clears 12, close this item. If it doesn't,
+the honest read is that free NFL news does not cover a 26-deep dynasty roster
+carrying taxi-squad rookies, and the **target should move rather than the
+sources** — do not bolt on low-signal feeds to chase the number. Record
+whichever way it goes.
 
 **Blocked, owner action:** Phase 3b needs a free CollegeFootballData API key
 stored as repo secret `CFBD_API_KEY`. Nothing else in the plan is blocked.

@@ -23,14 +23,16 @@ export function useNewsFeed() {
 
   const playerMap = values?.playerMap ?? null
 
-  // espn_id → player and normalized-name → player indices, built once per
+  // sleeperId / espn_id / normalized-name → player indices, built once per
   // (playerMap, playerDB). Names are sorted longest-first so a more specific
   // name wins when one player's name is a substring of another's headline.
   const indices = useMemo(() => {
     if (!playerMap) return null
+    const bySleeper = new Map()
     const byEspn = new Map()
     const byName = []
     Object.values(playerMap).forEach(p => {
+      bySleeper.set(String(p.sleeperId), p)
       const meta = playerDB?.[String(p.sleeperId)]
       const espnId = meta?.espn_id != null ? Number(meta.espn_id) : null
       if (espnId != null && !Number.isNaN(espnId) && !byEspn.has(espnId)) byEspn.set(espnId, p)
@@ -39,7 +41,7 @@ export function useNewsFeed() {
       if (n.length >= 6 && n.includes(' ')) byName.push({ n, player: p })
     })
     byName.sort((a, b) => b.n.length - a.n.length)
-    return { byEspn, byName }
+    return { bySleeper, byEspn, byName }
   }, [playerMap, playerDB])
 
   const myIds = useMemo(() => {
@@ -56,10 +58,20 @@ export function useNewsFeed() {
       .map(item => {
         let player = null
         const ids = item.athleteIds ?? []
+        const sleeperIds = item.playerIds ?? []
         if (indices) {
-          for (const id of ids) {
-            const hit = indices.byEspn.get(Number(id))
+          // Feed-resolved Sleeper ids first: most rostered players carry no
+          // espn_id in Sleeper's player DB, so the ESPN join below reaches
+          // only a minority of them (see scripts/fetch-news.mjs).
+          for (const id of sleeperIds) {
+            const hit = indices.bySleeper.get(String(id))
             if (hit) { player = hit; break }
+          }
+          if (!player) {
+            for (const id of ids) {
+              const hit = indices.byEspn.get(Number(id))
+              if (hit) { player = hit; break }
+            }
           }
           if (!player) {
             const headline = normalizeName(item.headline)
@@ -74,6 +86,7 @@ export function useNewsFeed() {
           source: item.source ?? null,
           link: item.link ?? null,
           athleteIds: ids,
+          playerIds: sleeperIds,
           player,
           isMine: player ? myIds.has(String(player.sleeperId)) : false,
         }

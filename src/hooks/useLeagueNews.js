@@ -4,9 +4,10 @@ import { usePlayerDB } from './usePlayerDB'
 
 // News relevant to a set of players (The Edge passes my roster + watchlist).
 // Reads the same aggregated feed as the player profile drawer — one fetch
-// per session — and matches items by ESPN athlete id first, normalized full
-// name in the headline second. Strictly best-effort, same contract as every
-// news surface: any failure yields [] and the section simply hides.
+// per session — and matches items by the feed's own resolved Sleeper ids
+// first, ESPN athlete id second, normalized full name in the headline last.
+// Strictly best-effort, same contract as every news surface: any failure
+// yields [] and the section simply hides.
 export function useLeagueNews(players) {
   const { playerDB } = usePlayerDB()
   const [items, setItems] = useState(null)
@@ -26,6 +27,7 @@ export function useLeagueNews(players) {
       const n = normalizeName(p.name)
       return {
         player: p,
+        sleeperId: String(p.sleeperId),
         espnId: playerDB?.[p.sleeperId]?.espn_id != null
           ? Number(playerDB[p.sleeperId].espn_id)
           : null,
@@ -38,7 +40,11 @@ export function useLeagueNews(players) {
     const matched = []
     items.forEach(item => {
       const headline = normalizeName(item.headline)
-      const hit = matchers.find(({ espnId, name }) =>
+      const hit = matchers.find(({ sleeperId, espnId, name }) =>
+        // Feed-resolved Sleeper ids first — most rostered players carry no
+        // espn_id in Sleeper's player DB, so the id join below can't reach
+        // them (see scripts/fetch-news.mjs).
+        item.playerIds?.includes(sleeperId) ||
         (espnId != null && item.athleteIds?.includes(espnId)) ||
         (name && headline.includes(name))
       )
@@ -51,6 +57,7 @@ export function useLeagueNews(players) {
         source: item.source ?? null,
         link: item.link ?? null,
         athleteIds: item.athleteIds ?? [],
+        playerIds: item.playerIds ?? [],
         player: hit.player,
       })
     })
