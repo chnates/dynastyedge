@@ -78,6 +78,132 @@ export function opportunityScore({ position, rank, pick }) {
   return DEPTH_WEIGHT * depthScore(position, rank) + (1 - DEPTH_WEIGHT) * capitalScore(pick)
 }
 
+// ── Measurables: age at draft + the combine drills ───────────────────────────
+// DISPLAYED, NEVER SCORED. Phase 3 proposed a second "long-term" score built
+// from age and combine athleticism; docs/analysis/rookie-longterm-signals-2026-09.md
+// tested it against years 2+3 production over n=871 drafted skill rookies
+// (2013-2023) and killed it:
+//
+//   - COMBINE ATHLETICISM IS NULL. Adding it to a capital+age score moved the
+//     held-out Spearman by +0.004, inside the noise, and only ~half of a
+//     current rookie class has a 40 time at all (38 of 80 in 2026 — the best
+//     prospects skip the drill or run at a pro day nflverse does not publish).
+//   - AGE at draft is a real but small signal, and it is NOT a second axis:
+//     a long-term score built on it correlates 0.923 with the score already
+//     shipped, is a WORSE predictor of years 2+3 than that score (+0.610 vs
+//     +0.634), and the "low impact now / high upside later" quadrant the
+//     two-axis product depended on held 0 rookies across nine real classes.
+//
+// So these are rendered as context on the profile drawer, in the same voice as
+// camp movement: a fact about the player, with no claim that it predicts.
+// Regenerate the baselines with `node scripts/dev/rookie-longterm-backtest.mjs`,
+// which diffs them against a fresh measurement — never hand-edit them.
+
+// Feed key -> the nflverse combine column it comes from. Only the three
+// well-covered drills are carried: cone and shuttle are missing for more than
+// half the population, so a band computed from them would mostly be absent.
+export const COMBINE_DRILLS = { forty: 'forty', vert: 'vertical', broad: 'broad_jump' }
+
+// Mean and sd per position over every 2013+ combine invitee at that position
+// (n = 1,597 skill players). `higherIsBetter` is false for a timed drill.
+export const COMBINE_BASELINE = {
+  QB: {
+    forty: { mean: 4.79, sd: 0.16, higherIsBetter: false },
+    vert:  { mean: 31.46, sd: 3.14, higherIsBetter: true },
+    broad: { mean: 113.64, sd: 6.69, higherIsBetter: true },
+  },
+  RB: {
+    forty: { mean: 4.55, sd: 0.11, higherIsBetter: false },
+    vert:  { mean: 34.49, sd: 3.18, higherIsBetter: true },
+    broad: { mean: 120.09, sd: 5.27, higherIsBetter: true },
+  },
+  WR: {
+    forty: { mean: 4.50, sd: 0.10, higherIsBetter: false },
+    vert:  { mean: 35.54, sd: 3.21, higherIsBetter: true },
+    broad: { mean: 122.84, sd: 5.88, higherIsBetter: true },
+  },
+  TE: {
+    forty: { mean: 4.74, sd: 0.14, higherIsBetter: false },
+    vert:  { mean: 33.66, sd: 3.06, higherIsBetter: true },
+    broad: { mean: 118.00, sd: 5.57, higherIsBetter: true },
+  },
+}
+
+// Age at the NFL draft, per position, over the 2013-2023 drafted skill classes
+// (n = 869). The spread is narrow — every position sits within a year of 22.2
+// with an sd under 1.1 — which is itself why age cannot carry a score.
+export const AGE_BASELINE = {
+  QB: { mean: 22.75, sd: 1.06 },
+  RB: { mean: 22.09, sd: 0.88 },
+  WR: { mean: 22.15, sd: 0.89 },
+  TE: { mean: 22.45, sd: 0.88 },
+}
+
+export const DRILL_LABEL = { forty: '40-yard dash', vert: 'Vertical', broad: 'Broad jump' }
+
+// Signed z against the position baseline, POSITIVE = better than his position
+// group. Returns null when the drill or the position has no baseline — the
+// caller renders `—`, it never substitutes a zero (rule 7's spirit: an absent
+// measurement is shown as absent, not as average).
+export function measurableZ(position, drill, value) {
+  const b = COMBINE_BASELINE[position]?.[drill]
+  if (!b?.sd || value == null || !Number.isFinite(value)) return null
+  const z = (value - b.mean) / b.sd
+  return b.higherIsBetter ? z : -z
+}
+
+// Age at draft as a signed z, POSITIVE = younger than his position group.
+export function ageAtDraftZ(position, age) {
+  const b = AGE_BASELINE[position]
+  if (!b?.sd || age == null || !Number.isFinite(age)) return null
+  return (b.mean - age) / b.sd
+}
+
+// A z turned into a plain-English band. Deliberately coarse: the underlying
+// signal is weak, and four buckets say what a decimal would overstate.
+export function bandOf(z) {
+  if (z == null) return null
+  if (z >= 1) return 'elite'
+  if (z >= 0.35) return 'above average'
+  if (z > -0.35) return 'average'
+  return 'below average'
+}
+
+// The drawer's "Measurables" readout: one row per drill the feed actually has.
+// A rookie with no combine entry returns [] and the card hides — nothing is
+// invented, and he is never dropped from any list for it.
+export function measurables(row) {
+  if (!row?.position) return []
+  return Object.keys(COMBINE_DRILLS)
+    .map(drill => {
+      const value = row[drill]
+      if (value == null || !Number.isFinite(value)) return null
+      const z = measurableZ(row.position, drill, value)
+      return { drill, label: DRILL_LABEL[drill], value, z, band: bandOf(z) }
+    })
+    .filter(Boolean)
+}
+
+// "an RB", "a WR" — only RB is read as a vowel sound ("ar-bee"). Exported so
+// the drawer's drill lines use the same article as the age line.
+export function positionArticle(position) {
+  return position === 'RB' ? 'an' : 'a'
+}
+
+// "22.1 at the draft — young for a WR". Age is the one measurable that carried
+// any measured signal, so it gets a sentence of its own; the sentence still
+// makes no prediction.
+export function ageAtDraftRead(position, age) {
+  if (age == null || !Number.isFinite(age)) return null
+  const z = ageAtDraftZ(position, age)
+  const forPos = `for ${positionArticle(position)} ${position}`
+  const qualifier = z == null ? null
+    : z >= 0.75 ? `young ${forPos}`
+    : z <= -0.75 ? `old ${forPos}`
+    : `typical ${forPos}`
+  return { age, z, text: qualifier ? `${age.toFixed(1)} at the NFL draft — ${qualifier}` : `${age.toFixed(1)} at the NFL draft` }
+}
+
 // How a rookie's depth standing moved across the published window.
 // DELIBERATELY NOT SCORED: camp movement is computable for the current class
 // but could not be back-tested (nflverse's 2025 depth charts only begin
@@ -170,6 +296,16 @@ export function buildRookieResearch(prospects, intel) {
       round: entry?.round ?? null,
       ahead: entry?.ahead ?? [],
       move: campMove(entry?.ranks),
+      // Measurables ride along untouched from the feed. They are DISPLAY ONLY
+      // (see the null above) — nothing below reads them, and `opportunityScore`
+      // is not passed them, so a feed that starts or stops carrying them can
+      // never move a single score.
+      ageAtDraft: entry?.age ?? null,
+      height: entry?.ht ?? null,
+      weight: entry?.wt ?? null,
+      forty: entry?.forty ?? null,
+      vert: entry?.vert ?? null,
+      broad: entry?.broad ?? null,
       noData: !entry,
     }
     if (!entry || !position) return { ...base, score: null, reasons: [], tier: null, depthText: null }

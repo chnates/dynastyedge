@@ -119,6 +119,39 @@ and this is diagnostic, not daily information.
 **Blocked, owner action:** Phase 3b needs a free CollegeFootballData API key
 stored as repo secret `CFBD_API_KEY`. Nothing else in the plan is blocked.
 
+### 2026-09-04 — Phase 3 landed partial: 3a shipped, 3c a null, 3b and 3d NOT built
+
+Full memo: `docs/analysis/rookie-longterm-signals-2026-09.md`.
+
+- **3a shipped.** `rookie-intel.json` now carries age at the NFL draft,
+  height/weight and the three well-covered combine drills, joined **by ID only**
+  (`pfr_id` → `gsis_id`/`espn_id` → `sleeperId`). Rendered on the profile
+  drawer as *"Measurables · context, not scored"*.
+- **3b NOT attempted — still the open owner action.** `CFBD_API_KEY` could not
+  be verified from the session: the agent proxy blocks the GitHub Actions API
+  (`/actions/secrets` → 403), and nothing in the repo references the secret.
+  Per the instruction to build 3b only if the secret exists, it was skipped.
+  The pipeline reads no key and publishes fine without one.
+- **3c is a null and 3d is stopped.** A "long-term" score from age +
+  athleticism beats *draft capital alone* out of sample by only +0.012 rho
+  (95% CI includes zero), is a **worse** predictor of years 2–3 than the score
+  already shipped (+0.602 vs +0.632), and correlates **0.934** with it. The
+  "low impact now / high upside later" quadrant a two-axis UI exists to surface
+  held **0 rookies across nine real draft classes**. Combine athleticism
+  specifically is null (+0.002).
+
+**Trigger for revisiting:** the CFBD key. §4 of the memo is the reason it
+matters more than it did before — age and athleticism cannot separate a second
+axis because both are dominated by draft capital, and **college production
+(dominator rating, breakout age) is the only proposed input that is not a
+restatement of where a player was drafted.**
+
+**One measured follow-up, not shipped:** a 0.10 age *tilt* on the existing
+opportunity score gains +0.018 rho against years 2–3 (t = 3.35, 8 of 9
+classes) at no measurable cost to year 1, and moves 241 of 712 rookies ≥5
+spots. It is a change to a back-tested model that was not asked for. Needs an
+owner ask.
+
 **Do not** re-test multi-source projections, a boom/bust score, weekly defense
 streaming, or usage-as-prediction. All four were measured and rejected; §0 of
 the plan carries the numbers.

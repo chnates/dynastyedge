@@ -22,9 +22,16 @@
 // Format is columnar to stay mobile-sized:
 //   { updatedAt, season, dates: ['YYYY-MM-DD', ...],
 //     players: { sleeperId: { name, pos, team, round, pick, rank, slot,
-//                             ranks: [r|null, ...], ahead: [...] } } }
+//                             ranks: [r|null, ...], ahead: [...],
+//                             age, ht, wt, forty, vert, broad } } }
 // `ranks` is aligned to `dates` (one column per ISO week — daily snapshots
 // would be ~7x the bytes for no extra signal).
+//
+// MEASURABLES (age at the NFL draft, height/weight, and the three well-covered
+// combine drills) are published as DISPLAY CONTEXT ONLY. They were tested as
+// the basis of a second "long-term" score and the result was null — see
+// docs/analysis/rookie-longterm-signals-2026-09.md and the comment block in
+// src/utils/rookieResearch.js. They are facts on a card, not score inputs.
 
 import { writeFileSync } from 'node:fs'
 
@@ -175,7 +182,8 @@ try {
 }
 
 // ── NFL draft capital ────────────────────────────────────────────────────────
-const capital = new Map()  // sleeperId -> { round, pick }
+const capital = new Map()      // sleeperId -> { round, pick, age }
+const pfrFromDraft = new Map() // pfr_id -> sleeperId, straight off the draft rows
 try {
   const picksCsv = await get(`${NFLVERSE}/draft_picks/draft_picks.csv`, 'text')
   eachRow(picksCsv, (c, i) => {
@@ -189,11 +197,92 @@ try {
       sid = resolveName(c[i.pfr_player_name], c[i.position])
     }
     if (!sid || !rookies.has(sid)) return
-    capital.set(sid, { round: Number(c[i.round]) || null, pick: Number(c[i.pick]) || null })
+    capital.set(sid, {
+      round: Number(c[i.round]) || null,
+      pick: Number(c[i.pick]) || null,
+      // Age at the draft, published as context. The column is populated for
+      // essentially every drafted skill player (869/871 across 2013-2023).
+      age: Number(c[i.age]) || null,
+    })
+    const pfr = (c[i.pfr_player_id] || '').trim()
+    if (pfr) pfrFromDraft.set(pfr, sid)
   })
   console.log(`Draft capital: ${capital.size} rookies matched to an NFL pick`)
 } catch (err) {
   console.error(`Draft picks unavailable (${err.message}) — capital omitted`)
+}
+
+// ── Measurables: age at the NFL draft + the combine drills ───────────────────
+// Age comes straight off the draft row we already matched. The combine join is
+// `draft_picks.pfr_player_id` -> `combine.pfr_id` — an exact ID match on both
+// sides, with NO name matching anywhere in this section. players.csv adds a
+// second ID hop (`pfr_id` -> `espn_id` -> Sleeper's own `espn_id`) so an
+// UNDRAFTED rookie who worked out at the combine still resolves; he has no
+// draft row, so pfr_id is otherwise unreachable for him.
+//
+// Both hops are best-effort: a failure here omits measurables and leaves the
+// capital + depth-chart signals — the ones the model actually scores —
+// untouched. Nothing below can abort the run.
+const HT = /^(\d+)-(\d+)$/            // combine ships height as "6-2"
+const heightInches = v => {
+  const m = HT.exec((v || '').trim())
+  return m ? Number(m[1]) * 12 + Number(m[2]) : null
+}
+const numOrNull = v => {
+  const s = (v || '').trim()
+  if (!s) return null
+  const n = Number(s)
+  return Number.isFinite(n) ? n : null
+}
+
+// espn_id -> sleeperId, rookies only. Sleeper stores it as a string or a
+// number depending on the record, so both sides are normalized (rule 8).
+const espnToSleeper = new Map()
+for (const [pid, p] of Object.entries(playerDB)) {
+  if (!rookies.has(pid) || p?.espn_id == null) continue
+  espnToSleeper.set(String(p.espn_id), pid)
+}
+
+// pfr_id -> sleeperId. Populated from the draft rows first (authoritative:
+// that id came from the gsis crosswalk or the position-guarded name fallback
+// already applied above), then widened with players.csv's espn_id hop.
+const pfrToSleeper = new Map(pfrFromDraft)
+try {
+  const playersCsv = await get(`${NFLVERSE}/players/players.csv`, 'text')
+  let viaGsis = 0, viaEspn = 0
+  eachRow(playersCsv, (c, i) => {
+    const pfr = (c[i.pfr_id] || '').trim()
+    if (!pfr || pfrToSleeper.has(pfr)) return
+    const byGsis = gsisToSleeper.get(c[i.gsis_id])
+    if (byGsis) { pfrToSleeper.set(pfr, byGsis); viaGsis++; return }
+    const byEspn = espnToSleeper.get((c[i.espn_id] || '').trim())
+    if (byEspn) { pfrToSleeper.set(pfr, byEspn); viaEspn++ }
+  })
+  console.log(`Player crosswalk: +${viaGsis} via gsis_id, +${viaEspn} via espn_id ` +
+    `(${pfrToSleeper.size} pfr_ids resolved in total)`)
+} catch (err) {
+  console.error(`players.csv unavailable (${err.message}) — combine limited to drafted rookies`)
+}
+
+const measurables = new Map()   // sleeperId -> { ht, wt, forty, vert, broad }
+try {
+  const combineCsv = await get(`${NFLVERSE}/combine/combine.csv`, 'text')
+  eachRow(combineCsv, (c, i) => {
+    if (c[i.season] !== season) return
+    const sid = pfrToSleeper.get((c[i.pfr_id] || '').trim())
+    if (!sid || !rookies.has(sid)) return
+    measurables.set(sid, {
+      ht: heightInches(c[i.ht]),
+      wt: numOrNull(c[i.wt]),
+      forty: numOrNull(c[i.forty]),
+      vert: numOrNull(c[i.vertical]),
+      broad: numOrNull(c[i.broad_jump]),
+    })
+  })
+  const withForty = [...measurables.values()].filter(m => m.forty != null).length
+  console.log(`Combine: ${measurables.size} rookies matched, ${withForty} with a 40 time`)
+} catch (err) {
+  console.error(`Combine unavailable (${err.message}) — measurables omitted`)
 }
 
 // ── Depth charts: current standing, who's ahead, and the camp series ─────────
@@ -277,6 +366,7 @@ for (const [sid, meta] of rookies) {
       if (!current || v.date > current.date) current = v
     }
   }
+  const m = measurables.get(sid) ?? null
   players[sid] = {
     name: meta.name,
     pos: meta.pos,
@@ -287,6 +377,14 @@ for (const [sid, meta] of rookies) {
     slot: current?.slot ?? null,
     ranks,
     ahead: aheadBySleeper.get(sid) ?? [],
+    // Display-only measurables. Absent stays null; the app renders `—` and
+    // never drops the player for it.
+    age: cap?.age ?? null,
+    ht: m?.ht ?? null,
+    wt: m?.wt ?? null,
+    forty: m?.forty ?? null,
+    vert: m?.vert ?? null,
+    broad: m?.broad ?? null,
   }
 }
 
@@ -301,6 +399,8 @@ const out = {
     published: Object.keys(players).length,
     withCapital: capital.size,
     withDepth: perWeek.size,
+    withAge: [...capital.values()].filter(c => c.age != null).length,
+    withCombine: measurables.size,
   },
 }
 
@@ -313,4 +413,5 @@ writeFileSync('rookie-intel.json', JSON.stringify(out))
 const kb = (JSON.stringify(out).length / 1024).toFixed(0)
 console.log(`Wrote rookie-intel.json: ${out.meta.published} rookies, ` +
   `${dates.length} weekly columns, ${kb}KB ` +
-  `(${out.meta.withCapital} with capital, ${out.meta.withDepth} with depth)`)
+  `(${out.meta.withCapital} with capital, ${out.meta.withDepth} with depth, ` +
+  `${out.meta.withAge} with age, ${out.meta.withCombine} with combine)`)

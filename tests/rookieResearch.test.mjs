@@ -9,6 +9,8 @@ import {
   depthBucket, depthScore, capitalScore, opportunityScore,
   campMove, depthLabel, scoreReasons,
   buildRookieResearch, buildTeamFit, topTargets, splitDivergence,
+  COMBINE_BASELINE, AGE_BASELINE, COMBINE_DRILLS,
+  measurableZ, ageAtDraftZ, bandOf, measurables, ageAtDraftRead, positionArticle,
 } from '../src/utils/rookieResearch.js'
 
 test('the blend weight is the back-tested 0.3 depth / 0.7 capital', () => {
@@ -296,4 +298,92 @@ test('fit keeps the market in the ranking so the board stays draftable', () => {
   const flier = fitted.find(r => r.sleeperId === 'flier')
   assert.ok(flier.score > stud.score, 'the model does prefer the flier on opportunity')
   assert.ok(stud.fit > flier.fit, 'but the target board still leads with the stud')
+})
+
+// ── Measurables: age at draft + combine drills (Phase 3a) ───────────────────
+// Calibrated and, more importantly, DISQUALIFIED as score inputs in
+// docs/analysis/rookie-longterm-signals-2026-09.md. These tests exist to keep
+// them display-only: the null is the contract.
+
+test('measurables can never move an opportunity score', () => {
+  // THE load-bearing assertion. Combine athleticism measured +0.002 held-out
+  // rho — inside the noise — and a long-term score built on age correlates
+  // 0.934 with this one. So the feed's measurables must be inert: two rookies
+  // identical in position/rank/pick score identically however they tested.
+  const burner = { position: 'WR', rank: 2, pick: 40, age: 20.5, forty: 4.28, vert: 42, broad: 135 }
+  const plodder = { position: 'WR', rank: 2, pick: 40, age: 24.9, forty: 4.72, vert: 28, broad: 108 }
+  assert.equal(opportunityScore(burner), opportunityScore(plodder))
+
+  // And through the board builder, end to end.
+  const intel = {
+    players: {
+      1: { name: 'Burner', pos: 'WR', rank: 2, pick: 40, round: 2, ranks: [], age: 20.5, forty: 4.28 },
+      2: { name: 'Plodder', pos: 'WR', rank: 2, pick: 40, round: 2, ranks: [], age: 24.9, forty: 4.72 },
+    },
+  }
+  const [a, b] = buildRookieResearch(
+    [{ sleeperId: '1', name: 'Burner', position: 'WR', value: 1000 },
+     { sleeperId: '2', name: 'Plodder', position: 'WR', value: 1000 }], intel)
+  assert.equal(a.score, b.score)
+  // …but both still carry the measurables through for display.
+  assert.equal(a.forty, 4.28)
+  assert.equal(b.ageAtDraft, 24.9)
+})
+
+test('a drill z is signed so better is always positive, whichever way the drill runs', () => {
+  // The 40 is a time (lower is better); the vertical is a height (higher is
+  // better). Both must read positive when the rookie is good at them, or the
+  // band text says "elite" to the slowest player in the class.
+  const fastWR = measurableZ('WR', 'forty', COMBINE_BASELINE.WR.forty.mean - 2 * COMBINE_BASELINE.WR.forty.sd)
+  const slowWR = measurableZ('WR', 'forty', COMBINE_BASELINE.WR.forty.mean + 2 * COMBINE_BASELINE.WR.forty.sd)
+  assert.ok(fastWR > 0 && slowWR < 0)
+  assert.ok(measurableZ('WR', 'vert', COMBINE_BASELINE.WR.vert.mean + 3) > 0)
+  // The baseline is per position: the same 4.60 is slow for a WR, quick for a TE.
+  assert.ok(measurableZ('TE', 'forty', 4.6) > measurableZ('WR', 'forty', 4.6))
+})
+
+test('a missing measurement is absent, never substituted with an average', () => {
+  // Rule 7's spirit. Only 49 of the 2026 class ran a 40 — the rest must show
+  // nothing rather than silently score as league-average.
+  assert.equal(measurableZ('WR', 'forty', null), null)
+  assert.equal(measurableZ('WR', 'forty', undefined), null)
+  assert.equal(measurableZ('DEF', 'forty', 4.5), null)
+  assert.equal(ageAtDraftZ('WR', null), null)
+  assert.equal(bandOf(null), null)
+  assert.deepEqual(measurables({ position: 'WR' }), [])
+  assert.deepEqual(measurables(null), [])
+  assert.equal(ageAtDraftRead('WR', null), null)
+})
+
+test('age at draft reads younger-is-positive, against his own position', () => {
+  // Every position sits within a year of 22.2 with sd under 1.1, which is why
+  // the read is a qualifier and not a number pretending to be a projection.
+  assert.ok(ageAtDraftZ('WR', 21) > 0)
+  assert.ok(ageAtDraftZ('WR', 24) < 0)
+  assert.match(ageAtDraftRead('WR', 20.8).text, /young for a WR/)
+  // "an RB", not "a RB" — RB is the one position read as a vowel sound.
+  assert.match(ageAtDraftRead('RB', 20.8).text, /young for an RB/)
+  assert.equal(positionArticle('RB'), 'an')
+  assert.equal(positionArticle('WR'), 'a')
+  assert.match(ageAtDraftRead('WR', 24.5).text, /old for a WR/)
+  assert.match(ageAtDraftRead('WR', 22.2).text, /typical for a WR/)
+  // A QB is drafted older than a WR, so the same age reads differently.
+  assert.ok(ageAtDraftZ('QB', 22.2) > ageAtDraftZ('WR', 22.2))
+})
+
+test('only the well-covered drills ship, and every one has a full baseline', () => {
+  // Cone and shuttle are missing for more than half the population, so a band
+  // from them would mostly be absent — they are deliberately not carried.
+  assert.deepEqual(Object.keys(COMBINE_DRILLS), ['forty', 'vert', 'broad'])
+  for (const pos of ['QB', 'RB', 'WR', 'TE']) {
+    assert.ok(AGE_BASELINE[pos]?.sd > 0, `${pos} needs an age baseline`)
+    for (const drill of Object.keys(COMBINE_DRILLS)) {
+      const b = COMBINE_BASELINE[pos]?.[drill]
+      assert.ok(b?.sd > 0, `${pos}/${drill} needs a baseline`)
+      assert.equal(typeof b.higherIsBetter, 'boolean')
+    }
+  }
+  // The 40 is the one drill where lower wins.
+  assert.equal(COMBINE_BASELINE.WR.forty.higherIsBetter, false)
+  assert.equal(COMBINE_BASELINE.WR.vert.higherIsBetter, true)
 })
