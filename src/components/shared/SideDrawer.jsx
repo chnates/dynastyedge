@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   Zap, Users, ArrowLeftRight, Trophy, FileText, Newspaper,
-  RefreshCw, Sun, Moon, LogOut, Check, X, Loader2,
+  RefreshCw, Sun, Moon, LogOut, Check, X, Loader2, ArrowDownToLine,
 } from 'lucide-react'
 import DynastyEdgeLogo from './DynastyEdgeLogo'
 import TeamAvatar from './TeamAvatar'
@@ -107,6 +107,8 @@ export default function SideDrawer({
   onClose,
   isDark,
   onToggleTheme,
+  updateAvailable = false,
+  onApplyUpdate,
 }) {
   const { league, sleeperRetry, fcRetry, sleeperFetchedAt, fcFetchedAt } = useLeagueContext()
   const { clearIdentity } = useIdentity()
@@ -352,6 +354,20 @@ export default function SideDrawer({
         {/* Utility controls */}
         <div className="px-3 pt-2 pb-4 shrink-0">
           <div className="h-px bg-border-default mx-2 mb-3" />
+
+          {/* Only rendered when the running bundle is behind the server's —
+              see useAppVersion.js. Cold starts fix themselves silently, so
+              this is the mid-session case: reloading now would be rude, so we
+              offer it instead. */}
+          {updateAvailable && (
+            <button
+              onClick={onApplyUpdate}
+              className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-accent hover:bg-accent/10 transition-colors"
+            >
+              <ArrowDownToLine size={18} strokeWidth={2} />
+              <span className="font-body font-medium text-[14px]">Update available — Reload</span>
+            </button>
+          )}
 
           <button
             onClick={handleRefresh}

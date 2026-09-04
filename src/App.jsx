@@ -4,6 +4,7 @@ import { Menu, Search } from 'lucide-react'
 import { useLeague } from './hooks/useLeague'
 import { useTheme } from './hooks/useTheme'
 import { useIdentity } from './hooks/useIdentity'
+import { useAppVersion } from './hooks/useAppVersion'
 import { LeagueContext } from './context/LeagueContext'
 import SideDrawer from './components/shared/SideDrawer'
 import LoadingSpinner from './components/shared/LoadingSpinner'
@@ -62,7 +63,7 @@ function getSectionName(pathname) {
   return 'DynastyEdge'
 }
 
-function AppShell({ leagueData }) {
+function AppShell({ leagueData, updateAvailable, onApplyUpdate }) {
   const location = useLocation()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -115,6 +116,8 @@ function AppShell({ leagueData }) {
         onClose={() => setDrawerOpen(false)}
         isDark={isDark}
         onToggleTheme={toggleTheme}
+        updateAvailable={updateAvailable}
+        onApplyUpdate={onApplyUpdate}
       />
 
       {/* Opaque header that also fills the safe-area (status-bar) region, so
@@ -235,13 +238,21 @@ function AppShell({ leagueData }) {
 export default function App() {
   const leagueData = useLeague()
   const { rosterId } = useIdentity()
+  // Above the identity gate on purpose: a stale bundle that boots to the login
+  // screen must self-heal too, and the check has nothing to do with which team
+  // you are.
+  const { updateAvailable, applyUpdate } = useAppVersion()
   return (
     <LeagueContext.Provider value={leagueData}>
       {rosterId == null ? (
         <LoginScreen />
       ) : (
         <HashRouter>
-          <AppShell leagueData={leagueData} />
+          <AppShell
+            leagueData={leagueData}
+            updateAvailable={updateAvailable}
+            onApplyUpdate={applyUpdate}
+          />
         </HashRouter>
       )}
     </LeagueContext.Provider>

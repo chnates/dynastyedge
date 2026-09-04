@@ -1746,6 +1746,10 @@ that feed never loaded (standard best-effort contract — never an error).
 Reads the session caches via `loadNewsFeed` / `loadHistory` on drawer open —
 zero extra requests.
 
+An **"Update available — Reload"** row appears above Refresh only when the
+running bundle is behind the deployed one (see App version self-heal). Cold
+starts fix themselves silently, so this row is the mid-session case.
+
 **Refresh** is one button over five independent sources fired in parallel and
 non-blocking: a `phase` state drives the button (idle → refreshing → done)
 while each source tracks its own loading/done/error tick. Live APIs keep
@@ -2359,12 +2363,14 @@ dynastyedge/
 │   │   ├── useScrollLock.js     ← freezes <main> while a bottom sheet is open
 │   │   ├── useSheetDrag.js      ← swipe-down-to-dismiss gesture for bottom sheets
 │   │   ├── useTheme.js          ← dark/light toggle
+│   │   ├── useAppVersion.js     ← build-id self-heal: reload off cached HTML (iOS standalone)
 │   │   ├── usePlayerNews.js     ← per-player injury status
 │   │   ├── useSleeperRookies.js ← rookie map derived from usePlayerDB
 │   │   ├── useSleeperDraft.js   ← live rookie draft sync (order, picks, refresh/polling)
 │   │   └── useRookieADP.js
 │   ├── utils/
 │   │   ├── fetchJSON.js         ← shared fetch wrapper with timeout — use everywhere
+│   │   ├── appVersion.js        ← pure reload-URL builder for the version self-heal
 │   │   ├── positionColors.js    ← position identity color class maps — use everywhere
 │   │   ├── roundColors.js       ← pick round color classes (PickBadge, TeamCard)
 │   │   ├── tierColors.js        ← win-window tier colors (badge + banner chips)
@@ -2406,6 +2412,7 @@ dynastyedge/
 │   ├── pickCapital.test.mjs         ← pick ownership resolution, round-median pick values, year weights
 │   ├── pickTrades.test.mjs          ← slot tiers (as coded), slot pricing fallback, package constraints
 │   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
+│   ├── appVersion.test.mjs          ← reload URL: ?v= before the hash (HashRouter), encoding, null build id
 │   ├── tradeTargets.test.mjs        ← Targets ranking: deficit gate + value floor league-wide, team-scoped mode keeps depth (never empty), fillsNeed flag
 │   ├── tradeAnalysis.test.mjs       ← verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge
 │   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
@@ -2424,13 +2431,13 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 83 / # pass 78 /
+honestly:** instead of "cannot find module" it prints `# tests 88 / # pass 83 /
 # fail 5`, which reads like a code regression. The five files that fail are the
 ones transitively importing `react` (`tradeAnalysis.js` → `recommendations.js`
 → `useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
 `draftLive` loading their hooks) — the file fails to load, so its tests never
-run and the count silently drops from **131** to 83. `npm run build` in the
-same state fails with `sh: 1: vite: not found`. **If the test count isn't 131,
+run and the count silently drops from **136** to 88. `npm run build` in the
+same state fails with `sh: 1: vite: not found`. **If the test count isn't 136,
 run `npm ci` before debugging anything.** (Both numbers re-measured 2026-08-08
 by renaming `node_modules` aside; the previously documented 47/44/3 was stale.)
 
@@ -2554,17 +2561,64 @@ jobs:
 
 ### Vite config
 
-File: `vite.config.js` — set `base` to your repo name:
+File: `vite.config.js` — sets `base` to the repo name, and stamps one build id
+into **both** the bundle (`__BUILD_ID__`, via `define`) and an emitted
+`version.json` (via a tiny inline plugin). The app compares the two — see
+**App version self-heal** below.
 
 ```js
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-
 export default defineConfig({
-  plugins: [react()],
-  base: '/dynastyedge/',   // must match your GitHub repo name exactly
+  plugins: [react(), buildVersionPlugin()],
+  base: '/dynastyedge/',            // must match the GitHub repo name exactly
+  define: { __BUILD_ID__: JSON.stringify(BUILD_ID) },
 })
 ```
+
+`version.json` must be **emitted by the build**, never committed under
+`public/` — a checked-in file would have to be bumped by hand and would
+silently drift from the compiled-in id, which is the one thing this mechanism
+cannot tolerate (drift either way means updates are never noticed, or every
+launch reloads). `__BUILD_ID__` is declared in `eslint.config.js`'s browser
+globals; `npm run dev` emits no `version.json`, so the check no-ops in dev.
+
+### App version self-heal
+
+**The problem:** on iOS a home-screen (standalone) web app keeps its own WebKit
+cache, and GitHub Pages serves `index.html` with a fixed
+`cache-control: max-age=600` that Pages gives **no way to configure**. A cold
+launch can therefore boot **cached HTML referencing the old hashed chunks**, and
+nothing in the running app notices. Reloading doesn't help — same URL, same
+cached entry. Before this, the only reliable fix was deleting and re-adding the
+home-screen app. (Confirmed 2026-09-04: the deploy was verified byte-identical
+on the CDN while the phone still showed the previous build.)
+
+**The mechanism (`useAppVersion` + `utils/appVersion.js`):** the running bundle
+carries its own build id and fetches `version.json` to ask the server what the
+current one is. A mismatch means the HTML on screen is stale.
+
+- **Cold start reloads silently** — nothing is in flight to lose.
+- **On focus it only reports** (`updateAvailable`), surfaced as an
+  "Update available — Reload" row above Refresh in the side drawer. Yanking the
+  page out from under a half-built trade is worse than a stale render.
+- The reload target is `?v=<build id>` placed **before** the hash: it must be a
+  real URL change (a hash-only edit reuses the same cache entry) and the app is
+  a HashRouter, so a query after the hash would fold into the route.
+- **Loop guard:** sessionStorage `dynastyedge_version_reload` records which
+  build id was already reloaded toward. If the app is still stale afterwards the
+  reload didn't land, so it never retries — it falls back to the drawer row.
+  Without this, a reload that fails to take would cycle forever.
+- The check is a **unique query per request** (`?t=<now>`) rather than
+  `cache: 'no-store'`: the whole problem is caches that don't honor what
+  they're told, and a URL nothing has seen can't be served from any of them.
+- The hook is called **above the identity gate** in `App`, so a stale bundle
+  that boots to the login screen self-heals too.
+- **Best-effort, fails open:** any fetch failure simply offers no update. It is
+  deliberately **not** a service worker — a SW would also solve this, but a bad
+  one can pin the app to a stale build permanently with no delete-and-re-add
+  escape hatch left. This mechanism can only ever fail open.
+- Caveat: the check runs after boot, so the first launch after a deploy still
+  paints the old UI briefly before reloading. It removes the manual step, not
+  the round trip.
 
 ### GitHub Pages setting (one-time, done manually)
 
@@ -2699,6 +2753,9 @@ showing a dead season and never surfaces the new third year.
    take effect after the user removes and re-adds the home-screen app.
    Icon link tags carry a `?v=N` query — bump it to bust Safari's per-site
    icon cache when the logo changes.
+   **App code updates are handled separately** — the standalone app's HTML
+   cache used to require the same remove-and-re-add; it no longer does. See
+   **App version self-heal** under GitHub Pages Deployment.
 1. **Bottom sheets:** The app's scroll container is `<main>` — the body never
    scrolls. Every bottom sheet (PlayerProfileDrawer, RosterAnalysisSheet,
    trade add sheet, and any future sheet) must: call `useScrollLock()` while
@@ -2725,7 +2782,8 @@ showing a dead season and never surfaces the new third year.
    sessionStorage `dynastyedge_league_sort` / `dynastyedge_league_pos` /
    `dynastyedge_league_tier` (League tab filters, preserved across drill-downs) ·
    sessionStorage `dynastyedge_trade_draft` (in-progress trade) ·
-   sessionStorage `dynastyedge_targets_team` (Trade › Targets team filter).
+   sessionStorage `dynastyedge_targets_team` (Trade › Targets team filter) ·
+   sessionStorage `dynastyedge_version_reload` (app-version reload loop guard).
    **Roster-scoped keys** — `dynastyedge_action_dismissals`,
    `dynastyedge_trade_draft`, and `dynastyedge_targets_team` — are wiped by
    `useIdentity` on any identity change; league-wide caches are not. Add a
