@@ -143,50 +143,70 @@ console.log(idJoinWorks
   : '  VERDICT: the ids are NOT the same. A shipped join would need name matching,\n' +
     '           which this pipeline does not do unguarded. Report before building 3b.')
 
-// ── 3. Do the production endpoints carry an athlete id? ─────────────────────
-// Dominator rating = a player's share of his TEAM's receiving/rushing
-// production, so we need per-player season stats AND their team totals.
-console.log('\n=== 3. production endpoints — shape, ids, and call cost ===')
-const probeTeam = truth.find(p => p.college)?.college ?? 'Ohio State'
-for (const [label, path] of [
-  ['stats/player/season (receiving)', `/stats/player/season?year=${PROBE_SEASON}&team=${encodeURIComponent(probeTeam)}&category=receiving`],
-  ['player/usage', `/player/usage?year=${PROBE_SEASON}&team=${encodeURIComponent(probeTeam)}`],
-  ['player/season/overview', `/player/season/overview?year=${PROBE_SEASON}&team=${encodeURIComponent(probeTeam)}`],
-]) {
+// ── 3. The production payload — does it carry the athlete id? ───────────────
+// This is the second load-bearing question. A dominator rating needs a
+// player's share of his TEAM's production, so we need per-player season stats
+// that we can (a) attribute to a player BY ID and (b) sum within a team.
+//
+// Probe v1 learned that querying by `team=` returns 0 rows, because CFBD's
+// team names are its own ("Miami", not nflverse's "Miami (FL)") — a
+// name-matched team join we do not want anyway. Omitting `team` returns the
+// entire FBS for a year in one call, which is both cheaper and ID-clean.
+console.log('\n=== 3. /stats/player/season, whole-FBS per category ===')
+const statRows = new Map()   // category -> rows
+for (const category of ['receiving', 'rushing']) {
   const t0 = Date.now()
-  const { status, body, headers } = await cfbd(path)
+  const { status, body, headers } = await cfbd(`/stats/player/season?year=${PROBE_SEASON}&category=${category}`)
   const ms = Date.now() - t0
-  const n = Array.isArray(body) ? body.length : null
-  console.log(`  ${label}: ${status}${n != null ? ` · ${n} rows` : ''} · ${ms}ms`)
-  if (status === 200 && Array.isArray(body) && body[0]) {
-    console.log(`    keys: ${keysOf(body[0])}`)
-    console.log(`    sample: ${JSON.stringify(body[0]).slice(0, 260)}`)
-  } else if (status !== 200) {
-    console.log(`    body: ${String(body).slice(0, 220)}`)
-    if (status === 402 || status === 403) {
-      console.log('    ^ this endpoint may sit behind a PAID CFBD tier on this key.')
-    }
-  }
+  if (status !== 200 || !Array.isArray(body)) { fail(`${category} -> ${status}: ${String(body).slice(0, 200)}`); continue }
+  statRows.set(category, body)
+  console.log(`  ${category}: ${status} · ${body.length} rows · ${ms}ms`)
+  console.log(`    keys: ${keysOf(body[0])}`)
+  console.log(`    sample: ${JSON.stringify(body[0])}`)
+  const types = [...new Set(body.map(r => r.statType))].sort()
+  console.log(`    statTypes: ${types.join(', ')}`)
+  const idKey = ['playerId', 'player_id', 'athleteId', 'id'].find(k => body[0][k] != null)
+  console.log(`    athlete id field: ${idKey ?? 'NONE — rows are name-only'}`)
   const limit = headers.get('x-ratelimit-limit') || headers.get('ratelimit-limit')
   const remain = headers.get('x-ratelimit-remaining') || headers.get('ratelimit-remaining')
   if (limit || remain) console.log(`    rate limit: ${remain ?? '?'} of ${limit ?? '?'} remaining`)
 }
 
-// ── 4. How many calls would a real run cost? ────────────────────────────────
-console.log('\n=== 4. call budget for a daily run ===')
-const colleges = new Set(truth.map(p => p.college).filter(Boolean))
-console.log(`  ${PROBE_CLASS} class spans ${colleges.size} colleges`)
-console.log(`  one /stats/player/season per (college, season) over 3 college seasons` +
-  ` = ~${colleges.size * 3} calls/run`)
-console.log('  (a per-year, all-teams call would be 3 total if the endpoint allows omitting team —')
-console.log('   tested next)')
+// ── 4. Coverage: how many of OUR rookies are actually in that payload? ──────
+// The join is only useful if it lands. Measured against the whole draft class,
+// by ID, with no name matching.
+console.log('\n=== 4. coverage of the ' + PROBE_CLASS + ' class, joined BY ID ===')
+const rec = statRows.get('receiving') ?? []
+const rush = statRows.get('rushing') ?? []
+const idKey = ['playerId', 'player_id', 'athleteId', 'id'].find(k => rec[0]?.[k] != null)
+if (!idKey) {
+  fail('no athlete id on the stats rows — a shipped join would need name matching')
+} else {
+  const seen = new Set([...rec, ...rush].map(r => String(r[idKey])))
+  const hit = truth.filter(p => seen.has(String(p.espnId)))
+  console.log(`  ${hit.length}/${truth.length} of the ${PROBE_CLASS} class appear in the ${PROBE_SEASON} payload by ESPN id`)
+  console.log(`  (a rookie drafted in ${PROBE_CLASS} played his last college season in ${PROBE_SEASON - 1};`)
+  console.log(`   ${PROBE_SEASON} is used here only to prove the join, so a partial hit rate is expected)`)
+  const byPos = {}
+  for (const p of truth) (byPos[p.pos] ??= [0, 0])[seen.has(String(p.espnId)) ? 0 : 1]++
+  console.log('  by position: ' + Object.entries(byPos).map(([k, [a, b]]) => `${k} ${a}/${a + b}`).join('  '))
+
+  // Team totals: can a denominator be built by summing within team?
+  const teamKey = ['team'].find(k => rec[0]?.[k] != null)
+  console.log(`  team field on a row: ${teamKey ?? 'NONE'} — ` +
+    (teamKey ? 'team totals are a group-by, no extra call' : 'NO denominator without another call'))
+}
+
+// ── 5. Per-player season overview (the other candidate shape) ───────────────
+console.log('\n=== 5. /player/season/overview needs a playerId — does an ESPN id work? ===')
 {
-  const t0 = Date.now()
-  const { status, body } = await cfbd(`/stats/player/season?year=${PROBE_SEASON}&category=receiving`)
-  const ms = Date.now() - t0
-  console.log(`  /stats/player/season?year=${PROBE_SEASON}&category=receiving (no team): ${status}` +
-    `${Array.isArray(body) ? ` · ${body.length} rows` : ''} · ${ms}ms`)
-  if (status !== 200) console.log(`    body: ${String(body).slice(0, 200)}`)
+  const probeId = truth.find(p => p.espnId)?.espnId
+  const { status, body } = await cfbd(`/player/season/overview?playerId=${probeId}`)
+  console.log(`  playerId=${probeId} -> ${status}` + (Array.isArray(body) ? ` · ${body.length} rows` : ''))
+  if (status === 200 && Array.isArray(body) && body[0]) console.log(`    keys: ${keysOf(body[0])}`)
+  else if (status !== 200) console.log(`    body: ${String(body).slice(0, 200)}`)
+  console.log('  NOTE: per-player endpoints cost one call each (~80/class/season).')
+  console.log('  The whole-FBS category call above is 1 call per (year, category) and is preferred.')
 }
 
 console.log(`\n=== done, ${failures} failure(s) ===`)
