@@ -5,9 +5,8 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-08-14 (ACTIVE-2 closed — the rookie-intel pipeline
-published its first run and was verified end to end; trigger sweep re-run, none
-of OPEN-1/2/3/5 has fired).
+**Last reviewed:** 2026-09-04 (owner approved a four-phase build plan — see
+`docs/build-plan-2026-09.md`, now the active work queue).
 
 **How to use it:**
 - Each item states its **trigger** — the condition that makes it ready. An item
@@ -22,10 +21,49 @@ of OPEN-1/2/3/5 has fired).
 
 ## 1. Active
 
-**Nothing is active.** ACTIVE-1 and ACTIVE-2 are both closed (§3); every
-deferred item's trigger was re-checked on 2026-08-14 and none has fired. The
-next work here is calendar-driven: the rookie draft (OPEN-2) and Week 1
-(OPEN-5), neither of which has a date yet.
+### ACTIVE-3 — the September 2026 build plan (owner-approved 2026-09-04)
+
+**`docs/build-plan-2026-09.md` is the active work queue.** It carries four
+phases, each with its own kickoff prompt, verification criteria, and — where the
+evidence didn't support building — an explicit decision not to. It came out of
+`docs/analysis/optimizer-data-sources-2026-09.md`; read that study's REVISION
+block before touching any of it, because two of its original conclusions were
+overturned.
+
+- **Phase 1** — surface what the app already has: confidence percentages on
+  lineup moves, the DEF free-agent fix, weekly projections in the free-agent
+  list, snap share on player profiles. App-only, no pipelines.
+- **Phase 2** — news coverage: FantasyPros' feed is dead (HTTP 404) and only
+  3 of 25 rostered players appear in the live feed. Pre-registered target: ≥12.
+- **Phase 3** — rookie research split into "impact now" vs "long-term stash",
+  adding age + athleticism from nflverse and (gated on a key) college
+  production. **3c is a hard gate:** if the long-term score doesn't beat draft
+  capital out of sample, report the null and stop.
+- **Phase 4** — a real valuation consensus. FantasyCalc is currently the app's
+  only valuation source. Three are obtainable free and ID-joinable: FantasyCalc
+  (actual trades), DynastyProcess (FantasyPros expert consensus), KeepTradeCut
+  (crowdsourced votes). **FantasyCalc and KTC agree at 0.975 even among the top
+  25; DynastyProcess is the lone outlier at ~0.51** — market view vs expert
+  view. Archive all three daily first (starts the clock on "which source
+  leads?"), then surface the disagreement. Do not average them; do not replace
+  FantasyCalc. See the plan's §10.
+
+- ~~**Phase 4 (original)** — the breakout alert~~ **CUT 2026-09-04.** It became testable
+  when nflverse's historical injury reports were found, and it tested null:
+  players whose position-mate was ruled Out beat their projection by +1.13
+  against a +0.98 control (n=318). Sleeper had already raised their projections.
+  See the plan's §9c.
+
+**Blocked, owner action:** Phase 3b needs a free CollegeFootballData API key
+stored as repo secret `CFBD_API_KEY`. Nothing else in the plan is blocked.
+
+**Do not** re-test multi-source projections, a boom/bust score, weekly defense
+streaming, or usage-as-prediction. All four were measured and rejected; §0 of
+the plan carries the numbers.
+
+The previously-listed deferred items below are unchanged — every trigger was
+re-checked 2026-08-14 and none has fired. The calendar-driven ones (the rookie
+draft, OPEN-2; Week 1, OPEN-5) still have no date.
 
 ### Verified 2026-08-14 — ACTIVE-2 closed: the rookie-intel pipeline's first run
 
