@@ -22,6 +22,7 @@
 import { ROSTER_SLOTS } from '../constants'
 import { selectOptimalStarters } from './lineupBuild'
 import { getProjPts, getAvailability } from './projections'
+import { confidenceForGap, MIN_MEANINGFUL_GAIN } from './lineupConfidence'
 
 // A blocked player scores 0 no matter what Sleeper projects for him. An "Out"
 // starter carrying a 12.4 projection would otherwise inflate the current total
@@ -146,13 +147,21 @@ export function buildLineupMoves({ players, lineup, projMap, playerStatuses, pla
     const outEntry = pickIdx >= 0 ? unmatched.splice(pickIdx, 1)[0] : null
     const direct = outEntry ? isEligibleForSlot(inEntry.player, slotOfCurrent.get(outEntry.id)) : true
     const gain = inEntry.effPts - (outEntry?.effPts ?? 0)
+    const mustFix = !outEntry || outEntry.availability.blocked
     moves.push({
       key: `${outEntry?.id ?? 'empty'}->${inEntry.id}`,
       out: outEntry,
       in: inEntry,
       gain,
       direct,
-      mustFix: !outEntry || outEntry.availability.blocked,
+      mustFix,
+      // Confidence answers "is the higher-projected player the right start?",
+      // so it only applies where that is genuinely in doubt. A must-fix is a
+      // bye/Out/empty slot: the outgoing side scores 0 by rule, not by
+      // projection, and dressing that certainty up as "87% likely" would be
+      // borrowing the curve's authority for a question it never measured.
+      confidence: mustFix ? null : confidenceForGap(gain),
+      meaningful: mustFix || gain >= MIN_MEANINGFUL_GAIN,
       reason: reasonFor({ outEntry, inEntry, gain }),
     })
   })
@@ -166,6 +175,10 @@ export function buildLineupMoves({ players, lineup, projMap, playerStatuses, pla
       gain: -outEntry.effPts,
       direct: true,
       mustFix: outEntry.availability.blocked,
+      confidence: null,
+      // Nobody can replace him — there is no alternative to be unsure about,
+      // and the move is the only honest thing to show either way.
+      meaningful: true,
       reason: reasonFor({ outEntry, inEntry: null, gain: 0 }),
     })
   })
@@ -193,7 +206,12 @@ export function buildLineupMoves({ players, lineup, projMap, playerStatuses, pla
     optimalTotal,
     pointsLeft: Math.max(0, optimalTotal - currentTotal),
     mustFixCount: moves.filter(m => m.mustFix).length,
-    upgradeCount: moves.filter(m => !m.mustFix).length,
+    // Upgrades worth presenting AS upgrades. Sub-1-point swaps are 52/48 coin
+    // flips (see lineupConfidence.js), so they are counted separately and the
+    // UI demotes them — but they stay in `moves`, because the headline is
+    // optimal − current and the per-move gains must keep summing to it.
+    upgradeCount: moves.filter(m => !m.mustFix && m.meaningful).length,
+    coinFlipCount: moves.filter(m => !m.meaningful).length,
     emptySlots: slots.filter(s => !s.entry).length,
   }
 }

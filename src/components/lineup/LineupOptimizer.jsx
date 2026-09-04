@@ -243,6 +243,7 @@ export default function LineupOptimizer() {
         moves={moves}
         mustFixCount={analysis.mustFixCount}
         upgradeCount={analysis.upgradeCount}
+        coinFlipCount={analysis.coinFlipCount}
         dirty={dirty}
         onApplyAll={() => { setLineup([...optimalByIdx]); setSwapArm(null) }}
         onReset={() => { setLineup(baseLineup); setSwapArm(null) }}
@@ -331,12 +332,16 @@ export default function LineupOptimizer() {
         <PlayerProfileDrawer player={profilePlayer} onClose={() => setProfilePlayer(null)} />
       )}
 
-      {faSlotIdx != null && fcValues?.playerMap && (
+      {/* NOT gated on FantasyCalc: it ranks no defenses, so requiring it here
+          is what emptied the DEF drawer. `playerStatuses` is the shared player
+          DB and resolves everyone FantasyCalc misses. */}
+      {faSlotIdx != null && (
         <FreeAgentDrawer
           slot={ROSTER_SLOTS[faSlotIdx]}
           projMap={lineupData.projMap}
           allRosters={league.allRosters}
-          fcPlayerMap={fcValues.playerMap}
+          fcPlayerMap={fcValues?.playerMap ?? {}}
+          playerDB={lineupData.playerStatuses}
           onClose={() => setFaSlotIdx(null)}
         />
       )}

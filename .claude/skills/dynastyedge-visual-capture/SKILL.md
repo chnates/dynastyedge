@@ -48,7 +48,7 @@ sheet) · `--url BASE` · `--wait MS` · `--stub SUBSTRING=FILE` (serve a local
 file for any external URL containing SUBSTRING; repeatable) ·
 `--seed-session KEY=VALUE` (seed sessionStorage before boot; repeatable) ·
 `--click TEXT` (click the first button/link whose accessible name matches,
-then shoot).
+then shoot; **repeatable**, applied in order).
 
 **`--seed-session` and `--click` reach UI state the URL can't address.** Some
 state lives only behind a control the user taps or in a storage key, so a
@@ -65,6 +65,10 @@ node scripts/dev/screenshot-app.mjs --route /trade/whats-fair \
   --seed-session dynastyedge_targets_team=2
 # a nav-state deep link: land on Partners, tap through, shoot where it lands
 node scripts/dev/screenshot-app.mjs --route /trade --click "See their targets"
+# two taps deep, no URL and no storage key in between: the Optimizer's waiver
+# drawer only exists once a slot's swap is armed
+node scripts/dev/screenshot-app.mjs --route /my-team/lineup \
+  --click "Swap Kansas City Chiefs" --click "Waiver options"
 ```
 
 **`--stub` is how you screenshot a feature whose Actions feed doesn't exist

@@ -2,6 +2,8 @@ import { useCallback, useMemo, useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useSleeperRookies } from '../../hooks/useSleeperRookies'
+import { usePlayerDB } from '../../hooks/usePlayerDB'
+import { useWeeklyProjections } from '../../hooks/weeklyProjections'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { recommendFreeAgents } from '../../utils/recommendations'
 import { Card, Chip, SearchInput } from '../ui'
@@ -12,11 +14,15 @@ import TrendArrow from '../shared/TrendArrow'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
 
-const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE']
-const SORT_OPTIONS = [
-  { id: 'value', label: 'Value' },
-  { id: 'age',   label: 'Age'   },
-]
+// DEF belongs here: the league starts one, and FantasyCalc ranks zero
+// defenses — so filtering the pool to FantasyCalc's positions (the old
+// ['QB','RB','WR','TE']) made every available defense invisible. See
+// utils/freeAgents.js for the same blind spot on the Optimizer's waiver list.
+const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'DEF']
+const VALUED_POSITIONS = ['QB', 'RB', 'WR', 'TE']
+const SORT_VALUE = { id: 'value', label: 'Value' }
+const SORT_PROJ  = { id: 'proj',  label: 'Proj'  }
+const SORT_AGE   = { id: 'age',   label: 'Age'   }
 
 function FillsNeedBadge() {
   return (
@@ -83,6 +89,10 @@ function RecommendedPickups({ recs, onSelect }) {
 export default function FreeAgentsView() {
   const { league, loading, error, retry, values } = useLeagueContext()
   const { sleeperRookieMap } = useSleeperRookies()
+  const { playerDB } = usePlayerDB()
+  // Best-effort and in-season only: a failure just hides the Proj column.
+  const { projMap, week: projWeek, isOffseason } = useWeeklyProjections()
+  const showProj = !isOffseason && !!projMap
 
   const [posFilter, setPosFilter]     = useState('ALL')
   const [sortMode, setSortMode]       = useState('value')
@@ -137,21 +147,54 @@ export default function FreeAgentsView() {
     return byPos
   }, [league])
 
-  const freeAgents = useMemo(() => {
-    if (!league || !values?.playerMap) return []
-
+  const rosteredIds = useMemo(() => {
     const rostered = new Set()
-    league.allRosters.forEach(r =>
+    ;(league?.allRosters ?? []).forEach(r =>
       r.players.forEach(p => rostered.add(p.sleeperId))
     )
+    return rostered
+  }, [league])
 
+  // The dynasty-valued pool. This is what the recommendation engine scores —
+  // it reasons entirely in FantasyCalc value, so defenses must never enter it.
+  const freeAgents = useMemo(() => {
+    if (!league || !values?.playerMap) return []
     return Object.values(values.playerMap)
       .filter(p =>
-        !rostered.has(p.sleeperId) &&
-        ['QB', 'RB', 'WR', 'TE'].includes(p.position) &&
+        !rosteredIds.has(p.sleeperId) &&
+        VALUED_POSITIONS.includes(p.position) &&
         (p.value ?? 0) > 0
       )
-  }, [league, values])
+  }, [league, values, rosteredIds])
+
+  // Available defenses, resolved from the shared player DB — FantasyCalc ranks
+  // none, so they carry no dynasty value and show `—` (rule 7). Without this
+  // the DEF chip would be a filter over an empty set.
+  const availableDefenses = useMemo(() => {
+    if (!league || !playerDB) return []
+    return Object.entries(playerDB)
+      .filter(([id, p]) => p.position === 'DEF' && p.team && !rosteredIds.has(id))
+      .map(([id, p]) => ({
+        sleeperId: id,
+        name: p.name,
+        position: 'DEF',
+        team: p.team,
+        value: null,
+        age: null,
+        overallRank: null,
+        trend30Day: 0,
+      }))
+  }, [league, playerDB, rosteredIds])
+
+  const allFreeAgents = useMemo(
+    () => [...freeAgents, ...availableDefenses],
+    [freeAgents, availableDefenses],
+  )
+
+  const projOf = useCallback(
+    p => (showProj ? (projMap[p.sleeperId]?.pts_half_ppr ?? 0) : null),
+    [showProj, projMap],
+  )
 
   // Proactive pickup recommendations — respects the position filter so it
   // narrows with the list, but ignores search (it's advice, not a lookup).
@@ -162,12 +205,15 @@ export default function FreeAgentsView() {
   }, [freeAgents, league, posFilter])
 
   const filtered = useMemo(() => {
-    let list = freeAgents
+    let list = allFreeAgents
 
     if (posFilter !== 'ALL') list = list.filter(p => p.position === posFilter)
 
+    // A value-based filter, so it only applies to positions that HAVE a value.
     if (upgradesOnly) {
-      list = list.filter(p => (p.value ?? 0) > (myWorstByPosition[p.position] ?? 0))
+      list = list.filter(p =>
+        VALUED_POSITIONS.includes(p.position) &&
+        (p.value ?? 0) > (myWorstByPosition[p.position] ?? 0))
     }
 
     if (hideRookies) {
@@ -179,11 +225,20 @@ export default function FreeAgentsView() {
       list = list.filter(p => p.name?.toLowerCase().includes(q))
     }
 
-    if (sortMode === 'value') list = [...list].sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
-    else list = [...list].sort((a, b) => (a.age ?? 99) - (b.age ?? 99))
+    if (sortMode === 'proj') {
+      list = [...list].sort((a, b) => (projOf(b) ?? 0) - (projOf(a) ?? 0) || (b.value ?? 0) - (a.value ?? 0))
+    } else if (sortMode === 'value') {
+      list = [...list].sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
+    } else {
+      list = [...list].sort((a, b) => (a.age ?? 99) - (b.age ?? 99))
+    }
 
     return list
-  }, [freeAgents, posFilter, upgradesOnly, hideRookies, isRookie, search, sortMode, myWorstByPosition])
+  }, [allFreeAgents, posFilter, upgradesOnly, hideRookies, isRookie, search, sortMode, myWorstByPosition, projOf])
+
+  // Sorting by a projection that doesn't exist would silently reorder nothing.
+  const sortOptions = showProj ? [SORT_VALUE, SORT_PROJ, SORT_AGE] : [SORT_VALUE, SORT_AGE]
+  const activeSort = sortMode === 'proj' && !showProj ? 'value' : sortMode
 
   if (loading && !league) return <LoadingSpinner message="Loading league data…" />
   if (error && !league)   return <ErrorState message={error} onRetry={retry} />
@@ -226,14 +281,18 @@ export default function FreeAgentsView() {
         {/* Filter toggles */}
         <div className="mb-3">
           <div className="flex items-center gap-2">
-            <Chip
-              active={upgradesOnly}
-              activeClass="bg-success/20 text-success border border-success/30"
-              onClick={() => setUpgradesOnly(o => !o)}
-              className="rounded-lg tracking-wide"
-            >
-              Upgrades Only
-            </Chip>
+            {/* Upgrades Only compares dynasty value, which defenses don't have —
+                showing it under the DEF chip would filter the list to nothing. */}
+            {posFilter !== 'DEF' && (
+              <Chip
+                active={upgradesOnly}
+                activeClass="bg-success/20 text-success border border-success/30"
+                onClick={() => setUpgradesOnly(o => !o)}
+                className="rounded-lg tracking-wide"
+              >
+                Upgrades Only
+              </Chip>
+            )}
             <Chip
               active={hideRookies}
               activeClass="bg-warning/20 text-warning border border-warning/30"
@@ -243,7 +302,7 @@ export default function FreeAgentsView() {
               Hide Rookies
             </Chip>
           </div>
-          {upgradesOnly && (
+          {upgradesOnly && posFilter !== 'DEF' && (
             <p className="font-body text-[10px] text-text-tertiary leading-tight mt-1.5">
               Better than my worst {posFilter === 'ALL' ? 'at each position' : posFilter}
             </p>
@@ -251,16 +310,16 @@ export default function FreeAgentsView() {
         </div>
 
         {/* Sort + count row */}
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-1.5">
           <span className="font-body text-[11px] text-text-tertiary">
             {filtered.length} available
           </span>
           <div className="flex gap-1">
-            {SORT_OPTIONS.map(o => (
+            {sortOptions.map(o => (
               <Chip
                 key={o.id}
                 size="sm"
-                active={sortMode === o.id}
+                active={activeSort === o.id}
                 onClick={() => setSortMode(o.id)}
                 className="rounded tracking-wide"
               >
@@ -270,6 +329,18 @@ export default function FreeAgentsView() {
           </div>
         </div>
 
+        {/* Why the second axis exists. Sorting a WAIVER list by dynasty value
+            puts players who cannot score this week at the top — three of the
+            current dynasty top ten project 0.0. The projection level, by
+            contrast, sorts the waiver tier 12× across its range. */}
+        {showProj && (
+          <p className="font-body text-[10px] text-text-tertiary leading-snug mb-3">
+            {activeSort === 'proj'
+              ? `Week ${projWeek} projection. Among waiver-tier players a 0–2 projection means a 0.9% chance of a 15+ point game; 6–8 means 10.6%.`
+              : `Dynasty value first — tap Proj to rank by what they'd score in Week ${projWeek} instead.`}
+          </p>
+        )}
+
         {/* Player list */}
         {filtered.length === 0 ? (
           <p className="text-center text-text-tertiary font-body text-sm py-10">
@@ -277,14 +348,23 @@ export default function FreeAgentsView() {
               ? 'No players match your search.'
               : upgradesOnly
                 ? 'No free agents upgrade your roster at this position.'
-                : 'No free agents at this position.'
+                : posFilter === 'DEF'
+                  ? 'Every defense is rostered.'
+                  : 'No free agents at this position.'
             }
           </p>
         ) : (
           <div className="rounded-none bg-bg-card border border-border-default px-3">
+            <div className="flex items-center gap-2 pt-2 pb-1 border-b border-border-default font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">
+              <span className="flex-1 min-w-0" />
+              {showProj && <span className="w-9 text-right shrink-0">Proj</span>}
+              <span className="w-11 text-right shrink-0">Value</span>
+              <span className="w-4 shrink-0" />
+            </div>
             {filtered.map((player, i) => {
               const fillsNeed = needPositions.includes(player.position)
               const rookie = isRookie(player)
+              const proj = projOf(player) ?? 0
               return (
                 <button
                   key={player.sleeperId}
@@ -299,8 +379,13 @@ export default function FreeAgentsView() {
                     </span>
                     {rookie && <RookieBadge />}
                     {fillsNeed && <FillsNeedBadge />}
-                    <span className="font-mono text-sm font-medium text-accent tabular-nums flex-shrink-0">
-                      {(player.value ?? 0).toLocaleString()}
+                    {showProj && (
+                      <span className="font-mono text-sm font-semibold text-text-primary tabular-nums flex-shrink-0 w-9 text-right">
+                        {proj > 0 ? proj.toFixed(1) : '—'}
+                      </span>
+                    )}
+                    <span className="font-mono text-sm font-medium text-accent tabular-nums flex-shrink-0 w-11 text-right">
+                      {player.value ? player.value.toLocaleString() : '—'}
                     </span>
                     <TrendArrow trend={player.trend30Day ?? 0} />
                   </div>

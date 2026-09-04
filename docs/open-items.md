@@ -30,9 +30,15 @@ evidence didn't support building — an explicit decision not to. It came out of
 block before touching any of it, because two of its original conclusions were
 overturned.
 
-- **Phase 1** — surface what the app already has: confidence percentages on
-  lineup moves, the DEF free-agent fix, weekly projections in the free-agent
-  list, snap share on player profiles. App-only, no pipelines.
+- **Phase 1 — SHIPPED 2026-09-04.** Confidence percentages on lineup moves
+  (`utils/lineupConfidence.js`, table regenerated from
+  `scripts/dev/optimizer-signal-backtest.mjs` §3) with sub-1-point swaps
+  demoted; the DEF free-agent fix (`utils/freeAgents.js` — the waiver drawer
+  returns 14 defenses against live data, and DEF is a Free Agents filter);
+  weekly projections + a Proj sort in League › Free Agents
+  (`hooks/weeklyProjections.js`, shared with the Optimizer); snap/target/rush
+  share on the player profile drawer, DISPLAY ONLY. The `TEAM_*` stats trap is
+  now in CLAUDE.md's Critical stats note. 161 tests, lint + build clean.
 - **Phase 2** — news coverage: FantasyPros' feed is dead (HTTP 404) and only
   3 of 25 rostered players appear in the live feed. Pre-registered target: ≥12.
 - **Phase 3** — rookie research split into "impact now" vs "long-term stash",

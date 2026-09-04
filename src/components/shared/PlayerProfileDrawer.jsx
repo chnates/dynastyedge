@@ -219,6 +219,50 @@ function RookieOpportunity({ research }) {
 
 // ── Slot label ───────────────────────────────────────────────────────────────
 
+
+// ── Usage — DISPLAY ONLY ─────────────────────────────────────────────────────
+// "How he's being used", not "how he'll score". Adding usage to Sleeper's
+// weekly projection was measured worthless (MAE gain 0.026, unstable signs —
+// study §5), so this is deliberately descriptive and feeds no score or ranking
+// anywhere in the app. The label says so on screen.
+
+function UsageStat({ label, value, suffix = '%' }) {
+  return (
+    <div>
+      <span className="font-mono text-lg font-semibold text-text-primary tabular-nums">
+        {value != null ? `${value}${suffix}` : '—'}
+      </span>
+      <span className="block font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mt-0.5">
+        {label}
+      </span>
+    </div>
+  )
+}
+
+function UsageCard({ usage, position }) {
+  if (!usage) return null
+  return (
+    <Card padding="sm">
+      <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
+        Usage · {usage.year} season
+      </p>
+      <div className="flex gap-5">
+        <UsageStat label="Snap share" value={usage.snapShare} />
+        {position === 'RB'
+          ? <UsageStat label="Rush share" value={usage.rushShare} />
+          : <UsageStat label="Target share" value={usage.targetShare} />}
+        {usage.rzTargets != null && position !== 'QB' && (
+          <UsageStat label="RZ targets" value={usage.rzTargets} suffix="" />
+        )}
+      </div>
+      <p className="font-body text-[10px] text-text-tertiary leading-snug mt-2.5">
+        How he's being used — context only. Usage was measured not to improve a
+        weekly projection, so nothing here feeds a score or a ranking.
+      </p>
+    </Card>
+  )
+}
+
 function slotLabel(rosterPlayer) {
   if (!rosterPlayer) return 'Bench'
   if (rosterPlayer.isIR) return 'Injured Reserve'
@@ -296,12 +340,20 @@ export default function PlayerProfileDrawer({
     return values?.playerMap ?? {}
   }, [playerMap, values])
 
+  // Both readings are keyed entirely to a FantasyCalc positional rank, so a
+  // player who has none — every team defense, plus any unranked stash — would
+  // be graded from a made-up `99` and stamped "D — Deep Stash". Show them only
+  // where the rank they are derived from actually exists.
   const grade = useMemo(() =>
-    getOpportunityGrade(player.position, player.positionRank ?? 99, player.value ?? 0),
+    (player.positionRank != null
+      ? getOpportunityGrade(player.position, player.positionRank, player.value ?? 0)
+      : null),
   [player])
 
   const role = useMemo(() =>
-    getRoleDescription(player.position, player.positionRank ?? 99),
+    (player.positionRank != null
+      ? getRoleDescription(player.position, player.positionRank)
+      : ''),
   [player])
 
   const comparables = useMemo(() =>
@@ -354,9 +406,11 @@ export default function PlayerProfileDrawer({
         <div className="flex items-start justify-between px-4 pt-2 pb-3 border-b border-border-default">
           <div className="flex-1 min-w-0 pr-3">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className={`font-body text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${GRADE_STYLES[grade]}`}>
-                {grade} — {GRADE_LABELS[grade]}
-              </span>
+              {grade && (
+                <span className={`font-body text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${GRADE_STYLES[grade]}`}>
+                  {grade} — {GRADE_LABELS[grade]}
+                </span>
+              )}
               {player.position && (
                 <span className={`font-body text-[10px] font-semibold uppercase tracking-wider ${POS_TEXT[player.position] ?? 'text-text-tertiary'}`}>
                   {player.position}
@@ -502,6 +556,8 @@ export default function PlayerProfileDrawer({
             </Card>
           )}
 
+          <UsageCard usage={intel.usage} position={intel.position} />
+
           {/* Production — recent games in-season, last-season summary otherwise */}
           {(intel.loading || intel.seasonSummary || intel.recentGames.some(g => g.pts != null)) && (
             <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
@@ -610,8 +666,10 @@ export default function PlayerProfileDrawer({
               Dynasty Value
             </p>
             <div className="flex items-baseline gap-3">
+              {/* Rule 7: an unranked player shows `—`, never a 0 that reads
+                  like a measured value of zero. */}
               <span className="font-mono text-3xl font-semibold text-accent tabular-nums">
-                {(player.value ?? 0).toLocaleString()}
+                {player.value ? player.value.toLocaleString() : '—'}
               </span>
               <TrendArrow trend={player.trend30Day ?? 0} />
             </div>
@@ -768,7 +826,7 @@ export default function PlayerProfileDrawer({
                                 {comp.name}
                               </p>
                               <span className={`font-mono text-xs tabular-nums ml-2 flex-shrink-0 ${isViewed ? 'font-semibold text-accent' : 'text-text-secondary'}`}>
-                                {(comp.value ?? 0).toLocaleString()}
+                                {comp.value ? comp.value.toLocaleString() : '—'}
                               </span>
                             </div>
                           )
@@ -804,6 +862,10 @@ export default function PlayerProfileDrawer({
                   {myPositionPlayers.length > 0 ? (
                     <div className="flex flex-col gap-0">
                       {myPositionPlayers.map((rp, i) => {
+                        // A value comparison needs two values. For a position
+                        // FantasyCalc doesn't rank (every defense) both sides
+                        // are unvalued, and "0 · +0" reads as a measurement.
+                        const comparable = !!player.value && !!rp.value
                         const delta = (player.value ?? 0) - (rp.value ?? 0)
                         return (
                           <div
@@ -813,18 +875,20 @@ export default function PlayerProfileDrawer({
                             <div className="flex-1 min-w-0">
                               <p className="font-body text-sm text-text-primary truncate">{rp.name}</p>
                               <p className="font-body text-[10px] text-text-tertiary truncate">
-                                {rp.team || 'FA'} · #{rp.positionRank ?? '—'} {rp.position}
+                                {rp.team || 'FA'}{rp.positionRank != null ? ` · #${rp.positionRank}` : ''} {rp.position}
                               </p>
                             </div>
                             <div className="flex items-center gap-2 ml-2 flex-shrink-0">
                               <span className="font-mono text-sm text-text-secondary tabular-nums">
-                                {(rp.value ?? 0).toLocaleString()}
+                                {rp.value ? rp.value.toLocaleString() : '—'}
                               </span>
-                              <span className={`font-mono text-xs font-semibold tabular-nums w-14 text-right ${
-                                delta > 0 ? 'text-success' : delta < 0 ? 'text-danger' : 'text-text-tertiary'
-                              }`}>
-                                {delta > 0 ? '+' : ''}{delta.toLocaleString()}
-                              </span>
+                              {comparable && (
+                                <span className={`font-mono text-xs font-semibold tabular-nums w-14 text-right ${
+                                  delta > 0 ? 'text-success' : delta < 0 ? 'text-danger' : 'text-text-tertiary'
+                                }`}>
+                                  {delta > 0 ? '+' : ''}{delta.toLocaleString()}
+                                </span>
+                              )}
                             </div>
                           </div>
                         )
