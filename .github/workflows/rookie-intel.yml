@@ -5,10 +5,14 @@ on:
     - cron: '23 10 * * *'   # daily, offset from the news (:17/:47) and values (9:41) runs
   workflow_dispatch:
     inputs:
-      probe_only:
-        description: 'Run the CFBD join probe instead of the daily snapshot'
-        type: boolean
-        default: false
+      mode:
+        description: 'What to run'
+        type: choice
+        default: snapshot
+        options:
+          - snapshot          # the daily feed (what the cron runs)
+          - probe             # CFBD auth + join diagnostics, publishes nothing
+          - college-backtest  # the Phase 3b gate, publishes nothing
 
 permissions:
   contents: write
@@ -25,7 +29,7 @@ jobs:
   # our rookies BY ID before any college-production code is written — see the
   # header of scripts/dev/cfbd-probe.mjs. It publishes nothing.
   probe:
-    if: inputs.probe_only
+    if: inputs.mode == 'probe'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -37,8 +41,26 @@ jobs:
           CFBD_API_KEY: ${{ secrets.CFBD_API_KEY }}
         run: node scripts/dev/cfbd-probe.mjs
 
+  # The Phase 3b gate. College production is the last input that is not a
+  # restatement of draft capital, so it gets tested before it gets shipped --
+  # the same bar 3c held age and combine athleticism to, and both failed.
+  college-backtest:
+    if: inputs.mode == 'college-backtest'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+      - name: Back-test college production
+        env:
+          CFBD_API_KEY: ${{ secrets.CFBD_API_KEY }}
+        run: node scripts/dev/rookie-college-backtest.mjs
+
   snapshot:
-    if: ${{ !inputs.probe_only }}
+    # Scheduled runs carry no inputs, so `mode` is empty and the snapshot runs.
+    if: inputs.mode == '' || inputs.mode == 'snapshot'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
