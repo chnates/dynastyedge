@@ -1,27 +1,28 @@
-import { useState, useMemo } from 'react'
-import { LayoutList, CheckCircle2 } from 'lucide-react'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { LayoutList, Search } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useFantasyCalc } from '../../hooks/useFantasyCalc'
 import { useLineupData } from '../../hooks/useLineupData'
-import { POS_TEXT } from '../../utils/positionColors'
 import {
-  getProjPts,
   computeDefenseRankings,
   getMatchupQuality,
-  getPlayerFlag,
-  getBestBench,
 } from '../../utils/projections'
+import {
+  buildLineupMoves,
+  lineupFromRoster,
+  applySwap,
+  isEligibleForSlot,
+} from '../../utils/lineupMoves'
 import {
   computeLeagueAverages,
   getPositionalDeltas,
   assignWinWindowTiers,
 } from '../../utils/rosterAnalysis'
 import { ROSTER_SLOTS, POSITIONS, PICK_YEARS } from '../../constants'
-import LoadingSpinner from '../shared/LoadingSpinner'
-import ErrorState from '../shared/ErrorState'
-import SectionHeader from '../shared/SectionHeader'
-import WinWindowBadge from '../shared/WinWindowBadge'
-import StarterSlot from './StarterSlot'
+import { Button, Card, ErrorState, Spinner, SectionHeader, WinWindowBadge, cn } from '../ui'
+import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
+import LineupRow from './LineupRow'
+import LineupMovesCard from './LineupMovesCard'
 import FreeAgentDrawer from './FreeAgentDrawer'
 
 function OffseasonPlaceholder({ league }) {
@@ -108,30 +109,53 @@ function OffseasonPlaceholder({ league }) {
   )
 }
 
-const MATCHUP_DOT = {
-  Easy:    <span className="inline-block w-2 h-2 rounded-full bg-success" />,
-  Neutral: <span className="inline-block w-2 h-2 rounded-full bg-text-tertiary" />,
-  Tough:   <span className="inline-block w-2 h-2 rounded-full bg-danger" />,
-}
-
 export default function LineupOptimizer() {
   const { league, loading: leagueLoading, error: leagueError, retry: leagueRetry } = useLeagueContext()
   const { values: fcValues, loading: fcLoading } = useFantasyCalc()
   const lineupData = useLineupData()
 
-  const [drawerState, setDrawerState] = useState(null)
+  // ── The sandbox ───────────────────────────────────────────────────────
+  // Sleeper's API is READ-ONLY, so the lineup can never be written back. What
+  // it can be is a local scratchpad: swap freely, watch the projected total
+  // move, then mirror the result in the Sleeper app. `lineup` is an array of
+  // sleeperId|null aligned to ROSTER_SLOTS.
+  const [lineup, setLineup] = useState(null)
+  const [swapArm, setSwapArm] = useState(null)      // { kind:'slot', idx } | { kind:'bench', playerId }
+  const [profilePlayer, setProfilePlayer] = useState(null)
+  const [faSlotIdx, setFaSlotIdx] = useState(null)
+  const [flash, setFlash] = useState(false)
 
-  const loading = leagueLoading || fcLoading || lineupData.loading
-  const error   = leagueError || lineupData.error
+  const baseLineup = useMemo(
+    () => (league?.myRoster ? lineupFromRoster(league.myRoster) : null),
+    [league?.myRoster],
+  )
 
-  const lineupView = useMemo(() => {
-    if (!league?.myRoster || !lineupData.projMap || !fcValues) return null
+  // Seed (and re-seed) from Sleeper whenever the real roster changes — a
+  // refresh that returns a new lineup must not be masked by stale local edits.
+  const seededFrom = useRef(null)
+  useEffect(() => {
+    if (!baseLineup) return
+    const sig = baseLineup.join(',')
+    if (seededFrom.current === sig) return
+    seededFrom.current = sig
+    setLineup(baseLineup)
+    setSwapArm(null)
+  }, [baseLineup])
 
-    const { myRoster } = league
+  const analysis = useMemo(() => {
+    if (!league?.myRoster || !lineupData.projMap || !lineup) return null
+
     const { projMap, playerStatuses, playingTeams, defStatsRaw, statsWeek, nflState, schedule } = lineupData
-
-    const bench = myRoster.players.filter(p => !p.isStarter && !p.isTaxi && !p.isIR)
     const currentWeek = nflState?.week ?? 1
+
+    const res = buildLineupMoves({
+      players: league.myRoster.players,
+      lineup,
+      projMap,
+      playerStatuses,
+      playingTeams,
+    })
+
     // `playerStatuses` IS the shared trimmed player DB (position + team), which
     // is where defense rankings get the position and team the stats payload no
     // longer carries. `statsWeek` pairs those stats with that week's opponents.
@@ -140,155 +164,180 @@ export default function LineupOptimizer() {
       schedule,
       week: statsWeek ?? Math.max(1, currentWeek - 1),
     })
+    // Week 1 has no prior week to rank defenses from, so every player would
+    // read "Neutral". Showing a column of meaningless pills implies data we
+    // don't have — so the pills hide and the header says why.
+    const matchupsReady = POSITIONS.some(pos => Object.keys(defenseRankings[pos] ?? {}).length > 0)
+    const matchupFor = player => (
+      matchupsReady && player
+        ? getMatchupQuality(player.team, player.position, currentWeek, schedule, defenseRankings)
+        : null
+    )
 
-    const starterSlots = (myRoster.starterOrder ?? [])
-      .map((sleeperId, idx) => {
-        const slot = ROSTER_SLOTS[idx]
-        if (!slot || slot.label === 'DEF') return null
-        const player = myRoster.players.find(p => p.sleeperId === sleeperId)
-        if (!player) return null
+    return { ...res, currentWeek, matchupsReady, matchupFor }
+  }, [league, lineup, lineupData])
 
-        const projPts = getProjPts(player.sleeperId, projMap)
-        const matchupQuality = getMatchupQuality(player.team, player.position, currentWeek, schedule, defenseRankings)
-        const flag = getPlayerFlag(player, projMap, playerStatuses, playingTeams, bench, slot.eligible)
-        const bestBenchPlayer = getBestBench(slot.eligible, player.sleeperId, bench, projMap, playerStatuses, playingTeams)
-        const bestBenchPts = bestBenchPlayer ? getProjPts(bestBenchPlayer.sleeperId, projMap) : 0
+  // Flash the projected total whenever the lineup changes (Motion spec).
+  useEffect(() => {
+    if (!lineup || !baseLineup) return
+    setFlash(true)
+    const t = setTimeout(() => setFlash(false), 400)
+    return () => clearTimeout(t)
+  }, [lineup, baseLineup])
 
-        return { slot, player, projPts, matchupQuality, flag, bestBenchPts, idx }
-      })
-      .filter(Boolean)
+  const loading = leagueLoading || fcLoading || lineupData.loading
+  const error   = leagueError || lineupData.error
 
-    const benchWithProj = bench
-      .map(p => ({
-        player: p,
-        projPts: getProjPts(p.sleeperId, projMap),
-        matchupQuality: getMatchupQuality(p.team, p.position, currentWeek, schedule, defenseRankings),
-      }))
-      .sort((a, b) => b.projPts - a.projPts)
-
-    const flagCounts = { red: 0, yellow: 0 }
-    starterSlots.forEach(s => { if (s.flag !== 'green') flagCounts[s.flag]++ })
-
-    return { starterSlots, benchWithProj, flagCounts, currentWeek }
-  }, [league, fcValues, lineupData])
-
-  if (loading) return <LoadingSpinner message="Loading lineup data…" />
+  if (loading) return <Spinner message="Loading lineup data…" />
   if (error) return <ErrorState message={error} onRetry={() => { leagueRetry(); lineupData.retry() }} />
   if (lineupData.isOffseason) return <OffseasonPlaceholder league={league} />
-  if (!lineupView) return <ErrorState message="Could not build lineup view." onRetry={() => { leagueRetry(); lineupData.retry() }} />
+  if (!analysis) return <ErrorState message="Could not build lineup view." onRetry={() => { leagueRetry(); lineupData.retry() }} />
 
-  const { starterSlots, benchWithProj, flagCounts, currentWeek } = lineupView
+  const { slots, bench, moves, optimalByIdx, currentWeek, matchupsReady, matchupFor } = analysis
+  const dirty = baseLineup ? lineup.join(',') !== baseLineup.join(',') : false
+
+  // ── Swap orchestration ────────────────────────────────────────────────
+  // A swap is legal when BOTH players can occupy the other's slot. Bench
+  // players only need to be eligible for the armed slot.
+  const armedPlayer = swapArm?.kind === 'slot'
+    ? slots[swapArm.idx]?.entry?.player ?? null
+    : bench.find(b => b.id === swapArm?.playerId)?.player ?? null
+
+  const slotState = idx => {
+    if (!swapArm) return 'idle'
+    if (swapArm.kind === 'slot') {
+      if (swapArm.idx === idx) return 'armed'
+      const theirs = slots[idx]?.entry?.player
+      const mineOk = armedPlayer ? isEligibleForSlot(armedPlayer, idx) : true
+      const theirsOk = theirs ? isEligibleForSlot(theirs, swapArm.idx) : true
+      return mineOk && theirsOk ? 'target' : 'muted'
+    }
+    return armedPlayer && isEligibleForSlot(armedPlayer, idx) ? 'target' : 'muted'
+  }
+
+  const benchState = playerId => {
+    if (!swapArm) return 'idle'
+    if (swapArm.kind === 'bench') return swapArm.playerId === playerId ? 'armed' : 'muted'
+    const p = bench.find(b => b.id === playerId)?.player
+    return p && isEligibleForSlot(p, swapArm.idx) ? 'target' : 'muted'
+  }
+
+  const selectSlot = idx => {
+    if (swapArm.kind === 'slot') setLineup(applySwap(lineup, swapArm.idx, { kind: 'slot', slotIdx: idx }))
+    else setLineup(applySwap(lineup, idx, { kind: 'bench', playerId: swapArm.playerId }))
+    setSwapArm(null)
+  }
+
+  const selectBench = playerId => {
+    setLineup(applySwap(lineup, swapArm.idx, { kind: 'bench', playerId }))
+    setSwapArm(null)
+  }
 
   return (
-    <div className="px-4 pb-4">
-      {/* Header */}
-      <div className="pt-4 pb-3 border-b border-border-default dark:border-border-default">
-        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary mb-0.5">
-          Week {currentWeek}
-        </p>
-        <h1 className="font-display text-2xl uppercase tracking-wide text-text-primary dark:text-text-primary leading-tight">
-          Lineup Optimizer
-        </h1>
-        {(flagCounts.red > 0 || flagCounts.yellow > 0) ? (
-          <p className="font-body text-xs text-warning mt-1">
-            {[
-              flagCounts.red > 0 ? `${flagCounts.red} must-start change${flagCounts.red > 1 ? 's' : ''}` : null,
-              flagCounts.yellow > 0 ? `${flagCounts.yellow} decision${flagCounts.yellow > 1 ? 's' : ''} to review` : null,
-            ].filter(Boolean).join(' · ')}
-          </p>
-        ) : (
-          <p className="font-body text-xs text-success mt-1 flex items-center gap-1.5">
-            <CheckCircle2 size={13} strokeWidth={2.25} className="shrink-0" />
-            Lineup is optimal — no changes needed
-          </p>
-        )}
-      </div>
+    <div className="px-4 pb-4 hero-sweep">
+      <LineupMovesCard
+        week={currentWeek}
+        currentTotal={analysis.currentTotal}
+        optimalTotal={analysis.optimalTotal}
+        pointsLeft={analysis.pointsLeft}
+        moves={moves}
+        mustFixCount={analysis.mustFixCount}
+        upgradeCount={analysis.upgradeCount}
+        dirty={dirty}
+        onApplyAll={() => { setLineup([...optimalByIdx]); setSwapArm(null) }}
+        onReset={() => { setLineup(baseLineup); setSwapArm(null) }}
+      />
 
-      {/* Legend — the matchup pills and status dots aren't hoverable on touch,
-          so the color vocabulary is spelled out once up top. */}
-      <div className="flex flex-col gap-1.5 pt-3 pb-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-body text-[10px] font-semibold uppercase tracking-wide text-text-tertiary dark:text-text-tertiary w-12 shrink-0">
-            Matchup
-          </span>
-          <span className="rounded-full px-1.5 py-0.5 font-body text-[9px] font-semibold uppercase tracking-wide text-success bg-success/10">Easy</span>
-          <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">soft defense</span>
-          <span className="rounded-full px-1.5 py-0.5 font-body text-[9px] font-semibold uppercase tracking-wide text-danger bg-danger/10">Tough</span>
-          <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">hard defense</span>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-body text-[10px] font-semibold uppercase tracking-wide text-text-tertiary dark:text-text-tertiary w-12 shrink-0">
-            Status
-          </span>
-          <span className="inline-block w-2 h-2 rounded-full bg-success" />
-          <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">set</span>
-          <span className="inline-block w-2 h-2 rounded-full bg-warning" />
-          <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">review</span>
-          <span className="inline-block w-2 h-2 rounded-full bg-danger" />
-          <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">must start</span>
-        </div>
-      </div>
-
-      {/* Starters */}
+      {/* ── Starters ── */}
       <section>
-        <SectionHeader label="Starting Lineup" count={starterSlots.length} />
-        <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
-          {starterSlots.map(({ slot, player, flag, projPts, matchupQuality, bestBenchPts, idx }) => (
-            <StarterSlot
+        <SectionHeader label="Starting Lineup" />
+        {swapArm && (
+          <Card padding="p-2.5" className="mb-2 border-brand/40">
+            <p className="font-body text-xs text-text-secondary leading-snug">
+              Swapping <span className="font-semibold text-text-primary">{armedPlayer?.name ?? 'this slot'}</span>
+              {' '}— tap a highlighted row to complete it.
+            </p>
+            <div className="flex gap-2 mt-2">
+              {swapArm.kind === 'slot' && (
+                <Button
+                  variant="tinted"
+                  size="sm"
+                  icon={<Search size={13} strokeWidth={2.25} />}
+                  onClick={() => { setFaSlotIdx(swapArm.idx); setSwapArm(null) }}
+                >
+                  Waiver options
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" onClick={() => setSwapArm(null)}>Cancel</Button>
+            </div>
+          </Card>
+        )}
+        <Card padding="px-3">
+          {slots.map(({ idx, slot, entry, isOptimal }) => (
+            <LineupRow
               key={`${slot.label}-${idx}`}
-              slotLabel={slot.label}
-              player={player}
-              flag={flag}
-              projPts={projPts}
-              matchupQuality={matchupQuality}
-              bestBenchPts={bestBenchPts}
-              onClick={() => setDrawerState({ slot, player })}
+              lead={slot.label}
+              leadIsSlot
+              entry={entry}
+              matchupQuality={matchupFor(entry?.player)}
+              isOptimal={isOptimal}
+              state={slotState(idx)}
+              onOpenProfile={() => entry && setProfilePlayer(entry.player)}
+              onArm={() => setSwapArm({ kind: 'slot', idx })}
+              onSelectTarget={() => selectSlot(idx)}
+              onCancel={() => setSwapArm(null)}
             />
           ))}
-        </div>
+        </Card>
+        <p className={cn(
+          'font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-right mt-1.5 tabular-nums transition-colors',
+          flash ? 'text-accent' : 'text-text-tertiary',
+        )}>
+          Projected {analysis.currentTotal.toFixed(1)}
+        </p>
       </section>
 
-      {/* Bench */}
-      {benchWithProj.length > 0 && (
+      {/* ── Bench ── */}
+      {bench.length > 0 && (
         <section>
-          <SectionHeader label="Bench" count={benchWithProj.length} />
-          <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
-            {benchWithProj.map(({ player, projPts, matchupQuality }) => (
-              <div
-                key={player.sleeperId}
-                className="py-2.5 border-b border-border-default dark:border-border-default last:border-0"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="flex-1 font-body font-medium text-sm text-text-primary dark:text-text-primary truncate min-w-0">
-                    {player.name}
-                  </span>
-                  <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary shrink-0 uppercase tracking-wide">
-                    {player.team}
-                  </span>
-                  <span className={`font-body text-[10px] font-semibold shrink-0 uppercase ${POS_TEXT[player.position] ?? 'text-text-tertiary dark:text-text-tertiary'}`}>
-                    {player.position}
-                  </span>
-                  <span className="font-mono text-sm font-semibold text-text-primary dark:text-text-primary shrink-0 w-10 text-right tabular-nums">
-                    {projPts > 0 ? projPts.toFixed(1) : '—'}
-                  </span>
-                  <span className="shrink-0 flex items-center justify-center w-4" title={matchupQuality}>
-                    {MATCHUP_DOT[matchupQuality] ?? MATCHUP_DOT.Neutral}
-                  </span>
-                </div>
-              </div>
+          <SectionHeader label="Bench" count={bench.length} />
+          <Card padding="px-3">
+            {bench.map(b => (
+              <LineupRow
+                key={b.id}
+                lead={b.player.position}
+                entry={b}
+                matchupQuality={matchupFor(b.player)}
+                isOptimal={false}
+                state={benchState(b.id)}
+                onOpenProfile={() => setProfilePlayer(b.player)}
+                onArm={() => setSwapArm({ kind: 'bench', playerId: b.id })}
+                onSelectTarget={() => selectBench(b.id)}
+                onCancel={() => setSwapArm(null)}
+              />
             ))}
-          </div>
+          </Card>
         </section>
       )}
 
-      {/* Free agent drawer */}
-      {drawerState && fcValues?.playerMap && (
+      {!matchupsReady && (
+        <p className="font-body text-[11px] text-text-tertiary leading-snug mt-3">
+          Matchup ratings appear from Week 2 — they rank each defense by the points
+          it allowed the previous week, and no week has been played yet.
+        </p>
+      )}
+
+      {profilePlayer && (
+        <PlayerProfileDrawer player={profilePlayer} onClose={() => setProfilePlayer(null)} />
+      )}
+
+      {faSlotIdx != null && fcValues?.playerMap && (
         <FreeAgentDrawer
-          slot={drawerState.slot}
+          slot={ROSTER_SLOTS[faSlotIdx]}
           projMap={lineupData.projMap}
           allRosters={league.allRosters}
           fcPlayerMap={fcValues.playerMap}
-          onClose={() => setDrawerState(null)}
+          onClose={() => setFaSlotIdx(null)}
         />
       )}
     </div>

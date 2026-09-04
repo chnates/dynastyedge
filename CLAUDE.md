@@ -749,8 +749,9 @@ sessionStorage, but there is no multi-trade history — that lives in Sleeper.
 
 ### Feature 4 — Lineup Optimizer
 
-**Purpose:** Optimize the weekly starting lineup using live projections,
-injury status, bye weeks, and matchup quality.
+**Purpose:** answer one question every week — **"what should I change, and what
+does it cost me if I don't?"** Not a status board: a start/sit engine that
+solves the whole lineup, names the moves, and lets you build the result.
 
 *The Optimizer is the **Lineup** sub-tab under **My Team** (`/my-team/lineup`),
 a sibling of My Roster, Season Review (Feature 9), and Trajectory. The
@@ -771,30 +772,107 @@ win window); Season Review remains available on its own tab.*
 |Matchup quality             |Sleeper `/stats/nfl/regular/{year}/{week}` for points, joined to the player DB (position + team) and the schedule (opponent) — those stats carry no `pos`/`opp`/`tm`|
 |Dynasty value (secondary)   |FantasyCalc (already cached)                                                                      |
 
+**Sleeper's projections payload carries no floor/ceiling** (verified against the
+live 2026 W1 endpoint — only `pts_half_ppr` plus stat components). So there is
+no boom/bust or confidence read here, and inventing one would be fabrication.
+
+#### The engine (`utils/lineupMoves.js`, pure)
+
+`buildLineupMoves` solves the **whole lineup at once** with the shared slot-fill
+(`selectOptimalStarters` — the same engine Season Review uses in hindsight, fed
+weekly points), then **diffs** the optimal starter set against the one you're
+actually starting. The set difference is the move list.
+
+This replaced a per-slot check ("is any bench player projecting higher than this
+starter?"), which was not an optimization and was wrong in two ways:
+
+1. **Gains double-counted.** One bench player who outprojected two starters
+   flagged *both* slots, advertising his points twice for a player who can only
+   fill one.
+2. **Cascading moves were structurally invisible** — promoting a WR out of FLEX
+   into WR2 so a better RB takes the FLEX is the most common real optimization,
+   and no single-slot comparison can see it.
+
+The diff has the property the old math lacked: **the per-move gains sum exactly
+to the headline** ("points sitting on your bench"), because shuffling a player
+between slots changes no total. `tests/lineupMoves.test.mjs` pins that
+invariant, both original bugs, and the swap algebra.
+
+Two contracts worth stating:
+
+- **A blocked player is dropped from the eligible pool outright**, not handed a
+  0 metric — a 0-metric player still gets *placed* when nothing else is
+  eligible, which would quietly "optimize" a bye-week player back into your
+  lineup. An unfillable slot stays empty; that's the truthful outcome, and it
+  surfaces as "no eligible replacement on your bench".
+- **A blocked starter contributes 0 to the current total**, whatever projection
+  Sleeper still carries for him. An "Out" starter holding 12.4 would otherwise
+  inflate the total and hide the exact gap this tool exists to surface.
+
+**`getAvailability` (`utils/projections.js`) is the one availability verdict** —
+`{ blocked, status, label, short }` for bye / IR / Out / Questionable / ok.
+`label` is the full word for prose ("is listed Questionable"); `short` is the
+fantasy shorthand for a row chip, because a full-width badge at 390px squeezes
+the player's own name to "Rach…".
+
+**The DEF slot is part of the lineup.** The old view skipped it entirely, so an
+unset or bye-week DEF was invisible — verified live on 2026-09-04, when roster 6
+had an empty DEF slot, a rostered Chiefs DEF on the bench, and the Optimizer
+reporting no changes needed.
+
 #### Main view
 
-- Current starting lineup displayed with projected points per slot
-- Bench displayed with projected points per player
-- The gap between starter and best bench option is visible at a glance
-- Slots sorted by: starters first, then bench by projected points
-- An inline **legend** spells out the matchup pills (Easy / Tough) and status
-  dots (set / review / must start) — the `title` tooltips alone aren't legible
-  on touch
-- When no slot needs action the header shows a positive **"Lineup is optimal —
-  no changes needed"** confirmation, so "nothing to do" reads differently from
-  "didn't load"
+- **Moves card (top, the red score-bug hero):** projected **points sitting on
+  your bench** as the headline, `now → optimal` totals, and a must-fix /
+  upgrades count. When nothing needs changing it flips to the green
+  "Lineup is optimal — no changes needed" state.
+- **The move list:** one card per move — `SIT <player>` / `START <player>` with
+  its own gain, a Must fix / Upgrade badge, and a plain-English reason ("Rachaad
+  White is on bye and will score 0"). A move whose one-for-one pairing isn't
+  directly legal is labelled part of a multi-player reshuffle rather than
+  implying an illegal swap.
+- **Starting lineup + bench**, both rendered by the shared `LineupRow` so a
+  player reads identically wherever he sits: slot/position lead, name, status
+  chip, NFL team, projection, matchup pill, and an optimal tick.
+
+#### The sandbox — swapping
+
+Sleeper's API is **read-only**; a lineup can never be written back. So the
+lineup here is a **local scratchpad** seeded from Sleeper's actual starters:
+
+- Tapping a row **body** opens the `PlayerProfileDrawer`, like every other
+  player row in the app. The **⇄ handle** arms a swap.
+- While a swap is armed the **whole row becomes the target hit-area** (a 24px
+  handle is not a mobile tap target for the action you're mid-way through), and
+  only **legal** targets highlight — the rest mute. A starter↔starter swap is
+  legal only when **both** players can occupy the other's slot; a bench player
+  only needs to be eligible for the armed slot.
+- **Apply N moves** writes the optimal lineup; **Reset** restores Sleeper's.
+  While edited, a line says plainly that this is a local preview and the real
+  lineup is set in the Sleeper app.
+- An **empty slot** carries its own "Tap to fill" affordance — it's the one row
+  you must act on and the only one with nothing to tap.
+- The armed banner also offers **Waiver options** for that slot, which is the
+  moment you're actually asking "who else can play here?" — the free-agent list
+  is an explicit action, never the accidental result of tapping a flagged
+  player (which is what it used to be).
+
+**Free agents are deliberately NOT folded into the optimal lineup** (owner
+decision, 2026-09-04): the headline must stay honest, and you can't start a
+player you don't own.
 
 #### Status flags — shown on every player
 
-- 🔴 **Hard block:** Player is Out, on IR, or on bye. Must be replaced. Non-negotiable.
-- 🟡 **Soft flag:** Player is Questionable, OR any bench player projects
-  higher than the current starter at that slot (flag any positive difference — no minimum threshold).
-- 🟢 **Confirmed:** Healthy, highest projected at their slot. No action needed.
+- 🔴 **Hard block:** Out, IR, Suspended, PUP, or on bye. Scores 0, excluded from
+  the optimal pool, always a **Must fix** move.
+- 🟡 **Soft flag:** Questionable / Doubtful — startable, still counted, but
+  surfaced on the row and named in any move that involves them.
+- 🟢 **Confirmed:** healthy and in the optimal lineup — a green tick, no action.
 
 #### Free agent layer
 
-- Tap any flagged slot → drawer opens showing top available free agents at that position
-- Sort: weekly projection (primary)
+- The armed-slot **Waiver options** action opens a drawer of available players at
+  that slot's eligible positions, sorted by weekly projection
 - Each free agent shows **both** values side by side:
   - Weekly projected points (from Sleeper)
   - FantasyCalc dynasty value (from cached FantasyCalc data)
@@ -803,11 +881,11 @@ win window); Season Review remains available on its own tab.*
 
 #### Matchup quality indicator
 
-Shown on every player in both starting lineup and bench:
+Shown on players in both the starting lineup and the bench:
 
 - 🟢 **Easy** — opponent defense ranks bottom third against this position
-- ⚪ **Neutral** — middle third
 - 🔴 **Tough** — top third
+- Middle third shows **nothing** — a column of "Neutral" pills is noise
 
 Rankings are computed fresh each week by `computeDefenseRankings`
 (`utils/projections.js`) from the previous week's stats: **total** half-PPR
@@ -819,13 +897,12 @@ from the shared player DB and the schedule (see the Critical stats note).
 Update when the user manually refreshes or opens the Lineup tab.
 
 **Week 1 degrades honestly:** no prior week has been played, so Sleeper returns
-`{}` and every player reads ⚪ Neutral rather than a ranking invented from an
-empty sample. The schedule and prior-week stats are both **best-effort** —
-either failing leaves byes/matchup quality degraded but must never blank the
-Optimizer behind an `ErrorState` (it renders that check *before* the offseason
-check, so a rejected fetch would take the whole tab down for the season).
-
------
+`{}`. Rather than rating every player "Neutral" off an empty sample, the pills
+**hide entirely** and a line explains that matchup ratings start in Week 2. The
+schedule and prior-week stats are both **best-effort** — either failing leaves
+byes/matchup quality degraded but must never blank the Optimizer behind an
+`ErrorState` (it renders that check *before* the offseason check, so a rejected
+fetch would take the whole tab down for the season).
 
 ### Feature 5 — League-Wide Overview
 
@@ -2302,10 +2379,11 @@ dynastyedge/
 │   │   │   ├── PartnerContextStrip.jsx ← THE partner intelligence strip — Analyzer + Targets
 │   │   │   └── WhatsFair.jsx        ← Targets: league-wide board + per-team scouting mode
 │   │   ├── lineup/                  ← rendered as "My Team" sub-tabs (no own layout)
-│   │   │   ├── LineupOptimizer.jsx  ← My Team › Lineup
+│   │   │   ├── LineupOptimizer.jsx  ← My Team › Lineup: the swap sandbox + orchestration
+│   │   │   ├── LineupMovesCard.jsx  ← the start/sit hero + move list ("what do I change?")
+│   │   │   ├── LineupRow.jsx        ← THE lineup row — starters AND bench, so a player reads the same either side of the line
 │   │   │   ├── LineupEfficiency.jsx ← My Team › Season Review: actual vs optimal points
-│   │   │   ├── StarterSlot.jsx
-│   │   │   └── FreeAgentDrawer.jsx
+│   │   │   └── FreeAgentDrawer.jsx  ← per-slot waiver options (an explicit action)
 │   │   ├── league/
 │   │   │   ├── LeagueLayout.jsx     ← sub-tabs: Overview / Free Agents / Activity / Movers / Playoffs
 │   │   │   ├── LeagueOverview.jsx
@@ -2388,6 +2466,7 @@ dynastyedge/
 │   │   ├── peakWindows.js       ← position peak-age windows + status helper
 │   │   ├── draftLive.js         ← THE rookie draft live path (on the clock, countdown, Best Available, capital, recap) — pure, extracted from DraftTracker so it is testable
 │   │   ├── lineupBuild.js       ← THE optimal starting-lineup slot-fill (metric-agnostic); fed points (Optimizer) or dynasty value (Trade Analyzer fit sim)
+│   │   ├── lineupMoves.js       ← THE weekly start/sit engine: solves the lineup, diffs it against yours, emits the move list (gains sum to the headline)
 │   │   ├── lineupHistory.js     ← optimal-lineup POINTS math for efficiency review (delegates to lineupBuild)
 │   │   ├── playoffOdds.js       ← scoring model + Monte Carlo + deadline verdict
 │   │   └── projections.js       ← lineup optimization, matchup quality
@@ -2417,6 +2496,7 @@ dynastyedge/
 │   ├── tradeAnalysis.test.mjs       ← verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge
 │   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
 │   ├── lineupBuild.test.mjs         ← slot-fill order (singles → FLEX → SFLX), IR/taxi excluded, who-starts identity
+│   ├── lineupMoves.test.mjs         ← start/sit engine: Σ gains = headline invariant, the two superseded per-slot bugs (double-count, missed cascade), hard-block exclusion, empty DEF slot, swap algebra
 │   ├── lineupHistory.test.mjs       ← optimal-lineup slot-fill order (singles → FLEX → SFLX)
 │   ├── matchupWeeks.test.mjs        ← mocked-fetch: one fetch/week across both consumers, all-fail rejection
 │   ├── rookieResearch.test.mjs      ← opportunity blend, shared points scale (the backup-TE trap), within-position divergence, roster-fit re-ranking (need/window bonuses, score untouched), drawer hand-off fields, best-effort feed degradation
@@ -2431,15 +2511,15 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 88 / # pass 83 /
+honestly:** instead of "cannot find module" it prints `# tests 104 / # pass 99 /
 # fail 5`, which reads like a code regression. The five files that fail are the
 ones transitively importing `react` (`tradeAnalysis.js` → `recommendations.js`
 → `useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
 `draftLive` loading their hooks) — the file fails to load, so its tests never
-run and the count silently drops from **136** to 88. `npm run build` in the
-same state fails with `sh: 1: vite: not found`. **If the test count isn't 136,
-run `npm ci` before debugging anything.** (Both numbers re-measured 2026-08-08
-by renaming `node_modules` aside; the previously documented 47/44/3 was stale.)
+run and the count silently drops from **152** to 104. `npm run build` in the
+same state fails with `sh: 1: vite: not found`. **If the test count isn't 152,
+run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-04
+by renaming `node_modules` aside; re-measure them whenever the suite grows.)
 
 **Tests:** `npm test` runs the `tests/` suite — plain `.mjs` scripts on Node's
 built-in `node:test` runner with `node:assert/strict`, zero new dependencies
