@@ -333,7 +333,12 @@ Write findings to docs/analysis/ as a dated note. Do not open a PR until I ask.
 
 ---
 
-## 5. Phase 4 — The breakout alert  *(explicitly an experiment)*
+## 5. Phase 4 — The breakout alert  **— CUT 2026-09-04, see §9**
+
+> **Do not build this.** When this plan was written the mechanism was untestable
+> because Sleeper keeps no historical injury status. It turned out **nflverse
+> publishes historical injury reports** (§9), so it was tested — and it is null.
+> The original reasoning is kept below for the record.
 
 **Why:** 79% of waiver-tier breakouts arrive with no bump in Sleeper's
 projection. The plausible mechanism is the one thing Sleeper's number lags —
@@ -392,7 +397,7 @@ Do not open a PR until I ask.
 | 1 — Surface what we have | App-only, no pipelines, highest confidence-per-hour. Ships in days. | nothing |
 | 2 — News | Self-contained pipeline work, independent of Phase 1, and it improves the briefing every other feature reads. | nothing |
 | 3 — Rookie research | Largest build. 3b needs the owner's CFBD key; 3a/3c do not. Rookie draft is the deadline. | owner's key (3b only) |
-| 4 — Breakout alert | Rides on Phase 1c's free-agent surface, and needs live in-season data to mean anything. | Phase 1c |
+| ~~4 — Breakout alert~~ | **CUT.** Back-tested against nflverse injury reports and found null (§9). | — |
 
 Phases 1 and 2 touch disjoint files and can run in either order, or in parallel
 sessions if desired.
@@ -425,3 +430,89 @@ Carried from the study's methodology lessons (§R6) and the repo's own gates:
 7. All UI from `src/components/ui`; `/design-review` before committing UI work.
 8. Every new number in the app must be traceable to a committed, re-runnable
    script — never hand-copied.
+
+
+---
+
+## 9. Source survey — where a keyed source would actually help  *(added 2026-09-04)*
+
+Asked before merging: *where else in this app could a paid/keyed source help, and
+where was the option never surfaced?* Everything below was probed live, and the
+falsifiable parts were tested against the corpus.
+
+**Headline: the gap was never secrets.** Exactly one keyed source is worth having
+(CollegeFootballData, already in Phase 3b). The genuinely missed opportunity was
+**nflverse** — which this repo already uses for one narrow purpose and which
+publishes far more, all free and CC-licensed.
+
+### 9a. Tested and rejected
+
+| Candidate | Needs a key? | Result |
+|---|---|---|
+| **Vegas lines** (implied team total, from nflverse `games.csv`) | No — free | Holdout MAE 5.228 → **5.205**, a 0.023 gain against a 0.05 floor. Sleeper's projection already prices game environment. |
+| **Weather** (wind/temp) | For a *forecast*, **yes** — nflverse weather is historical only (0 of 272 upcoming 2026 games carry wind) | Wind is a real but small effect. Learned on 2022–24: passers in 15+ mph average **−0.81** vs projection (n=301). Applying that haircut to the 2025 replay moved **+0.13 pts/team-week** and changed **4 of 140 lineups**. Pre-registered bar was ≥1 pt. **Not worth a key.** |
+| **The breakout alert** (Phase 4's mechanism) | No | See §9c — null. |
+
+**A discipline note on the weather result.** On the 2025 season alone the wind
+effect measured **−3.10** pts, which looks compelling. Learned properly on
+2022–24 it is **−0.81**. That is the same single-season trap that produced the
+retracted DEF result, caught this time because §8 rule 1 was applied *before*
+recommending anything.
+
+### 9b. Free sources we should have been using — the real finding
+
+| Source | What it gives | Why it matters |
+|---|---|---|
+| **nflverse `roster_weekly_{season}.csv`** | Per-week `team` + `position` keyed by **both `sleeper_id` and `gsis_id`** | **This is infrastructure.** It is the crosswalk that lets any nflverse dataset join to this app with no name matching. 132,590 player-week rows across 2022–25. Everything else in this table depends on it. |
+| **nflverse `injuries_{season}.csv`** | Weekly injury AND practice reports — `report_status` (Out/Questionable/Doubtful), `practice_status`, injury descriptions | Makes every injury-based hypothesis **back-testable**. It is what killed Phase 4 (§9c) — which is precisely its value. 3,782 "Out" designations joined to Sleeper IDs. |
+| **nflverse `games.csv`** | `total_line`, `spread_line`, `roof`, `surface` (+ historical `temp`/`wind`) | Vegas lines **are** published for upcoming games (112 of 272 for 2026 already). Useless as a model input (9a), but legitimate as *context* on a matchup pill — "this is a 51-point game" is something Sleeper's app does not tell you. |
+| **nflverse `combine.csv` / `players.csv` / `draft_picks.csv`** | Athleticism, age, career outcomes | Already adopted as Phase 3a. |
+| **Sleeper `/players/nfl/trending/add`** | League-wide add/drop counts across all Sleeper users | **Free, on an API the app already calls, and entirely unused.** 560,352 managers added Roschon Johnson in 24 hours. It is crowd behaviour, not a prediction — but "the market is moving on this player" is real GM information and it is one request away. Untested: there is no historical archive of it, so it can only be validated live. |
+
+### 9c. Phase 4 back-test — the breakout alert is null
+
+Now testable via `injuries_{season}.csv`. Population: waiver-tier RB/WR/TE
+(projected < 8), 2022–2025. Question: does a same-position teammate being ruled
+**Out** predict that player beating his projection?
+
+| condition | n | avg proj | avg actual | beat proj by | 15+ rate |
+|---|---|---|---|---|---|
+| a **starter** at his position is Out (that man's own season avg ≥ 10) | 318 | 4.22 | 5.35 | **+1.13** | 4.7% |
+| a mid-tier teammate is Out (5–10) | 645 | 4.21 | 4.94 | +0.74 | 3.4% |
+| a scrub teammate is Out (< 5) | 831 | 4.08 | 4.83 | +0.74 | 4.2% |
+| **nobody at his position is Out** | 8,730 | 3.90 | 4.88 | **+0.98** | 4.6% |
+
+The starter-out group beats its projection by +1.13 against a control of +0.98 —
+a **0.15-point difference on n=318**, with an essentially identical breakout rate
+(4.7% vs 4.6%). No signal.
+
+**The mechanism is visible in the projections column:** the starter-out group is
+projected **4.22** against the control's **3.90**. Sleeper *already raised* those
+players. The alert would have told you what the number in front of you had
+already said. This is the same finding as everywhere else in the study.
+
+This does not contradict the earlier "79% of breakouts arrive unflagged" result.
+Both are true: breakouts are largely unpredictable, **and** the injury mechanism
+does not isolate them. The 79% figure describes how hard the problem is; this
+result says one specific proposed solution does not work.
+
+### 9d. The one real single-point-of-failure (naming, not fixing)
+
+**FantasyCalc is the app's only valuation source.** Every trade verdict, roster
+total, trajectory curve, pick price, market-mover and briefing item traces back
+to one opinion from one provider. If it changes methodology or goes away, the
+app has no second reading.
+
+KeepTradeCut is the obvious second opinion; its public endpoint returns **404**
+and it publishes no documented API. **Recorded as a known risk, not proposed
+work** — worth revisiting only if FantasyCalc becomes unreliable.
+
+### 9e. Verdict
+
+- **Keys needed: one.** `CFBD_API_KEY`, already in Phase 3b.
+- **A weather key is not worth buying** — the signal is 0.13 pts and 4 lineups a
+  season.
+- **The real correction is to treat nflverse as a first-class source** rather
+  than a rookie-intel-only one. The `roster_weekly` crosswalk should be
+  documented in `dynastyedge-data-contracts` when Phase 3 lands, since every
+  future nflverse join depends on it.

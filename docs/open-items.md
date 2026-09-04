@@ -39,8 +39,11 @@ overturned.
   adding age + athleticism from nflverse and (gated on a key) college
   production. **3c is a hard gate:** if the long-term score doesn't beat draft
   capital out of sample, report the null and stop.
-- **Phase 4** — the breakout alert, explicitly labelled experimental in the UI,
-  with logging from day one and a Week 10 kill criterion.
+- ~~**Phase 4** — the breakout alert~~ **CUT 2026-09-04.** It became testable
+  when nflverse's historical injury reports were found, and it tested null:
+  players whose position-mate was ruled Out beat their projection by +1.13
+  against a +0.98 control (n=318). Sleeper had already raised their projections.
+  See the plan's §9c.
 
 **Blocked, owner action:** Phase 3b needs a free CollegeFootballData API key
 stored as repo secret `CFBD_API_KEY`. Nothing else in the plan is blocked.
