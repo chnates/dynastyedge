@@ -111,7 +111,16 @@ const sessionSeeds = process.argv.reduce((acc, a, i) => {
 // travels in React Router nav state rather than the URL (nothing to type into
 // the address bar), so a "does this button land on the right screen?" check is
 // otherwise unscreenshotable.
-const click = arg('click')
+//
+// REPEATABLE, and it has to be: some states are two taps deep with no URL and
+// no storage key between them. The Optimizer's waiver drawer is the case that
+// forced it — you must arm a slot's swap handle BEFORE "Waiver options" exists
+// to click at all:
+//   --click "Swap Kansas City Chiefs" --click "Waiver options"
+const clicks = process.argv.reduce((acc, a, i) => {
+  if (a === '--click' && process.argv[i + 1]) acc.push(process.argv[i + 1])
+  return acc
+}, [])
 let out      = arg('out')
 if (!out) {
   const dir = join(REPO, '.screenshots')
@@ -224,7 +233,7 @@ if (player) {
   console.log('profile drawer open for', player)
 }
 
-if (click) {
+for (const click of clicks) {
   const control = page.getByRole('button', { name: new RegExp(click, 'i') })
     .or(page.getByRole('link', { name: new RegExp(click, 'i') })).first()
   await control.waitFor({ state: 'visible', timeout: 20000 })

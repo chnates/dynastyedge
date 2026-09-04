@@ -1,6 +1,7 @@
 # DynastyEdge build plan — September 2026
 
-**Status:** approved by owner 2026-09-04. Not started.
+**Status:** approved by owner 2026-09-04. **Phase 1 shipped 2026-09-04**
+(see §2); Phases 2–3 not started, Phase 4 cut (§9).
 **Origin:** the Optimizer data-source study
 (`docs/analysis/optimizer-data-sources-2026-09.md`, incl. its REVISION block).
 **How to use this file:** each phase below has a **kickoff prompt** — paste it
@@ -88,6 +89,38 @@ All probed live 2026-09-04. Re-verify only if something breaks.
 ---
 
 ## 2. Phase 1 — Surface what we already have  *(app-only, no pipelines)*
+
+> **SHIPPED 2026-09-04.** All four items landed. Notes on what the build
+> settled that the plan left open:
+> - **1a** — the table below reproduced exactly on regeneration. The same run
+>   measures the curve independently for QB and DEF and they track the
+>   FLEX curve within ~3 points at every bin, so **one** curve ships rather
+>   than three; cross-position slot-fills remain unmeasured and the code says
+>   so. A must-fix carries **no** confidence (its outgoing side scores 0 by
+>   rule, not by projection). Sub-1-point moves are **demoted, not dropped** —
+>   dropping one would leave points in the "sitting on your bench" headline
+>   with nothing on screen explaining them, breaking the Σ-gains invariant's
+>   *meaning* even though the arithmetic still held.
+> - **1b** — verified live: the DEF drawer returns 14 defenses (LV 7.7, TEN
+>   7.3, DAL 6.8), matching §1's probe. Fixing it also exposed two rule-7
+>   defects the drawer had been hiding — a defense opened from Free Agents was
+>   graded "D — Deep Stash" off a `positionRank ?? 99` default, and unvalued
+>   comparison rows rendered `0` — both now show `—`.
+>
+>   **Owner correction, same day:** the first cut put the 14 defenses into the
+>   general free-agent pool, which is wrong for dynasty — you roster exactly
+>   one defense, so a list mixing them in reads as "pick up some defenses".
+>   Defenses are now reachable only through the DEF chip (and the DEF slot),
+>   the DEF view leads with the incumbent rather than the alternatives, and a
+>   defense carries no dynasty framing anywhere. Written up as League Context
+>   doctrine in CLAUDE.md, not just as feature text, and pinned by a test.
+>   **The plan under-specified this**: §1b said "add DEF to the position
+>   filter" and stopped, which is the mechanical half of the fix.
+> - **1c** — needed a shared `/projections` session cache
+>   (`hooks/weeklyProjections.js`) so Free Agents and the Optimizer don't each
+>   pull the ~1–2MB payload.
+> - **1d** — target/rush share needs a `TEAM_{team}` row as its denominator,
+>   which is the one legitimate read of those keys; the trap note says so.
 
 Four changes that share one theme: the data is already in the app and is either
 hidden or presented without confidence. No new fetches except one.

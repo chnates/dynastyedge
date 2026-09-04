@@ -1,6 +1,8 @@
-import { ArrowDown, ArrowUp, CheckCircle2, AlertTriangle, Wand2, RotateCcw } from 'lucide-react'
+import { useState } from 'react'
+import { ArrowDown, ArrowUp, CheckCircle2, AlertTriangle, Wand2, RotateCcw, ChevronDown, Scale } from 'lucide-react'
 import { Card, Button, Badge, cn } from '../ui'
 import { POS_TEXT } from '../../utils/positionColors'
+import { MIN_MEANINGFUL_GAIN } from '../../utils/lineupConfidence'
 
 // THE answer to "what should I do this week?" — the summary the Optimizer
 // never had. The headline is the number every comparable tool leads with:
@@ -33,11 +35,60 @@ function MoveSide({ icon, verb, entry, tone }) {
   )
 }
 
+// One move card. The confidence line is the point of this whole feature: a
+// "+2.3" presented alone reads as certain, and it is not — the measured curve
+// says a 2-point edge is right 61% of the time (utils/lineupConfidence.js).
+function MoveCard({ move: m }) {
+  return (
+    <Card cut accent={m.mustFix ? 'bg-danger' : 'bg-warning'} padding="p-3">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <Badge tone={m.mustFix ? 'danger' : 'warning'} soft>
+          {m.mustFix ? 'Must fix' : 'Upgrade'}
+        </Badge>
+        <span className={cn(
+          'font-mono text-sm font-semibold tabular-nums',
+          m.gain > 0 ? 'text-success' : 'text-text-tertiary',
+        )}>
+          {m.gain > 0 ? '+' : ''}{m.gain.toFixed(1)}
+        </span>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <MoveSide icon={<ArrowDown size={13} strokeWidth={2.5} />} verb="Sit" entry={m.out} tone="text-danger" />
+        <MoveSide icon={<ArrowUp size={13} strokeWidth={2.5} />} verb="Start" entry={m.in} tone="text-success" />
+      </div>
+
+      {m.confidence != null && (
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-accent mt-2">
+          {m.confidence.toFixed(0)}% likely to be the right call
+        </p>
+      )}
+
+      <p className="font-body text-[11px] text-text-secondary leading-snug mt-2">
+        {m.reason}
+        {!m.direct && (
+          <span className="text-text-tertiary">
+            {' '}· part of a multi-player reshuffle — apply the moves to see the full lineup.
+          </span>
+        )}
+      </p>
+    </Card>
+  )
+}
+
 export default function LineupMovesCard({
   week, currentTotal, optimalTotal, pointsLeft, moves,
-  mustFixCount, upgradeCount, dirty, onApplyAll, onReset,
+  mustFixCount, upgradeCount, coinFlipCount = 0, dirty, onApplyAll, onReset,
 }) {
   const optimal = moves.length === 0
+  const [showCoinFlips, setShowCoinFlips] = useState(false)
+
+  // Sub-1-point swaps are 52/48 (lineupConfidence.js), so they are demoted out
+  // of the move list rather than presented as things to do. They are NOT
+  // dropped: the headline is optimal − current, and hiding a move outright
+  // would leave points in that number with nothing on screen explaining them.
+  const listed = moves.filter(m => m.meaningful)
+  const coinFlips = moves.filter(m => !m.meaningful)
 
   return (
     <>
@@ -118,6 +169,14 @@ export default function LineupMovesCard({
                     </span>
                   </span>
                 )}
+                {coinFlipCount > 0 && (
+                  <span className="flex items-center gap-1.5">
+                    <Scale size={13} strokeWidth={2.25} className="text-white/45 shrink-0" />
+                    <span className="font-body text-xs text-white/60">
+                      {coinFlipCount} coin flip{coinFlipCount > 1 ? 's' : ''}
+                    </span>
+                  </span>
+                )}
               </div>
             </>
           )}
@@ -162,54 +221,45 @@ export default function LineupMovesCard({
       )}
 
       {/* ── The move list ── */}
-      {moves.length > 0 && (
+      {listed.length > 0 && (
         <div className="flex flex-col gap-2 mt-3">
-          {moves.map(m => (
-            <Card
-              key={m.key}
-              cut
-              accent={m.mustFix ? 'bg-danger' : 'bg-warning'}
-              padding="p-3"
-            >
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <Badge tone={m.mustFix ? 'danger' : 'warning'} soft>
-                  {m.mustFix ? 'Must fix' : 'Upgrade'}
-                </Badge>
-                <span className={cn(
-                  'font-mono text-sm font-semibold tabular-nums',
-                  m.gain > 0 ? 'text-success' : 'text-text-tertiary',
-                )}>
-                  {m.gain > 0 ? '+' : ''}{m.gain.toFixed(1)}
-                </span>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <MoveSide
-                  icon={<ArrowDown size={13} strokeWidth={2.5} />}
-                  verb="Sit"
-                  entry={m.out}
-                  tone="text-danger"
-                />
-                <MoveSide
-                  icon={<ArrowUp size={13} strokeWidth={2.5} />}
-                  verb="Start"
-                  entry={m.in}
-                  tone="text-success"
-                />
-              </div>
-
-              <p className="font-body text-[11px] text-text-secondary leading-snug mt-2">
-                {m.reason}
-                {!m.direct && (
-                  <span className="text-text-tertiary">
-                    {' '}· part of a multi-player reshuffle — apply the moves to see the full lineup.
-                  </span>
-                )}
-              </p>
-            </Card>
-          ))}
+          {listed.map(m => <MoveCard key={m.key} move={m} />)}
         </div>
       )}
+
+      {/* Demoted: swaps inside the noise. Collapsed by default, never hidden —
+          they still count toward the headline above. */}
+      {coinFlips.length > 0 && (
+        <div className="mt-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            fullWidth
+            icon={
+              <ChevronDown
+                size={14}
+                strokeWidth={2.25}
+                className={cn('transition-transform', showCoinFlips && 'rotate-180')}
+              />
+            }
+            iconRight
+            onClick={() => setShowCoinFlips(v => !v)}
+          >
+            {coinFlips.length} swap{coinFlips.length > 1 ? 's' : ''} with no meaningful edge
+          </Button>
+          <p className="font-body text-[11px] text-text-tertiary leading-snug mt-1.5">
+            Under {MIN_MEANINGFUL_GAIN} projected point. Across 124,433 measured pairs the
+            higher-projected player won only 52% of the time at this gap — a coin flip, so
+            these are not presented as moves.
+          </p>
+          {showCoinFlips && (
+            <div className="flex flex-col gap-2 mt-2 opacity-75">
+              {coinFlips.map(m => <MoveCard key={m.key} move={m} />)}
+            </div>
+          )}
+        </div>
+      )}
+
     </>
   )
 }

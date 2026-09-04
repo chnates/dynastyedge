@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { SLEEPER_BASE, SLEEPER_ROOT } from '../constants'
 import { fetchJSON } from '../utils/fetchJSON'
 import { loadPlayerDB } from './usePlayerDB'
+import { loadNflState, loadWeeklyProjections, clearProjectionCache } from './weeklyProjections'
 
 // Teams with a game this week — everyone else is on bye. Sleeper's schedule
 // payload uses `home`/`away` (NOT `home_team`/`away_team`).
@@ -34,7 +35,9 @@ export function useLineupData() {
     setError(null)
 
     try {
-      const state = await fetchJSON(`${SLEEPER_BASE}/state/nfl`, { label: 'Sleeper' })
+      // Shared with League › Free Agents via hooks/weeklyProjections.js — one
+      // /state/nfl and one projections fetch per session across both.
+      const state = await loadNflState()
       setNflState(state)
 
       if (state.season_type !== 'regular') {
@@ -53,7 +56,7 @@ export function useLineupData() {
       // behind an ErrorState — projections and injury statuses are what the
       // lineup actually needs. (The schedule lives off /v1; see SLEEPER_ROOT.)
       const [projData, scheduleData, statsData, statuses] = await Promise.all([
-        fetchJSON(`${SLEEPER_BASE}/projections/nfl/regular/${season}/${week}`, { label: 'Sleeper' }),
+        loadWeeklyProjections(season, week),
         fetchJSON(`${SLEEPER_ROOT}/schedule/nfl/regular/${season}`, { label: 'Sleeper schedule' })
           .catch(() => []),
         prevWeek > 0
@@ -83,6 +86,10 @@ export function useLineupData() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  // Retry (and the drawer's Refresh) must actually go back to Sleeper, so it
+  // drops the shared cache first — otherwise it would replay the same payload.
+  const retry = useCallback(() => { clearProjectionCache(); fetchData() }, [fetchData])
+
   return {
     isOffseason,
     nflState,
@@ -94,6 +101,6 @@ export function useLineupData() {
     statsWeek,
     loading,
     error,
-    retry: fetchData,
+    retry,
   }
 }

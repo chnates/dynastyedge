@@ -259,6 +259,58 @@ async function buildSeasonSummary(year, sleeperId) {
   }
 }
 
+// ── Usage — DISPLAY ONLY ─────────────────────────────────────────────────────
+// Snap share and target share answer "how is he being used?", which is what a
+// GM actually wants to know about a bench player or a waiver add. They are
+// DESCRIPTIVE CONTEXT and nothing else: adding usage to Sleeper's projection
+// was measured at an MAE gain of 0.026 with coefficient signs that flip between
+// specifications (docs/analysis/optimizer-data-sources-2026-09.md §5, H6
+// disconfirmed). Sleeper already prices usage in. So this must never feed a
+// projection, a score, or a recommendation ranking — owner call, 2026-09-04.
+//
+// TRAP — `TEAM_*` keys: `/stats/nfl/regular/{year}` carries BOTH `ARI` (the
+// team DEFENSE, a fantasy asset) and `TEAM_ARI` (team OFFENSE totals: 584 pass
+// attempts, 549 targets, ≈110–120 fantasy pts). Team targets are exactly what
+// a target share needs — so `TEAM_${team}` is read here DELIBERATELY, as the
+// denominator. It is never a player and never a defense.
+
+function pct(num, den) {
+  if (!num || !den) return null
+  const v = (num / den) * 100
+  return v > 0 && v <= 100 ? Math.round(v * 10) / 10 : null
+}
+
+function buildUsage(stats, sleeperId, position, team, year) {
+  const s = stats?.[sleeperId]
+  if (!s) return null
+  const teamTotals = team ? stats[`TEAM_${team}`] : null
+
+  const usage = {
+    year,
+    snapShare:   pct(s.off_snp, s.tm_off_snp),
+    targetShare: position === 'QB' ? null : pct(s.rec_tgt, teamTotals?.rec_tgt),
+    rushShare:   position === 'RB' ? pct(s.rush_att, teamTotals?.rush_att) : null,
+    targets:     s.rec_tgt ?? null,
+    rzTargets:   s.rec_rz_tgt ?? null,
+    snaps:       s.off_snp ?? null,
+  }
+  const hasAny = usage.snapShare != null || usage.targetShare != null ||
+    usage.rushShare != null || usage.rzTargets != null
+  return hasAny ? usage : null
+}
+
+// Usage for the most recent season that actually has any. In Week 1 the
+// current season is empty, and "no usage" is far less useful than last
+// season's — so it falls back one year and the card labels which season it is.
+async function buildUsageSummary(year, sleeperId, position, team) {
+  for (const y of [year, year - 1]) {
+    const stats = await loadSeasonStats(y).catch(() => null)
+    const usage = buildUsage(stats, sleeperId, position, team, y)
+    if (usage) return usage
+  }
+  return null
+}
+
 async function buildRecentGames(year, currentWeek, sleeperId, position) {
   const weeks = []
   for (let w = currentWeek - 1; w >= 1 && weeks.length < 3; w--) weeks.push(w)
@@ -289,8 +341,9 @@ export async function getPlayerIntel(sleeperId, nflState) {
   const statsYear = (inSeason || nflState?.season_type === 'post') ? seasonNum : seasonNum - 1
   const week      = Number(nflState?.week) || 0
 
-  const [seasonSummary, recentGames, news] = await Promise.all([
+  const [seasonSummary, usage, recentGames, news] = await Promise.all([
     buildSeasonSummary(statsYear, sleeperId).catch(() => null),
+    buildUsageSummary(statsYear, sleeperId, position, meta.team).catch(() => null),
     inSeason && week > 1
       ? buildRecentGames(seasonNum, week, sleeperId, position).catch(() => [])
       : Promise.resolve([]),
@@ -306,6 +359,7 @@ export async function getPlayerIntel(sleeperId, nflState) {
   return {
     position,
     seasonSummary,                 // { year, pts, gp, ppg, posRank } | null
+    usage,                         // DISPLAY ONLY — see buildUsage above
     recentGames,                   // [{ week, pts, touches }] — in-season only
     news,                          // [{ headline, story, published }]
     depthChart: buildDepthRoom(db, sleeperId, meta),
@@ -314,7 +368,7 @@ export async function getPlayerIntel(sleeperId, nflState) {
 }
 
 const EMPTY_INTEL = {
-  loading: true, position: null, seasonSummary: null,
+  loading: true, position: null, seasonSummary: null, usage: null,
   recentGames: [], news: [], depthChart: null, newsUpdated: null,
 }
 

@@ -91,6 +91,18 @@ season). Taxi action items flag `years_exp >= 2`, never 2nd-year players.
 
 **No kicker in this league.**
 
+**Exactly one defense is ever rostered.** There is one DEF slot, only one
+defense can start in any week, and a defense carries no dynasty value
+(FantasyCalc ranks zero of them) — so a second one is a wasted bench spot.
+Owner doctrine, 2026-09-04. The app must therefore **never suggest adding a
+defense as a pickup**: defenses appear only against the DEF slot (the
+Optimizer's waiver drawer) or the DEF filter (League › Free Agents), never in
+a general free-agent pool, never in `recommendFreeAgents`, and never with
+dynasty-asset framing (no opportunity grade, no value card, no trade CTA).
+The one question worth answering there is "is there a reason to replace the
+one I have?" — and the measured answer is almost always no (see Feature 4's
+free-agent layer).
+
 3 FLEX spots means starting 5–6 RBs/WRs is common. RB and WR depth are
 disproportionately valuable. Superflex makes elite QBs the single most
 valuable dynasty asset despite 4-pt passing TDs.
@@ -143,6 +155,19 @@ checked (2022–2026). Anything needing a player's position, team, or opponent
 must join to the shared player DB (`usePlayerDB` keeps `position` + `team`) and
 to the schedule. The stats payload supplies points and nothing else.
 
+**`TEAM_*` trap — two kinds of team key, and only one is an asset.** Both the
+weekly and season stats payloads carry **`ARI`** (the **team defense**, a real
+fantasy asset, `pts_half_ppr` ≈ −4…20) *and* **`TEAM_ARI`** (**team offense
+totals** — 584 pass attempts, 549 targets, `pts_half_ppr` ≈ 110–120). Both are
+non-numeric, so **any `!isNumeric(id)` test that means "this is a defense"
+silently sweeps in a 110-point row.** The shipped `computeDefenseRankings` is
+safe only *by accident* — `TEAM_ARI` is absent from the player DB, so its
+`playerDB[id]` lookup drops it. **Anything new touching defenses must exclude
+the `TEAM_` prefix explicitly** (`utils/freeAgents.js` exports `isTeamTotalsKey`
+for exactly this). The one legitimate read of a `TEAM_*` row is as a
+**denominator**: `usePlayerIntel`'s target/rush share divides a player's
+`rec_tgt` / `rush_att` by his team's, which is what those rows are for.
+
 **Standings note:** Win/loss records and points for/against come from
 `roster.settings` (`wins`, `losses`, `ties`, `fpts`, `fpts_against`) on the
 rosters endpoint — no extra call needed.
@@ -176,7 +201,30 @@ context, peak-window status, and recent news. Sources:
   alone doesn't say much, since "WR2 behind a 1,100 WR1" reads nothing like
   "WR2 behind a 7,000 one". Zero extra fetch; unranked teammates show `—`
   (rule 7).
+- **Usage — DISPLAY ONLY:** snap share (`off_snp` / `tm_off_snp`), target share
+  and, for RBs, rush share (`rec_tgt` / `rush_att` over the **`TEAM_{team}`**
+  offense totals in the same payload — see the `TEAM_*` trap above), plus
+  red-zone targets. Rendered on the profile drawer as a "Usage · {year} season"
+  card labelled *"how he's being used"*. It uses the season the Production card
+  uses, falling back one season when the current one has no usage yet (Week 1),
+  and the card always names its year. **This must never feed a projection, a
+  score, or a recommendation ranking** — owner call 2026-09-04, on the measured
+  finding that adding usage to Sleeper's weekly projection gains 0.026 MAE with
+  coefficient signs that flip between specifications
+  (`docs/analysis/optimizer-data-sources-2026-09.md` §5, H6 disconfirmed).
+  Sleeper already prices usage in; the value here is descriptive context.
 - **Peak window:** `utils/peakWindows.js` (shared with Roster Analysis).
+- **Unranked players get no fabricated grade.** The drawer's opportunity grade
+  (A–D) and Dynasty Outlook line are derived entirely from a FantasyCalc
+  positional rank, so they render only when the player actually has one — a
+  team defense or an unranked stash previously fell through a `?? 99` default
+  and was stamped "D — Deep Stash". Dynasty value shows `—` (rule 7).
+- **A defense gets no dynasty framing at all.** It is not a dynasty asset in
+  this app's model (League Context: one is rostered, ever), so on a DEF the
+  drawer also drops the **Dynasty Value card** and the **Analyze Trade** CTA —
+  a value card reading `—` and a trade the Analyzer would price at 0 are noise,
+  not information. What remains is what a defense actually has: status,
+  production, and which defense it would replace.
 - All fetches are lazy (first profile open) and session-cached — nothing at
   app load.
 
@@ -462,6 +510,42 @@ across future seasons.
   list from a filter into actual advice: each row carries plain-English reasons
   ("fills your TE deficit", "rising 30-day trend"). Respects the position
   filter; hidden while searching.
+
+  **Two axes, not one.** The list used to rank purely by dynasty value, which
+  is the wrong yardstick for a waiver list — the two orderings correlate at
+  only r = 0.427 and three of the current dynasty top ten project **0.0 points**
+  (rookies who won't play). So each row now carries **this week's Sleeper
+  projection** beside the dynasty value, with a **Proj** sort mode
+  (`useWeeklyProjections`, the shared session cache the Optimizer also reads —
+  one projections fetch per session across both). In-season only: offseason
+  hides the column and the sort mode, like every other weekly surface. A line
+  under the sort row states what the projection buys — among waiver-tier
+  players a 0–2 projection means a **0.9%** chance of a 15+ point game, 6–8
+  means **10.6%** (`docs/analysis/optimizer-data-sources-2026-09.md` R2).
+
+  **DEF is a separate pool behind its own chip — never mixed in.** The pool
+  used to be built from FantasyCalc's `playerMap` filtered to QB/RB/WR/TE, and
+  FantasyCalc ranks **zero** defenses, so every available defense was invisible
+  in a league that starts one. Defenses now come from the shared `usePlayerDB`
+  cache — but they are reachable **only** through the DEF chip, because you
+  roster exactly one (see League Context) and a list mixing 14 of them into the
+  general pool reads as "pick up some defenses", which is advice this app must
+  never give. Under the Proj sort they would rank mid-list too: a defense
+  projects 4–8 and plenty of real stashes project less. They never enter
+  `recommendFreeAgents` (which scores in dynasty value).
+
+  Under the DEF chip the view answers the only question that matters — **"is
+  there a reason to replace the one I have?"** A `DefenseRosterNote` card leads
+  with the incumbent and its projection, states that only one starts and that
+  streaming measured worth nothing, and turns urgent in the two cases that
+  actually cost points: **no defense rostered**, or **mine on bye**. Bye
+  detection needs no schedule fetch — a defense on bye has **no row at all** in
+  the projections payload (verified against 2025 W6: 30 of 32 defenses
+  projected, the two bye teams absent). The dead controls hide with it: Upgrades
+  Only and Hide Rookies (a defense has no value and is never a rookie), the
+  sort toggle (projection is the only real ordering), and the Value column (a
+  column of `—`). Rule 7 is about never dropping a *player*; a column no row in
+  the view can ever fill is noise, and the card says why.
 - Tap any team card → full roster + picks drill-down (`/league/teams/:rosterId`)
 - League › Overview team cards also drill into the same view; the back button
   returns to wherever you came from with filters preserved
@@ -824,13 +908,52 @@ reporting no changes needed.
 
 - **Moves card (top, the red score-bug hero):** projected **points sitting on
   your bench** as the headline, `now → optimal` totals, and a must-fix /
-  upgrades count. When nothing needs changing it flips to the green
+  upgrades / coin-flips count. When nothing needs changing it flips to the green
   "Lineup is optimal — no changes needed" state.
 - **The move list:** one card per move — `SIT <player>` / `START <player>` with
-  its own gain, a Must fix / Upgrade badge, and a plain-English reason ("Rachaad
-  White is on bye and will score 0"). A move whose one-for-one pairing isn't
-  directly legal is labelled part of a multi-player reshuffle rather than
-  implying an illegal swap.
+  its own gain, a Must fix / Upgrade badge, a **confidence line**, and a
+  plain-English reason ("Rachaad White is on bye and will score 0"). A move
+  whose one-for-one pairing isn't directly legal is labelled part of a
+  multi-player reshuffle rather than implying an illegal swap.
+
+#### Confidence — how much to believe the recommendation
+
+A "+2.3 pts" upgrade shown with the same authority as a "+9" one is a lie of
+presentation: residual weekly scoring noise is 5.6–7.3 points per player, so a
+two-point edge is nearly a coin flip. `utils/lineupConfidence.js` ships the
+**measured** hit-rate curve — "how often does the higher-projected player
+actually outscore the lower, as a function of the gap?" — and every non-must-fix
+move renders it: *"61% likely to be the right call."*
+
+|gap|right|
+|---|---|
+|0–1|52.0%|
+|1–2|56.9%|
+|2–3|61.2%|
+|3–4|65.3%|
+|4–5|69.4%|
+|5–8|74.7%|
+|8–12|82.5%|
+|12+|87.2%|
+
+- **N = 666,026 FLEX-eligible same-week pairs (2022–25), monotone across every
+  bin.** Regenerate with `scripts/dev/optimizer-signal-backtest.mjs` §3 and copy
+  the "FLEX-eligible" block — **never hand-edit the numbers.** The file carries
+  the command and the last regeneration date.
+- **One curve, not three.** The same run measures it independently for QB and
+  DEF and they track within ~3 points at every bin, so the gap — not the
+  position — is what drives it. What is *not* measured is a cross-position
+  slot-fill (a QB winning Superflex over a WR); the file says so.
+- **A must-fix carries NO confidence.** A bye/Out/empty slot scores 0 by rule,
+  not by projection — there is no "higher-projected player" question to be 61%
+  sure about, and borrowing the curve's authority for it would misstate what it
+  measured.
+- **Sub-1-point moves are demoted out of the move list** into a collapsed
+  "N swaps with no meaningful edge" group that states the 52% figure. They are
+  **demoted, never dropped**: the headline is optimal − current, and hiding a
+  move outright would leave points in that number with nothing on screen
+  explaining them. The invariant "per-move gains sum exactly to the headline"
+  still holds over *all* moves, and `tests/lineupMoves.test.mjs` pins it.
 - **Starting lineup + bench**, both rendered by the shared `LineupRow` so a
   player reads identically wherever he sits: slot/position lead, name, status
   chip, NFL team, projection, matchup pill, and an optimal tick.
@@ -878,6 +1001,20 @@ player you don't own.
   - FantasyCalc dynasty value (from cached FantasyCalc data)
 - Reason: if two free agents project similarly this week, prefer the one with
   higher dynasty value. Both numbers must be visible to make this call.
+- **The list is NEVER gated on FantasyCalc.** It used to be (`if (!fc) return
+  null`), and since FantasyCalc ranks **zero** defenses that emptied the DEF
+  slot completely: 0 rows against 14 available defenses, behind the one row the
+  Optimizer marks "Tap to fill". Unranked players — every defense, plus deep
+  stashes — resolve from the shared `usePlayerDB` cache and show `—` for value,
+  exactly as rule 7 requires everywhere else. The list itself is built by the
+  pure, tested `utils/freeAgents.js` (`buildWaiverOptions`), which also carries
+  the `TEAM_*` guard.
+- **Framed honestly for the DEF slot:** the drawer says this is for filling an
+  empty slot or covering a bye, **not** a weekly streaming edge. Streaming
+  defenses on Sleeper's projection was measured over **408 team-weeks
+  (2023–25) at −0.00 pts/wk** (one season significantly negative) — the
+  original single-season "+0.91, significant" result did not replicate. This is
+  a correctness bug worth a few points a year, not a feature.
 
 #### Matchup quality indicator
 
@@ -2431,7 +2568,8 @@ dynastyedge/
 │   │   ├── matchupWeeks.js      ← shared /matchups/{week} session cache (playoff odds + lineup history)
 │   │   ├── useLineupHistory.js  ← my past matchups for efficiency review (reads matchupWeeks)
 │   │   ├── usePlayoffOdds.js    ← regular-season schedule (via matchupWeeks) + Monte Carlo sim
-│   │   ├── useLineupData.js     ← projections, statuses, schedule, def stats
+│   │   ├── weeklyProjections.js ← shared /projections + /state session cache (Optimizer + Free Agents)
+│   │   ├── useLineupData.js     ← projections (via weeklyProjections), statuses, schedule, def stats
 │   │   ├── useWatchlist.js      ← starred players (localStorage-backed store)
 │   │   ├── useLastVisit.js      ← The Edge's "since your last visit" anchor
 │   │   ├── useLeagueNews.js     ← news feed matched to my roster + watchlist
@@ -2468,6 +2606,8 @@ dynastyedge/
 │   │   ├── draftLive.js         ← THE rookie draft live path (on the clock, countdown, Best Available, capital, recap) — pure, extracted from DraftTracker so it is testable
 │   │   ├── lineupBuild.js       ← THE optimal starting-lineup slot-fill (metric-agnostic); fed points (Optimizer) or dynasty value (Trade Analyzer fit sim)
 │   │   ├── lineupMoves.js       ← THE weekly start/sit engine: solves the lineup, diffs it against yours, emits the move list (gains sum to the headline)
+│   │   ├── lineupConfidence.js  ← the MEASURED hit-rate curve behind "61% likely to be the right call" — regenerate, never hand-edit
+│   │   ├── freeAgents.js        ← THE waiver-options list (never gated on FantasyCalc; carries the TEAM_* guard)
 │   │   ├── lineupHistory.js     ← optimal-lineup POINTS math for efficiency review (delegates to lineupBuild)
 │   │   ├── playoffOdds.js       ← scoring model + Monte Carlo + deadline verdict
 │   │   └── projections.js       ← lineup optimization, matchup quality
@@ -2498,7 +2638,8 @@ dynastyedge/
 │   ├── tradeAnalysis.test.mjs       ← verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge
 │   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
 │   ├── lineupBuild.test.mjs         ← slot-fill order (singles → FLEX → SFLX), IR/taxi excluded, who-starts identity
-│   ├── lineupMoves.test.mjs         ← start/sit engine: Σ gains = headline invariant, the two superseded per-slot bugs (double-count, missed cascade), hard-block exclusion, empty DEF slot, swap algebra
+│   ├── lineupMoves.test.mjs         ← start/sit engine: Σ gains = headline invariant, the two superseded per-slot bugs (double-count, missed cascade), hard-block exclusion, empty DEF slot, swap algebra, confidence lookup + coin-flip demotion (demoted moves still sum to the headline)
+│   ├── freeAgents.test.mjs          ← waiver options: the DEF blind spot (FantasyCalc must not gate the list), TEAM_* offense-totals guard, rule-7 `—` for unranked, rostered exclusion, and the one-defense rule (a skill slot never returns a DEF, however it projects)
 │   ├── lineupHistory.test.mjs       ← optimal-lineup slot-fill order (singles → FLEX → SFLX)
 │   ├── matchupWeeks.test.mjs        ← mocked-fetch: one fetch/week across both consumers, all-fail rejection
 │   ├── rookieResearch.test.mjs      ← opportunity blend, shared points scale (the backup-TE trap), within-position divergence, roster-fit re-ranking (need/window bonuses, score untouched), drawer hand-off fields, best-effort feed degradation
@@ -2513,13 +2654,13 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 104 / # pass 99 /
+honestly:** instead of "cannot find module" it prints `# tests 113 / # pass 108 /
 # fail 5`, which reads like a code regression. The five files that fail are the
 ones transitively importing `react` (`tradeAnalysis.js` → `recommendations.js`
 → `useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
 `draftLive` loading their hooks) — the file fails to load, so its tests never
-run and the count silently drops from **152** to 104. `npm run build` in the
-same state fails with `sh: 1: vite: not found`. **If the test count isn't 152,
+run and the count silently drops from **163** to 113. `npm run build` in the
+same state fails with `sh: 1: vite: not found`. **If the test count isn't 163,
 run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-04
 by renaming `node_modules` aside; re-measure them whenever the suite grows.)
 

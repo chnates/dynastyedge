@@ -1,37 +1,34 @@
 import { useMemo } from 'react'
 import { Sheet, SheetHeader } from '../ui'
 
+import { buildWaiverOptions } from '../../utils/freeAgents'
 import { POS_TAG as POS_COLORS } from '../../utils/positionColors'
 
-export default function FreeAgentDrawer({ slot, projMap, allRosters, fcPlayerMap, onClose }) {
-  const faList = useMemo(() => {
-    if (!projMap || !fcPlayerMap) return []
-
-    const rosteredIds = new Set(
-      (allRosters ?? []).flatMap(r => r.players.map(p => p.sleeperId))
-    )
-
-    return Object.entries(projMap)
-      .filter(([id]) => !rosteredIds.has(id))
-      .map(([id, proj]) => {
-        const fc = fcPlayerMap[id]
-        if (!fc) return null
-        return {
-          sleeperId: id,
-          projPts: proj.pts_half_ppr ?? 0,
-          name: fc.name,
-          position: fc.position,
-          team: fc.team,
-          value: fc.value,
-        }
-      })
-      .filter(fa => fa && fa.position && slot.eligible.includes(fa.position))
-      .sort((a, b) => b.projPts - a.projPts)
-      .slice(0, 25)
-  }, [projMap, allRosters, fcPlayerMap, slot])
+// Waiver options for one armed lineup slot, ranked by this week's Sleeper
+// projection.
+//
+// This list used to be gated on FantasyCalc (`if (!fc) return null`), which
+// silently emptied the DEF slot entirely: FantasyCalc ranks ZERO defenses
+// (473 entries, RB/WR/QB/TE/PICK only — verified 2026-09-04), so the one row
+// the Optimizer marks "Tap to fill" opened onto "No free agents with
+// projections this week" while Sleeper was publishing projections for 14
+// available defenses. Unranked players are now resolved from the shared player
+// DB and show `—` for value, exactly as rule 7 requires everywhere else.
+//
+// The list itself is built by utils/freeAgents.js — pure, tested, and carrying
+// the `TEAM_*` guard every defense-touching surface needs.
+export default function FreeAgentDrawer({ slot, projMap, allRosters, fcPlayerMap, playerDB, onClose }) {
+  const faList = useMemo(() => buildWaiverOptions({
+    projMap,
+    rosteredIds: new Set((allRosters ?? []).flatMap(r => r.players.map(p => p.sleeperId))),
+    fcPlayerMap,
+    playerDB,
+    eligible: slot.eligible,
+  }), [projMap, allRosters, fcPlayerMap, playerDB, slot])
 
   const slotLabel = slot.label
-  const posLabel  = slot.eligible.filter(p => p !== 'DEF').join(' / ')
+  const posLabel  = slot.eligible.join(' / ')
+  const isDefSlot = slot.eligible.length === 1 && slot.eligible[0] === 'DEF'
 
   return (
     <Sheet onClose={onClose} surface="bg-bg-card" maxHeight="max-h-[75vh]" label={`${slotLabel} free agents`}>
@@ -43,6 +40,17 @@ export default function FreeAgentDrawer({ slot, projMap, allRosters, fcPlayerMap
       />
 
       <div className="px-4">
+        {/* Say what this list is FOR. Streaming defenses on Sleeper's weekly
+            projection was measured across 408 team-weeks (2023–25) and is
+            worth −0.00 pts/wk — so this is "fill the slot", not an edge. */}
+        {isDefSlot && (
+          <p className="font-body text-[11px] text-text-tertiary leading-snug pt-1 pb-2">
+            For filling an empty slot or covering a bye. Swapping defenses week to week
+            on projection alone measured worth nothing over three seasons — if yours is
+            playing, keep it.
+          </p>
+        )}
+
         {/* Column headers */}
         <div className="flex items-center gap-2 py-1.5 border-b border-border-default dark:border-border-default">
           <span className="w-7 shrink-0" />
