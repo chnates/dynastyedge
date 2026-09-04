@@ -34,6 +34,9 @@ const browserGlobals = {
   CustomEvent: 'readonly',
   IntersectionObserver: 'readonly',
   ResizeObserver: 'readonly',
+  // Compiled in by Vite's `define` (see vite.config.js) — the build id the
+  // running bundle was built from.
+  __BUILD_ID__: 'readonly',
 }
 
 const nodeGlobals = {
