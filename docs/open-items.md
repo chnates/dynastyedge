@@ -95,6 +95,27 @@ carrying taxi-squad rookies, and the **target should move rather than the
 sources** — do not bolt on low-signal feeds to chase the number. Record
 whichever way it goes.
 
+### NEWS-2 — wire the feed's `coverage` block into the drawer's data-status row
+
+**Trigger:** ready now; small, and gated only on whether it earns its screen
+space. Owner call.
+
+Phase 2's step 5 asked for a relevance/source breakdown "in the feed JSON so
+the side drawer's data-status block can show feed health". **The data shipped;
+the UI did not.** `news.json` now carries
+`{ total, playerItems, withPlayerIds, withAthleteIds, spanHours, sources }`
+next to `updatedAt`, and nothing in the app reads it — the drawer still shows
+only the News row's refresh age and publish age.
+
+What it would add: a dead pipeline is already visible through publish age, but
+a **degraded** one is not. A run where RotoWire's markup changed, or where the
+player DB fetch failed and every new item landed in the general bucket, still
+publishes a fresh `updatedAt` while `playerItems` quietly collapses. That is
+the failure this block was published to make visible.
+
+Keep it to one line under the existing News row — the drawer is already dense,
+and this is diagnostic, not daily information.
+
 **Blocked, owner action:** Phase 3b needs a free CollegeFootballData API key
 stored as repo secret `CFBD_API_KEY`. Nothing else in the plan is blocked.
 

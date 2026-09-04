@@ -80,8 +80,11 @@ chain; each link **forces** the next:
    is the clearest case: it reads three nflverse CSVs (~39MB, no CORS) and
    ships a ~52KB derived file. It also resolves the nflverse→Sleeper join
    server-side — the app receives clean Sleeper player IDs and never
-   name-matches — exactly as the news pipeline resolves `athleteIds`. When a
-   new source needs a fuzzy join, resolve it in the workflow, not the client.
+   name-matches — exactly as the news pipeline resolves `playerIds` (it name-
+   matches every item against the player DB in the workflow and ships Sleeper
+   ids; `athleteIds` alone reached only the minority of players carrying an
+   `espn_id`). When a new source needs a fuzzy join, resolve it in the
+   workflow, not the client.
 6. **Anything published this way is inherently best-effort** (a branch can be
    missing, a cron can be disabled, a run can fail) → the client contract for
    these feeds is *degrade silently, never error* (section 5).

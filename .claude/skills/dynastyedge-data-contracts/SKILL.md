@@ -271,36 +271,70 @@ prevents re-fetch loops.
 Writer: `scripts/fetch-news.mjs`, run by `.github/workflows/news.yml`
 (cron `17,47 * * * *` + `workflow_dispatch`, as of 2026-07-05; schedules +
 60-day auto-disable ops canonical: `dynastyedge-run-and-operate`);
-force-pushes a single-commit branch. Exits 1 (keeping the previous feed) only when ALL
-five sources (ESPN news API, FantasyPros RSS, Yahoo RSS, ESPN RSS, CBS RSS)
-return nothing. Dedupe by normalized headline, newest first,
-`MAX_ITEMS = 100`.
+force-pushes a single-commit branch.
 
-Schema (verified against writer and readers):
+**The feed ACCUMULATES (rewritten 2026-09-04).** It is no longer a snapshot of
+one fetch: the workflow checks the previously published `news.json` out of the
+`news-data` branch **via git** (not the raw CDN — that caches ~5 min and would
+hand a run back its own grandparent) into `news-prev.json`, and the script
+merges into it. Retention: **player items 7 days / 240 max, general items 48
+hours / 80 max** (`PLAYER_MAX`, `PLAYER_MAX_AGE_MS`, `GENERAL_MAX`,
+`GENERAL_MAX_AGE_MS`) — roughly 100 KB. Dedupe by normalized headline; **later
+copies win on content, but the first `published` we recorded stands**, so an
+item cannot float back to the top by being re-listed. Exits 1 (keeping the
+published feed) only when no source returned anything AND nothing was retained.
+
+Eleven sources as of 2026-09-04 — ESPN news API, RotoWire *page*, RotoWire
+RSS, Yardbarker, PFF, The Athletic, ESPN RSS, PFT, CBS, Sporting News, Yahoo.
+FantasyPros was removed (all three endpoints dead). Adoption rationale and the
+ten rejected candidates: `docs/analysis/news-sources-2026-09.md`.
+
+Schema (verified against writer and readers, 2026-09-04):
 
 ```json
 {
   "updatedAt": "ISO-8601",
+  "coverage": {
+    "total": 207,
+    "playerItems": 127,
+    "withPlayerIds": 120,
+    "withAthleteIds": 62,
+    "spanHours": 159,
+    "sources": { "ESPN API": 50, "RotoWire page": 25 }
+  },
   "items": [
     {
       "headline": "string (required, non-empty)",
       "story": "string, ≤ 600 chars (MAX_STORY), HTML stripped",
       "published": "ISO-8601 | null",
-      "source": "ESPN | FantasyPros | Yahoo | CBS",
+      "source": "ESPN | RotoWire | Yardbarker | PFF | The Athletic | PFT | CBS | Sporting News | Yahoo",
       "link": "validated http(s) URL | null",
-      "athleteIds": [123456]
+      "athleteIds": [123456],
+      "playerIds": ["4984"],
+      "isPlayerNews": true
     }
   ]
 }
 ```
 
-`athleteIds` is populated only by the ESPN API source (from article
-`categories` with `type === 'athlete'`); RSS items get `[]`. Readers:
-`loadNewsFeed` in `usePlayerIntel.js` (one fetch/session, 10 s timeout,
-`.catch(() => [])`), consumed by `usePlayerIntel`, `useLeagueNews`,
-`useNewsFeed`. Player matching: ESPN athlete id ↔ playerDB `espn_id` first,
-then normalized full name (≥ 6 chars, must contain a space) in the headline,
-longest name wins.
+**`playerIds` is the join, not `athleteIds`.** The writer resolves every item
+against Sleeper's player DB server-side (ESPN athlete id first, then
+normalized full name across headline **and** story) and stamps the matched
+**Sleeper** ids. This exists because **`espn_id` is null for 17 of the owner's
+26 rostered spots** — the old id-first design could not reach most of a
+dynasty roster by anything but a headline name. `athleteIds` is still enriched
+from name matches, so a consumer predating `playerIds` keeps working; RSS
+items with no resolvable player still get `[]`.
+
+`coverage` is published for diagnostics and as a baseline for the next
+measurement. **No app code reads it yet** (open item `NEWS-2`);
+`scripts/dev/news-coverage.mjs` does.
+
+Readers: `loadNewsFeed` in `usePlayerIntel.js` (one fetch/session, 10 s
+timeout, `.catch(() => [])`), consumed by `usePlayerIntel`, `useLeagueNews`,
+`useNewsFeed`. **Player matching order in all three:** `playerIds` →
+`athleteIds` ↔ playerDB `espn_id` → normalized full name (≥ 6 chars, must
+contain a space) in the headline, longest name wins.
 
 ### 3b. `VALUES_HISTORY_URL` → values-history.json (branch `values-history`)
 
@@ -574,7 +608,7 @@ sed -n '1,56p' /home/user/dynastyedge/src/constants.js
 grep -n "FANTASYCALC_PARAMS\|values/current" /home/user/dynastyedge/src/hooks/useFantasyCalc.js /home/user/dynastyedge/scripts/snapshot-values.mjs /home/user/dynastyedge/scripts/snapshot-trade-values.mjs
 
 # Feed schemas: writers vs readers
-grep -n "MAX_ITEMS\|MAX_STORY\|athleteIds" /home/user/dynastyedge/scripts/fetch-news.mjs
+grep -n "PLAYER_MAX\|GENERAL_MAX\|MAX_STORY\|playerIds\|isPlayerNews" /home/user/dynastyedge/scripts/fetch-news.mjs
 grep -n "MAX_DAYS\|MAX_PLAYERS" /home/user/dynastyedge/scripts/snapshot-values.mjs
 grep -n "MIN_SPARKLINE_POINTS" /home/user/dynastyedge/src/hooks/useValueHistory.js
 grep -n "RECENT_DAYS\|picks\[" /home/user/dynastyedge/scripts/snapshot-trade-values.mjs

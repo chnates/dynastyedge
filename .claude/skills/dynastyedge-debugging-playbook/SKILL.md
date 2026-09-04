@@ -69,6 +69,7 @@ documented in §5 below.
 | Trade totals "wrong" | Are you expecting trade-time prices? | **By design**: Activity + manager ledgers grade at *today's* prices; FAAB displays but counts 0 | Compare against the "At trade time" line (only if archived) | `src/components/league/LeagueActivity.jsx:73`, `src/utils/managerAnalysis.js:243` | `dynasty-fantasy-reference` |
 | Sparkline missing | How many snapshots does the player have? | **By design**: hidden under 4 points (`MIN_SPARKLINE_POINTS`) | Fetch `values-history.json` raw URL, count non-null entries for that sleeperId | `src/hooks/useValueHistory.js:38` | — |
 | News section vanished | Nothing — this is the contract | **By design**: news hides on *any* failure, never errors | Fetch `news.json` raw URL yourself | `loadNewsFeed` in `src/hooks/usePlayerIntel.js:82` (`.catch(() => [])`) | — |
+| News loads, but a specific player never has any | Nothing | Usually **genuine absence** — free NFL news does not cover a 26-deep dynasty roster. Only ~10 of 26 rostered players appear in a typical feed (measured 2026-09-04). Not a matching bug unless the player's name IS in the feed text | `node scripts/dev/news-coverage.mjs` prints covered/uncovered by name; then grep the feed for that name to split absence from mis-match | `scripts/fetch-news.mjs` (`enrich`), `useLeagueNews.js`, `useNewsFeed.js` | `docs/analysis/news-sources-2026-09.md` |
 | News/values stale for days | Commit date on `news-data` / `values-history` branches | GitHub cron auto-disabled after ~60 days repo inactivity; or workflow failing | `git ls-remote` + raw-URL `updatedAt` (§6, needs network) | `.github/workflows/news.yml`, `values-history.yml`; any push re-enables cron | `dynastyedge-run-and-operate` |
 | Matchups / Lineup optimizer / projections gone | `season_type` from `/state/nfl` | **By design**: offseason hides in-season UI (`isOffseason = season_type !== 'regular'`) | Check `nflState.season_type` in console/curl | `src/hooks/useLeague.js:166` + consumers (LineupOptimizer, EdgeView, TradeLayout, LeagueOverview) | — |
 | "Record" sort option gone | Has any team played a game? | **By design**: hidden when no records; persisted `record` sort silently falls back to value | `roster.settings.wins/losses/ties` all 0? | `src/components/league/LeagueOverview.jsx:123-125,196` | — |
@@ -233,10 +234,14 @@ Likely causes, in order:
 1. **GitHub disables cron workflows after ~60 days without repo activity.**
    Any push to the repo re-enables them; or trigger manually
    (`workflow_dispatch` on both workflows).
-2. Workflow failing: check Actions runs. News only hard-fails when *all five*
-   sources return nothing (keeps previous feed). The trade-archive step is
-   `continue-on-error` and the publish step re-fetches the previous archive
-   on script failure — a bad run can't erase it.
+2. Workflow failing: check Actions runs. News only hard-fails when **all
+   eleven sources return nothing AND nothing was retained** from the previous
+   feed (which keeps the published feed). It also fails deliberately if the
+   `news-data` branch exists but its `news.json` can't be checked out — that
+   guard protects the accumulated 7-day window from being force-pushed away.
+   The trade-archive step is `continue-on-error` and the publish step
+   re-fetches the previous archive on script failure — a bad run can't erase
+   it.
 3. You're seeing the ~5-minute CDN cache on raw.githubusercontent.com, or the
    in-app once-per-session cache (§7). Not a bug.
 

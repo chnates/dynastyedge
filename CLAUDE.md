@@ -307,6 +307,10 @@ architecture:
   `node scripts/dev/news-coverage.mjs` reports it against the live feed (or a
   local file) along with how many of the owner's rostered players the app
   actually resolves — that is the pipeline's acceptance metric.
+  **The drawer's data-status block does not read it yet** — publish age already
+  surfaces a *dead* pipeline; this block would surface a *degraded* one (a run
+  that publishes on time with `playerItems` quietly collapsed). Open item
+  `NEWS-2`.
 - **News items are tappable everywhere they appear** (profile drawer
   "Latest News", The Edge "Headlines") → `NewsArticleSheet`, a bottom sheet
   (z-60, layers above the profile drawer) with the full stored story, a
@@ -2525,10 +2529,11 @@ left the font request in Phase 3.
 ```
 dynastyedge/
 ├── .github/
+│   ├── pull_request_template.md ← THE PR body layout (measured-result + evidence + docs + rollback gates)
 │   └── workflows/
 │       ├── deploy.yml          ← GitHub Actions auto-deploy (lint + test gate before build)
 │       ├── ci.yml              ← lint + test + build on branch pushes / PRs (no deploy)
-│       ├── news.yml            ← twice-hourly news aggregation → news-data branch
+│       ├── news.yml            ← twice-hourly news aggregation (accumulates into the feed) → news-data branch
 │       ├── values-history.yml  ← daily value snapshot + trade archive → values-history branch
 │       └── rookie-intel.yml   ← daily rookie depth-chart + draft-capital feed → rookie-intel branch
 ├── scripts/
@@ -2721,12 +2726,12 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 113 / # pass 108 /
+honestly:** instead of "cannot find module" it prints `# tests 115 / # pass 110 /
 # fail 5`, which reads like a code regression. The five files that fail are the
 ones transitively importing `react` (`tradeAnalysis.js` → `recommendations.js`
 → `useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
 `draftLive` loading their hooks) — the file fails to load, so its tests never
-run and the count silently drops from **163** to 113. `npm run build` in the
+run and the count silently drops from **163** to 115. `npm run build` in the
 same state fails with `sh: 1: vite: not found`. **If the test count isn't 163,
 run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-04
 by renaming `node_modules` aside; re-measure them whenever the suite grows.)

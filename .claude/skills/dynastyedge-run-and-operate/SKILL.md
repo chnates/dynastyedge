@@ -144,16 +144,28 @@ GitHub Actions cron is **UTC**.
 
 - **Schedule:** `17,47 * * * *` — twice hourly at :17 and :47 UTC (offsets
   avoid top-of-hour congestion). Plus `workflow_dispatch`.
-- **Script:** `node scripts/fetch-news.mjs` (repo root cwd in Actions). Tries
-  **five sources**, each best-effort with a 15s timeout and a browser
-  User-Agent: ESPN news API (JSON — the only source carrying `athleteIds`),
-  FantasyPros player-news RSS, Yahoo NFL RSS, ESPN RSS, CBS RSS. A failing
-  source is logged and skipped. Items are merged, sorted newest-first,
-  deduped by normalized headline, capped at **100 items** (story ≤600 chars,
-  `link` kept only if a real http(s) URL, else null).
-- **Failure semantics:** exits 1 **only when ALL sources return zero items**
-  — the workflow run fails and the previous `news.json` stays published.
-  One or two dead sources = still a green run.
+- **Step 1 — carry the previous feed forward** (rewritten 2026-09-04). The
+  feed **accumulates**, so the last run's output is an *input*: the workflow
+  checks `news.json` out of the `news-data` branch **via git** (not the raw
+  CDN, which caches ~5 min and would hand a run back its own grandparent) and
+  writes it to `news-prev.json`. A branch that exists but won't yield the file
+  **fails the job here, before the publish step** — the accumulated window
+  survives and the next run self-heals. Only a never-existing branch (first
+  run) proceeds without it.
+- **Step 2 — `node scripts/fetch-news.mjs`** (repo root cwd in Actions). Tries
+  **eleven sources**, each best-effort with a 20s timeout and a browser
+  User-Agent: ESPN news API (JSON — the only source shipping `athleteIds`),
+  RotoWire's news *page* (scraped `news-update__*` markup — the most
+  player-dense source), RotoWire RSS, Yardbarker, PFF, The Athletic, ESPN RSS,
+  PFT, CBS, Sporting News, Yahoo. A failing source is logged and skipped. It
+  then fetches Sleeper's player DB to resolve items to `playerIds` — also
+  best-effort; without it, ranking falls back to recency.
+  Retention after merge: **player items 7d / 240 max, general 48h / 80 max**.
+- **Failure semantics:** exits 1 **only when no source returned anything AND
+  nothing was retained** — the run fails and the published `news.json` stays.
+  Dead sources, a dead player DB, or a corrupt `news-prev.json` are all still
+  green runs (verified end to end 2026-09-04 —
+  `docs/analysis/news-sources-2026-09.md` §5).
 - **Publish:** writes `news.json` to cwd; the workflow copies it into a fresh
   repo and force-pushes branch **`news-data`** (single commit "Update news
   feed").
@@ -235,15 +247,23 @@ GitHub Actions cron is **UTC**.
   `gh workflow run rookie-intel.yml --repo chnates/dynastyedge`
 - **MCP:** `actions_run_trigger` (github MCP server).
 
-Safe to re-run anytime: news fully regenerates; values replaces today's
+Safe to re-run anytime: news merges into the published feed (it no longer
+regenerates from scratch, so a re-run can only add); values replaces today's
 column; trade archive never overwrites existing entries; rookie intel is
 rebuilt wholesale from upstream.
 
 ### Verifying feed freshness (requires open network)
 
 ```bash
-# news: updatedAt should be < ~40 min old (cron every 30 min + CDN ~5 min)
-curl -s https://raw.githubusercontent.com/chnates/dynastyedge/news-data/news.json | head -c 200
+# news: updatedAt should be < ~40 min old (cron every 30 min + CDN ~5 min).
+# The `coverage` block next to it is the health readout — a fresh updatedAt
+# with playerItems collapsed means a degraded run, not a healthy one.
+curl -s https://raw.githubusercontent.com/chnates/dynastyedge/news-data/news.json \
+  | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const f=JSON.parse(d);console.log(f.updatedAt,JSON.stringify(f.coverage))})'
+
+# Deeper: how many of the owner's rostered players the app can actually
+# resolve — the news pipeline's acceptance metric (no arg = live feed).
+node /home/user/dynastyedge/scripts/dev/news-coverage.mjs
 
 # values: updatedAt should be today (UTC); last date in `dates` = today
 curl -s https://raw.githubusercontent.com/chnates/dynastyedge/values-history/values-history.json | head -c 300
@@ -277,17 +297,24 @@ anywhere, but **require open network** (blocked in this Claude sandbox —
 external API curls get proxy 403; not runnable/verified here).
 
 ```bash
-# Run from a scratch dir so output doesn't land in the repo root
-# (news.json / values-history.json / trade-values.json are NOT gitignored):
+# Run from a scratch dir. (These outputs ARE gitignored at the repo root —
+# corrected 2026-09-04, the skill previously claimed otherwise — but a scratch
+# dir still keeps runs from stomping each other.)
+# fetch-news.mjs reads ./news-prev.json if present, so drop the live feed there
+# first to reproduce what Actions actually does:
 mkdir -p /tmp/de-scratch && cd /tmp/de-scratch
+curl -s https://raw.githubusercontent.com/chnates/dynastyedge/news-data/news.json -o news-prev.json
 node /home/user/dynastyedge/scripts/fetch-news.mjs            # → ./news.json
 node /home/user/dynastyedge/scripts/snapshot-values.mjs       # → ./values-history.json
 node /home/user/dynastyedge/scripts/snapshot-trade-values.mjs # → ./trade-values.json
 ```
 
 Each prints per-source/per-step counts — that log is the diagnostic. The
-snapshot scripts read their *existing* state from the live branch raw URLs,
-so a local run reproduces exactly what Actions would do today.
+snapshot scripts read their *existing* state from the live branch raw URLs, so
+a local run reproduces exactly what Actions would do today. `fetch-news.mjs`
+is the exception: Actions hands it the previous feed via **git**, not the raw
+URL, so seed `news-prev.json` yourself as above — with no such file it starts a
+fresh window and its output will look far thinner than production's.
 
 **NEVER hand-push script output to `news-data` or `values-history`.** The
 workflows force-push those branches on every run; a manual push will be
