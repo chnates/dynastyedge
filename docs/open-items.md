@@ -39,7 +39,16 @@ overturned.
   adding age + athleticism from nflverse and (gated on a key) college
   production. **3c is a hard gate:** if the long-term score doesn't beat draft
   capital out of sample, report the null and stop.
-- ~~**Phase 4** — the breakout alert~~ **CUT 2026-09-04.** It became testable
+- **Phase 4** — a real valuation consensus. FantasyCalc is currently the app's
+  only valuation source. Three are obtainable free and ID-joinable: FantasyCalc
+  (actual trades), DynastyProcess (FantasyPros expert consensus), KeepTradeCut
+  (crowdsourced votes). **FantasyCalc and KTC agree at 0.975 even among the top
+  25; DynastyProcess is the lone outlier at ~0.51** — market view vs expert
+  view. Archive all three daily first (starts the clock on "which source
+  leads?"), then surface the disagreement. Do not average them; do not replace
+  FantasyCalc. See the plan's §10.
+
+- ~~**Phase 4 (original)** — the breakout alert~~ **CUT 2026-09-04.** It became testable
   when nflverse's historical injury reports were found, and it tested null:
   players whose position-mate was ruled Out beat their projection by +1.13
   against a +0.98 control (n=318). Sleeper had already raised their projections.

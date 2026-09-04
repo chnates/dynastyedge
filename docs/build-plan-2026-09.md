@@ -398,6 +398,7 @@ Do not open a PR until I ask.
 | 2 — News | Self-contained pipeline work, independent of Phase 1, and it improves the briefing every other feature reads. | nothing |
 | 3 — Rookie research | Largest build. 3b needs the owner's CFBD key; 3a/3c do not. Rookie draft is the deadline. | owner's key (3b only) |
 | ~~4 — Breakout alert~~ | **CUT.** Back-tested against nflverse injury reports and found null (§9). | — |
+| 4 — Valuation consensus (§10) | Removes the app's single-source dependency, and 4a should ship early because it starts the clock on the only test that can settle which source leads. | nothing |
 
 Phases 1 and 2 touch disjoint files and can run in either order, or in parallel
 sessions if desired.
@@ -496,16 +497,17 @@ Both are true: breakouts are largely unpredictable, **and** the injury mechanism
 does not isolate them. The 79% figure describes how hard the problem is; this
 result says one specific proposed solution does not work.
 
-### 9d. The one real single-point-of-failure (naming, not fixing)
+### 9d. The one real single-point-of-failure — now Phase 4 (§10)
 
 **FantasyCalc is the app's only valuation source.** Every trade verdict, roster
 total, trajectory curve, pick price, market-mover and briefing item traces back
 to one opinion from one provider. If it changes methodology or goes away, the
 app has no second reading.
 
-KeepTradeCut is the obvious second opinion; its public endpoint returns **404**
-and it publishes no documented API. **Recorded as a known risk, not proposed
-work** — worth revisiting only if FantasyCalc becomes unreliable.
+**Superseded by §10.** A follow-up probe found KeepTradeCut's rankings page
+embeds its full value table as JSON, and DynastyProcess publishes both free
+Superflex values and a universal ID crosswalk. Three sources are obtainable
+without a key. The owner approved building the consensus — see Phase 4 (§10).
 
 ### 9e. Verdict
 
@@ -516,3 +518,147 @@ work** — worth revisiting only if FantasyCalc becomes unreliable.
   than a rookie-intel-only one. The `roster_weekly` crosswalk should be
   documented in `dynastyedge-data-contracts` when Phase 3 lands, since every
   future nflverse join depends on it.
+
+---
+
+## 10. Phase 4 — A real valuation consensus  *(added 2026-09-04, owner-approved)*
+
+**The problem.** FantasyCalc is the app's only valuation source. Every trade
+verdict, roster total, trajectory curve, pick price, market-mover and briefing
+item traces back to one provider's opinion. That is both a single point of
+failure and a single point of view.
+
+**Three sources are obtainable, all free, all ID-joinable.** Verified live
+2026-09-04 — no key, no scraping of a rendered page, no name matching.
+
+| Source | What it measures | How to get it | Coverage |
+|---|---|---|---|
+| **FantasyCalc** *(in use)* | **Actual completed trades** in real leagues — revealed preference | `api.fantasycalc.com/values/current` | 397 players |
+| **DynastyProcess** | **FantasyPros expert consensus rankings** — stated preference | `raw.githubusercontent.com/dynastyprocess/data/master/files/values-players.csv` (`value_2qb` = Superflex). Also `values-picks.csv`, which carries **high/low ranges** FantasyCalc has no equivalent for. | 631 players |
+| **KeepTradeCut** | **Crowdsourced "would you rather" votes** from its userbase | `keeptradecut.com/dynasty-rankings` embeds `var playersArray = [...]` with `superflexValues`. Server-side only (CORS) — the news-pipeline pattern applies. | 450 players |
+
+**The join is ID-based end to end.** DynastyProcess publishes
+`files/db_playerids.csv`, a universal crosswalk carrying `sleeper_id`,
+`ktc_id`, `fantasypros_id`, `gsis_id`, `espn_id`, `pfr_id`, `mfl_id` and more.
+Verified: 4,850 fantasypros→sleeper and 456 ktc→sleeper mappings; 450 of KTC's
+500 players resolve to a Sleeper ID. **No name matching anywhere.** This
+crosswalk is independently valuable and should be documented in
+`dynastyedge-data-contracts` when this lands.
+
+### The finding that shapes the design
+
+Pairwise rank agreement, on the 376 players all three price:
+
+| pair | top 25 | top 100 | all |
+|---|---|---|---|
+| FantasyCalc vs KeepTradeCut | **0.975** | 0.976 | 0.969 |
+| FantasyCalc vs DynastyProcess | **0.513** | 0.902 | 0.960 |
+| DynastyProcess vs KeepTradeCut | **0.472** | 0.896 | 0.945 |
+
+**This is not three independent opinions.** FantasyCalc and KeepTradeCut agree
+almost perfectly even among elite assets — both are *market* measures (completed
+trades, and user votes). **DynastyProcess is the lone outlier**, and it is the
+only *expert* measure.
+
+So the real structure is **market consensus (2 sources) vs expert view (1)** —
+and because two market sources independently agree, the market/expert divergence
+is a consistent phenomenon rather than one provider behaving oddly. Directionally,
+DynastyProcess prices **QBs higher** and **RB/TE lower** than both market sources.
+
+Note also that all three agree at ~0.95+ *overall* and diverge only at the top.
+**The top of the board is the only place this matters** — and it is exactly where
+trades happen. Any evaluation of this feature must be run on the top 100–150, not
+pooled across every ranked player, or the effect disappears into the tail.
+
+### What to build
+
+**4a. Archive all three, daily — do this first and immediately.**
+Extend `.github/workflows/values-history.yml`, which already runs daily and
+already publishes to the `values-history` branch. Add DynastyProcess and
+KeepTradeCut columns alongside the existing FantasyCalc snapshot.
+
+Do this **before** any UI work, because it starts the clock on the question
+nobody can answer today: **when the sources disagree, which one do the others
+move toward?** With ~3 months of archive that becomes a real test. Without an
+archive it is unanswerable forever.
+
+Follow the existing publish contract exactly: recover a missing output from the
+branch via git, abort rather than force-push an empty file, and treat each source
+as best-effort so one failure never erases the others.
+
+**4b. Solve the scale problem properly — this is the hard part.**
+The three use different scales *and different distribution shapes*. Naive
+max-scaling (what my throwaway analysis used) distorts the comparison: it made
+KeepTradeCut look systematically higher at every position, which is a scale
+artifact, not a real bias. **Do not ship max-scaling.** Use rank-based
+normalization or distribution matching (map each source onto a common quantile
+scale), and validate that a source with no genuine bias shows none after the
+transform.
+
+**4c. Surface the disagreement — do not blend it away.**
+- **Do not replace FantasyCalc.** Every model in the app — trajectory age
+  curves, trade verdicts, pick pricing, recommendation keep-scores — is
+  calibrated on its scale. Swapping means recalibrating all of it.
+- **Do not average the sources into one number.** At ~0.96 overall the average
+  is essentially FantasyCalc, and averaging destroys the disagreement, which is
+  the entire product.
+- **Do show the spread where it is wide**, in the Trade Analyzer and the player
+  profile drawer: *"trade market 6,907 · expert consensus 4,444"*. A contested
+  asset is a different thing to trade than an agreed one, and no other tool
+  tells you which is which.
+- Use the broader coverage (631 vs 397) to **fill in players that currently show
+  `—`**, clearly labelled as to source. Rule 7 still applies: never drop a
+  rostered player.
+
+**4d. The forward test (runs later, needs the 4a archive).**
+Once ~3 months of three-source history exists: when sources disagree by more
+than X%, does the gap close, and **which source moves?** If the expert view
+leads the market, its divergences are buy signals. If the market leads, they are
+noise. Pre-register the threshold and the window before looking.
+
+### Honest limits
+
+- **Nobody knows which source is right**, and this phase does not claim to. It
+  ships *"these disagree"*, not *"this one is wrong"*. 4d is what would change
+  that.
+- **KeepTradeCut is page-embedded JSON, not an API.** It can change shape without
+  notice. Treat it as strictly best-effort: if the parse fails, the pipeline
+  publishes the other two and the UI hides KTC. Never let it fail a run.
+- Check each source's terms before publishing its values to a public branch. We
+  are storing derived numeric values for personal single-user use, which is a
+  lighter footprint than republishing an article, but it is worth a look.
+
+### Kickoff prompt — Phase 4
+
+```
+Read CLAUDE.md (the Value history pipeline section), then
+docs/build-plan-2026-09.md section 10.
+
+Build Phase 4 in order: 4a first (archive all three sources daily), then 4b
+(scale normalization), then 4c (surface the disagreement). 4d is later.
+
+Branch: claude/phase4-valuation-consensus.
+
+Start by re-verifying all three sources are still reachable and parseable --
+these were probed 2026-09-04 and KeepTradeCut in particular is page-embedded
+JSON that can change shape without notice.
+
+Hard rules:
+- The join is ID-based via dynastyprocess db_playerids.csv (sleeper_id,
+  ktc_id, fantasypros_id). Do NOT name-match.
+- Ship 4a before any UI. It starts the clock on the 4d test, which is
+  unanswerable without an archive.
+- Do NOT replace FantasyCalc and do NOT average the sources. Read section 4c
+  for why.
+- Do NOT use max-scaling to normalize. It produces a fake position bias. Show
+  me your normalization validated on a source you expect to be unbiased.
+- Every source is best-effort. One failing must never erase the others or
+  fail the workflow.
+- Evaluate on the top 100-150 assets. The sources agree in the tail; pooling
+  across all ranked players hides the entire effect.
+
+Update CLAUDE.md's Value history pipeline section and add the db_playerids
+crosswalk to the data-contracts skill, in the same commit.
+
+Do not open a PR until I ask.
+```
