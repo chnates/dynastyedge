@@ -253,13 +253,22 @@ passing**, and the broken state reads **`# tests 115 / # pass 110 / # fail 5`**.
 Lesson worth keeping: a number repeated across four files drifts four times.
 When you change the suite size, `grep -rn "passing" .claude/skills docs CLAUDE.md`.
 
-**Open (pre-existing, NOT fixed — owner call).** `scripts/generate-favicons.js`
-is absent from CLAUDE.md's File Structure tree. It is not undocumented in the
-library — `dynastyedge-build-and-env` §226 marks it **LEGACY, do not run** —
-but a session reading only CLAUDE.md would meet an unexplained script that
-paints the pre-Phase-3 blue palette (`#0B1120`). Either delete the file or give
-it a one-line tree entry marked legacy. Reported rather than fixed, per the
-audit protocol above.
+**Closed same session (owner chose delete).** `scripts/generate-favicons.js`
+was absent from CLAUDE.md's File Structure tree while `dynastyedge-build-and-env`
+marked it LEGACY — so a session reading only CLAUDE.md would have met an
+unexplained script painting the pre-Phase-3 blue palette (`#0B1120`). Reported
+rather than silently patched, per the audit protocol above; the owner chose to
+delete it. `generate-icons.mjs` was verified a strict superset of its outputs
+first. The skill now records *why* it is gone, so nobody reconstructs it.
+
+**Also closed:** removing that block surfaced a stale neighbor —
+`build-and-env` still carried a "Doc-vs-code note (as of 2026-07-05)" claiming
+CLAUDE.md rule 16 denied the `apple-mobile-web-app-status-bar-style` meta while
+`index.html` shipped `black-translucent`. Both halves are now false: rule 16 was
+rewritten 2026-07-19 and the design changed again 2026-07-20 to `default`, which
+is what `index.html:22` ships today. A *note about* drift outlived the drift and
+became drift itself — when you resolve a contradiction, delete the notes
+pointing at it, not just the contradiction.
 
 ### Open findings — re-run 2026-08-14
 
