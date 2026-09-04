@@ -33,6 +33,17 @@
 // 5353/5364 distinct ids in ESPN's range). We reach it from
 // draft_picks.pfr_player_id -> players.csv espn_id. NO NAME MATCHING.
 //
+// COVERAGE CLIFF (found run 33930694653, and it invalidates any naive run of
+// this script): CFBD's playerId is only ESPN-aligned from college season ~2015
+// onward. Dominator coverage by draft class runs 0% for 2013-2015, 4% in 2016,
+// 30% in 2017, 71% in 2018, then 96-100% from 2019. A fit on classes <= 2019
+// is therefore mostly fitting the MISSING-value fallback, while the held-out
+// classes have the variable at ~100% — two different populations, and any
+// train/test delta across that boundary is confounded rather than
+// out-of-sample. Every comparison below is therefore restricted to classes
+// that clear MIN_COVERAGE; the full-frame numbers are printed too, labelled as
+// confounded, so the cliff stays visible instead of being quietly dropped.
+//
 // Usage (workflow input):  mode=college-backtest
 
 import {
@@ -55,6 +66,9 @@ const AXIS_CLASSES = range(2015, 2023)
 const SPLIT = 2019          // fit on <= SPLIT, test on > SPLIT
 // The conventional WR breakout threshold. Reported, not tuned.
 const BREAKOUT_DOMINATOR = 0.20
+// A class is usable only if CFBD actually covers it. See the coverage cliff
+// in the header — this is the guard that keeps the analysis honest.
+const MIN_COVERAGE = 0.80
 
 function range(a, b) { return Array.from({ length: b - a + 1 }, (_, i) => a + i) }
 const mean = xs => xs.reduce((s, x) => s + x, 0) / xs.length
@@ -230,8 +244,8 @@ for (const c of CLASSES) {
 }
 const covered = rows.filter(r => r.domFinal != null)
 console.log(`  TOTAL ${covered.length}/${rows.length} (${Math.round(100 * covered.length / rows.length)}%)`)
-console.log('  misses are FCS/non-FBS players and transfers CFBD does not carry — a real,')
-console.log('  permanent limitation, not a matching failure (the join is by ID).')
+console.log('  misses below the cliff are an ID-space change in CFBD, not a matching')
+console.log('  failure; misses above it are FCS/non-FBS players and transfers.')
 for (const pos of POSITIONS) {
   const g = rows.filter(r => r.pos === pos)
   console.log(`    ${pos}: ${g.filter(r => r.domFinal != null).length}/${g.length}` +
@@ -240,6 +254,24 @@ for (const pos of POSITIONS) {
       return v.length ? v[v.length >> 1].toFixed(3) : '—'
     })()}`)
 }
+
+// ── 3b. The usable frame ────────────────────────────────────────────────────
+const USABLE = CLASSES.filter(c => {
+  const g = rows.filter(r => r.season === c)
+  return g.filter(r => r.domFinal != null).length / g.length >= MIN_COVERAGE
+})
+console.log(`\n  USABLE CLASSES (>= ${Math.round(MIN_COVERAGE * 100)}% covered): ` +
+  (USABLE.length ? `${USABLE[0]}-${USABLE.at(-1)}` : 'NONE'))
+if (USABLE.length < 4) {
+  console.log('  Fewer than 4 usable classes — not enough to split. Reporting full-frame')
+  console.log('  numbers only, and they are CONFOUNDED by the coverage cliff.')
+}
+const clean = rows.filter(r => USABLE.includes(r.season))
+console.log(`  clean frame n=${clean.length} (full frame n=${rows.length})`)
+// Split the usable classes in half rather than reusing the global SPLIT, which
+// sits below the cliff and would put every training row on the missing side.
+const CLEAN_SPLIT = USABLE.length ? USABLE[Math.floor((USABLE.length - 1) / 2)] : SPLIT
+console.log(`  clean split: fit <= ${CLEAN_SPLIT}, test > ${CLEAN_SPLIT}`)
 
 // ── 4. Q1 — univariate, and against capital alone out of sample ─────────────
 console.log('\n=== 4. Q1: does college production beat draft capital alone? ===')
@@ -265,24 +297,34 @@ const medDom = (() => {
 const withCollege = (r, w, key = 'domBest') => (1 - w) * r.cap + w * (r[key] ?? medDom)
 const GRID = [0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40]
 
-const train = rows.filter(r => r.season <= SPLIT)
-const test = rows.filter(r => r.season > SPLIT)
-let bestW = 0, bestRho = -Infinity
-for (const w of GRID) {
-  const { rho } = spearman(train.map(r => [withCollege(r, w), r.y23]))
-  if (rho > bestRho) { bestRho = rho; bestW = w }
+function splitTest(pool, splitAt, label) {
+  const train = pool.filter(r => r.season <= splitAt)
+  const test = pool.filter(r => r.season > splitAt)
+  if (train.length < 40 || test.length < 40) {
+    console.log(`\n  ${label}: too few rows to split (train ${train.length}, test ${test.length})`)
+    return
+  }
+  let bestW = 0, bestRho = -Infinity
+  for (const w of GRID) {
+    const { rho } = spearman(train.map(r => [withCollege(r, w), r.y23]))
+    if (rho > bestRho) { bestRho = rho; bestW = w }
+  }
+  const capTest = spearman(test.map(r => [r.cap, r.y23])).rho
+  const colTest = spearman(test.map(r => [withCollege(r, bestW), r.y23])).rho
+  console.log(`\n  ${label}`)
+  console.log(`    weight chosen on ${train.length} training rookies (<=${splitAt}): ` +
+    `w_college=${bestW.toFixed(2)} (train rho ${bestRho.toFixed(3)})`)
+  console.log(`    HELD OUT >${splitAt} (n=${test.length}): capital ${capTest.toFixed(3)}  ` +
+    `+college ${colTest.toFixed(3)}  delta ${colTest - capTest >= 0 ? '+' : ''}${(colTest - capTest).toFixed(4)}`)
+  for (const c of [...new Set(test.map(r => r.season))].sort()) {
+    const g = test.filter(r => r.season === c)
+    const a = spearman(g.map(r => [r.cap, r.y23])).rho
+    const b = spearman(g.map(r => [withCollege(r, bestW), r.y23])).rho
+    console.log(`      ${c} (n=${String(g.length).padStart(3)}): ${a.toFixed(3)} -> ${b.toFixed(3)}  ${b - a >= 0 ? '+' : ''}${(b - a).toFixed(3)}`)
+  }
 }
-const capTest = spearman(test.map(r => [r.cap, r.y23])).rho
-const colTest = spearman(test.map(r => [withCollege(r, bestW), r.y23])).rho
-console.log(`\n  weight chosen on ${train.length} training rookies (<=${SPLIT}): w_college=${bestW.toFixed(2)} (train rho ${bestRho.toFixed(3)})`)
-console.log(`  HELD OUT >${SPLIT} (n=${test.length}): capital ${capTest.toFixed(3)}  +college ${colTest.toFixed(3)}` +
-  `  delta ${colTest - capTest >= 0 ? '+' : ''}${(colTest - capTest).toFixed(4)}`)
-for (const c of CLASSES.filter(c => c > SPLIT)) {
-  const g = test.filter(r => r.season === c)
-  const a = spearman(g.map(r => [r.cap, r.y23])).rho
-  const b = spearman(g.map(r => [withCollege(r, bestW), r.y23])).rho
-  console.log(`    ${c} (n=${String(g.length).padStart(3)}): ${a.toFixed(3)} -> ${b.toFixed(3)}  ${b - a >= 0 ? '+' : ''}${(b - a).toFixed(3)}`)
-}
+splitTest(rows, SPLIT, 'FULL FRAME — CONFOUNDED by the coverage cliff, shown only so it stays visible:')
+splitTest(clean, CLEAN_SPLIT, `CLEAN FRAME (${USABLE[0] ?? '?'}-${USABLE.at(-1) ?? '?'}) — this is the one that counts:`)
 
 // ── 5. Q2 — on top of the SHIPPED score (needs the week-1 depth chart) ──────
 console.log('\n=== 5. Q2: does it add anything ON TOP of the shipped opportunity score? ===')
@@ -299,7 +341,13 @@ for (const season of AXIS_CLASSES) {
   }
   depthByClass.set(season, out)
 }
-const axis = rows.filter(r => AXIS_CLASSES.includes(r.season)).map(r => ({
+// Q2 and Q3 also run on the clean frame only, for the same reason: a class
+// where nobody has a dominator contributes a constant, which drags any
+// per-class delta toward zero and makes the long-term score a compressed
+// restatement of draft capital.
+const AXIS_USABLE = AXIS_CLASSES.filter(c => USABLE.includes(c))
+console.log(`  restricted to usable classes: ${AXIS_USABLE.join(', ') || 'NONE'}`)
+const axis = rows.filter(r => AXIS_USABLE.includes(r.season)).map(r => ({
   ...r,
   rank: depthByClass.get(r.season).get(r.gsis) ?? null,
   now: opportunityScore({ position: r.pos, rank: depthByClass.get(r.season).get(r.gsis) ?? null, pick: r.pick }),
@@ -313,7 +361,7 @@ for (const outcome of ['y1', 'y23']) {
     const f = g => spearman(g.map(r => [tilt(r, w), r[outcome]])).rho.toFixed(3)
     console.log(`    w_college=${w.toFixed(2)}   ${AXIS_CLASSES[0]}-2020 ${f(early)}   2021-${AXIS_CLASSES.at(-1)} ${f(late)}   pooled ${f(axis)}`)
   }
-  const deltas = AXIS_CLASSES.map(c => {
+  const deltas = AXIS_USABLE.map(c => {
     const g = axis.filter(r => r.season === c)
     return spearman(g.map(r => [tilt(r, 0.15), r[outcome]])).rho - spearman(g.map(r => [r.now, r[outcome]])).rho
   })
@@ -336,7 +384,7 @@ console.log(`\n  Spearman(impact-now, long-term) = ${spearman(axis.map(r => [r.n
 console.log('  (age + athleticism managed 0.934 — near-duplicate. Lower is the point.)')
 const cell = new Map()
 let stash = 0, rental = 0
-for (const c of AXIS_CLASSES) {
+for (const c of AXIS_USABLE) {
   const g = axis.filter(r => r.season === c)
   const q = key => {
     const m = new Map()
