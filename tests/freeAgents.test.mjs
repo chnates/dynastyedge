@@ -81,3 +81,31 @@ test('a player the DB cannot name is dropped rather than shown blank', () => {
   })
   assert.deepEqual(rows, [])
 })
+
+// ── one defense, and only one ─────────────────────────────────────────────
+// CLAUDE.md Feature 1 / Feature 4: you start exactly one defense a week and
+// there is no dynasty reason to hold a second, so a defense is only ever
+// surfaced against the DEF slot or the DEF filter. `buildWaiverOptions` is
+// slot-scoped by construction — this pins that a skill slot can never return
+// one, which is what would turn the waiver list into "add some defenses".
+
+test('a skill slot never returns a defense, however it is projected', () => {
+  // LV projects 7.66 here — ahead of the unranked RB. If DEF leaked into a
+  // FLEX list it would outrank real players and read as a recommendation.
+  const rows = buildWaiverOptions({
+    projMap, rosteredIds, fcPlayerMap, playerDB, eligible: ['RB', 'WR', 'TE'],
+  })
+  assert.ok(!rows.some(r => r.position === 'DEF'), 'FLEX slot is skill-only')
+  const sflx = buildWaiverOptions({
+    projMap, rosteredIds, fcPlayerMap, playerDB, eligible: ['QB', 'RB', 'WR', 'TE'],
+  })
+  assert.ok(!sflx.some(r => r.position === 'DEF'), 'Superflex is skill-only too')
+})
+
+test('the DEF slot returns ONLY defenses — never a skill player', () => {
+  const rows = buildWaiverOptions({
+    projMap, rosteredIds, fcPlayerMap, playerDB, eligible: ['DEF'],
+  })
+  assert.ok(rows.length > 0)
+  assert.ok(rows.every(r => r.position === 'DEF'))
+})

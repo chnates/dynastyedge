@@ -106,6 +106,16 @@ All probed live 2026-09-04. Re-verify only if something breaks.
 >   defects the drawer had been hiding — a defense opened from Free Agents was
 >   graded "D — Deep Stash" off a `positionRank ?? 99` default, and unvalued
 >   comparison rows rendered `0` — both now show `—`.
+>
+>   **Owner correction, same day:** the first cut put the 14 defenses into the
+>   general free-agent pool, which is wrong for dynasty — you roster exactly
+>   one defense, so a list mixing them in reads as "pick up some defenses".
+>   Defenses are now reachable only through the DEF chip (and the DEF slot),
+>   the DEF view leads with the incumbent rather than the alternatives, and a
+>   defense carries no dynasty framing anywhere. Written up as League Context
+>   doctrine in CLAUDE.md, not just as feature text, and pinned by a test.
+>   **The plan under-specified this**: §1b said "add DEF to the position
+>   filter" and stopped, which is the mechanical half of the fix.
 > - **1c** — needed a shared `/projections` session cache
 >   (`hooks/weeklyProjections.js`) so Free Agents and the Optimizer don't each
 >   pull the ~1–2MB payload.

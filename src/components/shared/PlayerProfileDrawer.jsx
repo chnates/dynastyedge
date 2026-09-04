@@ -397,6 +397,12 @@ export default function PlayerProfileDrawer({
 
   const flagStyle = FLAG_STYLES[injuryFlag] ?? FLAG_STYLES.green
 
+  // A team defense is not a dynasty asset in this app's model: FantasyCalc
+  // ranks none, you start exactly one a week, and there is no reason to hold a
+  // second. So the dynasty framing — a value card reading `—`, a trade CTA the
+  // Analyzer would price at 0 — is noise on a defense, not information.
+  const isDefense = player.position === 'DEF'
+
   return (
     <>
       {/* z-50 so the nested NewsArticleSheet (z-[60], rendered after) paints on top */}
@@ -660,7 +666,8 @@ export default function PlayerProfileDrawer({
             </div>
           )}
 
-          {/* Dynasty value */}
+          {/* Dynasty value — never for a defense (see isDefense above) */}
+          {!isDefense && (
           <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
             <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
               Dynasty Value
@@ -694,6 +701,7 @@ export default function PlayerProfileDrawer({
               )}
             </div>
           </div>
+          )}
 
           {/* Role / opportunity — hidden when FP dynasty outlook is available */}
           {role && !(isDraftContext && fpNotes?.dynastyOutlook) && (
@@ -918,11 +926,13 @@ export default function PlayerProfileDrawer({
             </div>
           )}
 
-          {/* Analyze Trade button */}
-          <Button size="lg" fullWidth onClick={handleAnalyzeTrade}
-            icon={<ArrowRight size={16} strokeWidth={2} />} iconRight>
-            Analyze Trade
-          </Button>
+          {/* Analyze Trade button — not for a defense (see isDefense above) */}
+          {!isDefense && (
+            <Button size="lg" fullWidth onClick={handleAnalyzeTrade}
+              icon={<ArrowRight size={16} strokeWidth={2} />} iconRight>
+              Analyze Trade
+            </Button>
+          )}
 
         </div>
       </Sheet>

@@ -38,7 +38,10 @@ overturned.
   weekly projections + a Proj sort in League › Free Agents
   (`hooks/weeklyProjections.js`, shared with the Optimizer); snap/target/rush
   share on the player profile drawer, DISPLAY ONLY. The `TEAM_*` stats trap is
-  now in CLAUDE.md's Critical stats note. 161 tests, lint + build clean.
+  now in CLAUDE.md's Critical stats note. Owner correction on review: defenses
+  are reachable only through the DEF chip/slot and carry no dynasty framing —
+  you roster exactly one, so the app must never suggest adding them (now
+  League Context doctrine in CLAUDE.md). 163 tests, lint + build clean.
 - **Phase 2** — news coverage: FantasyPros' feed is dead (HTTP 404) and only
   3 of 25 rostered players appear in the live feed. Pre-registered target: ≥12.
 - **Phase 3** — rookie research split into "impact now" vs "long-term stash",
