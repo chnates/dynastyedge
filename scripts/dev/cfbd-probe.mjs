@@ -95,6 +95,25 @@ async function getText(url) {
   return r.text()
 }
 
+// Is this the same human? Used ONLY to audit an ID join, never to make one.
+//
+// Strict string equality was the first cut and it produced a false alarm:
+// nflverse's "Cam Ward" against CFBD's "Cameron Ward" — the same quarterback at
+// the same school — was reported as a WRONG PLAYER, which nearly got a working
+// join written off. Nicknames and suffixes differ across sources, so the
+// comparison strips suffixes and falls back to first-initial + surname, the
+// same shape the pipeline's own name fallback uses.
+const SUFFIX = /\b(jr|sr|ii|iii|iv|v)\b/g
+const norm = n => (n || '').toLowerCase().replace(/\./g, '').replace(SUFFIX, '').replace(/[^a-z]/g, '')
+function sameHuman(a, b) {
+  if (norm(a) === norm(b)) return true
+  const parts = n => (n || '').toLowerCase().replace(/\./g, '').replace(SUFFIX, '').trim().split(/\s+/).filter(Boolean)
+  const [pa, pb] = [parts(a), parts(b)]
+  if (pa.length < 2 || pb.length < 2) return false
+  const surname = x => x[x.length - 1].replace(/[^a-z]/g, '')
+  return surname(pa) === surname(pb) && pa[0][0] === pb[0][0]
+}
+
 // ── 0. Auth ─────────────────────────────────────────────────────────────────
 console.log('=== 0. auth ===')
 if (!KEY) {
@@ -204,8 +223,7 @@ if (!idKey) {
   for (const p of truth.slice(0, 12)) {
     const row = byId.get(String(p.espnId))
     if (!row) { absent++; console.log(`    ${p.name.padEnd(22)} ${p.pos}  espn=${p.espnId}  ABSENT`); continue }
-    const same = (row.player || '').toLowerCase().replace(/[^a-z]/g, '')
-      === p.name.toLowerCase().replace(/[^a-z]/g, '')
+    const same = sameHuman(row.player, p.name)
     same ? right++ : wrong++
     console.log(`    ${p.name.padEnd(22)} ${p.pos}  espn=${String(p.espnId).padEnd(8)} -> ` +
       `"${row.player}" (${row.position}, ${row.team}) ${same ? 'CORRECT' : '*** WRONG PLAYER ***'}`)
