@@ -4,41 +4,71 @@
 // and a repo secret is not readable from a dev machine or an agent session.
 // Nothing in the app or the daily pipeline imports it.
 //
-// It exists to answer ONE question before any college-production code is
-// written: **can CFBD be joined to our rookies by ID, or only by name?**
+// It answers the questions that decide whether college production can be
+// added at all, BEFORE any of it is written:
 //
-// The build plan assumed `cfb_id` was the join. It is not: nflverse's
-// `cfb_player_id` is a sports-reference SLUG ("ashton-jeanty-1") while CFBD
-// keys athletes by a numeric id. The candidate ID bridge is ESPN's athlete id,
-// which we already carry in nflverse `players.csv` and in Sleeper's own
-// `espn_id`. If CFBD's athlete id IS the ESPN athlete id, college production
-// joins by ID end to end, exactly like every other feed here. If it is not,
-// the only bridge left is a name match, which this pipeline does not do
-// unguarded (CLAUDE.md: Jordan Love vs Jeremiyah Love).
+//   Q1  Can CFBD be joined to our rookies BY ID?
+//       ANSWERED YES, run 33929621664 (2026-09-04): CFBD's athlete id IS the
+//       ESPN athlete id — 14 of 15 exact matches on the 2025 draft class,
+//       zero mismatches. The build plan's assumption that `cfb_id` was the
+//       join was wrong (nflverse's cfb_player_id is a sports-reference slug,
+//       "ashton-jeanty-1"), but espn_id — which we already carry in nflverse
+//       players.csv AND in Sleeper's own player DB — bridges it cleanly.
+//       That test is kept below behind --join so it can be re-run, but it is
+//       OFF by default: it costs one /player/search per player and the answer
+//       is already recorded here.
 //
-// THE KEY IS NEVER PRINTED. Only status codes, response key names, ids that
-// are already public, and counts.
+//   Q2  Do the season-stat rows carry that id, or only a player's name?
+//       If they are name-only the whole approach collapses regardless of Q1.
+//       This is what the default run measures.
+//
+// Also learned in run 1: querying /stats/player/season with `team=` returns 0
+// rows, because CFBD's team names are its own ("Miami", not nflverse's
+// "Miami (FL)"). That would be a name-matched TEAM join, which we want no more
+// than a name-matched player join. Omitting `team` returns the whole FBS for a
+// year in one call, which is both ID-clean and far cheaper.
+//
+// THE KEY IS NEVER PRINTED — only status codes, already-public ids, counts.
+//
+// Usage (as workflow inputs):  probe_only=true          -> Q2
+//                              probe_only=true, --join   -> Q1 as well
 
 const CFBD = 'https://api.collegefootballdata.com'
 const NFLVERSE = 'https://github.com/nflverse/nflverse-data/releases/download'
 const KEY = (process.env.CFBD_API_KEY || '').trim()
+const RUN_JOIN_TEST = process.argv.includes('--join')
 
-// The class whose college careers are fully in the past, so every endpoint has
-// real data. 2026 rookies played in 2025 and would work too; 2025 is safer.
-const PROBE_SEASON = 2025
-const PROBE_CLASS = '2025'
-const SAMPLE = 15
+// A rookie drafted in 2025 played his last college season in 2024, so 2024 is
+// the year whose payload should actually contain the class.
+const COLLEGE_SEASON = 2024
+const DRAFT_CLASS = '2025'
+const CALL_TIMEOUT_MS = 45000
 
 let failures = 0
 const fail = msg => { failures++; console.error(`  FAIL: ${msg}`) }
+const keysOf = o => (o && typeof o === 'object' ? Object.keys(o).join(', ') : String(o))
 
-async function cfbd(path) {
-  const res = await fetch(`${CFBD}${path}`, {
-    headers: { Authorization: `Bearer ${KEY}`, Accept: 'application/json' },
-    signal: AbortSignal.timeout(60000),
-  })
-  const body = res.ok ? await res.json() : await res.text().catch(() => '')
-  return { status: res.status, body, headers: res.headers }
+// Every call announces itself BEFORE it goes out, so a hang is visible in the
+// log at the exact request that caused it. Probe v2 stalled with no output and
+// had to be cancelled blind; that is a diagnostic failing at its one job.
+async function cfbd(path, { quiet = false } = {}) {
+  if (!quiet) process.stdout.write(`    -> GET ${path.slice(0, 90)} … `)
+  const t0 = Date.now()
+  try {
+    const res = await fetch(`${CFBD}${path}`, {
+      headers: { Authorization: `Bearer ${KEY}`, Accept: 'application/json' },
+      signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+    })
+    const body = res.ok ? await res.json() : await res.text().catch(() => '')
+    if (!quiet) console.log(`${res.status} in ${Date.now() - t0}ms` +
+      (Array.isArray(body) ? ` (${body.length} rows)` : ''))
+    return { status: res.status, body, headers: res.headers }
+  } catch (err) {
+    if (!quiet) console.log(`ERROR after ${Date.now() - t0}ms: ${err.name} ${err.message}`)
+    // A Map stands in for Headers here so the caller's `.get()` still works
+    // without adding Headers to the lint config's globals for one error path.
+    return { status: 0, body: '', headers: new Map(), error: err }
+  }
 }
 
 function parseCsv(text) {
@@ -59,14 +89,13 @@ function parseCsv(text) {
   return rows.filter(r => r.length === head.length)
     .map(r => Object.fromEntries(head.map((h, i) => [h, r[i]])))
 }
-const get = async (url) => {
+async function getText(url) {
   const r = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(180000) })
   if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`)
   return r.text()
 }
-const keysOf = obj => (obj && typeof obj === 'object' ? Object.keys(obj).join(', ') : String(obj))
 
-// ── 0. Is the secret even present and valid? ────────────────────────────────
+// ── 0. Auth ─────────────────────────────────────────────────────────────────
 console.log('=== 0. auth ===')
 if (!KEY) {
   console.error('  CFBD_API_KEY is empty or unset in this run.')
@@ -75,139 +104,89 @@ if (!KEY) {
   process.exit(1)
 }
 console.log(`  key present: ${KEY.length} chars` +
-  (/^bearer\s/i.test(KEY) ? '  <-- WARNING: the value starts with "Bearer ". Store the key ALONE.' : ''))
+  (/^bearer\s/i.test(KEY) ? '  <-- WARNING: value starts with "Bearer ". Store the key ALONE.' : ''))
 {
-  const { status, body } = await cfbd(`/teams?year=${PROBE_SEASON}`)
-  console.log(`  GET /teams?year=${PROBE_SEASON} -> ${status}` +
-    (Array.isArray(body) ? ` (${body.length} teams)` : ''))
+  const { status, body } = await cfbd('/teams?year=2025')
   if (status === 401) {
-    console.error('  401 Unauthorized — the key is wrong, expired, or has a stray prefix/space.')
+    console.error('  401 Unauthorized — wrong key, expired, or a stray prefix/space.')
     process.exit(1)
   }
-  if (status !== 200) { fail(`unexpected status ${status}: ${String(body).slice(0, 200)}`); process.exit(1) }
+  if (status !== 200) { fail(`/teams -> ${status}: ${String(body).slice(0, 200)}`); process.exit(1) }
 }
 
-// ── 1. Build the truth set: real NFL rookies with a known ESPN athlete id ────
-console.log('\n=== 1. truth set from nflverse (pfr_id -> espn_id) ===')
-const picks = parseCsv(await get(`${NFLVERSE}/draft_picks/draft_picks.csv`))
-  .filter(r => ['QB', 'RB', 'WR', 'TE'].includes(r.position) && r.season === PROBE_CLASS)
-const playersCsv = parseCsv(await get(`${NFLVERSE}/players/players.csv`))
+// ── 1. Truth set: real NFL rookies with a known ESPN athlete id ─────────────
+console.log(`\n=== 1. truth set — the ${DRAFT_CLASS} draft class, pfr_id -> espn_id ===`)
+const picks = parseCsv(await getText(`${NFLVERSE}/draft_picks/draft_picks.csv`))
+  .filter(r => ['QB', 'RB', 'WR', 'TE'].includes(r.position) && r.season === DRAFT_CLASS)
 const espnByPfr = new Map()
-for (const p of playersCsv) if (p.pfr_id?.trim() && p.espn_id?.trim()) espnByPfr.set(p.pfr_id.trim(), p.espn_id.trim())
-
-const truth = picks
-  .map(p => ({
-    name: p.pfr_player_name,
-    pos: p.position,
-    pick: Number(p.pick),
-    college: p.college,
-    cfbSlug: p.cfb_player_id,          // the sports-reference slug the plan assumed
-    espnId: espnByPfr.get((p.pfr_player_id || '').trim()) ?? null,
-  }))
-  .filter(r => r.espnId)
-  .sort((a, b) => a.pick - b.pick)
-console.log(`  ${PROBE_CLASS} drafted skill players: ${picks.length}, ` +
-  `${truth.length} carry an ESPN athlete id in players.csv`)
-console.log(`  nflverse cfb_player_id is a SLUG, e.g. ${truth[0]?.cfbSlug} — not a CFBD numeric id`)
-
-// ── 2. THE JOIN TEST — is CFBD's athlete id the ESPN athlete id? ────────────
-// /player/search is used HERE ONLY, as the diagnostic bootstrap: it is the one
-// way to find CFBD's record for a player we already know. If the ids match,
-// nothing shipped ever needs this endpoint.
-console.log('\n=== 2. THE JOIN TEST: does CFBD athlete id == ESPN athlete id? ===')
-const sample = truth.slice(0, SAMPLE)
-let matched = 0, mismatched = 0, notFound = 0, ambiguous = 0
-let searchShapePrinted = false
-for (const p of sample) {
-  const { status, body } = await cfbd(`/player/search?searchTerm=${encodeURIComponent(p.name)}`)
-  if (status !== 200 || !Array.isArray(body)) { fail(`/player/search -> ${status}`); break }
-  if (!searchShapePrinted && body[0]) {
-    console.log(`  /player/search row keys: ${keysOf(body[0])}`)
-    searchShapePrinted = true
-  }
-  // Position-guarded, exactly as the pipeline's own name fallback is guarded.
-  const hits = body.filter(h => (h.position || '').toUpperCase() === p.pos)
-  if (!hits.length) { notFound++; console.log(`    ${p.name.padEnd(22)} ${p.pos}  no ${p.pos} hit`); continue }
-  if (hits.length > 1) ambiguous++
-  const cfbdId = String(hits[0].id ?? '')
-  const same = cfbdId === p.espnId
-  if (same) matched++; else mismatched++
-  console.log(`    ${p.name.padEnd(22)} ${p.pos}  cfbd=${cfbdId.padEnd(8)} espn=${String(p.espnId).padEnd(8)} ` +
-    `${same ? 'MATCH' : 'differ'}${hits.length > 1 ? `  (${hits.length} same-position hits)` : ''}`)
+for (const p of parseCsv(await getText(`${NFLVERSE}/players/players.csv`))) {
+  if (p.pfr_id?.trim() && p.espn_id?.trim()) espnByPfr.set(p.pfr_id.trim(), p.espn_id.trim())
 }
-console.log(`\n  matched ${matched} / mismatched ${mismatched} / no hit ${notFound} (n=${sample.length}, ambiguous ${ambiguous})`)
-const idJoinWorks = matched > 0 && mismatched === 0
-console.log(idJoinWorks
-  ? '  VERDICT: CFBD athlete id IS the ESPN athlete id. College production can join by ID\n' +
-    '           end to end (pfr_id -> espn_id -> CFBD), no name matching anywhere.'
-  : '  VERDICT: the ids are NOT the same. A shipped join would need name matching,\n' +
-    '           which this pipeline does not do unguarded. Report before building 3b.')
+const truth = picks.map(p => ({
+  name: p.pfr_player_name,
+  pos: p.position,
+  pick: Number(p.pick),
+  cfbSlug: p.cfb_player_id,
+  espnId: espnByPfr.get((p.pfr_player_id || '').trim()) ?? null,
+})).filter(r => r.espnId).sort((a, b) => a.pick - b.pick)
+console.log(`  ${picks.length} drafted skill players, ${truth.length} carry an ESPN athlete id`)
+console.log(`  nflverse cfb_player_id is a SLUG (e.g. ${truth[0]?.cfbSlug}) — not a CFBD id`)
 
-// ── 3. The production payload — does it carry the athlete id? ───────────────
-// This is the second load-bearing question. A dominator rating needs a
-// player's share of his TEAM's production, so we need per-player season stats
-// that we can (a) attribute to a player BY ID and (b) sum within a team.
-//
-// Probe v1 learned that querying by `team=` returns 0 rows, because CFBD's
-// team names are its own ("Miami", not nflverse's "Miami (FL)") — a
-// name-matched team join we do not want anyway. Omitting `team` returns the
-// entire FBS for a year in one call, which is both cheaper and ID-clean.
-console.log('\n=== 3. /stats/player/season, whole-FBS per category ===')
-const statRows = new Map()   // category -> rows
+// ── 2. Q1, only on request ──────────────────────────────────────────────────
+if (RUN_JOIN_TEST) {
+  console.log('\n=== 2. Q1: does CFBD athlete id == ESPN athlete id? ===')
+  let matched = 0, mismatched = 0, missed = 0
+  for (const p of truth.slice(0, 15)) {
+    const { status, body } = await cfbd(`/player/search?searchTerm=${encodeURIComponent(p.name)}`, { quiet: true })
+    if (status !== 200 || !Array.isArray(body)) { fail(`/player/search -> ${status}`); break }
+    const hits = body.filter(h => (h.position || '').toUpperCase() === p.pos)   // position-guarded
+    if (!hits.length) { missed++; continue }
+    String(hits[0].id) === p.espnId ? matched++ : mismatched++
+  }
+  console.log(`  matched ${matched} / mismatched ${mismatched} / no hit ${missed}`)
+} else {
+  console.log('\n=== 2. Q1 skipped — already answered (see the header). Pass --join to re-run. ===')
+}
+
+// ── 3. Q2: the production payload ───────────────────────────────────────────
+console.log(`\n=== 3. Q2: /stats/player/season for ${COLLEGE_SEASON}, whole FBS, per category ===`)
+const statRows = new Map()
 for (const category of ['receiving', 'rushing']) {
-  const t0 = Date.now()
-  const { status, body, headers } = await cfbd(`/stats/player/season?year=${PROBE_SEASON}&category=${category}`)
-  const ms = Date.now() - t0
+  const { status, body, headers } = await cfbd(`/stats/player/season?year=${COLLEGE_SEASON}&category=${category}`)
   if (status !== 200 || !Array.isArray(body)) { fail(`${category} -> ${status}: ${String(body).slice(0, 200)}`); continue }
   statRows.set(category, body)
-  console.log(`  ${category}: ${status} · ${body.length} rows · ${ms}ms`)
   console.log(`    keys: ${keysOf(body[0])}`)
   console.log(`    sample: ${JSON.stringify(body[0])}`)
-  const types = [...new Set(body.map(r => r.statType))].sort()
-  console.log(`    statTypes: ${types.join(', ')}`)
+  console.log(`    statTypes: ${[...new Set(body.map(r => r.statType))].sort().join(', ')}`)
   const idKey = ['playerId', 'player_id', 'athleteId', 'id'].find(k => body[0][k] != null)
-  console.log(`    athlete id field: ${idKey ?? 'NONE — rows are name-only'}`)
-  const limit = headers.get('x-ratelimit-limit') || headers.get('ratelimit-limit')
+  console.log(`    ATHLETE ID FIELD: ${idKey ?? 'NONE — rows are name-only'}`)
+  console.log(`    team field: ${body[0].team != null ? 'team' : 'NONE'}` +
+    ` (the dominator-rating denominator is a group-by if present)`)
   const remain = headers.get('x-ratelimit-remaining') || headers.get('ratelimit-remaining')
-  if (limit || remain) console.log(`    rate limit: ${remain ?? '?'} of ${limit ?? '?'} remaining`)
+  const limit = headers.get('x-ratelimit-limit') || headers.get('ratelimit-limit')
+  if (remain || limit) console.log(`    rate limit: ${remain ?? '?'} of ${limit ?? '?'} remaining`)
 }
 
-// ── 4. Coverage: how many of OUR rookies are actually in that payload? ──────
-// The join is only useful if it lands. Measured against the whole draft class,
-// by ID, with no name matching.
-console.log('\n=== 4. coverage of the ' + PROBE_CLASS + ' class, joined BY ID ===')
-const rec = statRows.get('receiving') ?? []
-const rush = statRows.get('rushing') ?? []
-const idKey = ['playerId', 'player_id', 'athleteId', 'id'].find(k => rec[0]?.[k] != null)
+// ── 4. Coverage: does the ID join actually land on a real class? ────────────
+console.log(`\n=== 4. coverage — how many of the ${DRAFT_CLASS} class appear in ${COLLEGE_SEASON}, BY ID ===`)
+const rows = [...(statRows.get('receiving') ?? []), ...(statRows.get('rushing') ?? [])]
+const idKey = ['playerId', 'player_id', 'athleteId', 'id'].find(k => rows[0]?.[k] != null)
 if (!idKey) {
-  fail('no athlete id on the stats rows — a shipped join would need name matching')
+  fail('no athlete id on the stat rows — a shipped join would need name matching. STOP.')
 } else {
-  const seen = new Set([...rec, ...rush].map(r => String(r[idKey])))
+  const seen = new Set(rows.map(r => String(r[idKey])))
   const hit = truth.filter(p => seen.has(String(p.espnId)))
-  console.log(`  ${hit.length}/${truth.length} of the ${PROBE_CLASS} class appear in the ${PROBE_SEASON} payload by ESPN id`)
-  console.log(`  (a rookie drafted in ${PROBE_CLASS} played his last college season in ${PROBE_SEASON - 1};`)
-  console.log(`   ${PROBE_SEASON} is used here only to prove the join, so a partial hit rate is expected)`)
+  console.log(`  ${hit.length}/${truth.length} resolved by ESPN id ` +
+    `(${Math.round(100 * hit.length / truth.length)}%)`)
   const byPos = {}
   for (const p of truth) (byPos[p.pos] ??= [0, 0])[seen.has(String(p.espnId)) ? 0 : 1]++
-  console.log('  by position: ' + Object.entries(byPos).map(([k, [a, b]]) => `${k} ${a}/${a + b}`).join('  '))
-
-  // Team totals: can a denominator be built by summing within team?
-  const teamKey = ['team'].find(k => rec[0]?.[k] != null)
-  console.log(`  team field on a row: ${teamKey ?? 'NONE'} — ` +
-    (teamKey ? 'team totals are a group-by, no extra call' : 'NO denominator without another call'))
-}
-
-// ── 5. Per-player season overview (the other candidate shape) ───────────────
-console.log('\n=== 5. /player/season/overview needs a playerId — does an ESPN id work? ===')
-{
-  const probeId = truth.find(p => p.espnId)?.espnId
-  const { status, body } = await cfbd(`/player/season/overview?playerId=${probeId}`)
-  console.log(`  playerId=${probeId} -> ${status}` + (Array.isArray(body) ? ` · ${body.length} rows` : ''))
-  if (status === 200 && Array.isArray(body) && body[0]) console.log(`    keys: ${keysOf(body[0])}`)
-  else if (status !== 200) console.log(`    body: ${String(body).slice(0, 200)}`)
-  console.log('  NOTE: per-player endpoints cost one call each (~80/class/season).')
-  console.log('  The whole-FBS category call above is 1 call per (year, category) and is preferred.')
+  console.log('  by position: ' + Object.entries(byPos)
+    .map(([k, [a, b]]) => `${k} ${a}/${a + b}`).join('  '))
+  console.log('  (QBs are expected to miss the receiving/rushing categories; a passing')
+  console.log('   category call would cover them, and dominator rating is a WR/TE/RB idea anyway)')
+  const missed = truth.filter(p => !seen.has(String(p.espnId)) && p.pos !== 'QB').slice(0, 8)
+  if (missed.length) console.log('  sample of non-QB misses: ' + missed.map(p => `${p.name} (${p.pos})`).join(', '))
 }
 
 console.log(`\n=== done, ${failures} failure(s) ===`)
-console.log(`JOIN_BY_ID=${idJoinWorks ? 'yes' : 'no'}`)
+console.log(`STATS_HAVE_ID=${idKey ? 'yes' : 'no'}`)
