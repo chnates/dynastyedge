@@ -87,11 +87,45 @@ export function getMatchupQuality(playerTeam, playerPosition, currentWeek, sched
   return defenseRankings[playerPosition]?.[opponent] ?? 'Neutral'
 }
 
-function isHardBlocked(player, playerStatuses, playingTeams) {
-  if (player.isIR) return true
-  if (playingTeams.size > 0 && player.team && !playingTeams.has(player.team)) return true
+// THE availability verdict for a player in a given week — the one place that
+// decides "can this player be started, and if not, why?". Returns a reason so
+// callers can SAY why (a move card reading "on bye" beats a red dot), and a
+// `blocked` flag so the lineup engine can drop them from the eligible pool
+// entirely rather than hoping a 0 projection sorts them out.
+//
+// `label` is the full word for prose ("is listed Questionable"); `short` is the
+// conventional fantasy shorthand for a chip, because a full-width
+// "QUESTIONABLE" badge on a 390px row squeezes the player's own name down to
+// "Rach…" — and the name is the one thing the row must never lose.
+//
+//   { blocked, status: 'ok'|'bye'|'ir'|'out'|'questionable', label, short }
+const SHORT_LABEL = {
+  Questionable: 'Q', Doubtful: 'D', Suspended: 'SUSP',
+  'NFI-R': 'NFI', NA: 'NA',
+}
+
+export function getAvailability(player, playerStatuses, playingTeams) {
+  const done = (blocked, status, label) =>
+    ({ blocked, status, label, short: label ? (SHORT_LABEL[label] ?? label) : null })
+
+  if (!player) return done(true, 'out', 'Empty')
+
+  if (player.isIR) return done(true, 'ir', 'IR')
+
+  // playingTeams is empty when the schedule fetch failed (best-effort) — with
+  // no schedule we can't know who's on bye, so we must not invent a bye.
+  if (playingTeams?.size > 0 && player.team && !playingTeams.has(player.team)) {
+    return done(true, 'bye', 'Bye')
+  }
+
   const status = playerStatuses?.[player.sleeperId]?.injury_status
-  return status != null && HARD_BLOCK_STATUSES.has(status)
+  if (status && HARD_BLOCK_STATUSES.has(status)) return done(true, 'out', status)
+  if (status && SOFT_FLAG_STATUSES.has(status)) return done(false, 'questionable', status)
+  return done(false, 'ok', null)
+}
+
+function isHardBlocked(player, playerStatuses, playingTeams) {
+  return getAvailability(player, playerStatuses, playingTeams).blocked
 }
 
 // Determine the flag for a starter slot.

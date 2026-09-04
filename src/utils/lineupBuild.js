@@ -14,7 +14,7 @@
 import { ROSTER_SLOTS } from '../constants'
 
 // items: [{ key, position, metric, item? }] — item is passed through untouched.
-// Returns { starters: [{ slot, key, position, metric, item }], total }.
+// Returns { starters: [{ slot, slotIndex, key, position, metric, item }], total }.
 export function selectOptimalStarters(items) {
   const byPos = {}
   ;(items ?? []).forEach(it => {
@@ -24,7 +24,13 @@ export function selectOptimalStarters(items) {
   Object.values(byPos).forEach(arr => arr.sort((a, b) => b.metric - a.metric))
 
   // Fewest-eligible slots first: singles (QB/RB/WR/TE/DEF) before FLEX before SFLX.
-  const slots = [...ROSTER_SLOTS].sort((a, b) => a.eligible.length - b.eligible.length)
+  // `index` is carried through so callers can map a chosen starter back to its
+  // position in ROSTER_SLOTS (labels repeat — RB/RB, FLEX×3 — so the label
+  // alone can't address a slot). Array#sort is stable, so equal-eligibility
+  // slots keep their declared order and the assignment stays deterministic.
+  const slots = ROSTER_SLOTS
+    .map((s, index) => ({ ...s, index }))
+    .sort((a, b) => a.eligible.length - b.eligible.length)
 
   const starters = []
   let total = 0
@@ -37,7 +43,7 @@ export function selectOptimalStarters(items) {
     })
     if (bestPos != null) {
       const it = byPos[bestPos].shift()
-      starters.push({ slot: slot.label, ...it })
+      starters.push({ slot: slot.label, slotIndex: slot.index, ...it })
       total += it.metric
     }
   })
