@@ -17,6 +17,153 @@ where *not* to spend effort, and they are consistent with one mechanism.
 
 ---
 
+## REVISION — 2026-09-04, later same day (owner review)
+
+The owner challenged two things. Both challenges were correct, and one of them
+**reverses a headline recommendation.** Original text is left intact below so the
+error is visible; this block is the corrected reading.
+
+### R1. The DEF streaming result did NOT replicate. It is dead.
+
+I reported +0.91 pts/wk (t = 2.22, "significant at 95%") from **one season** and
+ranked it the #1 thing to build, while flagging the single season as a caveat. I
+should have run the other seasons *before* ranking it. Extended to the full
+league history:
+
+| season | n | started | best owned | streamed | gain |
+|---|---|---|---|---|---|
+| 2023 | 137 | 8.81 | 8.99 | 9.07 | +0.26 |
+| 2024 | 135 | 7.99 | 8.30 | 6.80 | **−1.19** |
+| 2025 | 136 | 8.22 | 8.29 | 9.13 | +0.91 |
+| **pooled** | **408** | | | | **−0.00** (95% CI −0.60…+0.59, t = −0.01) |
+
+A clean null, with one season significantly *negative*. **Streaming defenses by
+Sleeper's projection is worth nothing** — unsurprising in hindsight, since that
+projection is the weakest of any position (r = 0.213). Holding a good defense is
+just as good as churning.
+
+The narrower case survives but is small: across 2023–25 there were only **8
+team-weeks** where a DEF slot could not be filled from the roster at all (nothing
+rostered, or the only rostered defense on bye). Those weeks score **0**; the best
+available defense averaged **3.5 pts** (95% CI −0.95…+7.95 — n = 8, so this is an
+observation, not a result).
+
+**Corrected verdict:** the empty-drawer bug (§2) is still real and still worth
+fixing — you cannot add a defense at all, and in KC's bye week (2026 W5) that slot
+scores 0 with no in-app remedy. But fix it as a **correctness bug worth a few
+points a year**, not as a +12.8-point feature. The original ranking oversold it.
+
+### R2. The ceiling test was the wrong instrument for the waiver question.
+
+The owner's objection: season averages can't represent "this backup will go off
+this week because the starter is out," so a cheater built from season averages
+understates what a weekly-aware model could do. **Correct.**
+
+Two compounding flaws in the original design:
+
+1. The cheater used each player's **season average**, which by construction
+   smooths away mid-season role changes — exactly the event in question. It
+   measures how much of scoring is explained by *stable* talent, not how much is
+   knowable before kickoff.
+2. Every accuracy and ceiling table filtered to **projected ≥ 5**, which excludes
+   the waiver population outright. A backup projected 3 who scores 18 never
+   entered the sample. So those tables describe **starters**, and I used them to
+   argue about **pickups**.
+
+On the owner's follow-up ("what if the cheater knew each week?"): a predictor
+that knows the exact weekly score has zero error by definition — that is the
+answer sheet, not a ceiling, and it proves nothing about what is *knowable*.
+The right question is the tail, measured directly:
+
+**Waiver-tier RB/WR/TE (projected < 8), 2022–25: 8,072 player-weeks, 402 scored 15+ (5.0%).**
+
+| Sleeper projected | count | chance of a 15+ game |
+|---|---|---|
+| 0–2 pts | 1,657 | **0.9%** |
+| 2–4 pts | 2,147 | 2.4% |
+| 4–6 pts | 2,087 | 5.0% |
+| 6–8 pts | 2,181 | **10.6%** |
+
+So the projection **level** sorts this tier extremely well — a 12× spread. But the
+week-over-week **bump** does not warn you: of the 402 actual breakouts, Sleeper
+had raised the projection by ≥1 point for only **83 (21%)**. **Roughly four in five
+breakouts arrive with no advance signal in the projection.**
+
+That is a real gap, and the original note's "Sleeper already absorbs everything"
+claim was too strong. It holds for *average accuracy across starters*; it does
+**not** hold for the waiver tail.
+
+**Is the missing 79% recoverable?** Unknown, and I could not test it. The obvious
+mechanism — "the man ahead of him on the depth chart is Out" — is buildable from
+data the app **already caches**: `usePlayerDB` keeps `injury_status`,
+`depth_chart_position` and `depth_chart_order`, and depth-chart coverage is
+complete (32/32 teams list an RB1). But:
+
+- A naive join (any free agent behind any injured player) returns **22 hits on
+  live data, all projecting 0.0** — third-string tight ends behind injured
+  fourth-stringers. Noise.
+- A tightened join (immediate backup to a depth-order-1 starter, own projection
+  ≥ 3) returns **0 hits today**, because in Week 1 preseason no starters carry an
+  Out designation yet.
+- There is **no historical `injury_status`** in the Sleeper API, so this cannot be
+  back-tested at all. Only a live in-season trial can settle it.
+
+**Corrected verdict on Q3:** the provable win is still the one already
+identified — put the weekly projection in the free-agent list and sort by it,
+which moves the top of that list from a 0.9% breakout tier to a 10.6% one. The
+injury/depth-chart alert is a *promising, untested* idea, not a measured one, and
+should be built (if at all) as an explicitly experimental surface with a plan to
+measure it during the season.
+
+### R3. New caveat — the projections endpoint is mutable
+
+`/projections/nfl/regular/{y}/{w}` is **rewritten in place**. Two fetches of 2026
+W1 about ten hours apart differed on 6 of 9,419 entries (PIT 8.01→7.97, ATL
+5.93→5.91, …). Small drift in the preseason, but it establishes the mechanism.
+
+Consequence: every historical projection used in this note is the **last value
+Sleeper held for that week**, not necessarily what was on screen before kickoff.
+This makes the accuracy figures **optimistic** (they may embed late-week news a
+Wednesday reader never saw) — and it makes the 21% breakout-flag rate
+**conservative**: even with late news possibly baked in, Sleeper still failed to
+flag four out of five breakouts.
+
+### R4. What still stands, unchanged
+
+- The **ceiling on average accuracy for starters** (4.4–13.4%) and the ESPN
+  agreement (r = 0.966) — both still argue against multi-source projections for
+  the start/sit case. R2 narrows their scope to starters; it does not overturn them.
+- The **calibration curve** (§4). N > 500k pairs, monotone 52% → 87%. Unaffected by
+  any of the above and still the strongest single finding.
+- The **empty free-agent drawer** (§2) — a live, reproduced bug.
+- H1, H2, H3 and H6 all remain disconfirmed *as posed*. R2's point is that H6
+  posed the wrong question (lagged usage predicting next week), not that its
+  answer was wrong.
+
+### R5. Corrected ranking
+
+| # | Item | Status after revision |
+|---|---|---|
+| **1** | **Confidence / calibration curve** | **Promoted to first.** Strongest evidence in the study, unaffected by the revision. |
+| **2** | **Weekly projection in the free-agent list, sorted by it** | Promoted. 0.9% → 10.6% breakout rate across the sort. |
+| **3** | Fix the empty DEF drawer | Still do it — a correctness bug, not a points feature. Demoted from #1. |
+| **4** | Injury/depth-chart breakout alert | **New, unproven.** Data exists and is already cached; mechanism untested and un-backtestable. Build only as a measured experiment. |
+| 5–7 | Multi-source projections · boom/bust score · lagged-usage model | Still don't build. |
+
+### R6. Standing methodology lessons
+
+1. **Never rank a recommendation on one season.** The DEF result had n = 136 and
+   t = 2.22 — precisely the marginal zone that fails to replicate. Multi-season
+   replication should be a gate *before* ranking, not a caveat after it.
+2. **A filter chosen for one population invalidates claims about another.**
+   `proj ≥ 5` was right for start/sit and silently wrong for waivers.
+3. **A ceiling is only as good as the cheater's information set.** State what the
+   cheater knows, and check it can represent the phenomenon in question.
+4. **Test the endpoint's mutability before back-testing it.** Two fetches hours
+   apart is a five-minute check that should have run first.
+
+---
+
 ## 1. What the data actually is (verified, not assumed)
 
 All probed live on 2026-09-04. NFL state: **2026, week 1, `season_type` regular,
@@ -275,7 +422,11 @@ Predicted ≥ 0.15, floor 0.05. **Result 0.026, and the share-delta coefficient
 flips sign between specifications** — the exact instability the pre-registration
 named as disconfirming. Sleeper already prices usage in.
 
-**Verdict on Q3: the gap is presentational, not predictive.** The additive move
+**Verdict on Q3: PARTLY SUPERSEDED — see R2.** The presentational gap is real,
+but "not predictive" was too strong: 79% of waiver breakouts arrive unflagged.
+Original reasoning follows.
+
+**Original verdict: the gap is presentational, not predictive.** The additive move
 is to give the Free Agents view its missing second axis — the weekly projection
 next to the dynasty value, plus the roster context the app uniquely has
 (`recommendations.js` already computes replacement level and deficits, but scores
@@ -322,7 +473,8 @@ Modest but statistically real — and note *where* it comes from: not from a
 cleverer model, but from **considering the 14 defenses the app never displays.**
 Sleeper's own number, on players the app hides, is the entire edge.
 
-**Verdict on Q4: build it — as a bug fix plus a surfacing, not a model.**
+**Verdict on Q4: SUPERSEDED — see R1.** The streaming gain below is a
+single-season artifact that does not replicate; the bug is still worth fixing.
 
 ---
 
@@ -337,7 +489,7 @@ Sleeper's own number, on players the app hides, is the entire edge.
 | **5** | Boom/bust score (Q2, as originally framed) | Volatility persists only for WR/RB; variance tiebreak worth **−0.07 wins/season**, negative at every margin. | Moderate | **Don't build.** Its useful half is item 2. |
 | **6** | Usage-based breakout model (Q3) | MAE gain 0.026, coefficient signs unstable. | Moderate | **Don't build.** |
 
-**Start with #1.** It is the smallest change, it is a defect rather than a
+**[SUPERSEDED — see R5 for the corrected ranking.]** **Start with #1.** It is the smallest change, it is a defect rather than a
 feature, the owner's DEF slot is empty *right now* with Week 1 five days out, and
 it is the only item with a statistically significant measured payoff. #2 is the
 one that actually changes what the app is — it makes the Optimizer honest about
