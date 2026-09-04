@@ -202,7 +202,8 @@ Sandboxed sessions typically get proxy 403s — use --fixture offline instead.
 
 **What it measures:** the four static JSON feeds served from orphan branches
 (URLs read from `src/constants.js`, falling back to hardcoded copies):
-news item count + newest-item age vs the twice-hourly cron; values-history
+news item count, newest-item age vs the twice-hourly cron **and the share of
+items resolved to a player** (from the feed's own `coverage` block); values-history
 date range / column count / player count vs the daily 09:41 UTC cron;
 trade-values archive entry count; rookie-intel player/column counts and
 snapshot date vs the daily 10:23 UTC cron. Per-feed graceful failure; exits 1
@@ -222,10 +223,11 @@ node $SKILL/scripts/check-feeds.mjs
 
 ```
 === news.json (news-data branch) ===
-items:        100 (pipeline caps at 100)
-newest item:  2026-07-05T22:55:47.000Z (5.7h ago)
-with links:   100 · sources: Yahoo, ESPN, CBS
-verdict:      STALE — newest item 5.7h old (>2h). Check .github/workflows/news.yml runs.
+items:        207 (accumulating feed: 240 player + 80 general)
+newest item:  2026-09-04T18:41:24.000Z (0.3h ago)
+with links:   201 · sources: ESPN, RotoWire, The Athletic, Yahoo, Sporting News, Yardbarker, CBS, PFF, PFT
+player items: 127 · resolved to players: 120 (58%) · span 159h
+verdict:      FRESH
 
 === values-history.json (values-history branch) ===
 updatedAt:    2026-07-05T11:19:35.048Z
@@ -247,6 +249,28 @@ verdict:      no staleness rule — archive only gains entries when trades happe
   repo activity, or every source returned nothing (script then keeps the old
   feed). In the deep July offseason a quiet overnight window can also read
   stale. To *fix*, open `dynastyedge-run-and-operate` (pipeline operations).
+- **⚠ LOW resolved-to-players (<30%) is the *degraded* failure, and it is
+  invisible in `updatedAt`.** A run whose RotoWire scrape broke, or whose
+  Sleeper player-DB fetch failed, still publishes on time — what collapses is
+  the share of items carrying `playerIds`. Healthy sits near 55% (measured
+  2026-09-04). A reading of exactly 0% on a feed whose items also lack
+  `playerIds` entirely means the branch predates that field. To find out
+  *which* players went missing rather than just how many, run the sibling tool
+  below.
+
+  ```bash
+  # Which of the owner's rostered players the app can actually resolve.
+  # No argument = the live published feed; pass a path for a local news.json.
+  node /home/user/dynastyedge/scripts/dev/news-coverage.mjs
+  ```
+
+  It prints items / span / `athleteIds` / `playerIds` / per-source counts, then
+  the covered and uncovered rostered players **by name**. That split is the
+  whole diagnostic: a name absent from the feed's text is genuine absence (the
+  normal case — free NFL news covers ~10 of 26 rostered players), while a name
+  present in the text but uncovered is a matcher bug. It lives in the repo, not
+  this skill, because it is the news pipeline's acceptance metric
+  (`docs/analysis/news-sources-2026-09.md`).
 - Values verdict STALE (missing today *and* yesterday) → the daily
   `values-history.yml` run failed or was disabled — same sibling.
 - `FEED UNREACHABLE` on all three → no network; on one → that branch/file is

@@ -54,7 +54,7 @@ classes must pass the union of both gate sets.
 |---|---|---|
 | **UI-only** (styling/layout, no logic or data change) | `4457e45` stadium-lights rollout · `0b15ca3` login neon styling · `e98260f` iOS focus-zoom fix | gates green (lint + test + build) · **`design-review` skill on the diff** · 390px mental layout check · CLAUDE.md same-commit *if* the design system or a documented treatment changed (`8b6edb4` bundled CLAUDE.md with the ui/ library) |
 | **Behavior/logic** (any change to what the app computes, fetches, stores, or shows) | `24ed7cf` taxi (developmental-player stash — see dynasty-fantasy-reference) rule fix · `1ef480a` pick pricing fix · `119c164` new Feature 17 · `92657ae` trade preload fix | gates green (lint + test + build) · **real-data verification** against the live league (route: `dynastyedge-validation-and-qa`) · **CLAUDE.md updated in the SAME commit** · design-review if UI moved too |
-| **Data-pipeline/workflow** (`.github/workflows/*.yml`, `scripts/*.mjs`) | `news.yml` (cron `17,47 * * * *`) · `values-history.yml` (cron `41 9 * * *`) — both force-push single-commit data branches | gates green (lint + test + build, if app code touched) · run the script locally where network allows · **never write a publish step that can erase accumulated branch data** (values-history.yml's publish step re-fetches the old trade archive on script failure — preserve that pattern) · CLAUDE.md same commit · after merge, verify with a manual `workflow_dispatch` run (workflows can only truly be tested on the default branch) · pipeline ops/schedules canonical: `dynastyedge-run-and-operate` |
+| **Data-pipeline/workflow** (`.github/workflows/*.yml`, `scripts/*.mjs`) | `news.yml` (cron `17,47 * * * *`) · `values-history.yml` (cron `41 9 * * *`) — both force-push single-commit data branches | gates green (lint + test + build, if app code touched) · run the script locally where network allows · **never write a publish step that can erase accumulated branch data** (values-history.yml's publish step re-fetches the old trade archive on script failure; news.yml fails *before* publishing if it can't read back the feed it is about to merge into — preserve both patterns) · CLAUDE.md same commit · after merge, verify with a manual `workflow_dispatch` run (workflows can only truly be tested on the default branch) · pipeline ops/schedules canonical: `dynastyedge-run-and-operate` |
 | **Doc-only** (CLAUDE.md / skills, no code) | `700ce00` "docs: reflect UX audit fixes" · `d4f9e75` "docs: add phased Navigation Refactor plan" | prefix subject with `docs:` · verify every claim against the code before writing it (see Divergence protocol) · gates not strictly required but cost seconds — run lint + test + build anyway (CLAUDE.md rule 22 expects lint green before any commit) |
 | **PWA-meta/manifest** (index.html metas, manifest.webmanifest, theme-color logic in `useTheme`) | the `cfd9ad0` → `3083f0c` → `78b6c29` status-bar saga (below) | **highest-risk class.** All behavior-class gates, PLUS: read the saga below and `dynastyedge-failure-archaeology` first · know that meta changes only take effect after the owner **removes and re-adds** the home-screen app (stated in index.html's own comment and CLAUDE.md rule 16) — you cannot verify this class in any sandbox — a headless-browser screenshot shows the page, never iOS chrome, so it needs the physical phone · bump the `?v=N` icon query only for logo changes |
 
@@ -79,14 +79,14 @@ Run top to bottom before any merge to `main`:
 cd /home/user/dynastyedge
 npm ci                 # STEP 0 — see the trap below. Never `npm install`.
 npm run lint           # ESLint 9 flat config over src/ + scripts/, error severity
-npm test               # tests/*.test.mjs on node:test (120 passing as of 2026-08-08)
+npm test               # tests/*.test.mjs on node:test (163 passing as of 2026-09-04)
 npm run build          # must end "✓ built in …"
 ```
 
 > **Trap — a fresh clone has no `node_modules`, and `npm test` lies about it.**
 > Remote sessions start from a fresh clone. Skip `npm ci` and you do *not* get
-> a clean "cannot find module" error — you get **`# tests 47 / # pass 44 /
-> # fail 3`**, which reads exactly like a code regression. The three failing
+> a clean "cannot find module" error — you get **`# tests 115 / # pass 110 /
+> # fail 5`**, which reads exactly like a code regression. The five failing
 > files (`tradeAnalysis`, `matchupWeeks`, `transactions`) are the ones that
 > transitively import `react` — `tradeAnalysis.js → recommendations.js →
 > useLeague.js`, and the two hook loaders directly — so their whole file fails

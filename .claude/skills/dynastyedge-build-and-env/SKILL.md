@@ -223,19 +223,16 @@ of 2026-07-05). Bump N whenever regenerated icons ship, or Safari keeps
 showing the old icon. iOS home-screen icon/meta changes only take effect after
 the user removes and re-adds the home-screen app.
 
-**`scripts/generate-favicons.js` is LEGACY — do not run it.** It draws an
-obsolete pre-crown logo (a dark "De" wordmark tile), overwrites
-`favicon*.png` / `apple-touch-icon.png` with the wrong art, and generates
-neither `icon-192/512.png` nor `logo.svg`. Nothing in the repo references it
-(verified by grep). `generate-icons.mjs` is the one that matches CLAUDE.md
-and the shipped assets. Safe to treat as dead code.
-
-**Doc-vs-code note (as of 2026-07-05):** CLAUDE.md's rule 16 says there is no
-`apple-mobile-web-app-status-bar-style` meta, but `index.html` *does* ship one
-(`black-translucent`, with a comment explaining the transparent-status-bar
-design). The code + its comment are ground truth here; flag the CLAUDE.md
-staleness per `dynastyedge-change-control` rather than "fixing" index.html to
-match the doc.
+**`scripts/generate-favicons.js` was DELETED 2026-09-04** (owner call). It drew
+an obsolete pre-crown logo — a dark "De" wordmark tile on the pre-Phase-3 blue
+`#0B1120` — and would have overwritten `favicon*.png` / `apple-touch-icon.png`
+with the wrong art while generating neither `icon-192/512.png` nor `logo.svg`.
+Nothing referenced it. **`scripts/generate-icons.mjs` is the only icon
+generator**, and its outputs are a strict superset (all four favicon files plus
+`icon-192.png`, `icon-512.png`, `logo.svg`). Recorded here so nobody
+reconstructs it: if you need a favicon-only path, add a flag to
+`generate-icons.mjs` rather than a second script that can drift from the crown
+geometry.
 
 ## 6. Fonts
 
@@ -256,7 +253,7 @@ Barlow Condensed 600/700/800, IBM Plex Mono 400/500, IBM Plex Sans
 |---|---|
 | npm on restricted networks | `npm ci` needs registry access on a cold cache. In sandboxes here, HTTPS routes through a pre-configured proxy (CA bundle at `/root/.ccr/ca-bundle.crt`) and `npm ci` worked; if it 403s, check `curl -sS "$HTTPS_PROXY/__agentproxy/status"` — never disable TLS verification. |
 | Stale `node_modules` after a lockfile change | Symptoms: "Cannot find module", version-skew weirdness after pulling. Fix: re-run `npm ci` (it deletes and rebuilds `node_modules` to match the lock exactly). When in doubt after any `git pull` that touched `package-lock.json`, `npm ci`. |
-| **Missing `node_modules` masquerading as failing tests** | Every remote/cloud session starts from a fresh clone with no `node_modules`, and `npm test` does NOT say so. It prints `# tests 47 / # pass 44 / # fail 3` — which reads as a code regression. Cause: the 3 files that transitively import `react` (`tradeAnalysis.test.mjs` via `tradeAnalysis.js → recommendations.js → useLeague.js`; `matchupWeeks.test.mjs` and `transactions.test.mjs` via their hooks) fail to *load*, so their ~73 tests never run and the total drops from **120** to 47. `npm run build` in the same state fails `sh: 1: vite: not found`. **Rule: if `npm test` doesn't say 120, run `npm ci` before debugging.** (Observed 2026-08-08.) |
+| **Missing `node_modules` masquerading as failing tests** | Every remote/cloud session starts from a fresh clone with no `node_modules`, and `npm test` does NOT say so. It prints `# tests 115 / # pass 110 / # fail 5` — which reads as a code regression. Cause: the 5 files that transitively import `react` (`tradeAnalysis.test.mjs` via `tradeAnalysis.js → recommendations.js → useLeague.js`; `matchupWeeks.test.mjs`, `transactions.test.mjs`, `sleeperDraft.test.mjs` and `draftLive.test.mjs` via their hooks) fail to *load*, so their ~48 tests never run and the total drops from **163** to 115. `npm run build` in the same state fails `sh: 1: vite: not found`. **Rule: if `npm test` doesn't say 163, run `npm ci` before debugging.** (Re-measured 2026-09-04 by moving `node_modules` aside; was 120/47 on 2026-08-08.) |
 | Committing build output | `dist/` and `node_modules/` are gitignored (`.gitignore` also covers `.DS_Store`, `*.local`). Never force-add them; Pages deploys build `dist/` fresh in Actions. |
 | Case-sensitivity | CI builds on Linux (case-sensitive). An import like `./playerCard` for `PlayerCard.jsx` can work on macOS and fail only in the deploy build. Match file-name case exactly in every import. |
 | `sharp` is a native binary | Platform-specific prebuilds land in `node_modules`. After switching OS/arch (e.g. copying `node_modules` between machines — don't), icon generation fails until `npm ci` on the target platform. Irrelevant to `npm run build` (sharp is script-only). |
@@ -284,4 +281,4 @@ Re-verify before trusting, one-liners:
 - Content scan: `grep -n content tailwind.config.js` · class presence: `grep -c '<class>' dist/assets/index-*.css`
 - Env-var claim: `grep -rn 'import.meta.env' src/`
 - Icon script outputs: `sed -n 56,66p scripts/generate-icons.mjs` · cache-bust N: `grep '?v=' index.html`
-- Legacy favicon script still unreferenced: `grep -rn generate-favicons --include='*.{json,yml,md,mjs,js}' . | grep -v node_modules`
+- Only one icon generator exists (the legacy one was deleted 2026-09-04): `ls scripts/ | grep -i icon` → `generate-icons.mjs` and nothing else

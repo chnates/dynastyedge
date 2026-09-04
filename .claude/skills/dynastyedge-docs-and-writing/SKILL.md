@@ -227,6 +227,49 @@ through the change-control divergence protocol.
 | Feature locations vs routes | `grep -n 'path=\|Navigate' src/App.jsx \| head -50` vs the Navigation route map | Every route in App.jsx appears in the doc's route map or redirect list |
 | Future Features vs reality | Read "Future Features"; for each bullet, `grep -rn` a distinctive term in `src/` | Nothing listed as "do not build yet" already exists |
 
+### Open findings — re-run 2026-09-04
+
+Run during the Phase 2 news work. Storage keys, constants, `src/utils` +
+`src/hooks` + `scripts/dev` file coverage, crons, and the raw-`fetch()` baseline
+(still exactly the 2 sanctioned `DraftBoard.jsx` hits) all clean.
+
+**Fixed this session** — stale facts the news rewrite invalidated, updated in
+the same commit: CLAUDE.md's Player news pipeline section · `data-contracts`
+(the `news.json` schema, now carrying `playerIds` / `isPlayerNews` / `coverage`,
+plus a re-verification command that grepped for the deleted `MAX_ITEMS`) ·
+`run-and-operate` (five sources → eleven, the accumulate-and-carry-forward
+publish contract, and a "these outputs are NOT gitignored" claim that had been
+wrong since the feed artifacts were ignored) · `architecture-contract` (the
+server-side-join example) · `debugging-playbook` (the "all five sources"
+failure rule) · `change-control` (the never-erase-branch-data pattern) ·
+`diagnostics-and-tooling` + its `check-feeds.mjs` (which asserted a 100-item
+cap and could not see a degraded run).
+
+**Also fixed — stale machine-gate counts, four files.** `validation-and-qa`,
+`change-control` and `build-and-env` all still said **120 passing** and quoted
+the missing-`node_modules` signature as `47/44/3`; CLAUDE.md said `113/108/5`.
+Re-measured 2026-09-04 by moving `node_modules` aside: the suite is **163
+passing**, and the broken state reads **`# tests 115 / # pass 110 / # fail 5`**.
+Lesson worth keeping: a number repeated across four files drifts four times.
+When you change the suite size, `grep -rn "passing" .claude/skills docs CLAUDE.md`.
+
+**Closed same session (owner chose delete).** `scripts/generate-favicons.js`
+was absent from CLAUDE.md's File Structure tree while `dynastyedge-build-and-env`
+marked it LEGACY — so a session reading only CLAUDE.md would have met an
+unexplained script painting the pre-Phase-3 blue palette (`#0B1120`). Reported
+rather than silently patched, per the audit protocol above; the owner chose to
+delete it. `generate-icons.mjs` was verified a strict superset of its outputs
+first. The skill now records *why* it is gone, so nobody reconstructs it.
+
+**Also closed:** removing that block surfaced a stale neighbor —
+`build-and-env` still carried a "Doc-vs-code note (as of 2026-07-05)" claiming
+CLAUDE.md rule 16 denied the `apple-mobile-web-app-status-bar-style` meta while
+`index.html` shipped `black-translucent`. Both halves are now false: rule 16 was
+rewritten 2026-07-19 and the design changed again 2026-07-20 to `default`, which
+is what `index.html:22` ships today. A *note about* drift outlived the drift and
+became drift itself — when you resolve a contradiction, delete the notes
+pointing at it, not just the contradiction.
+
 ### Open findings — re-run 2026-08-14
 
 **Clean.** The three audit loops below (storage keys, constants, `src/utils` +
@@ -302,6 +345,31 @@ anything a future session might revert without understanding does.
 **Trailers:** Claude-authored commits carry `Co-Authored-By:` +
 `Claude-Session:` trailers (see `700ce00`) — your harness appends these; keep
 them.
+
+### Pull request bodies
+
+`.github/pull_request_template.md` (added 2026-09-04) is the layout. It exists
+because this repo's PRs fail in predictable ways, and each section is a guard:
+
+- **Measured result** — the evidence bar from `dynastyedge-validation-and-qa`
+  §1, applied to PRs. A claim of improvement needs a before AND after from the
+  same script on the same input. **Report a pre-registered target's real number
+  even when it misses** — the Phase 2 news PR records a 10-of-25 miss against a
+  target of 12, and that record is worth more than a moved goalpost.
+- **Evidence** — names the highest rung reached, then the three machine gates,
+  then the conditional checks (design review, 390px screenshots, real-data
+  spot-check, the best-effort degradation contract, no new deps, no raw
+  `fetch()`).
+- **Docs** — the same-commit doctrine as a checkbox, including
+  `docs/open-items.md` (with the trigger) and any skill whose facts the PR
+  invalidates.
+- **Risk and rollback** — specifically what a revert would *not* undo: a
+  force-pushed data branch, a published feed, a storage-key change already on
+  the owner's phone.
+- **Owner-required** — the iOS class no sandbox can check, and anything gated
+  on a repo secret or an unrun scheduled workflow.
+
+Delete sections that don't apply; a small PR should stay small.
 
 ---
 

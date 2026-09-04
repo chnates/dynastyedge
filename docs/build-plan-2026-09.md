@@ -1,7 +1,8 @@
 # DynastyEdge build plan — September 2026
 
 **Status:** approved by owner 2026-09-04. **Phase 1 shipped 2026-09-04**
-(see §2); Phases 2–3 not started, Phase 4 cut (§9).
+(see §2). **Phase 2 shipped 2026-09-04 — acceptance test MISSED, 10 of 25
+against a target of 12** (see §3); Phase 3 not started, Phase 4 cut (§9).
 **Origin:** the Optimizer data-source study
 (`docs/analysis/optimizer-data-sources-2026-09.md`, incl. its REVISION block).
 **How to use this file:** each phase below has a **kickoff prompt** — paste it
@@ -208,8 +209,52 @@ Do not open a PR until I ask.
 
 ## 3. Phase 2 — Make the news feed actually about my players
 
+> **SHIPPED 2026-09-04 — acceptance test MISSED at 10 of 25 (target 12).**
+> Reported as a miss, not spun. Full probe + measurement record:
+> `docs/analysis/news-sources-2026-09.md`. Re-measure trigger: `NEWS-1` in
+> `docs/open-items.md` (on or after 2026-09-11).
+>
+> What the build settled that the plan left open:
+> - **The §1 baseline had drifted slightly** and was re-verified before any
+>   code changed: FantasyPros still 404, 25/100 items naming a player, 21/100
+>   carrying `athleteIds`, 25.7h span, and **5 of 26** rostered players covered
+>   (the roster is 26 with taxi/IR, not 25). The picture held.
+> - **The binding constraint was not the sources — it was `espn_id`.** It is
+>   null for **17 of the owner's 26 rostered spots**, so the app's id-first
+>   matching could never reach most of the roster by anything but a headline
+>   name. Items now carry `playerIds` (Sleeper ids resolved server-side across
+>   headline *and* story) and the three client matchers read those first.
+>   This is why the plan's "touches no app logic" line did not hold: three
+>   hooks and one component changed. Owner-approved mid-session before
+>   implementation.
+> - **Step 1 has no replacement to find.** All three FantasyPros endpoints are
+>   dead (`/nfl/rss/player-news.php` 404, `/nfl/rss/news.php` 404,
+>   `/rss/player-news.xml` 200-with-empty-body). Dropped, not replaced.
+> - **Step 2 — ten sources adopted, ten rejected.** The best of them is
+>   **RotoWire, scraped from its news page rather than its RSS**: the RSS is
+>   hard-capped at 5 items and ignores `count`, `limit`, `numitems`, `team` and
+>   `pos` (all probed), while the page carries 25 of the same updates, every
+>   headline literally `Player: Note`. **Do not adopt ESPN's per-team RSS** —
+>   it looks like 32 beat feeds and is the identical national all-sports feed
+>   for every team (kc and sf return the same 42 items, WNBA included).
+> - **Step 4 was the structural change.** The feed accumulates across runs
+>   (player items 7d/240, general 48h/80) instead of being a snapshot, which is
+>   what makes a 25-item-per-pull source compound across 48 runs a day. The
+>   workflow reads the previous feed off the branch **via git, not the CDN the
+>   app reads**, and fails before the publish step rather than force-pushing a
+>   reset feed.
+> - **Step 5 shipped as data, not UI.** The feed carries a `coverage` block
+>   (`{ total, playerItems, withPlayerIds, withAthleteIds, spanHours, sources }`).
+>   **The side drawer's data-status block does not read it yet** — that wiring
+>   was not built. Recorded as `NEWS-2` in `docs/open-items.md`.
+> - **The acceptance number is bounded by news volume, not by matching.** The
+>   app now resolves every player the matcher can find (achieved = ceiling),
+>   and all 15 misses were individually verified as genuine absence from all
+>   eleven sources. Accumulation had not run when this was measured.
+
 Self-contained: one script, one workflow. Touches no app logic beyond what
-already reads the feed.
+already reads the feed. *(This last clause did not survive contact — see the
+`espn_id` note above.)*
 
 **The problem, measured:** 3 of 25 rostered players covered; 76% of items are
 general NFL content; the whole feed is 20 hours deep because 100 general-interest

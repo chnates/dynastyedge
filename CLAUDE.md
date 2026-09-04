@@ -232,41 +232,111 @@ context, peak-window status, and recent news. Sources:
 
 ### Player news pipeline (GitHub Actions + multi-source aggregation)
 
-News sources (ESPN, FantasyPros, Yahoo, CBS) block browser/CORS access, so
-news is aggregated **server-side in GitHub Actions** and served as a static
-file — keeping the no-backend architecture:
+News sources block browser/CORS access, so news is aggregated **server-side in
+GitHub Actions** and served as a static file — keeping the no-backend
+architecture:
 
 - `.github/workflows/news.yml` runs twice an hour (cron `17,47 * * * *`,
   plus manual `workflow_dispatch`). It runs `scripts/fetch-news.mjs`, which
-  tries five sources (ESPN news API, FantasyPros player-news RSS, Yahoo RSS,
-  ESPN RSS, CBS RSS), merges + dedupes to ≤100 items, and **force-pushes a
-  single-commit `news-data` branch** containing `news.json`. Each item
-  carries `headline`, `story` (≤600 chars), `published`, `source`,
-  `link` (validated http(s) article URL or null), and `athleteIds`.
-- Every source is best-effort; the script only fails (keeping the previous
-  feed) when all sources return nothing.
+  pulls **eleven** sources, merges them into the **previously published
+  feed**, resolves each item to the players it names, ranks player news above
+  general news, and **force-pushes a single-commit `news-data` branch**
+  containing `news.json`. Each item carries `headline`, `story` (≤600 chars),
+  `published`, `source`, `link` (validated http(s) article URL or null),
+  `athleteIds`, `playerIds`, and `isPlayerNews`.
+- **Sources, in priority order** (each probed and parsed server-side before
+  adoption — see `docs/analysis/news-sources-2026-09.md` for the full probe,
+  including the ten rejected candidates): ESPN news API (the only source that
+  ships `athleteIds`), **RotoWire's news page**, RotoWire RSS, Yardbarker,
+  PFF, The Athletic, ESPN RSS, PFT, CBS, Sporting News, Yahoo. The percentage
+  of a source's items naming a real player is the reason each is on the list;
+  Yahoo (8%) still ships because the News tab wants general items too, it just
+  loses every tiebreak.
+  - **RotoWire is scraped from `rotowire.com/football/news.php`, not its RSS.**
+    The RSS is hard-capped at 5 items — `count`, `limit`, `numitems`, `team`
+    and `pos` are all ignored (probed). The page carries 25 of the same
+    updates in structured `news-update__*` markup, and every headline is
+    literally `Player: Note`, the shape the app matches on. It is the single
+    most player-dense source in the pipeline. Markup is more fragile than an
+    RSS contract, so it sits in the same best-effort `try` as everything else.
+  - **FantasyPros is gone.** All three of its endpoints are dead
+    (`/nfl/rss/player-news.php` 404, `/nfl/rss/news.php` 404,
+    `/rss/player-news.xml` 200-with-empty-body). It was the most
+    player-focused source in the old list and had been contributing nothing.
+  - **ESPN's per-team RSS is a trap.** `/rss/nfl/team/news/_/name/{team}`
+    looks like 32 beat feeds and is the identical national all-sports feed for
+    every team (kc and sf return the same 42 items, WNBA and World Cup
+    included). Same for `/rss/nfl/injuries`. Never adopt either.
+- **The feed ACCUMULATES.** It used to be a snapshot of one fetch capped at
+  100 items, which spanned ~20 hours because 100 general-interest items
+  flushed the player news out. Each run now merges into the last run's output,
+  retaining **player items 7 days (240 max)** and **general items 48 hours
+  (80 max)** — around 100KB, pulled once per session. This is what makes a
+  source like RotoWire (25 player items per pull) compound across 48 runs a
+  day. The workflow therefore reads the previous `news.json` off the
+  `news-data` branch **via git, not the raw.githubusercontent CDN** (which
+  caches ~5 minutes and would hand a run back its own grandparent); a branch
+  that exists but won't yield the file fails the job **before** the publish
+  step, so the accumulated window is never force-pushed away.
+- **Later copies win on content, but the FIRST publish time we recorded
+  stands** — retained items are seeded before the current pull and sources run
+  most-precise-first, so an item can neither float back to the top by being
+  re-listed nor lose an exact RSS timestamp to a date-only reprint of itself.
 - The app fetches `NEWS_FEED_URL`
   (`raw.githubusercontent.com/chnates/dynastyedge/news-data/news.json` —
   sends CORS `*`, ~5 min CDN cache) once per session in `usePlayerIntel`.
-- **Player matching:** ESPN API items carry `athleteIds` (matched against
-  `espn_id` from the Sleeper player DB); all other items match by normalized
-  full player name in the headline. ESPN tags roundup columns with *every*
-  athlete mentioned, so a multi-player article can surface on a player the
-  headline isn't about — by design (we'd rather show the buried blurb than
-  miss it). The article sheet flags this case explicitly.
+- **Player matching — `playerIds` is the join, not `athleteIds`.** The feed
+  resolves every item against Sleeper's player DB server-side (ESPN athlete id
+  first, then normalized full name across headline **and** story) and stamps
+  the matched **Sleeper** ids on the item. All three client matchers
+  (`usePlayerIntel`'s `matchFeedItems`, `useLeagueNews`, `useNewsFeed`) read
+  `playerIds` first, then `athleteIds`, then the headline name.
+  **Why:** `espn_id` is null for most of a dynasty roster — only **9 of the
+  owner's 26 rostered spots** carry one — so the old id-first design could
+  never reach Bo Nix, Brock Bowers, Rachaad White, Chase Brown and thirteen
+  others by anything but a headline name. `athleteIds` is still enriched from
+  name matches, so a consumer predating `playerIds` keeps working.
+  ESPN tags roundup columns with *every* athlete mentioned, and story-level
+  name matching does the same, so a multi-player article can surface on a
+  player the headline isn't about — by design (we'd rather show the buried
+  blurb than miss it). The article sheet flags this case explicitly, reading
+  whichever of `playerIds` / `athleteIds` is longer.
+- **`coverage` block.** The feed carries `{ total, playerItems, withPlayerIds,
+  withAthleteIds, spanHours, sources }` next to `updatedAt`, so feed health is
+  inspectable and the next measurement of this pipeline has a baseline.
+  `node scripts/dev/news-coverage.mjs` reports it against the live feed (or a
+  local file) along with how many of the owner's rostered players the app
+  actually resolves — that is the pipeline's acceptance metric.
+  **The drawer's data-status block does not read it yet** — publish age already
+  surfaces a *dead* pipeline; this block would surface a *degraded* one (a run
+  that publishes on time with `playerItems` quietly collapsed). Open item
+  `NEWS-2`.
 - **News items are tappable everywhere they appear** (profile drawer
   "Latest News", The Edge "Headlines") → `NewsArticleSheet`, a bottom sheet
   (z-60, layers above the profile drawer) with the full stored story, a
   "Read full article" link when the item has one (opens the source site —
-  in-app Safari sheet on the home-screen app), a multi-player-roundup note
-  when `athleteIds.length > 2`, and (from The Edge) a "View profile" action.
+  in-app Safari sheet on the home-screen app), a multi-player-roundup note,
+  and (from The Edge) a "View profile" action.
   Full articles are never embedded — sources block cross-origin framing.
 - If the feed has no items for a player, the client falls back to ESPN's
   unofficial per-player endpoints (`site.api.espn.com/apis/fantasy/v2/...`,
   `site.web.api.espn.com/apis/common/v3/...`) — these are CORS-blocked in
-  practice but cost nothing and degrade silently.
+  practice (and 403 server-side) but cost nothing and degrade silently.
 - **News must never block a panel, show an error, or retry-loop.** On any
-  failure the news section simply hides.
+  failure the news section simply hides. Verified end to end: with all eleven
+  sources AND the player DB unreachable the script republishes the retained
+  window intact; with no previous feed either, it exits 1 without writing, so
+  the branch keeps the feed it has.
+- **Coverage, measured (2026-09-04).** Before: 100 items, 25.7h deep, 25%
+  naming a player, **5 of 26 rostered players** resolvable. After: 207 items,
+  159h deep, 57% resolved to players, **10 of 26**. That **misses** the
+  pre-registered target of 12 (`docs/build-plan-2026-09.md` §3) and is
+  recorded as a miss. The remaining 15 are genuine absence, not matching
+  failures — each was checked, and none of their names appear anywhere in the
+  feed's text; the app now resolves *every* player the matcher can find, so
+  no further matching work can move the number. Volume is the remaining
+  lever, and accumulation had not yet run when this was measured.
+  **Re-measure after a week of accumulation before adding sources.**
 - Caveat: GitHub disables cron workflows after ~60 days without repo
   activity — any push re-enables it. The workflows' own force-pushes to the
   data branches do NOT reset that clock; the values-history workflow's
@@ -2459,10 +2529,11 @@ left the font request in Phase 3.
 ```
 dynastyedge/
 ├── .github/
+│   ├── pull_request_template.md ← THE PR body layout (measured-result + evidence + docs + rollback gates)
 │   └── workflows/
 │       ├── deploy.yml          ← GitHub Actions auto-deploy (lint + test gate before build)
 │       ├── ci.yml              ← lint + test + build on branch pushes / PRs (no deploy)
-│       ├── news.yml            ← twice-hourly news aggregation → news-data branch
+│       ├── news.yml            ← twice-hourly news aggregation (accumulates into the feed) → news-data branch
 │       ├── values-history.yml  ← daily value snapshot + trade archive → values-history branch
 │       └── rookie-intel.yml   ← daily rookie depth-chart + draft-capital feed → rookie-intel branch
 ├── scripts/
@@ -2477,7 +2548,8 @@ dynastyedge/
 │       ├── faab-corpus.mjs     ← analysis-only: pulls the league's full FAAB bid corpus (see docs/analysis/faab-bid-corpus-2026-08.md); nothing imports it
 │       ├── rookie-signal-backtest.mjs ← analysis-only: grades the SHIPPED rookie model against 2021–2025 (imports src/utils/rookieResearch.js so it cannot drift)
 │       ├── trade-structure-backtest.mjs ← analysis-only: the DISCONFIRMED trade-structure profiling test (frontier Item 3); drives the shipped buildManagerProfiles so it cannot drift
-│       └── optimizer-signal-backtest.mjs ← analysis-only: measures whether a better weekly PROJECTION is obtainable (it is not) and what DEF streaming is worth; see docs/analysis/optimizer-data-sources-2026-09.md
+│       ├── optimizer-signal-backtest.mjs ← analysis-only: measures whether a better weekly PROJECTION is obtainable (it is not) and what DEF streaming is worth; see docs/analysis/optimizer-data-sources-2026-09.md
+│       └── news-coverage.mjs ← analysis-only: THE news-pipeline acceptance metric — how many of my rostered players the app can actually resolve in the feed (no arg = live feed); see docs/analysis/news-sources-2026-09.md
 ├── public/
 │   └── favicon.ico
 ├── src/
@@ -2654,12 +2726,12 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 113 / # pass 108 /
+honestly:** instead of "cannot find module" it prints `# tests 115 / # pass 110 /
 # fail 5`, which reads like a code regression. The five files that fail are the
 ones transitively importing `react` (`tradeAnalysis.js` → `recommendations.js`
 → `useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
 `draftLive` loading their hooks) — the file fails to load, so its tests never
-run and the count silently drops from **163** to 113. `npm run build` in the
+run and the count silently drops from **163** to 115. `npm run build` in the
 same state fails with `sh: 1: vite: not found`. **If the test count isn't 163,
 run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-04
 by renaming `node_modules` aside; re-measure them whenever the suite grows.)

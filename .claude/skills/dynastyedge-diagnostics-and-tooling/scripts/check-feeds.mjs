@@ -44,10 +44,22 @@ try {
   const list = Array.isArray(items) ? items : []
   const newest = list.map(i => i.published).filter(Boolean).sort().at(-1)
   const age = newest ? hoursAgo(newest) : null
-  console.log(`items:        ${list.length} (pipeline caps at 100)`)
+  console.log(`items:        ${list.length} (accumulating feed: 240 player + 80 general)`)
   console.log(`newest item:  ${newest ?? 'n/a'}${age != null ? ` (${age.toFixed(1)}h ago)` : ''}`)
   const withLinks = list.filter(i => i.link).length
   console.log(`with links:   ${withLinks} · sources: ${[...new Set(list.map(i => i.source))].join(', ') || 'n/a'}`)
+  // Health, not just freshness. A run whose sources broke still publishes a
+  // fresh `updatedAt`; what collapses is the share of items resolved to a
+  // player. `coverage` is published by the writer; fall back to counting.
+  const cov = feed.coverage ?? null
+  const resolved = cov?.withPlayerIds ?? list.filter(i => (i.playerIds ?? []).length).length
+  const pct = list.length ? Math.round((resolved / list.length) * 100) : 0
+  console.log(`player items: ${cov?.playerItems ?? 'n/a'} · resolved to players: ${resolved} (${pct}%)` +
+    `${cov ? ` · span ${cov.spanHours}h` : ''}`)
+  if (list.length && pct < 30) {
+    console.log('              ⚠ LOW — healthy runs sit near 55%. A source or the player-DB')
+    console.log('                lookup likely broke; see docs/analysis/news-sources-2026-09.md.')
+  }
   // The workflow runs at :17 and :47; sources publish continuously. A newest
   // item > 2h old usually means the cron workflow has stopped (GitHub disables
   // crons after ~60 days of repo inactivity) — check Actions.
