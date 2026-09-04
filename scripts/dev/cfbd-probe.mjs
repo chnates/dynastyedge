@@ -167,25 +167,60 @@ for (const category of ['receiving', 'rushing']) {
   if (remain || limit) console.log(`    rate limit: ${remain ?? '?'} of ${limit ?? '?'} remaining`)
 }
 
-// ── 4. Coverage: does the ID join actually land on a real class? ────────────
-console.log(`\n=== 4. coverage — how many of the ${DRAFT_CLASS} class appear in ${COLLEGE_SEASON}, BY ID ===`)
+// ── 4. Coverage — and an adversarial check on it ────────────────────────────
+// A set-membership count is easy to fool. Probe v3 reported 85/85 (100%),
+// including QB 14/14 in RECEIVING+RUSHING payloads, while the sample rows
+// showed 6-digit playerIds (146583) against 7-digit ESPN ids (4685415). Those
+// two facts cannot both be true, so the count is not trusted until named rows
+// come back with the right names on them.
+console.log(`\n=== 4. coverage — ${DRAFT_CLASS} class in the ${COLLEGE_SEASON} payload, BY ID ===`)
 const rows = [...(statRows.get('receiving') ?? []), ...(statRows.get('rushing') ?? [])]
 const idKey = ['playerId', 'player_id', 'athleteId', 'id'].find(k => rows[0]?.[k] != null)
 if (!idKey) {
   fail('no athlete id on the stat rows — a shipped join would need name matching. STOP.')
 } else {
-  const seen = new Set(rows.map(r => String(r[idKey])))
-  const hit = truth.filter(p => seen.has(String(p.espnId)))
-  console.log(`  ${hit.length}/${truth.length} resolved by ESPN id ` +
-    `(${Math.round(100 * hit.length / truth.length)}%)`)
-  const byPos = {}
-  for (const p of truth) (byPos[p.pos] ??= [0, 0])[seen.has(String(p.espnId)) ? 0 : 1]++
-  console.log('  by position: ' + Object.entries(byPos)
-    .map(([k, [a, b]]) => `${k} ${a}/${a + b}`).join('  '))
-  console.log('  (QBs are expected to miss the receiving/rushing categories; a passing')
-  console.log('   category call would cover them, and dominator rating is a WR/TE/RB idea anyway)')
-  const missed = truth.filter(p => !seen.has(String(p.espnId)) && p.pos !== 'QB').slice(0, 8)
-  if (missed.length) console.log('  sample of non-QB misses: ' + missed.map(p => `${p.name} (${p.pos})`).join(', '))
+  const byId = new Map()
+  for (const r of rows) {
+    const k = String(r[idKey])
+    if (!byId.has(k)) byId.set(k, r)
+  }
+  console.log(`  ${rows.length} rows, ${byId.size} distinct ${idKey}s`)
+
+  // What do CFBD's ids actually look like? ESPN college athlete ids for the
+  // modern recruiting era are 7 digits starting with 4.
+  const nums = [...byId.keys()].map(Number).filter(Number.isFinite).sort((a, b) => a - b)
+  const espnShaped = nums.filter(n => n >= 4000000).length
+  console.log(`  ${idKey} range: ${nums[0]} … ${nums.at(-1)}; ` +
+    `${espnShaped}/${nums.length} (${Math.round(100 * espnShaped / nums.length)}%) are ESPN-shaped (>= 4,000,000)`)
+
+  const hit = truth.filter(p => byId.has(String(p.espnId)))
+  console.log(`  set-membership count: ${hit.length}/${truth.length}`)
+
+  // THE DECISIVE CHECK: for named players, does the row found under their ESPN
+  // id actually belong to them? A matching id with the wrong name means the
+  // count above is an artifact, not a join.
+  console.log('\n  named spot-check (id -> whose row came back?):')
+  let right = 0, wrong = 0, absent = 0
+  for (const p of truth.slice(0, 12)) {
+    const row = byId.get(String(p.espnId))
+    if (!row) { absent++; console.log(`    ${p.name.padEnd(22)} ${p.pos}  espn=${p.espnId}  ABSENT`); continue }
+    const same = (row.player || '').toLowerCase().replace(/[^a-z]/g, '')
+      === p.name.toLowerCase().replace(/[^a-z]/g, '')
+    same ? right++ : wrong++
+    console.log(`    ${p.name.padEnd(22)} ${p.pos}  espn=${String(p.espnId).padEnd(8)} -> ` +
+      `"${row.player}" (${row.position}, ${row.team}) ${same ? 'CORRECT' : '*** WRONG PLAYER ***'}`)
+  }
+  console.log(`\n  correct ${right} / WRONG ${wrong} / absent ${absent}`)
+  if (wrong > 0) {
+    fail('ESPN ids resolve to the WRONG players — CFBD playerId is NOT the ESPN athlete id ' +
+      'on this endpoint. The stats join is name-based, and 3b is blocked.')
+  } else if (right === 0) {
+    fail('no ESPN id resolved to a row at all — the stats endpoint uses a different id space.')
+  } else {
+    console.log('  VERDICT: /stats/player/season playerId IS the ESPN athlete id. ' +
+      'College production joins by ID.')
+  }
+  console.log(`  JOIN_VERIFIED=${right > 0 && wrong === 0 ? 'yes' : 'no'}`)
 }
 
 console.log(`\n=== done, ${failures} failure(s) ===`)
