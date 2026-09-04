@@ -45,7 +45,27 @@ one surface with no route of its own; carries the per-source data-status block,
 but read gotcha 5 first) · `--out PATH` · `--width N` (default 390)
 · `--height N` · `--theme dark|light` · `--full` (full page, not just the
 sheet) · `--url BASE` · `--wait MS` · `--stub SUBSTRING=FILE` (serve a local
-file for any external URL containing SUBSTRING; repeatable).
+file for any external URL containing SUBSTRING; repeatable) ·
+`--seed-session KEY=VALUE` (seed sessionStorage before boot; repeatable) ·
+`--click TEXT` (click the first button/link whose accessible name matches,
+then shoot).
+
+**`--seed-session` and `--click` reach UI state the URL can't address.** Some
+state lives only behind a control the user taps or in a storage key, so a
+`--route` alone always captures the default. `--seed-session` writes
+sessionStorage before the app boots (e.g. Trade › Targets' team filter,
+`dynastyedge_targets_team`); `--click` is the only way to exercise a deep-link
+that travels in React Router **nav state** rather than the URL — there is
+nothing to type into an address bar, so "does this button land on the right
+screen?" is otherwise unscreenshotable:
+
+```bash
+# a filter that lives in sessionStorage
+node scripts/dev/screenshot-app.mjs --route /trade/whats-fair \
+  --seed-session dynastyedge_targets_team=2
+# a nav-state deep link: land on Partners, tap through, shoot where it lands
+node scripts/dev/screenshot-app.mjs --route /trade --click "See their targets"
+```
 
 **`--stub` is how you screenshot a feature whose Actions feed doesn't exist
 yet.** A data branch is only created by its workflow's first run, so on a

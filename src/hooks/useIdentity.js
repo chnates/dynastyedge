@@ -8,7 +8,7 @@ const KEY = 'dynastyedge_identity_v1'
 // items or your half-built trade. League-wide caches (transactions, history,
 // draft) are not roster-specific and are left alone.
 const ROSTER_SCOPED_LOCAL = ['dynastyedge_action_dismissals']
-const ROSTER_SCOPED_SESSION = ['dynastyedge_trade_draft']
+const ROSTER_SCOPED_SESSION = ['dynastyedge_trade_draft', 'dynastyedge_targets_team']
 
 function clearRosterScoped() {
   try {

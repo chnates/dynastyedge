@@ -95,6 +95,23 @@ const stubs = process.argv.reduce((acc, a, i) => {
   if (eq > 0) acc.push({ match: spec.slice(0, eq), file: spec.slice(eq + 1) })
   return acc
 }, [])
+// --seed-session KEY=VALUE seeds sessionStorage before the app boots. Some UI
+// state has no route of its own and is only reachable through a control the
+// user taps (e.g. Trade › Targets' team filter, dynastyedge_targets_team), so
+// this is how such a state gets captured. Repeatable.
+const sessionSeeds = process.argv.reduce((acc, a, i) => {
+  if (a !== '--seed-session') return acc
+  const spec = process.argv[i + 1]
+  const eq = spec ? spec.indexOf('=') : -1
+  if (eq > 0) acc.push([spec.slice(0, eq), spec.slice(eq + 1)])
+  return acc
+}, [])
+// --click TEXT clicks the first control whose accessible name matches, after
+// the app has loaded. This is the only way to exercise a deep-link that
+// travels in React Router nav state rather than the URL (nothing to type into
+// the address bar), so a "does this button land on the right screen?" check is
+// otherwise unscreenshotable.
+const click = arg('click')
 let out      = arg('out')
 if (!out) {
   const dir = join(REPO, '.screenshots')
@@ -131,14 +148,15 @@ const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleF
 
 // Skip the login gate: seed identity (owner_id + roster 6 — see src/constants.js)
 // and force the requested theme before any app script runs.
-await ctx.addInitScript(([t]) => {
+await ctx.addInitScript(([t, seeds]) => {
   // This callback is serialized and runs in the browser — localStorage is a
   // browser global, not a Node one (scripts/ lints under the Node env).
   /* eslint-disable no-undef */
   localStorage.setItem('dynastyedge_identity_v1', JSON.stringify({ userId: '965787707299430400', rosterId: 6 }))
   localStorage.setItem('dynastyedge_theme', t)
+  seeds.forEach(([k, v]) => sessionStorage.setItem(k, v))
   /* eslint-enable no-undef */
-}, [theme === 'light' ? 'light' : 'dark'])
+}, [theme === 'light' ? 'light' : 'dark', sessionSeeds])
 
 // Fulfill every EXTERNAL request via curl (proxy-safe); pass localhost through.
 const TMP = tmpdir()
@@ -204,6 +222,15 @@ if (player) {
   await dialog.waitFor({ state: 'visible', timeout: 30000 })
   if (!full) shotTarget = dialog
   console.log('profile drawer open for', player)
+}
+
+if (click) {
+  const control = page.getByRole('button', { name: new RegExp(click, 'i') })
+    .or(page.getByRole('link', { name: new RegExp(click, 'i') })).first()
+  await control.waitFor({ state: 'visible', timeout: 20000 })
+  await control.click()
+  await page.waitForTimeout(settle)
+  console.log('clicked', click)
 }
 
 await page.waitForTimeout(settle)

@@ -298,15 +298,29 @@ export default function TradePartnerFinder() {
       ) : (
         <div className="flex flex-col gap-3">
           {displayedPartners.map(partner => (
-            <TradePartnerCard
-              key={partner.rosterId}
-              partner={partner}
-              watchedNames={(watchedByRoster[partner.rosterId] ?? []).map(p => p.name)}
-              profile={profileByRoster[partner.rosterId] ?? null}
-              odds={oddsByRoster[partner.rosterId] ?? null}
-              trajectoryRead={trajectoryByRoster[partner.rosterId] ?? null}
-              onClick={() => navigate('/trade/analyze', { state: { opponentRosterId: partner.rosterId } })}
-            />
+            /* Two exits per partner: the card opens the Analyzer (build an
+               offer), the footer opens Targets scoped to them (what do I even
+               ask for?). The button is a sibling, never nested inside the
+               card's own <button>. */
+            <div key={partner.rosterId} className="flex flex-col">
+              <TradePartnerCard
+                partner={partner}
+                watchedNames={(watchedByRoster[partner.rosterId] ?? []).map(p => p.name)}
+                profile={profileByRoster[partner.rosterId] ?? null}
+                odds={oddsByRoster[partner.rosterId] ?? null}
+                trajectoryRead={trajectoryByRoster[partner.rosterId] ?? null}
+                onClick={() => navigate('/trade/analyze', { state: { opponentRosterId: partner.rosterId } })}
+              />
+              <Button
+                variant="tinted"
+                size="sm"
+                fullWidth
+                onClick={() => navigate('/trade/whats-fair', { state: { targetsRosterId: partner.rosterId } })}
+                className="-mt-px py-1.5 text-[11px] active:opacity-70"
+              >
+                See their targets →
+              </Button>
+            </div>
           ))}
         </div>
       )}

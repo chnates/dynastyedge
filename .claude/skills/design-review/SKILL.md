@@ -68,6 +68,10 @@ rg -n 'bg-accent text-white.*(text-\[9px\]|text-\[10px\]|uppercase)' $FILES
 rg -n '<input' $FILES
 rg -n 'border-border-default.*focus:border-accent' $FILES
 
+# Raw dropdown styling  → <Select> (or <PartnerSelect> for a trade opponent)
+rg -n '<select' $FILES
+rg -n 'appearance-none.*focus:border-accent' $FILES
+
 # Duplicate filter-chip ladders  → <Chip>
 rg -n 'rounded-full.*uppercase tracking|bg-accent text-white border border-transparent' $FILES
 
@@ -85,6 +89,7 @@ For every hit, the replacement is:
 | `rounded-xl bg-bg-card border border-border-default` surface                  | `<Card>` (add `accent` for the edge bar) |
 | `bg-accent text-white` small uppercase "New"/"You" label                      | `<Badge>` (`tone`/`soft`) |
 | raw `<input>` with field styling                                             | `<Input>` / `<SearchInput>` |
+| raw `<select>` with field styling (`appearance-none` + the ▾ span)           | `<Select>` — and in the Trade section, `<PartnerSelect>` for an opponent picker |
 | `rounded-full uppercase` toggle pill / chip ladder                            | `<Chip active activeClass={POS_CHIP_ACTIVE[pos]}>` |
 | re-declared `ErrorState`/`SectionHeader`/`SubTabBar`/`Spinner`                | `import { … } from '../ui'` |
 

@@ -19,6 +19,7 @@ export { default as Modal } from './Modal'
 export { default as Chip } from './Chip'
 export { default as Badge } from './Badge'
 export { Input, SearchInput } from './Input'
+export { default as Select } from './Select'
 export { cn } from './cn'
 
 // Adopted shared primitives (re-exported so the library is the one surface).
