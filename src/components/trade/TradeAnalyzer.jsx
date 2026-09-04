@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { AlertTriangle, CheckCircle2, RefreshCw, XCircle } from 'lucide-react'
+import { CheckCircle2, RefreshCw, XCircle } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
-import { getTeamName } from '../../hooks/useLeague'
 import { analyzeTrade, getTradeVerdict, suggestFairPackage, getCounterSuggestion, adjustVerdictForInjuries } from '../../utils/tradeAnalysis'
 import { rankTradePartners } from '../../utils/rosterAnalysis'
 import { buildAgeCurves, buildRosterTrajectory, getTrajectoryRead } from '../../utils/dynastyTrajectory'
@@ -12,7 +11,8 @@ import { fetchPlayerNews } from '../../hooks/usePlayerNews'
 import { getPlayerIntel } from '../../hooks/usePlayerIntel'
 import TradeBuilder from './TradeBuilder'
 import TradeVerdict from './TradeVerdict'
-import WinWindowBadge from '../shared/WinWindowBadge'
+import PartnerContextStrip from './PartnerContextStrip'
+import PartnerSelect, { buildPartnerOptions } from './PartnerSelect'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 
@@ -87,54 +87,6 @@ function StickySummary({ giveTotal, getTotal, verdict }) {
   )
 }
 
-// Partner intelligence carried in from the Trade Partner analysis so "what
-// should I offer them" is answerable while building.
-function OpponentContextStrip({ partner }) {
-  return (
-    <div className="mb-4 px-3 py-2.5 rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default flex flex-col gap-1.5">
-      <div className="flex items-center gap-x-3 gap-y-1.5 flex-wrap">
-        {partner.theirNeeds.length > 0 && (
-          <span className="flex items-center gap-1">
-            <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">Needs</span>
-            {partner.theirNeeds.map(pos => (
-              <span key={pos} className="inline-flex items-center rounded-none px-1.5 py-0.5 font-body text-[10px] font-bold uppercase bg-danger/10 text-danger">
-                {pos}
-              </span>
-            ))}
-          </span>
-        )}
-        {partner.theirHaves.length > 0 && (
-          <span className="flex items-center gap-1">
-            <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">Has</span>
-            {partner.theirHaves.map(pos => (
-              <span key={pos} className="inline-flex items-center rounded-none px-1.5 py-0.5 font-body text-[10px] font-bold uppercase bg-success/10 text-success">
-                {pos}
-              </span>
-            ))}
-          </span>
-        )}
-        <span className="flex items-center gap-1">
-          <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">Picks</span>
-          <span className={`font-body text-[10px] font-semibold ${
-            partner.pickCapStatus === 'Rich' ? 'text-success'
-              : partner.pickCapStatus === 'Depleted' ? 'text-danger'
-              : 'text-text-secondary dark:text-text-secondary'
-          }`}>
-            {partner.pickCapStatus}
-          </span>
-        </span>
-        <WinWindowBadge tier={partner.winWindowTier} />
-      </div>
-      {partner.mismatchWarning && (
-        <div className="flex items-start gap-1.5">
-          <AlertTriangle size={11} strokeWidth={2} className="text-warning shrink-0 mt-0.5" />
-          <span className="font-body text-[10px] text-warning leading-tight">{partner.mismatchWarning}</span>
-        </div>
-      )}
-    </div>
-  )
-}
-
 export default function TradeAnalyzer() {
   const { league, values, loading, error, retry, nflState } = useLeagueContext()
   // My live playoff odds feed Layer 3 (win-window fit). Null in the offseason
@@ -186,24 +138,7 @@ export default function TradeAnalyzer() {
     return partners.find(p => p.rosterId === selectedOpponentId) ?? null
   }, [league, selectedOpponentId])
 
-  // Fit-ranked pick list so the opponent selector isn't a blind list of names —
-  // it answers "who do I call?" inline: grouped by fit, each option carrying
-  // win-window tier + record. Partners come pre-sorted (best match first).
-  const partnerPickList = useMemo(() => {
-    if (!league?.myRoster || !league?.allRosters?.length) return []
-    const { partners } = rankTradePartners(league.myRoster, league.allRosters)
-    const rosterById = Object.fromEntries(league.allRosters.map(r => [r.rosterId, r]))
-    return partners.map(p => {
-      const r = rosterById[p.rosterId]
-      return {
-        rosterId: p.rosterId,
-        name: getTeamName(p.owner),
-        fitBadge: p.fitBadge,
-        tier: p.winWindowTier,
-        record: r?.hasRecord ? r.record : null,
-      }
-    })
-  }, [league])
+  const partnerOptions = useMemo(() => buildPartnerOptions(league), [league])
 
   const bothSides = giveAssets.length > 0 && getAssets.length > 0
 
@@ -320,8 +255,8 @@ export default function TradeAnalyzer() {
     return () => { cancelled = true }
   }, [giveAssets, getAssets, nflState])
 
-  function handleOpponentChange(rawValue) {
-    const id = rawValue ? Number(rawValue) : null
+  // PartnerSelect hands back a roster id or null — never a raw event value.
+  function handleOpponentChange(id) {
     setSelectedOpponentId(id)
     setGetAssets([])
     setWhatsFairTarget(null)
@@ -378,8 +313,6 @@ export default function TradeAnalyzer() {
   if (error && !league)   return <ErrorState message={error} onRetry={retry} />
   if (!league?.myRoster) return <ErrorState message="Could not load league data." onRetry={retry} />
 
-  const FIT_GROUPS = ['Priority', 'Good Fit', 'Poor Fit']
-
   return (
     <div className="px-4 pb-4">
       {/* Header */}
@@ -390,48 +323,18 @@ export default function TradeAnalyzer() {
       </div>
 
       {/* Opponent selector — grouped by trade fit, each option carrying tier +
-          record so the choice isn't blind. */}
+          record so the choice isn't blind. Same control Targets uses. */}
       <div className="mb-3">
-        <label className="block font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary mb-1.5">
-          Opponent
-        </label>
-        <div className="relative">
-          <select
-            value={selectedOpponentId ?? ''}
-            onChange={e => handleOpponentChange(e.target.value)}
-            className="w-full bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default rounded-none px-3 py-2.5 font-body text-sm text-text-primary dark:text-text-primary appearance-none focus:outline-none focus:border-accent pr-8"
-          >
-            <option value="">Select a team…</option>
-            {FIT_GROUPS.map(group => {
-              const inGroup = partnerPickList.filter(p => p.fitBadge === group)
-              if (inGroup.length === 0) return null
-              return (
-                <optgroup key={group} label={group}>
-                  {inGroup.map(p => (
-                    <option key={p.rosterId} value={p.rosterId}>
-                      {[
-                        p.name,
-                        p.tier,
-                        p.record ? `${p.record.wins}-${p.record.losses}${p.record.ties ? `-${p.record.ties}` : ''}` : null,
-                      ].filter(Boolean).join(' · ')}
-                    </option>
-                  ))}
-                </optgroup>
-              )
-            })}
-          </select>
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary text-xs">
-            ▾
-          </span>
-        </div>
-        <p className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary mt-1">
-          Sorted by fit — Priority targets first
-        </p>
+        <PartnerSelect
+          options={partnerOptions}
+          value={selectedOpponentId}
+          onChange={handleOpponentChange}
+        />
       </div>
 
       {opponentRoster ? (
         <>
-          {partnerInfo && <OpponentContextStrip partner={partnerInfo} />}
+          {partnerInfo && <PartnerContextStrip partner={partnerInfo} />}
 
           {(giveAssets.length > 0 || getAssets.length > 0) && (
             <StickySummary

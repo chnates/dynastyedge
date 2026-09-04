@@ -554,6 +554,10 @@ Each team card shows:
   always available (zero extra fetch), and distinct from the this-season
   playoff-odds flag.
 - **Tap → opens Trade Analyzer pre-loaded with this team selected**
+- **"See their targets →"** footer button (a sibling *below* the card, never
+  nested inside its `<button>`) → Trade › Targets scoped to that team. Two
+  exits per partner, matching the two questions: the card answers "build an
+  offer", the footer answers "what do I even ask for?"
 
 -----
 
@@ -704,6 +708,39 @@ the trade, reachable two ways:
   same in place
 - Apply all three analysis layers to the suggested package too
 - The callout card above the analysis is dismissible (×)
+
+##### Targets has two modes — league-wide and team-scoped
+
+A **team selector** (`PartnerSelect`, the same control the Analyzer uses —
+options grouped by trade fit, each carrying win-window tier + record) sits
+between the header and the position chips. It turns one fixed list into two
+modes; the position chips compose with both.
+
+- **All teams (default)** — the league-wide board: every opponent's players at
+  a position where I'm below league average, ranked by `need × value`, top 20.
+- **One team ("scout this team")** — `getTopTradeTargets`'s `ownerRosterId`
+  option scopes the ranking to that opponent **and keeps their non-deficit
+  pieces**, ranked below the need-matched ones and tagged `Depth` (need-matched
+  rows tag `Your need`). **The filter must push into the ranking, not sit on
+  top of it:** the league-wide list is sliced to 20 before anything sees it, so
+  filtering that slice client-side would leave most opponents showing zero or
+  one row. Keeping their whole board is also why an explicitly chosen team
+  never renders empty just because they hold nobody at a deficit position —
+  a line above the list states the split honestly ("6 of 14 fill a positional
+  deficit; the rest are their most valuable pieces", or "Nothing on {team}
+  fills a positional deficit — these are their most valuable movable pieces").
+- Scoping also renders the **`PartnerContextStrip`** (their needs / surpluses,
+  pick capital, win-window tier, mismatch warning) — the same strip the
+  Analyzer carries under its opponent selector, so the mode reads as scouting
+  rather than filtering. Row 2 of each card swaps by mode: league-wide shows
+  the owning team (the thing you can't infer), team-scoped shows the
+  need/depth tag (the owner is already in the header and selector, and
+  league-wide *every* row fills a need, so the tag would carry no information
+  there).
+- Selection persists in sessionStorage `dynastyedge_targets_team`, and nav
+  state (Partners → "See their targets →") takes priority over it — the same
+  precedence the Analyzer uses for its pre-fills. A stale or foreign roster id
+  (identity switch, departed team) silently falls back to the league-wide list.
 
 **No saved history.** The in-progress trade survives the session via
 sessionStorage, but there is no multi-trade history — that lives in Sleeper.
@@ -1902,6 +1939,7 @@ Import everything from the one barrel: `import { Button, Card, Sheet } from '../
 |`Modal`|THE centered dialog — confirm prompts and small forms that sit mid-screen rather than docking to the bottom (draft "Reset?" confirms, the CSV-name dialog). Owns overlay, `useScrollLock`, Escape + overlay-tap close; `maxWidth`/`surface` props. The bottom-docked counterpart is `Sheet`.|
 |`Chip`|THE filter chip — the QB/RB/WR/TE/All/Picks toggle, square, in the mono score-bug voice. Inactive is quiet; `active` defaults to solid silver with near-black text; pass `activeClass={POS_CHIP_ACTIVE[pos]}` for position-tinted active states. Sizes `sm`/`md`.|
 |`Badge`|THE small status/label badge, square, mono uppercase — `tone` (accent/brand/success/warning/danger/neutral) and `soft` tinted variants; `pill` for rounded. Solid accent (silver) carries near-black text; **`brand` is the rationed red, reserved for "you" labels** (You-chips). (Win-window tiers use `WinWindowBadge`; position tags use `POS_TAG`.)|
+|`Select`|THE dropdown field — a native `<select>` in the `Input` field voice, with the mono micro-`label`, optional `hint`, and the ▾ affordance. Native is deliberate: iOS renders it as the system wheel picker (better than any custom sheet for a one-of-N choice) and `<optgroup>` gives grouped options for free.|
 |`Input` / `SearchInput`|THE text field + search-box variant. Consistent field styling across all search/filter boxes; `SearchInput` adds the leading magnifier. Both `forwardRef`. Keep at `text-sm` (iOS focus-zoom is handled globally).|
 |`cn`|The one styling primitive — a tiny `className` joiner that drops falsy values. Never pull in a heavier classnames dep.|
 
@@ -2216,7 +2254,7 @@ dynastyedge/
 │   ├── snapshot-trade-values.mjs ← permanent trade-time value archiver (runs in Actions)
 │   ├── snapshot-rookie-intel.mjs ← daily nflverse → Sleeper rookie intel feed (runs in Actions)
 │   └── dev/
-│       ├── screenshot-app.mjs  ← headless-Chromium screenshotter for the running app (390px UI verification; --route, --player, --drawer — see the dynastyedge-visual-capture skill)
+│       ├── screenshot-app.mjs  ← headless-Chromium screenshotter for the running app (390px UI verification; --route, --player, --drawer, --seed-session, --click — see the dynastyedge-visual-capture skill)
 │       ├── replay-live.mjs     ← drives the running app against a SYNTHETIC draft / regular season, so the two once-a-year surfaces can be rehearsed on demand
 │       ├── faab-corpus.mjs     ← analysis-only: pulls the league's full FAAB bid corpus (see docs/analysis/faab-bid-corpus-2026-08.md); nothing imports it
 │       ├── rookie-signal-backtest.mjs ← analysis-only: grades the SHIPPED rookie model against 2021–2025 (imports src/utils/rookieResearch.js so it cannot drift)
@@ -2235,6 +2273,7 @@ dynastyedge/
 │   │   │   ├── Chip.jsx             ← THE filter chip (toggle pill, position-tinted active)
 │   │   │   ├── Badge.jsx            ← THE small status/label badge (New/You, tone/soft)
 │   │   │   ├── Input.jsx            ← THE text field + SearchInput variant
+│   │   │   ├── Select.jsx           ← THE dropdown field (native select + label/hint)
 │   │   │   └── cn.js                ← tiny className joiner (the one styling primitive)
 │   │   ├── auth/
 │   │   │   └── LoginScreen.jsx      ← Sleeper-username sign-in + team-picker fallback (gates the app)
@@ -2255,7 +2294,9 @@ dynastyedge/
 │   │   │   ├── TradeAnalyzer.jsx
 │   │   │   ├── TradeBuilder.jsx
 │   │   │   ├── TradeVerdict.jsx
-│   │   │   └── WhatsFair.jsx
+│   │   │   ├── PartnerSelect.jsx    ← THE opponent picker (fit-grouped) — Analyzer + Targets
+│   │   │   ├── PartnerContextStrip.jsx ← THE partner intelligence strip — Analyzer + Targets
+│   │   │   └── WhatsFair.jsx        ← Targets: league-wide board + per-team scouting mode
 │   │   ├── lineup/                  ← rendered as "My Team" sub-tabs (no own layout)
 │   │   │   ├── LineupOptimizer.jsx  ← My Team › Lineup
 │   │   │   ├── LineupEfficiency.jsx ← My Team › Season Review: actual vs optimal points
@@ -2365,6 +2406,7 @@ dynastyedge/
 │   ├── pickCapital.test.mjs         ← pick ownership resolution, round-median pick values, year weights
 │   ├── pickTrades.test.mjs          ← slot tiers (as coded), slot pricing fallback, package constraints
 │   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
+│   ├── tradeTargets.test.mjs        ← Targets ranking: deficit gate + value floor league-wide, team-scoped mode keeps depth (never empty), fillsNeed flag
 │   ├── tradeAnalysis.test.mjs       ← verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge
 │   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
 │   ├── lineupBuild.test.mjs         ← slot-fill order (singles → FLEX → SFLX), IR/taxi excluded, who-starts identity
@@ -2382,13 +2424,13 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 78 / # pass 73 /
+honestly:** instead of "cannot find module" it prints `# tests 83 / # pass 78 /
 # fail 5`, which reads like a code regression. The five files that fail are the
 ones transitively importing `react` (`tradeAnalysis.js` → `recommendations.js`
 → `useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
 `draftLive` loading their hooks) — the file fails to load, so its tests never
-run and the count silently drops from **126** to 78. `npm run build` in the
-same state fails with `sh: 1: vite: not found`. **If the test count isn't 126,
+run and the count silently drops from **131** to 83. `npm run build` in the
+same state fails with `sh: 1: vite: not found`. **If the test count isn't 131,
 run `npm ci` before debugging anything.** (Both numbers re-measured 2026-08-08
 by renaming `node_modules` aside; the previously documented 47/44/3 was stale.)
 
@@ -2682,18 +2724,20 @@ showing a dead season and never surfaces the new third year.
    `dynastyedge_csv_rankings` (draft board — see Feature 10) ·
    sessionStorage `dynastyedge_league_sort` / `dynastyedge_league_pos` /
    `dynastyedge_league_tier` (League tab filters, preserved across drill-downs) ·
-   sessionStorage `dynastyedge_trade_draft` (in-progress trade).
-   **Roster-scoped keys** — `dynastyedge_action_dismissals` and
-   `dynastyedge_trade_draft` — are wiped by `useIdentity` on any identity
-   change; league-wide caches are not. Add a new key to that wipe list if it
-   is tied to *which team you are*.
+   sessionStorage `dynastyedge_trade_draft` (in-progress trade) ·
+   sessionStorage `dynastyedge_targets_team` (Trade › Targets team filter).
+   **Roster-scoped keys** — `dynastyedge_action_dismissals`,
+   `dynastyedge_trade_draft`, and `dynastyedge_targets_team` — are wiped by
+   `useIdentity` on any identity change; league-wide caches are not. Add a
+   new key to that wipe list if it is tied to *which team you are*.
 1. **Shared components:** `ErrorState`, `SectionHeader`, and `SubTabBar` live in
    `src/components/shared/` — import them, never redefine them locally. Section
    sub-navigation is always `SubTabBar` (pass it a `tabs` array); never
    hand-roll a sub-tab row.
 1. **Design System library:** All new UI comes from `src/components/ui`
    (`Button`, `IconButton`, `Card`, `Sheet`/`SheetHeader`, `Chip`, `Badge`,
-   `Input`/`SearchInput`, `cn`, plus the re-exported shared primitives) — import
+   `Input`/`SearchInput`, `Select`, `cn`, plus the re-exported shared
+   primitives) — import
    from the `'../ui'` barrel. Never reintroduce a hand-rolled button, card,
    bottom sheet, filter chip, badge, or input inline; extend a primitive
    instead. Run `/design-review` before committing component work.

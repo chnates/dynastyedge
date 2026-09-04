@@ -145,8 +145,15 @@ export function getWinWindowTier(rosterId, allRosters) {
   return assignWinWindowTiers(allRosters)[rosterId] ?? 'Middle'
 }
 
-export function getTopTradeTargets(myRoster, allRosters, limit = 20) {
+export function getTopTradeTargets(myRoster, allRosters, limit = 20, opts = {}) {
   if (!myRoster || !allRosters?.length) return []
+
+  const { ownerRosterId = null } = opts
+  // Single-team mode ("scout this team"): the ranking is scoped to one
+  // opponent AND keeps their non-deficit pieces, ranked below the ones that
+  // fill a need. An explicitly chosen team must never render an empty board
+  // just because they hold nobody at a position you're thin at.
+  const scoped = ownerRosterId != null
 
   const leagueAverages = computeLeagueAverages(allRosters)
   const myDeltas = getPositionalDeltas(myRoster, leagueAverages)
@@ -155,17 +162,20 @@ export function getTopTradeTargets(myRoster, allRosters, limit = 20) {
 
   allRosters
     .filter(r => r.rosterId !== myRoster.rosterId)
+    .filter(r => !scoped || r.rosterId === ownerRosterId)
     .forEach(r => {
       r.players
         .filter(p => !p.isIR && (p.value ?? 0) >= 1000)
         .forEach(p => {
           const need = Math.max(0, -(myDeltas[p.position] ?? 0))
-          if (need === 0) return  // skip positions where I'm not below average
+          // League-wide: skip positions where I'm not below average.
+          if (need === 0 && !scoped) return
           targets.push({
             ...p,
             ownerRosterId: r.rosterId,
             owner:         r.owner,
             needScore:     need * p.value,
+            fillsNeed:     need > 0,
             positionDelta: myDeltas[p.position] ?? 0,
             leagueAvgAtPos: leagueAverages[p.position] ?? 1,
           })
@@ -173,6 +183,6 @@ export function getTopTradeTargets(myRoster, allRosters, limit = 20) {
     })
 
   return targets
-    .sort((a, b) => b.needScore - a.needScore)
+    .sort((a, b) => b.needScore - a.needScore || (b.value ?? 0) - (a.value ?? 0))
     .slice(0, limit)
 }

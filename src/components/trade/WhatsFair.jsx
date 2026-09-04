@@ -1,20 +1,38 @@
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getTeamName } from '../../hooks/useLeague'
-import { getTopTradeTargets, assignWinWindowTiers } from '../../utils/rosterAnalysis'
+import { getTopTradeTargets, rankTradePartners } from '../../utils/rosterAnalysis'
 import { suggestFairPackage } from '../../utils/tradeAnalysis'
-import WinWindowBadge from '../shared/WinWindowBadge'
-import TrendArrow from '../shared/TrendArrow'
-import LoadingSpinner from '../shared/LoadingSpinner'
-import ErrorState from '../shared/ErrorState'
-import { Card, Chip, cn } from '../ui'
+import PartnerContextStrip from './PartnerContextStrip'
+import PartnerSelect, { buildPartnerOptions } from './PartnerSelect'
+import { Badge, Card, Chip, ErrorState, Spinner, TrendArrow, WinWindowBadge, cn } from '../ui'
 import { POS_CHIP_ACTIVE, POS_TAG as POS_TAGS } from '../../utils/positionColors'
 
 const POSITION_FILTERS = ['All', 'QB', 'RB', 'WR', 'TE']
 
+// Session-scoped so drilling into the Analyzer and coming back keeps the
+// scouted team — same contract as the League tab's sort/position filters.
+// Roster-scoped: useIdentity wipes it on any identity change (the valid
+// opponent set depends on which team you are).
+const TEAM_KEY = 'dynastyedge_targets_team'
 
-function TargetCard({ target, fairPackage, onTap }) {
+function loadTeamFilter() {
+  try {
+    const raw = sessionStorage.getItem(TEAM_KEY)
+    return raw ? Number(raw) : null
+  } catch { return null }
+}
+
+function saveTeamFilter(rosterId) {
+  try {
+    if (rosterId == null) sessionStorage.removeItem(TEAM_KEY)
+    else sessionStorage.setItem(TEAM_KEY, String(rosterId))
+  } catch { /* private mode — the filter just won't persist */ }
+}
+
+
+function TargetCard({ target, fairPackage, showNeedTag, onTap }) {
   const posTag = POS_TAGS[target.position] ?? 'bg-bg-secondary text-text-secondary'
 
   return (
@@ -42,14 +60,20 @@ function TargetCard({ target, fairPackage, onTap }) {
         </span>
       </div>
 
-      {/* Row 2: owner team + fit tag */}
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-body text-[11px] text-text-secondary dark:text-text-secondary truncate min-w-0">
-          {getTeamName(target.owner)}
-        </span>
-        <span className={`shrink-0 font-body text-[10px] font-bold uppercase tracking-wider rounded-none px-1.5 py-0.5 ${POS_TAGS[target.position] ?? 'bg-bg-secondary text-text-secondary'}`}>
-          {target.position}
-        </span>
+      {/* Row 2 swaps by mode. League-wide: the owning team, since that's the
+          thing you can't infer. Team-scoped: the owner is already in the
+          header and selector, so the row carries the one fact that varies —
+          does this player fill a deficit, or is he depth? */}
+      <div className="flex items-center gap-2">
+        {showNeedTag
+          ? (target.fillsNeed
+              ? <Badge tone="danger" soft>Your need</Badge>
+              : <Badge tone="neutral" soft>Depth</Badge>)
+          : (
+            <span className="font-body text-[11px] text-text-secondary dark:text-text-secondary truncate min-w-0">
+              {getTeamName(target.owner)}
+            </span>
+          )}
       </div>
 
       {/* Row 3: estimated package cost + why these pieces */}
@@ -80,18 +104,39 @@ function TargetCard({ target, fairPackage, onTap }) {
 export default function WhatsFair() {
   const { league, loading, error, retry } = useLeagueContext()
   const navigate = useNavigate()
+  const location = useLocation()
   const [posFilter, setPosFilter] = useState('All')
+
+  // Nav state (Trade Partners → "See their targets") takes priority over the
+  // persisted session filter, same precedence the Analyzer uses for its
+  // pre-fills.
+  const [teamFilter, setTeamFilter] = useState(() => {
+    const fromNav = location.state?.targetsRosterId
+    return fromNav != null ? Number(fromNav) : loadTeamFilter()
+  })
+
+  const analysis = useMemo(() => {
+    if (!league?.myRoster || !league?.allRosters?.length) return null
+    return rankTradePartners(league.myRoster, league.allRosters)
+  }, [league])
+
+  // A stale/foreign roster id (identity switch, a departed team) falls back to
+  // the league-wide list rather than rendering an empty board.
+  const activeTeam = useMemo(() => {
+    if (teamFilter == null || !analysis) return null
+    return analysis.partners.find(p => p.rosterId === teamFilter) ?? null
+  }, [teamFilter, analysis])
+
+  const scopedRosterId = activeTeam?.rosterId ?? null
+
+  useEffect(() => { saveTeamFilter(scopedRosterId) }, [scopedRosterId])
 
   const targets = useMemo(() => {
     if (!league?.myRoster || !league?.allRosters?.length) return []
-    return getTopTradeTargets(league.myRoster, league.allRosters)
-  }, [league])
-
-  const myTier = useMemo(() => {
-    if (!league?.allRosters?.length || !league?.myRoster) return 'Middle'
-    const tiers = assignWinWindowTiers(league.allRosters)
-    return tiers[league.myRoster.rosterId] ?? 'Middle'
-  }, [league])
+    return getTopTradeTargets(league.myRoster, league.allRosters, 20, {
+      ownerRosterId: scopedRosterId,
+    })
+  }, [league, scopedRosterId])
 
   // Pre-compute fair packages for all targets (ascending algorithm)
   const fairPackages = useMemo(() => {
@@ -111,11 +156,15 @@ export default function WhatsFair() {
     return targets.filter(t => t.position === posFilter)
   }, [targets, posFilter])
 
-  if (loading && !league) return <LoadingSpinner message="Finding trade targets…" />
+  const partnerOptions = useMemo(() => buildPartnerOptions(league), [league])
+
+  if (loading && !league) return <Spinner message="Finding trade targets…" />
   if (error && !league)   return <ErrorState message={error} onRetry={retry} />
   if (!league?.myRoster) return <ErrorState message="Could not load league data." onRetry={retry} />
 
   const myTeamName = getTeamName(league.myRoster.owner)
+  const scopedTeamName = activeTeam ? getTeamName(activeTeam.owner) : null
+  const needCount = filteredTargets.filter(t => t.fillsNeed).length
 
   return (
     <div className="px-4 pb-4">
@@ -125,11 +174,25 @@ export default function WhatsFair() {
           <span className="font-body text-sm text-text-secondary dark:text-text-secondary">
             {myTeamName}
           </span>
-          <WinWindowBadge tier={myTier} />
+          <WinWindowBadge tier={analysis?.myTier ?? 'Middle'} />
         </div>
         <p className="font-body text-xs text-text-tertiary dark:text-text-tertiary leading-relaxed">
-          Top targets ranked by positional need × value. Tap to explore a fair package.
+          {scopedTeamName
+            ? `Everything ${scopedTeamName} has that you could ask for, ranked by your positional need × value. Tap to explore a fair package.`
+            : 'Top targets ranked by positional need × value. Tap to explore a fair package.'}
         </p>
+      </div>
+
+      {/* Team selector — grouped by trade fit, each option carrying tier +
+          record so the choice isn't blind. Same control the Analyzer uses. */}
+      <div className="pt-3">
+        <PartnerSelect
+          options={partnerOptions}
+          value={scopedRosterId}
+          onChange={setTeamFilter}
+          label="Team"
+          placeholder="All teams"
+        />
       </div>
 
       {/* Position filter */}
@@ -147,12 +210,30 @@ export default function WhatsFair() {
         ))}
       </div>
 
+      {/* Partner intelligence for the scouted team — the same strip the
+          Analyzer carries under its opponent selector. */}
+      {activeTeam && <PartnerContextStrip partner={activeTeam} />}
+
+      {/* Honest read on what the scoped list actually contains: their board is
+          shown whole, need-matched first, so the mode never renders empty. */}
+      {activeTeam && filteredTargets.length > 0 && (
+        <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary mb-3 leading-relaxed">
+          {needCount === 0
+            ? `Nothing on ${scopedTeamName} fills a positional deficit — these are their most valuable movable pieces.`
+            : `${needCount} of ${filteredTargets.length} fill a positional deficit; the rest are their most valuable pieces.`}
+        </p>
+      )}
+
       {filteredTargets.length === 0 ? (
         <div className="py-12 text-center">
           <p className="font-body text-sm text-text-tertiary dark:text-text-tertiary">
-            {posFilter === 'All'
-              ? "No targets found — your roster is well-balanced."
-              : `No ${posFilter} targets — you may already be strong at this position.`}
+            {activeTeam
+              ? (posFilter === 'All'
+                  ? `${scopedTeamName} has no tradeable assets to target right now.`
+                  : `${scopedTeamName} has no ${posFilter} worth targeting.`)
+              : (posFilter === 'All'
+                  ? "No targets found — your roster is well-balanced."
+                  : `No ${posFilter} targets — you may already be strong at this position.`)}
           </p>
         </div>
       ) : (
@@ -162,6 +243,7 @@ export default function WhatsFair() {
               key={target.sleeperId}
               target={target}
               fairPackage={fairPackages[target.sleeperId]}
+              showNeedTag={!!activeTeam}
               onTap={() =>
                 navigate('/trade/analyze', {
                   state: {
