@@ -76,6 +76,11 @@ export function reloadToBuild(buildId) {
  */
 export function useAppVersion() {
   const [updateAvailable, setUpdateAvailable] = useState(false)
+  // What the last check actually established, so the drawer can say whether the
+  // build stamp has been CONFIRMED current rather than just displaying an id.
+  // 'unknown' covers the dev server (no version.json is emitted) and any failed
+  // check — both are states where we must not claim the app is up to date.
+  const [versionState, setVersionState] = useState('unknown')
 
   const check = useCallback(async ({ autoReload }) => {
     // Dev has no version.json, and a bundle with no compiled id can't compare.
@@ -84,9 +89,14 @@ export function useAppVersion() {
     try {
       serverBuildId = await fetchServerBuildId()
     } catch {
+      setVersionState('unknown')
       return  // best-effort: never surface a version check as an error
     }
-    if (!serverBuildId || serverBuildId === CURRENT_BUILD_ID) return
+    if (!serverBuildId || serverBuildId === CURRENT_BUILD_ID) {
+      setVersionState(serverBuildId ? 'current' : 'unknown')
+      return
+    }
+    setVersionState('stale')
 
     // Already tried reloading toward this exact build and we're STILL on the
     // old one — the reload didn't take. Never loop; fall back to offering it.
@@ -124,5 +134,5 @@ export function useAppVersion() {
     if (!reloadToBuild(serverBuildId)) window.location.reload()
   }, [])
 
-  return { updateAvailable, applyUpdate, buildId: CURRENT_BUILD_ID }
+  return { updateAvailable, applyUpdate, buildId: CURRENT_BUILD_ID, versionState }
 }
