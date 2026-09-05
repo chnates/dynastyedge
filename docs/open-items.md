@@ -140,11 +140,21 @@ Full memo: `docs/analysis/rookie-longterm-signals-2026-09.md`.
   held **0 rookies across nine real draft classes**. Combine athleticism
   specifically is null (+0.002).
 
-**Trigger for revisiting:** the CFBD key. §4 of the memo is the reason it
-matters more than it did before — age and athleticism cannot separate a second
-axis because both are dominated by draft capital, and **college production
-(dominator rating, breakout age) is the only proposed input that is not a
-restatement of where a player was drafted.**
+**RESOLVED 2026-09-04 — the key arrived and college production was tested. It
+is also a null.** See `docs/analysis/rookie-college-production-2026-09.md`
+(run 33931139020). Dominator rating IS orthogonal to draft capital
+(r = +0.05…+0.09) and does produce a different ranking (0.725 vs the shipped
+score), but the long-term score built on it predicts years 2–3 **worse than the
+shipped score and worse than capital alone**, adds +0.011 at t = 1.71 on top of
+the shipped score, and populates the taxi-stash quadrant with 6 of 391. Nothing
+ships; **the two-axis rookie question is closed.**
+
+The one thing from 3b that did not get its own gate and might deserve one:
+**breakout age** (n = 306, univariate +0.262 vs years 2–3, the strongest single
+college number measured). It is currently dated off age at the draft rather than
+a real birthday, which is coarse. Also worth re-running everything if CFBD ever
+backfills ESPN ids before college season 2015 — that roughly doubles the usable
+frame.
 
 **One measured follow-up, not shipped:** a 0.10 age *tilt* on the existing
 opportunity score gains +0.018 rho against years 2–3 (t = 3.35, 8 of 9

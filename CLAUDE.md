@@ -1915,6 +1915,21 @@ result worth revisiting: a 0.10 age *tilt* on the existing score gains +0.018
 rho on years 2–3 (t = 3.35, 8 of 9 classes) at no measurable cost to year 1.
 Not shipped — recorded in the memo as the concrete follow-up.
 
+**College production was tested too, and it is also a null.** With the owner's
+`CFBD_API_KEY` in place, dominator rating and breakout age were back-tested in
+`docs/analysis/rookie-college-production-2026-09.md`
+(Actions → *Snapshot rookie intel* → `mode: college-backtest`, run 33931139020).
+Dominator is genuinely **orthogonal to draft capital** (r = +0.05…+0.09, against
+age's +0.36) and it does produce a materially different ranking (0.725 vs the
+shipped score, where age managed only 0.934) — but being different is not being
+better: the long-term score built on it predicts years 2–3 **worse than the
+shipped score and worse than draft capital alone** (+0.543 vs +0.608 vs +0.576),
+it adds only +0.011 at t = 1.71 on top of the shipped score, and the two-axis
+"taxi stash" quadrant holds 6 of 391. **So Draft › Research keeps one score, the
+app calls no college endpoint, and the two-axis question is closed.** Note the
+frame: CFBD's `playerId` is only ESPN-aligned from college season ~2015, so only
+draft classes 2019+ are usable (n = 391) — the memo's §2 carries that cliff.
+
 **Roster fit (`buildTeamFit` / `topTargets`)** answers the second question — the
 model above is league-agnostic ("which rookies become something?"), this is
 "which of them should *I* take?". It is a **re-ranking over the back-tested
@@ -2579,7 +2594,7 @@ dynastyedge/
 │       ├── ci.yml              ← lint + test + build on branch pushes / PRs (no deploy)
 │       ├── news.yml            ← twice-hourly news aggregation (accumulates into the feed) → news-data branch
 │       ├── values-history.yml  ← daily value snapshot + trade archive → values-history branch
-│       └── rookie-intel.yml   ← daily rookie depth-chart + draft-capital feed → rookie-intel branch
+│       └── rookie-intel.yml   ← daily rookie depth-chart + draft-capital feed → rookie-intel branch; `mode` input also runs the two CFBD analyses (probe · college-backtest), which publish nothing
 ├── scripts/
 │   ├── fetch-news.mjs          ← multi-source news fetcher (runs in Actions)
 │   ├── snapshot-values.mjs     ← daily FantasyCalc snapshot appender (runs in Actions)
@@ -2592,6 +2607,8 @@ dynastyedge/
 │       ├── faab-corpus.mjs     ← analysis-only: pulls the league's full FAAB bid corpus (see docs/analysis/faab-bid-corpus-2026-08.md); nothing imports it
 │       ├── rookie-signal-backtest.mjs ← analysis-only: grades the SHIPPED rookie model against 2021–2025 (imports src/utils/rookieResearch.js so it cannot drift)
 │       ├── rookie-longterm-backtest.mjs ← analysis-only: THE Phase 3c gate — a two-axis "long-term" rookie score, tested against years 2–3 and REJECTED; see docs/analysis/rookie-longterm-signals-2026-09.md
+│       ├── cfbd-probe.mjs        ← analysis-only, RUNS IN ACTIONS (needs CFBD_API_KEY): proves CFBD's athlete id IS the ESPN athlete id, so college data joins by ID and never by name
+│       ├── rookie-college-backtest.mjs ← analysis-only, RUNS IN ACTIONS: THE Phase 3b gate — dominator rating + breakout age vs years 2–3, also REJECTED; see docs/analysis/rookie-college-production-2026-09.md
 │       ├── trade-structure-backtest.mjs ← analysis-only: the DISCONFIRMED trade-structure profiling test (frontier Item 3); drives the shipped buildManagerProfiles so it cannot drift
 │       ├── optimizer-signal-backtest.mjs ← analysis-only: measures whether a better weekly PROJECTION is obtainable (it is not) and what DEF streaming is worth; see docs/analysis/optimizer-data-sources-2026-09.md
 │       └── news-coverage.mjs ← analysis-only: THE news-pipeline acceptance metric — how many of my rostered players the app can actually resolve in the feed (no arg = live feed); see docs/analysis/news-sources-2026-09.md

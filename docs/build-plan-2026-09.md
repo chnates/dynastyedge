@@ -2,9 +2,9 @@
 
 **Status:** approved by owner 2026-09-04. **Phase 1 shipped 2026-09-04**
 (see §2). **Phase 2 shipped 2026-09-04 — acceptance test MISSED, 10 of 25
-against a target of 12** (see §3). **Phase 3 partial 2026-09-04 — 3a shipped,
-3b still blocked on the owner's key, 3c returned a NULL and 3d was therefore
-not built** (see §4). Phase 4 cut (§9).
+against a target of 12** (see §3). **Phase 3 closed 2026-09-04 — 3a shipped;
+3b and 3c both returned NULLs and 3d was therefore not built** (see §4).
+Phase 4 cut (§9).
 **Origin:** the Optimizer data-source study
 (`docs/analysis/optimizer-data-sources-2026-09.md`, incl. its REVISION block).
 **How to use this file:** each phase below has a **kickoff prompt** — paste it
@@ -316,8 +316,14 @@ Do not open a PR until I ask.
 
 ## 4. Phase 3 — Rookie research that answers "impact now vs. stash"
 
-> **Status 2026-09-04: PARTIAL. 3a shipped · 3b skipped (key still absent) ·
-> 3c returned a NULL · 3d NOT BUILT.** The 3c gate was run and the two-axis
+> **Status 2026-09-04 (final): 3a shipped · 3b TESTED AND NULL · 3c NULL ·
+> 3d NOT BUILT.** The owner's `CFBD_API_KEY` landed later the same day, so 3b
+> was no longer blocked: CFBD joins to our rookies **by ID** (its `playerId` is
+> the ESPN athlete id — the plan's `cfb_id` route was a dead end), and dominator
+> rating plus breakout age were back-tested properly. Also null — see
+> `docs/analysis/rookie-college-production-2026-09.md`. Both candidate second
+> axes have now failed, so **the two-axis question is closed** rather than
+> parked. The 3c gate was run and the two-axis
 > premise did not survive it: a long-term score built on age + combine
 > athleticism correlates **0.934** with the score already shipped, *loses* to
 > it at predicting years 2–3 (+0.602 vs +0.632), and the "low impact now /
