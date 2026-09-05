@@ -2130,11 +2130,13 @@ An **"Update available — Reload"** row appears above Refresh only when the
 running bundle is behind the deployed one (see App version self-heal). Cold
 starts fix themselves silently, so this row is the mid-session case.
 
-An **"App build"** row closes the block, below a hairline: the build id the
-running bundle was compiled from (`__BUILD_ID__`, an ISO timestamp) rendered
-as a local date-time by `formatBuildId`, with a leading dot and a suffix
-carrying what the last version check established — green **· up to date**
-(server agrees), amber **· update ready** (it does not), or nothing at all.
+An **"App build"** row closes the block, below a hairline: the **build number**
+the running bundle was compiled from (`__BUILD_ID__`), with a leading dot and a
+suffix carrying what the last version check established — green **· up to
+date** (server agrees), amber **· update ready** (it does not), or nothing at
+all. The number is a first-parent commit count that advances by exactly one per
+merge to main (PR #32 shipped build 131), so "am I on 132?" is answerable
+against the repo in a way a timestamp never was.
 **"Nothing" is the honest state and is never dressed up as reassurance:** the
 dev server emits no `version.json` and a failed check proves nothing, so both
 show the stamp alone. This exists because the self-heal is otherwise invisible
@@ -2947,7 +2949,11 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # fetch-depth: 0 is LOAD-BEARING — the build id is a first-parent commit
+      # count, and a shallow clone makes that count 1 for EVERY build.
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -2971,6 +2977,20 @@ File: `vite.config.js` — sets `base` to the repo name, and stamps one build id
 into **both** the bundle (`__BUILD_ID__`, via `define`) and an emitted
 `version.json` (via a tiny inline plugin). The app compares the two — see
 **App version self-heal** below.
+
+**The build id is a BUILD NUMBER**: `git rev-list --count --first-parent HEAD`,
+which advances by exactly one per merge (or direct push) to `main`. It is
+deliberately **not** the PR number — `deploy.yml` runs on *push to main*, where
+no PR number exists, and `values-history.yml`'s keepalive commits to `main` with
+no PR at all.
+
+**A shallow clone silently poisons it**, which is why `deploy.yml` sets
+`fetch-depth: 0`: `actions/checkout` defaults to depth 1, where the count is
+**1 for every build** — every deploy would share an id and the self-heal could
+never detect a stale bundle. If that guard is ever lost, `vite.config.js`
+detects the shallow repo (`git rev-parse --is-shallow-repository`) and falls
+back to a timestamp id — uglier, but never a duplicate. `formatBuildId` renders
+a digits-only id verbatim and only date-formats the fallback.
 
 ```js
 export default defineConfig({

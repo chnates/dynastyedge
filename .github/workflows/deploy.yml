@@ -22,7 +22,13 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # fetch-depth: 0 is LOAD-BEARING. The build id is a first-parent commit
+      # count (see vite.config.js); a shallow clone makes that count 1 for
+      # every build, so every deploy would share an id and the version
+      # self-heal could never detect a stale bundle.
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
           node-version: 22
