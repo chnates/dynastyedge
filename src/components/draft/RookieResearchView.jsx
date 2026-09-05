@@ -239,7 +239,7 @@ export default function RookieResearchView() {
         <p className="text-xs text-text-secondary dark:text-text-secondary mt-1 leading-relaxed">
           Dynasty value tells you what a rookie <em>costs</em>. This page scores what he
           might <em>become</em>: an <span className="text-text-primary dark:text-text-primary font-semibold">opportunity
-          score</span> from 0–100 built on where he sits on his NFL depth chart and what his
+          score</span> from 0–100 built on where he sits on his NFL depth chart, what his
           team spent to draft him — the two things a value number doesn't price.
         </p>
         <ol className="text-xs text-text-secondary dark:text-text-secondary mt-2 space-y-1 leading-relaxed">
@@ -429,6 +429,16 @@ export default function RookieResearchView() {
             the depth chart alone at +0.54; blended they reach <span className="font-mono">+0.66</span>.
           </p>
           <p>
+            That blend answers <em>will he play this year</em>. Dynasty asks a longer
+            question, so the score is then tilted 10% toward youth, measured against
+            his own position — a 22-year-old QB is normal, a 22-year-old WR is not.
+            Over 712 rookies in nine classes that tilt improves the years-2-and-3
+            ordering by <span className="font-mono">+0.018</span> rho (better in 8 of 9
+            classes) and costs nothing measurable in year 1. A rookie with no known
+            draft age — nearly every undrafted one — is left untilted rather than
+            guessed at.
+          </p>
+          <p>
             A depth rank is scored by what it's <em>worth at that position</em>. A QB2
             is a backup, but an RB3 still plays — so the same ordinal is not the same
             opportunity.
@@ -441,9 +451,13 @@ export default function RookieResearchView() {
             changes the order. That re-ranking is a judgement call, not a back-tested one.
           </p>
           <p>
-            <span className="text-text-primary dark:text-text-primary font-semibold">Camp movement is shown, not scored.</span> It
-            can't be back-tested yet (the historical depth-chart feed starts in August,
-            so there's no pre-camp baseline to measure against).
+            <span className="text-text-primary dark:text-text-primary font-semibold">Camp movement, height, weight and the combine
+            drills are shown but not scored.</span> Camp movement can't be back-tested yet
+            (the historical depth-chart feed starts in August, so there's no pre-camp
+            baseline). Combine athleticism was tested and is a null — it moved the
+            held-out correlation by +0.002, and only about half of any class runs the
+            drills. College production was tested too, and also didn't earn a place.
+            Age is the one measurable that did.
           </p>
           <p>
             <span className="text-text-primary dark:text-text-primary font-semibold">Preseason stats are deliberately absent.</span> They

@@ -5,6 +5,7 @@ import NewsArticleSheet from './NewsArticleSheet'
 import { usePlayerNews } from '../../hooks/usePlayerNews'
 import { usePlayerIntel, relativeTime, TOUCH_LABEL } from '../../hooks/usePlayerIntel'
 import { getPeakStatus } from '../../utils/peakWindows'
+import { measurables, ageAtDraftRead, positionArticle } from '../../utils/rookieResearch'
 import { useWatchlist } from '../../hooks/useWatchlist'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
@@ -135,6 +136,12 @@ const OPP_REASON_TONE = {
 function RookieOpportunity({ research }) {
   const { score, tier, depthText, reasons = [], move, pick, round, slot, rank } = research
   const tone = OPP_TIER[tier] ?? OPP_TIER.weak
+  // Display-only context, never a score input — see the null in
+  // docs/analysis/rookie-longterm-signals-2026-09.md. A rookie the combine
+  // feed doesn't cover simply has no rows here; he is never dropped or
+  // penalised for it.
+  const drills = measurables(research)
+  const ageRead = ageAtDraftRead(research.position, research.ageAtDraft)
   const capital = pick == null
     ? (research.noData ? 'No NFL draft record in the feed' : 'Undrafted free agent')
     : `Round ${round ?? '—'} · pick ${pick} of the NFL draft`
@@ -158,7 +165,9 @@ function RookieOpportunity({ research }) {
             </span>
             <div>
               <p className={cn('font-body text-sm font-semibold', tone.text)}>{tone.label}</p>
-              <p className="font-body text-[10px] text-text-tertiary">out of 100 · chance he lands a real role</p>
+              <p className="font-body text-[10px] text-text-tertiary">
+                out of 100 · his path to snaps{research.ageTilted ? ', tilted for age' : ''}
+              </p>
             </div>
           </div>
 
@@ -176,6 +185,49 @@ function RookieOpportunity({ research }) {
               {Math.abs(move.delta) === 1 ? 'spot' : 'spots'} since the feed started tracking
               {' '}(#{move.from} → #{move.to}) — shown for context, not scored
             </p>
+          )}
+
+          {(ageRead || drills.length > 0 || research.height != null || research.weight != null) && (
+            <div className="mt-2.5 pt-2.5 border-t border-border-default">
+              <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-1">
+                Measurables
+              </p>
+              {ageRead && (
+                <p className="font-body text-xs text-text-primary leading-snug">
+                  {ageRead.text}
+                  {research.ageTilted && (
+                    <span className="text-text-tertiary"> · counted in the score</span>
+                  )}
+                </p>
+              )}
+              {(research.height != null || research.weight != null) && (
+                <p className="font-body text-xs text-text-secondary leading-snug">
+                  {research.height != null
+                    ? `${Math.floor(research.height / 12)}'${research.height % 12}"`
+                    : '—'}
+                  {' · '}
+                  {research.weight != null ? `${research.weight} lb` : '—'}
+                </p>
+              )}
+              {drills.length > 0 && (
+                <div className="mt-1 space-y-0.5">
+                  <p className="font-body text-[10px] text-text-tertiary">
+                    Combine · context, not scored
+                  </p>
+                  {drills.map(d => (
+                    <p key={d.drill} className="font-body text-xs text-text-secondary leading-snug">
+                      {d.label}{' '}
+                      <span className="font-mono text-text-primary">{d.value}</span>
+                      {d.band && (
+                        <span className="text-text-tertiary">
+                          {' '}· {d.band} for {positionArticle(research.position)} {research.position}
+                        </span>
+                      )}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           {reasons.length > 0 && (

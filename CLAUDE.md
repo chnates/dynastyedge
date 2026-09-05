@@ -441,8 +441,34 @@ in Actions and served as a static file, same architecture as news and values:
   indices are built from rookies only, so a veteran looks unambiguous.
 - Format is columnar: `{ updatedAt, season, asOf, dates: ['YYYY-MM-DD', …],
   players: { sleeperId: { name, pos, team, round, pick, rank, slot, ranks,
-  ahead } } }` — `ranks` aligned to `dates`, **one column per ISO week**
-  (daily columns would be ~7× the bytes for no extra signal).
+  ahead, age, ht, wt, forty, vert, broad } } }` — `ranks` aligned to `dates`,
+  **one column per ISO week** (daily columns would be ~7× the bytes for no
+  extra signal).
+- **`ht`/`wt` and the three combine drills are DISPLAY ONLY — they never feed
+  a score. `age` at the NFL draft is the one exception, and it is scored** (see
+  the age tilt in Feature 19). Combine athleticism was tested as the basis of a
+  second "long-term" rookie score and is a null: it buys **+0.002** held-out
+  Spearman against years 2–3, and only ~half of any class runs the drills. A
+  separate long-term *score* built on age was also rejected — it correlates
+  **0.934** with the shipped one and *loses* to it at predicting years 2–3
+  (+0.602 vs +0.632). What survived is a small **tilt**, not a second score.
+  See `docs/analysis/rookie-longterm-signals-2026-09.md`.
+  `tests/rookieResearch.test.mjs` pins both halves: two rookies identical but
+  for their combine numbers must score identically, and two identical but for
+  their age must not.
+  - The combine join is **ID-based end to end, never name-matched**:
+    `draft_picks.pfr_player_id` → `combine.pfr_id` for drafted rookies, plus
+    `players.csv`'s `pfr_id` → `gsis_id` → the roster crosswalk, and
+    `pfr_id` → `espn_id` → Sleeper's own `espn_id` as a second hop for
+    **undrafted** combine invitees (who have no draft row, so `pfr_id` is
+    otherwise unreachable for them).
+  - Both extra fetches are best-effort: a failure omits the measurables and
+    leaves capital + depth chart — the signals the model actually scores —
+    untouched. Neither can abort the run.
+  - Coverage is genuinely partial and always will be: nflverse publishes
+    combine results only, and the best prospects skip the drill or run at a pro
+    day. **49 of the 237 published 2026 rookies have a 40 time** (78 have an
+    age). Missing shows `—`; a rookie is never dropped for it.
 - No keepalive step: `values-history.yml`'s keepalive commits to `main`, which
   resets the 60-day cron-disable clock for **every** workflow in the repo.
 - Publish contract matches `values-history.yml` — a missing output is
@@ -1873,6 +1899,74 @@ March is computable for the current class but **could not be back-tested**
 no pre-camp baseline). Display it; don't let it move the score until a season
 of it exists.
 
+**Age at draft and combine athleticism are shown, not scored either — and here
+the reason is a measured null, not missing evidence.** Tested over n=866
+drafted skill rookies (2013–2023) against years 2–3 production in
+`docs/analysis/rookie-longterm-signals-2026-09.md`
+(`node scripts/dev/rookie-longterm-backtest.mjs`, which imports the shipped
+constants so it cannot drift): athleticism buys **+0.002** held-out Spearman;
+a long-term score built on age and athleticism correlates **0.934** with the
+shipped opportunity score, *loses* to it at predicting years 2–3 (+0.602 vs
++0.632), and the "low impact now / high upside later" quadrant that a two-axis
+UI would exist to surface held **0 rookies across nine real classes**. So
+**there is no second axis and Draft › Research keeps one score.**
+`COMBINE_BASELINE` is a display baseline only — never a score input.
+`AGE_BASELINE` is the exception: it feeds the age tilt below.
+
+**The age tilt — the one thing Phase 3 shipped into a score.** The board number
+is `dynastyOpportunityScore`: the back-tested year-1 `opportunityScore`, tilted
+**10% toward youth measured within position** (a 22-year-old QB is normal, a
+22-year-old WR is not). Measured over n=712 drafted skill rookies, classes
+2015–2023, with 2015–2020 entirely outside the window the year-1 core was
+calibrated on:
+
+|                | per-class delta at w=0.10 | t | classes improved |
+|----------------|---------------------------|---|------------------|
+| vs **years 2+3** | **+0.0183** | **+3.35** | **8 of 9** |
+| vs year 1        | −0.0023 | −0.37 | 4 of 9 |
+
+Clearly better at the three-year question, no measurable cost at year 1.
+Three contracts hold it together, all pinned by tests:
+
+1. **`opportunityScore` still means exactly what it always meant** — the
+   year-1 core `scripts/dev/rookie-signal-backtest.mjs` grades at rho +0.664.
+   The tilt is a separate function layered on top; the old back-test stays
+   valid.
+2. **An unknown age is a no-op, not an imputed average.** The shipped form is
+   written re-centred (`base + 0.0278·z`) rather than as the measured blend
+   (`0.9·base + 0.1·(0.5+0.25z)`). The two are a positive affine transform of
+   each other and **rank rookies identically** — the back-test asserts it live
+   at Spearman **0.999946**, and the only residual is the 0–1 clamp saturating.
+   Re-centring matters because only **78 of the 237** published 2026 rookies
+   carry an age and the rest are almost all undrafted: the blended form would
+   pull them toward 0.5 and more than double a buried UDFA's score.
+3. **It is a tilt, not a second axis.** The two-axis rookie UI was tested twice
+   and rejected twice (below). A tilted board correlates 0.971 with the
+   untilted one on the back-test frame — showing both would be showing the same
+   list twice.
+
+Live behaviour on the 2026 class: score changes are small (max 8 points of 100,
+median 0), and among **drafted** rookies — the population the tilt was
+validated on — the board moves at Spearman 0.946, median 5 spots. Whole-board
+rank movement looks far larger, but that is a ties artifact and not signal: 172
+of 237 rookies share just 26 distinct scores under 6/100, so a sub-point change
+vaults past dozens of players who all read "thin opportunity" anyway.
+
+**College production was tested too, and it is also a null.** With the owner's
+`CFBD_API_KEY` in place, dominator rating and breakout age were back-tested in
+`docs/analysis/rookie-college-production-2026-09.md`
+(Actions → *Snapshot rookie intel* → `mode: college-backtest`, run 33931139020).
+Dominator is genuinely **orthogonal to draft capital** (r = +0.05…+0.09, against
+age's +0.36) and it does produce a materially different ranking (0.725 vs the
+shipped score, where age managed only 0.934) — but being different is not being
+better: the long-term score built on it predicts years 2–3 **worse than the
+shipped score and worse than draft capital alone** (+0.543 vs +0.608 vs +0.576),
+it adds only +0.011 at t = 1.71 on top of the shipped score, and the two-axis
+"taxi stash" quadrant holds 6 of 391. **So Draft › Research keeps one score, the
+app calls no college endpoint, and the two-axis question is closed.** Note the
+frame: CFBD's `playerId` is only ESPN-aligned from college season ~2015, so only
+draft classes 2019+ are usable (n = 391) — the memo's §2 carries that cliff.
+
 **Roster fit (`buildTeamFit` / `topTargets`)** answers the second question — the
 model above is league-agnostic ("which rookies become something?"), this is
 "which of them should *I* take?". It is a **re-ranking over the back-tested
@@ -1909,8 +2003,10 @@ stats are absent. Unranked rookies show `—` and are never dropped.
 **The drawer carries the research read.** Rows are handed to
 `PlayerProfileDrawer` as its `research` prop, which renders a **Rookie
 Opportunity** card at the top of the sheet (score/100 + tier, depth read, NFL
-capital, camp move, the score's reasons, the within-position market-vs-model
-sentence, and the roster-fit reasons) — a value number alone doesn't answer
+capital, camp move, a **"Measurables · context, not scored"** block — age at
+the draft read against his position, height/weight, and the combine drills each
+banded within position — the score's reasons, the within-position
+market-vs-model sentence, and the roster-fit reasons) — a value number alone doesn't answer
 "is he going to play?", which is why the user opened the sheet. The row shape
 therefore also carries `positionRank` and `age`, which the model itself does
 not use: the drawer grades from `positionRank ?? 99`, so the first shipped
@@ -2535,7 +2631,7 @@ dynastyedge/
 │       ├── ci.yml              ← lint + test + build on branch pushes / PRs (no deploy)
 │       ├── news.yml            ← twice-hourly news aggregation (accumulates into the feed) → news-data branch
 │       ├── values-history.yml  ← daily value snapshot + trade archive → values-history branch
-│       └── rookie-intel.yml   ← daily rookie depth-chart + draft-capital feed → rookie-intel branch
+│       └── rookie-intel.yml   ← daily rookie depth-chart + draft-capital feed → rookie-intel branch; `mode` input also runs the two CFBD analyses (probe · college-backtest), which publish nothing
 ├── scripts/
 │   ├── fetch-news.mjs          ← multi-source news fetcher (runs in Actions)
 │   ├── snapshot-values.mjs     ← daily FantasyCalc snapshot appender (runs in Actions)
@@ -2547,6 +2643,9 @@ dynastyedge/
 │       ├── replay-live.mjs     ← drives the running app against a SYNTHETIC draft / regular season, so the two once-a-year surfaces can be rehearsed on demand
 │       ├── faab-corpus.mjs     ← analysis-only: pulls the league's full FAAB bid corpus (see docs/analysis/faab-bid-corpus-2026-08.md); nothing imports it
 │       ├── rookie-signal-backtest.mjs ← analysis-only: grades the SHIPPED rookie model against 2021–2025 (imports src/utils/rookieResearch.js so it cannot drift)
+│       ├── rookie-longterm-backtest.mjs ← analysis-only: THE Phase 3c gate — a two-axis "long-term" rookie score, tested against years 2–3 and REJECTED; see docs/analysis/rookie-longterm-signals-2026-09.md
+│       ├── cfbd-probe.mjs        ← analysis-only, RUNS IN ACTIONS (needs CFBD_API_KEY): proves CFBD's athlete id IS the ESPN athlete id, so college data joins by ID and never by name
+│       ├── rookie-college-backtest.mjs ← analysis-only, RUNS IN ACTIONS: THE Phase 3b gate — dominator rating + breakout age vs years 2–3, also REJECTED; see docs/analysis/rookie-college-production-2026-09.md
 │       ├── trade-structure-backtest.mjs ← analysis-only: the DISCONFIRMED trade-structure profiling test (frontier Item 3); drives the shipped buildManagerProfiles so it cannot drift
 │       ├── optimizer-signal-backtest.mjs ← analysis-only: measures whether a better weekly PROJECTION is obtainable (it is not) and what DEF streaming is worth; see docs/analysis/optimizer-data-sources-2026-09.md
 │       └── news-coverage.mjs ← analysis-only: THE news-pipeline acceptance metric — how many of my rostered players the app can actually resolve in the feed (no arg = live feed); see docs/analysis/news-sources-2026-09.md
@@ -2714,7 +2813,7 @@ dynastyedge/
 │   ├── freeAgents.test.mjs          ← waiver options: the DEF blind spot (FantasyCalc must not gate the list), TEAM_* offense-totals guard, rule-7 `—` for unranked, rostered exclusion, and the one-defense rule (a skill slot never returns a DEF, however it projects)
 │   ├── lineupHistory.test.mjs       ← optimal-lineup slot-fill order (singles → FLEX → SFLX)
 │   ├── matchupWeeks.test.mjs        ← mocked-fetch: one fetch/week across both consumers, all-fail rejection
-│   ├── rookieResearch.test.mjs      ← opportunity blend, shared points scale (the backup-TE trap), within-position divergence, roster-fit re-ranking (need/window bonuses, score untouched), drawer hand-off fields, best-effort feed degradation
+│   ├── rookieResearch.test.mjs      ← opportunity blend, shared points scale (the backup-TE trap), within-position divergence, roster-fit re-ranking (need/window bonuses, score untouched), drawer hand-off fields, best-effort feed degradation, and the measurables NULL (age/combine can never move a score)
 │   └── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
 ├── index.html
 ├── eslint.config.js             ← ESLint 9 flat config (recommended + react-hooks, src/ + scripts/)
@@ -2731,8 +2830,8 @@ honestly:** instead of "cannot find module" it prints `# tests 115 / # pass 110 
 ones transitively importing `react` (`tradeAnalysis.js` → `recommendations.js`
 → `useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
 `draftLive` loading their hooks) — the file fails to load, so its tests never
-run and the count silently drops from **163** to 115. `npm run build` in the
-same state fails with `sh: 1: vite: not found`. **If the test count isn't 163,
+run and the count silently drops from **174** to 115. `npm run build` in the
+same state fails with `sh: 1: vite: not found`. **If the test count isn't 174,
 run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-04
 by renaming `node_modules` aside; re-measure them whenever the suite grows.)
 

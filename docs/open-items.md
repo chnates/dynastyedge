@@ -119,6 +119,56 @@ and this is diagnostic, not daily information.
 **Blocked, owner action:** Phase 3b needs a free CollegeFootballData API key
 stored as repo secret `CFBD_API_KEY`. Nothing else in the plan is blocked.
 
+### 2026-09-04 — Phase 3 landed partial: 3a shipped, 3c a null, 3b and 3d NOT built
+
+Full memo: `docs/analysis/rookie-longterm-signals-2026-09.md`.
+
+- **3a shipped.** `rookie-intel.json` now carries age at the NFL draft,
+  height/weight and the three well-covered combine drills, joined **by ID only**
+  (`pfr_id` → `gsis_id`/`espn_id` → `sleeperId`). Rendered on the profile
+  drawer as *"Measurables · context, not scored"*.
+- **3b NOT attempted — still the open owner action.** `CFBD_API_KEY` could not
+  be verified from the session: the agent proxy blocks the GitHub Actions API
+  (`/actions/secrets` → 403), and nothing in the repo references the secret.
+  Per the instruction to build 3b only if the secret exists, it was skipped.
+  The pipeline reads no key and publishes fine without one.
+- **3c is a null and 3d is stopped.** A "long-term" score from age +
+  athleticism beats *draft capital alone* out of sample by only +0.012 rho
+  (95% CI includes zero), is a **worse** predictor of years 2–3 than the score
+  already shipped (+0.602 vs +0.632), and correlates **0.934** with it. The
+  "low impact now / high upside later" quadrant a two-axis UI exists to surface
+  held **0 rookies across nine real draft classes**. Combine athleticism
+  specifically is null (+0.002).
+
+**RESOLVED 2026-09-04 — the key arrived and college production was tested. It
+is also a null.** See `docs/analysis/rookie-college-production-2026-09.md`
+(run 33931139020). Dominator rating IS orthogonal to draft capital
+(r = +0.05…+0.09) and does produce a different ranking (0.725 vs the shipped
+score), but the long-term score built on it predicts years 2–3 **worse than the
+shipped score and worse than capital alone**, adds +0.011 at t = 1.71 on top of
+the shipped score, and populates the taxi-stash quadrant with 6 of 391. Nothing
+ships; **the two-axis rookie question is closed.**
+
+The one thing from 3b that did not get its own gate and might deserve one:
+**breakout age** (n = 306, univariate +0.262 vs years 2–3, the strongest single
+college number measured). It is currently dated off age at the draft rather than
+a real birthday, which is coarse. Also worth re-running everything if CFBD ever
+backfills ESPN ids before college season 2015 — that roughly doubles the usable
+frame.
+
+**One measured follow-up — SHIPPED 2026-09-05 on the owner's ask.** The 0.10
+age tilt (+0.018 rho against years 2–3, t = 3.35, 8 of 9 classes, no measurable
+cost to year 1) is now the board score, as `dynastyOpportunityScore`. See §5 of
+the long-term memo for the implementation contracts — in particular that an
+unknown age is a no-op rather than an imputed average, which matters because
+only 78 of 237 published rookies carry one.
+
+**Open, and worth a look eventually:** the board's bottom is dense — 172 of 237
+rookies share just 26 distinct scores under 6/100 — so tiny score differences
+produce enormous *rank* movement among players who all read "thin opportunity".
+That predates the tilt and is a presentation problem, not a model one. If the
+Opportunity sort ever feels jumpy, this is why.
+
 **Do not** re-test multi-source projections, a boom/bust score, weekly defense
 streaming, or usage-as-prediction. All four were measured and rejected; §0 of
 the plan carries the numbers.
