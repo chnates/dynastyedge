@@ -156,11 +156,18 @@ a real birthday, which is coarse. Also worth re-running everything if CFBD ever
 backfills ESPN ids before college season 2015 — that roughly doubles the usable
 frame.
 
-**One measured follow-up, not shipped:** a 0.10 age *tilt* on the existing
-opportunity score gains +0.018 rho against years 2–3 (t = 3.35, 8 of 9
-classes) at no measurable cost to year 1, and moves 241 of 712 rookies ≥5
-spots. It is a change to a back-tested model that was not asked for. Needs an
-owner ask.
+**One measured follow-up — SHIPPED 2026-09-05 on the owner's ask.** The 0.10
+age tilt (+0.018 rho against years 2–3, t = 3.35, 8 of 9 classes, no measurable
+cost to year 1) is now the board score, as `dynastyOpportunityScore`. See §5 of
+the long-term memo for the implementation contracts — in particular that an
+unknown age is a no-op rather than an imputed average, which matters because
+only 78 of 237 published rookies carry one.
+
+**Open, and worth a look eventually:** the board's bottom is dense — 172 of 237
+rookies share just 26 distinct scores under 6/100 — so tiny score differences
+produce enormous *rank* movement among players who all read "thin opportunity".
+That predates the tilt and is a presentation problem, not a model one. If the
+Opportunity sort ever feels jumpy, this is why.
 
 **Do not** re-test multi-source projections, a boom/bust score, weekly defense
 streaming, or usage-as-prediction. All four were measured and rejected; §0 of

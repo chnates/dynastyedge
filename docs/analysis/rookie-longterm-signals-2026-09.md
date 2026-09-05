@@ -155,6 +155,7 @@ instruction that 3c is a gate and not a formality.
 ---
 
 ## 5. The one positive by-product — a long-term *tilt*, not a second axis
+### SHIPPED 2026-09-05 (owner ask). Implementation notes at the end of this section.
 
 The long-term question is real even though the second axis is not. Adding a
 small age weight **on top of the shipped score** — one number, one ranking —
@@ -177,10 +178,41 @@ classes at t = 3.35, and costs nothing measurable on year 1. It moves 241 of 712
 rookies ≥ 5 spots within their class (Spearman 0.971 with the shipped order) —
 a real reordering, not a rounding.
 
-**Not shipped.** It is a change to a back-tested model that was not asked for,
-it belongs to the 3d work this memo just stopped, and t = 3.35 on nine classes
-is the sort of result this repo's own rules say to replicate before ranking on.
-Recorded here as the concrete follow-up if the owner wants one.
+**Shipped 2026-09-05** on an explicit owner ask, as
+`dynastyOpportunityScore` in `src/utils/rookieResearch.js`. Four things about
+the implementation are worth recording, because two of them are places the
+obvious version would have been wrong:
+
+1. **`opportunityScore` is untouched.** The tilt is layered on top, so the
+   year-1 back-test (`rookie-signal-backtest.mjs`, rho +0.664) keeps grading
+   exactly what it always graded.
+2. **The shipped form is re-centred**, `base + 0.0278·z`, rather than the blend
+   measured above, `0.9·base + 0.1·(0.5 + 0.25z)`. The two are a positive affine
+   transform of each other (`blend = 0.9·(shipped) + 0.05`) and rank rookies
+   identically — §4 of the back-test now asserts that on the live 712-rookie
+   frame and reports **Spearman 0.999946**, the residual being the 0–1 clamp
+   saturating on rank-1 quarterbacks taken at 1.01.
+3. **Why re-centre at all: an unknown age must be a no-op.** The blend pulls
+   every scored rookie toward 0.5, which is harmless when everybody is tilted
+   (865 of 866 here) and wrong when only some are. Live, only **78 of the 237**
+   published 2026 rookies carry an age, and the ones without are almost entirely
+   undrafted, already on the 0.05 capital floor — blending would take a buried
+   UDFA from 4/100 to 9/100, inflating precisely the players we know least
+   about. Same shape as the `?? 99` positional-rank default that once stamped
+   every rookie "D — Deep Stash".
+4. **`ageTiltScore` is deliberately unclamped**, because the measured spec is a
+   bare `0.5 + 0.25z`. An earlier cut added a clamp as a "safety rail" and it
+   silently disagreed with the re-centred form at |z| > 2, moving 17 of 78
+   tilted rookies by up to 9 spots on the live class.
+
+**Live behaviour, measured on the 2026 class:** score changes are small (max 8
+points of 100, p90 2.9, median 0). Among **drafted** rookies — the population
+the tilt was validated on — the board reorders at Spearman 0.946 with a median
+move of 5 spots, closely matching the 0.971 measured on the back-test frame.
+Whole-board Spearman looks much worse (0.856) and that number is an artifact,
+not signal: **172 of 237 rookies share only 26 distinct scores under 6/100**, so
+a sub-point change vaults past dozens of players who all read "thin
+opportunity". That density is pre-existing and was not introduced by the tilt.
 
 ---
 

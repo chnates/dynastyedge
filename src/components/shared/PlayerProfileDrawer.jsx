@@ -165,7 +165,9 @@ function RookieOpportunity({ research }) {
             </span>
             <div>
               <p className={cn('font-body text-sm font-semibold', tone.text)}>{tone.label}</p>
-              <p className="font-body text-[10px] text-text-tertiary">out of 100 · chance he lands a real role</p>
+              <p className="font-body text-[10px] text-text-tertiary">
+                out of 100 · his path to snaps{research.ageTilted ? ', tilted for age' : ''}
+              </p>
             </div>
           </div>
 
@@ -188,10 +190,15 @@ function RookieOpportunity({ research }) {
           {(ageRead || drills.length > 0 || research.height != null || research.weight != null) && (
             <div className="mt-2.5 pt-2.5 border-t border-border-default">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-1">
-                Measurables · context, not scored
+                Measurables
               </p>
               {ageRead && (
-                <p className="font-body text-xs text-text-primary leading-snug">{ageRead.text}</p>
+                <p className="font-body text-xs text-text-primary leading-snug">
+                  {ageRead.text}
+                  {research.ageTilted && (
+                    <span className="text-text-tertiary"> · counted in the score</span>
+                  )}
+                </p>
               )}
               {(research.height != null || research.weight != null) && (
                 <p className="font-body text-xs text-text-secondary leading-snug">
@@ -204,6 +211,9 @@ function RookieOpportunity({ research }) {
               )}
               {drills.length > 0 && (
                 <div className="mt-1 space-y-0.5">
+                  <p className="font-body text-[10px] text-text-tertiary">
+                    Combine · context, not scored
+                  </p>
                   {drills.map(d => (
                     <p key={d.drill} className="font-body text-xs text-text-secondary leading-snug">
                       {d.label}{' '}

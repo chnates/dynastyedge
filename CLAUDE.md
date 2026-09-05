@@ -444,17 +444,18 @@ in Actions and served as a static file, same architecture as news and values:
   ahead, age, ht, wt, forty, vert, broad } } }` — `ranks` aligned to `dates`,
   **one column per ISO week** (daily columns would be ~7× the bytes for no
   extra signal).
-- **The measurables (`age` at the NFL draft, `ht`/`wt`, and the three
-  well-covered combine drills) are DISPLAY ONLY — they never feed a score.**
-  They were built and tested as the basis of a second "long-term" rookie score
-  and the result was a null: combine athleticism buys **+0.002** held-out
-  Spearman against years 2–3 production, and a long-term score built on age
-  correlates **0.934** with the score already shipped while *losing* to it at
-  predicting years 2–3 (+0.602 vs +0.632). See
-  `docs/analysis/rookie-longterm-signals-2026-09.md`. Same contract as camp
-  movement: shown as context, never scored. `tests/rookieResearch.test.mjs`
-  pins it — two rookies identical in position, depth rank and draft capital
-  must score identically however they tested.
+- **`ht`/`wt` and the three combine drills are DISPLAY ONLY — they never feed
+  a score. `age` at the NFL draft is the one exception, and it is scored** (see
+  the age tilt in Feature 19). Combine athleticism was tested as the basis of a
+  second "long-term" rookie score and is a null: it buys **+0.002** held-out
+  Spearman against years 2–3, and only ~half of any class runs the drills. A
+  separate long-term *score* built on age was also rejected — it correlates
+  **0.934** with the shipped one and *loses* to it at predicting years 2–3
+  (+0.602 vs +0.632). What survived is a small **tilt**, not a second score.
+  See `docs/analysis/rookie-longterm-signals-2026-09.md`.
+  `tests/rookieResearch.test.mjs` pins both halves: two rookies identical but
+  for their combine numbers must score identically, and two identical but for
+  their age must not.
   - The combine join is **ID-based end to end, never name-matched**:
     `draft_picks.pfr_player_id` → `combine.pfr_id` for drafted rookies, plus
     `players.csv`'s `pfr_id` → `gsis_id` → the roster crosswalk, and
@@ -1909,11 +1910,47 @@ shipped opportunity score, *loses* to it at predicting years 2–3 (+0.602 vs
 +0.632), and the "low impact now / high upside later" quadrant that a two-axis
 UI would exist to surface held **0 rookies across nine real classes**. So
 **there is no second axis and Draft › Research keeps one score.**
-`COMBINE_BASELINE` / `AGE_BASELINE` are display baselines only (per-position
-mean and sd, drift-checked by that script) — never score inputs. The one
-result worth revisiting: a 0.10 age *tilt* on the existing score gains +0.018
-rho on years 2–3 (t = 3.35, 8 of 9 classes) at no measurable cost to year 1.
-Not shipped — recorded in the memo as the concrete follow-up.
+`COMBINE_BASELINE` is a display baseline only — never a score input.
+`AGE_BASELINE` is the exception: it feeds the age tilt below.
+
+**The age tilt — the one thing Phase 3 shipped into a score.** The board number
+is `dynastyOpportunityScore`: the back-tested year-1 `opportunityScore`, tilted
+**10% toward youth measured within position** (a 22-year-old QB is normal, a
+22-year-old WR is not). Measured over n=712 drafted skill rookies, classes
+2015–2023, with 2015–2020 entirely outside the window the year-1 core was
+calibrated on:
+
+|                | per-class delta at w=0.10 | t | classes improved |
+|----------------|---------------------------|---|------------------|
+| vs **years 2+3** | **+0.0183** | **+3.35** | **8 of 9** |
+| vs year 1        | −0.0023 | −0.37 | 4 of 9 |
+
+Clearly better at the three-year question, no measurable cost at year 1.
+Three contracts hold it together, all pinned by tests:
+
+1. **`opportunityScore` still means exactly what it always meant** — the
+   year-1 core `scripts/dev/rookie-signal-backtest.mjs` grades at rho +0.664.
+   The tilt is a separate function layered on top; the old back-test stays
+   valid.
+2. **An unknown age is a no-op, not an imputed average.** The shipped form is
+   written re-centred (`base + 0.0278·z`) rather than as the measured blend
+   (`0.9·base + 0.1·(0.5+0.25z)`). The two are a positive affine transform of
+   each other and **rank rookies identically** — the back-test asserts it live
+   at Spearman **0.999946**, and the only residual is the 0–1 clamp saturating.
+   Re-centring matters because only **78 of the 237** published 2026 rookies
+   carry an age and the rest are almost all undrafted: the blended form would
+   pull them toward 0.5 and more than double a buried UDFA's score.
+3. **It is a tilt, not a second axis.** The two-axis rookie UI was tested twice
+   and rejected twice (below). A tilted board correlates 0.971 with the
+   untilted one on the back-test frame — showing both would be showing the same
+   list twice.
+
+Live behaviour on the 2026 class: score changes are small (max 8 points of 100,
+median 0), and among **drafted** rookies — the population the tilt was
+validated on — the board moves at Spearman 0.946, median 5 spots. Whole-board
+rank movement looks far larger, but that is a ties artifact and not signal: 172
+of 237 rookies share just 26 distinct scores under 6/100, so a sub-point change
+vaults past dozens of players who all read "thin opportunity" anyway.
 
 **College production was tested too, and it is also a null.** With the owner's
 `CFBD_API_KEY` in place, dominator rating and breakout age were back-tested in

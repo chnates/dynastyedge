@@ -33,8 +33,9 @@ import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
-  capitalScore, opportunityScore,
-  COMBINE_BASELINE, AGE_BASELINE, COMBINE_DRILLS, ageAtDraftZ,
+  capitalScore, opportunityScore, dynastyOpportunityScore,
+  COMBINE_BASELINE, AGE_BASELINE, COMBINE_DRILLS,
+  ageTiltScore, AGE_TILT_WEIGHT,
 } from '../../src/utils/rookieResearch.js'
 
 const NFLVERSE = 'https://github.com/nflverse/nflverse-data/releases/download'
@@ -243,10 +244,11 @@ console.log(drift === 0
   : `  ${drift} baseline(s) drifted — update src/utils/rookieResearch.js`)
 
 // ── Scores under test ────────────────────────────────────────────────────────
-// Age, mapped to 0..1 with YOUNGER = better, via the shipped z helper so the
-// analysis and any future product use one definition. A missing age falls back
-// to his position's mean (z = 0), which is the neutral read.
-const ageScore = r => 0.5 + 0.25 * (ageAtDraftZ(r.pos, r.age) ?? 0)
+// Age, mapped to 0..1 with YOUNGER = better. This is now THE SHIPPED function
+// (`ageTiltScore`), not a local copy — §4's result is what the app runs, so the
+// two cannot drift. A missing age falls back to his position's mean (z = 0),
+// which is the neutral read for a back-test where 865 of 866 rookies have one.
+const ageScore = r => ageTiltScore(r.pos, r.age) ?? 0.5
 // Athleticism: the mean of the available drill z-scores against his position's
 // combine baseline, mapped to 0..1. Missing drills fall back to neutral.
 function athScore(r) {
@@ -403,7 +405,26 @@ for (const s of AXIS_CLASSES) {
   for (const r of g) if (Math.abs(a.get(r) - b.get(r)) >= 5) moved5++
 }
 console.log(`  a 0.10 age tilt moves ${moved5}/${axis.length} rookies >=5 spots within their class` +
-  ` (Spearman with the shipped order ${spearman(axis.map(r => [r.now, tilt(r, 0.10)])).rho.toFixed(3)})`)
+  ` (Spearman with the untilted order ${spearman(axis.map(r => [r.now, tilt(r, 0.10)])).rho.toFixed(3)})`)
+
+// The blend above is the SPEC. The app ships a re-centred form so that an
+// unknown age is a no-op instead of pulling the rookie toward 0.5 — see the
+// comment on dynastyOpportunityScore. It must rank identically, so grade it
+// here rather than trusting the algebra.
+console.log('\n  shipped form (dynastyOpportunityScore) vs the measured blend:')
+for (const outcome of ['y1', 'y23']) {
+  const blend = spearman(axis.map(r => [tilt(r, AGE_TILT_WEIGHT), r[outcome]])).rho
+  const ship = spearman(axis.map(r =>
+    [dynastyOpportunityScore({ position: r.pos, rank: r.rank, pick: r.pick, age: r.age }), r[outcome]])).rho
+  console.log(`    vs ${outcome === 'y1' ? 'YEAR 1  ' : 'YEARS 2+3'}: blend ${blend.toFixed(4)}  shipped ${ship.toFixed(4)}` +
+    `  diff ${(ship - blend).toFixed(4)}`)
+}
+const agree = spearman(axis.map(r => [
+  tilt(r, AGE_TILT_WEIGHT),
+  dynastyOpportunityScore({ position: r.pos, rank: r.rank, pick: r.pick, age: r.age }),
+])).rho
+console.log(`    Spearman(blend, shipped) = ${agree.toFixed(6)} — 1.000000 means the`)
+console.log('    re-centring cost nothing; anything less is the final 0-1 clamp saturating.')
 
 // ── Optional bootstrap ───────────────────────────────────────────────────────
 if (process.argv.includes('--bootstrap')) {

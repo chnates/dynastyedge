@@ -11,6 +11,7 @@ import {
   buildRookieResearch, buildTeamFit, topTargets, splitDivergence,
   COMBINE_BASELINE, AGE_BASELINE, COMBINE_DRILLS,
   measurableZ, ageAtDraftZ, bandOf, measurables, ageAtDraftRead, positionArticle,
+  AGE_TILT_WEIGHT, ageTiltScore, dynastyOpportunityScore,
 } from '../src/utils/rookieResearch.js'
 
 test('the blend weight is the back-tested 0.3 depth / 0.7 capital', () => {
@@ -305,29 +306,33 @@ test('fit keeps the market in the ranking so the board stays draftable', () => {
 // docs/analysis/rookie-longterm-signals-2026-09.md. These tests exist to keep
 // them display-only: the null is the contract.
 
-test('measurables can never move an opportunity score', () => {
-  // THE load-bearing assertion. Combine athleticism measured +0.002 held-out
-  // rho — inside the noise — and a long-term score built on age correlates
-  // 0.934 with this one. So the feed's measurables must be inert: two rookies
-  // identical in position/rank/pick score identically however they tested.
-  const burner = { position: 'WR', rank: 2, pick: 40, age: 20.5, forty: 4.28, vert: 42, broad: 135 }
-  const plodder = { position: 'WR', rank: 2, pick: 40, age: 24.9, forty: 4.72, vert: 28, broad: 108 }
-  assert.equal(opportunityScore(burner), opportunityScore(plodder))
+test('combine athleticism can never move a score — age is the only measurable that does', () => {
+  // Athleticism measured +0.002 held-out rho, inside the noise, so it stays
+  // inert. Age is the deliberate exception: it earned a tilt at t = +3.35 over
+  // 8 of 9 classes. Two rookies alike in everything but their combine numbers
+  // must score identically; alike in everything but their age must not.
+  const base = { position: 'WR', rank: 2, pick: 40, age: 22.15 }
+  const freak = { ...base, forty: 4.28, vert: 42, broad: 135 }
+  const stiff = { ...base, forty: 4.72, vert: 28, broad: 108 }
+  assert.equal(dynastyOpportunityScore(freak), dynastyOpportunityScore(stiff))
+  assert.equal(opportunityScore(freak), opportunityScore(stiff))
+  assert.ok(dynastyOpportunityScore({ ...base, age: 20.5 }) > dynastyOpportunityScore({ ...base, age: 24.9 }),
+    'age is scored on purpose; athleticism is not')
 
-  // And through the board builder, end to end.
+  // Through the board builder, end to end: same age, wildly different combine.
   const intel = {
     players: {
-      1: { name: 'Burner', pos: 'WR', rank: 2, pick: 40, round: 2, ranks: [], age: 20.5, forty: 4.28 },
-      2: { name: 'Plodder', pos: 'WR', rank: 2, pick: 40, round: 2, ranks: [], age: 24.9, forty: 4.72 },
+      1: { name: 'Freak', pos: 'WR', rank: 2, pick: 40, round: 2, ranks: [], age: 22.15, forty: 4.28, vert: 42 },
+      2: { name: 'Stiff', pos: 'WR', rank: 2, pick: 40, round: 2, ranks: [], age: 22.15, forty: 4.72, vert: 28 },
     },
   }
   const [a, b] = buildRookieResearch(
-    [{ sleeperId: '1', name: 'Burner', position: 'WR', value: 1000 },
-     { sleeperId: '2', name: 'Plodder', position: 'WR', value: 1000 }], intel)
+    [{ sleeperId: '1', name: 'Freak', position: 'WR', value: 1000 },
+     { sleeperId: '2', name: 'Stiff', position: 'WR', value: 1000 }], intel)
   assert.equal(a.score, b.score)
-  // …but both still carry the measurables through for display.
+  // …and both carry the measurables through for display regardless.
   assert.equal(a.forty, 4.28)
-  assert.equal(b.ageAtDraft, 24.9)
+  assert.equal(b.vert, 28)
 })
 
 test('a drill z is signed so better is always positive, whichever way the drill runs', () => {
@@ -386,4 +391,119 @@ test('only the well-covered drills ship, and every one has a full baseline', () 
   // The 40 is the one drill where lower wins.
   assert.equal(COMBINE_BASELINE.WR.forty.higherIsBetter, false)
   assert.equal(COMBINE_BASELINE.WR.vert.higherIsBetter, true)
+})
+
+// ── The age tilt ────────────────────────────────────────────────────────────
+// The one measured, replicating improvement out of Phase 3: tilting the year-1
+// opportunity score 10% toward youth gains +0.018 rho against years 2-3
+// (t = +3.35, 8 of 9 classes) at no measurable cost to year 1 (t = -0.37).
+// docs/analysis/rookie-longterm-signals-2026-09.md §5.
+
+test('an unknown age leaves the score exactly untouched', () => {
+  // THE load-bearing contract. The back-test imputed a neutral age because 865
+  // of its 866 rookies had one; live, only 78 of 237 published rookies do, and
+  // the ones missing it are almost all UNDRAFTED. Imputing 0.5 for them
+  // computes 0.9*base + 0.05, which more than doubles a buried UDFA's score —
+  // inflating exactly the players we know least about.
+  const udfa = { position: 'WR', rank: 4, pick: null }
+  assert.equal(dynastyOpportunityScore({ ...udfa, age: null }), opportunityScore(udfa))
+  assert.equal(dynastyOpportunityScore({ ...udfa, age: undefined }), opportunityScore(udfa))
+  // And the number that must NOT happen:
+  const imputed = (1 - AGE_TILT_WEIGHT) * opportunityScore(udfa) + AGE_TILT_WEIGHT * 0.5
+  assert.ok(dynastyOpportunityScore({ ...udfa, age: null }) < imputed - 0.03,
+    'a UDFA with no age must not be lifted toward the middle of the board')
+  // A position with no age baseline is the same case.
+  assert.equal(dynastyOpportunityScore({ position: 'DEF', rank: 1, pick: null, age: 22 }),
+    opportunityScore({ position: 'DEF', rank: 1, pick: null }))
+})
+
+test('the tilt ranks identically to the blend that was actually measured', () => {
+  // The app ships a re-centred form so an unknown age is a no-op. It has to be
+  // a positive affine transform of the measured blend, or the +0.018 result
+  // does not transfer. Verified over a realistic sweep; the back-test asserts
+  // the same thing on 712 real rookies (Spearman 0.999946).
+  const rows = []
+  for (const position of ['QB', 'RB', 'WR', 'TE']) {
+    for (const rank of [1, 2, 3, 4]) {
+      for (const pick of [15, 40, 120, 250]) {
+        for (const age of [21, 22, 23, 24]) rows.push({ position, rank, pick, age })
+      }
+    }
+  }
+  // Compared only where the shipped score is strictly inside (0, 1): at the
+  // rails it saturates and ties players the blend still separates. That is the
+  // whole residual, and on 712 real rookies it costs a Spearman of 0.999946.
+  const live = rows.filter(r => {
+    const v = dynastyOpportunityScore(r)
+    return v > 0 && v < 1
+  })
+  assert.ok(live.length > rows.length * 0.8, 'most of the sweep should be unsaturated')
+  const shipped = live.map(r => dynastyOpportunityScore(r))
+  const blend = live.map(r =>
+    (1 - AGE_TILT_WEIGHT) * opportunityScore(r) + AGE_TILT_WEIGHT * ageTiltScore(r.position, r.age))
+  const order = v => v.map((_, i) => i).sort((a, b) => v[a] - v[b]).join(',')
+  assert.equal(order(shipped), order(blend),
+    're-centring the tilt must not change the ordering the back-test measured')
+
+  // The blend is exactly a positive affine image of the shipped form.
+  for (let i = 0; i < live.length; i++) {
+    assert.ok(Math.abs(blend[i] - ((1 - AGE_TILT_WEIGHT) * shipped[i] + 0.05)) < 1e-12)
+  }
+})
+
+test('younger is better, and only within his own position', () => {
+  const wr = { position: 'WR', rank: 2, pick: 40 }
+  const young = dynastyOpportunityScore({ ...wr, age: 21 })
+  const typical = dynastyOpportunityScore({ ...wr, age: 22.15 })
+  const old = dynastyOpportunityScore({ ...wr, age: 24.5 })
+  assert.ok(young > typical && typical > old)
+  // A rookie at exactly his position's mean age is unmoved — the tilt is
+  // centred, so "normal age" is not a bonus or a penalty.
+  assert.ok(Math.abs(typical - opportunityScore(wr)) < 0.005)
+  // QBs are drafted older, so the same age reads differently by position.
+  const qb = { position: 'QB', rank: 2, pick: 40, age: 22.2 }
+  const wrSame = { position: 'WR', rank: 2, pick: 40, age: 22.2 }
+  assert.ok(dynastyOpportunityScore(qb) - opportunityScore({ position: 'QB', rank: 2, pick: 40 })
+    > dynastyOpportunityScore(wrSame) - opportunityScore({ position: 'WR', rank: 2, pick: 40 }))
+})
+
+test('the tilt is small: it reorders, it does not overturn', () => {
+  // 0.10 was chosen because it is the measured optimum, not because it is
+  // dramatic — the tilted board correlates 0.971 with the untilted one. Draft
+  // capital must still dominate: a young day-three flier cannot outscore a
+  // starting first-rounder.
+  const flier = dynastyOpportunityScore({ position: 'WR', rank: 3, pick: 200, age: 20 })
+  const stud = dynastyOpportunityScore({ position: 'WR', rank: 1, pick: 10, age: 24 })
+  assert.ok(stud > flier, 'a 0.10 tilt must not let age outrank capital and depth')
+  assert.equal(AGE_TILT_WEIGHT, 0.10)
+})
+
+test('the score stays inside 0-1 however extreme the age', () => {
+  for (const age of [17, 19, 22, 27, 31]) {
+    for (const position of ['QB', 'RB', 'WR', 'TE']) {
+      for (const [rank, pick] of [[1, 1], [4, 260], [2, 40]]) {
+        const v = dynastyOpportunityScore({ position, rank, pick, age })
+        assert.ok(v >= 0 && v <= 1, `${position} rank ${rank} pick ${pick} age ${age} -> ${v}`)
+      }
+    }
+  }
+})
+
+test('the board reports whether a score was actually tilted', () => {
+  // A mixed board is honest about it rather than implying every score sits on
+  // the same basis.
+  const intel = {
+    players: {
+      1: { name: 'Drafted', pos: 'WR', rank: 2, pick: 40, round: 2, ranks: [], age: 21 },
+      2: { name: 'Undrafted', pos: 'WR', rank: 2, pick: null, round: null, ranks: [] },
+    },
+  }
+  const [drafted, undrafted] = buildRookieResearch(
+    [{ sleeperId: '1', name: 'Drafted', position: 'WR', value: 1000 },
+     { sleeperId: '2', name: 'Undrafted', position: 'WR', value: 200 }], intel)
+  assert.equal(drafted.ageTilted, true)
+  assert.equal(undrafted.ageTilted, false)
+  assert.equal(undrafted.score, opportunityScore({ position: 'WR', rank: 2, pick: null }))
+  // A young drafted rookie gets a reason line naming it.
+  assert.ok(drafted.reasons.some(r => /young for a WR/i.test(r.text)))
 })

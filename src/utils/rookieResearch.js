@@ -73,9 +73,82 @@ export function capitalScore(pick) {
   return Math.max(0, 1 - Math.log(pick) / Math.log(LAST_PICK))
 }
 
-// The headline number: 0-1, higher = better chance of becoming something.
+// The year-1 core: 0-1, higher = better chance of landing a real role as a
+// rookie. This is the function `scripts/dev/rookie-signal-backtest.mjs` grades
+// against rookie-season points (rho +0.664) and it must keep meaning exactly
+// that. The number the BOARD shows is `dynastyOpportunityScore` below.
 export function opportunityScore({ position, rank, pick }) {
   return DEPTH_WEIGHT * depthScore(position, rank) + (1 - DEPTH_WEIGHT) * capitalScore(pick)
+}
+
+// ── The age tilt ─────────────────────────────────────────────────────────────
+// A dynasty manager is not asking "will he play in September", he is asking
+// "is he worth a roster spot for three years". The year-1 core above answers
+// the first question. Tilting it 10% toward youth answers the second measurably
+// better, and that is the only measured, replicating improvement to come out of
+// the whole Phase 3 investigation:
+//
+//   vs YEARS 2+3   per-class delta at w=0.10:  mean +0.0183  t=+3.35  8 of 9
+//   vs YEAR 1      per-class delta at w=0.10:  mean -0.0023  t=-0.37  4 of 9
+//
+// (n=712 drafted skill rookies, classes 2015-2023, and 2015-2020 sits entirely
+// outside the 2021-2025 window the year-1 core was calibrated on. Reproduce
+// with `node scripts/dev/rookie-longterm-backtest.mjs` §4, which imports the
+// constants below so the analysis and the app cannot drift.)
+//
+// So: clearly better at the three-year question, no measurable cost at year 1.
+// It is a TILT and not a second axis on purpose — the two-axis rookie UI was
+// tested twice and rejected twice (docs/analysis/rookie-longterm-signals-2026-09.md
+// and rookie-college-production-2026-09.md). A tilted board correlates 0.971
+// with the untilted one; showing both would be showing the same list twice.
+export const AGE_TILT_WEIGHT = 0.10
+
+// The blended form the back-test measured: `(1-w)*base + w*ageTiltScore`, with
+// age mapped to 0-1 (younger = higher) against his own position — a 22-year-old
+// QB is normal, a 22-year-old WR is not. Exported so
+// `scripts/dev/rookie-longterm-backtest.mjs` blends exactly what ships.
+// Returns null when the age is unknown.
+// Deliberately UNCLAMPED: the back-tested spec is a bare `0.5 + 0.25z`, and a
+// clamp here is not a harmless safety rail — it silently disagrees with the
+// centered form below at |z| > 2, which on the live class moved 17 of 78
+// tilted rookies by up to 9 spots. Ship the spec that was measured.
+export function ageTiltScore(position, age) {
+  const z = ageAtDraftZ(position, age)
+  if (z == null) return null
+  return 0.5 + 0.25 * z
+}
+
+// The SHIPPED form is the same tilt written so a neutral age is a no-op.
+//
+//   measured:  0.9*base + 0.1*(0.5 + 0.25z)  =  0.9*base + 0.05 + 0.025z
+//   shipped:   base + 0.0278z
+//   and       measured = 0.9 * (shipped + 0.0556)
+//
+// — a positive affine transform, so the two rank rookies IDENTICALLY. The
+// measured result carries over exactly; `tests/rookieResearch.test.mjs` pins
+// that equivalence rather than trusting this comment.
+//
+// Why bother rewriting it: the blended form pulls every scored rookie toward
+// 0.5, which is harmless when everyone is tilted (the back-test frame had an
+// age for 865 of 866) and actively wrong when only some are. Live, only 78 of
+// the 237 published 2026 rookies carry an age, and the ones missing it are
+// almost entirely UNDRAFTED — already sitting on the 0.05 capital floor.
+// Blending a buried UDFA toward 0.5 would take him from 0.041 to 0.087, more
+// than doubling the score of exactly the player we know least about. That is
+// the same shape of bug as the `?? 99` positional-rank default that once
+// stamped every rookie "D — Deep Stash".
+//
+// In this form an unknown age gives z = null, the tilt is skipped, and the
+// rookie keeps his year-1 score untouched — which is also the conservative
+// reading of the evidence, since the back-test frame was DRAFTED rookies only
+// and the tilt is not validated outside it.
+const AGE_Z_COEFF = 0.25 * AGE_TILT_WEIGHT / (1 - AGE_TILT_WEIGHT)
+
+export function dynastyOpportunityScore({ position, rank, pick, age }) {
+  const base = opportunityScore({ position, rank, pick })
+  const z = ageAtDraftZ(position, age)
+  if (z == null) return base
+  return Math.max(0, Math.min(1, base + AGE_Z_COEFF * z))
 }
 
 // ── Measurables: age at draft + the combine drills ───────────────────────────
@@ -239,7 +312,7 @@ const tierOf = score => (score >= 0.62 ? 'strong' : score >= 0.38 ? 'fair' : 'we
 
 // Reasons the score is what it is — shown on the card so the number is never
 // a black box.
-export function scoreReasons({ position, rank, pick, round }) {
+export function scoreReasons({ position, rank, pick, round, age }) {
   const out = []
   if (pick != null) {
     if (pick <= 32) out.push({ tone: 'good', text: `First-round capital (pick ${pick})` })
@@ -253,6 +326,15 @@ export function scoreReasons({ position, rank, pick, round }) {
   else if (bucket === 2) out.push({ tone: 'flat', text: 'One move from a starting role' })
   else if (bucket === 3) out.push({ tone: position === 'RB' ? 'flat' : 'bad', text: 'Third on the depth chart' })
   else out.push({ tone: 'bad', text: 'No clear path to snaps yet' })
+  // The age tilt, surfaced only when it actually moved the score in a
+  // direction worth naming — a typical-age rookie gets no line, because
+  // "he is exactly the normal age" is not a reason.
+  const ageZ = ageAtDraftZ(position, age)
+  if (ageZ != null && ageZ >= 0.75) {
+    out.push({ tone: 'good', text: `Young for a ${position} at ${age.toFixed(1)} — more upside years` })
+  } else if (ageZ != null && ageZ <= -0.75) {
+    out.push({ tone: 'bad', text: `Old for a ${position} at ${age.toFixed(1)} — fewer upside years` })
+  }
   return out
 }
 
@@ -308,13 +390,19 @@ export function buildRookieResearch(prospects, intel) {
       broad: entry?.broad ?? null,
       noData: !entry,
     }
-    if (!entry || !position) return { ...base, score: null, reasons: [], tier: null, depthText: null }
-    const score = opportunityScore({ position, rank, pick })
+    if (!entry || !position) {
+      return { ...base, score: null, reasons: [], tier: null, depthText: null, ageTilted: false }
+    }
+    const score = dynastyOpportunityScore({ position, rank, pick, age: base.ageAtDraft })
     return {
       ...base,
       score,
+      // Whether the age tilt actually applied. The UI says so rather than
+      // implying every score is on the same basis — an untilted rookie is
+      // scored on year-1 opportunity alone.
+      ageTilted: ageAtDraftZ(position, base.ageAtDraft) != null,
       tier: tierOf(score),
-      reasons: scoreReasons({ position, rank, pick, round: base.round }),
+      reasons: scoreReasons({ position, rank, pick, round: base.round, age: base.ageAtDraft }),
       depthText: depthLabel(position, rank, base.ahead),
     }
   })
