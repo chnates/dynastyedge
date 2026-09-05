@@ -63,7 +63,7 @@ function getSectionName(pathname) {
   return 'DynastyEdge'
 }
 
-function AppShell({ leagueData, updateAvailable, onApplyUpdate }) {
+function AppShell({ leagueData, updateAvailable, onApplyUpdate, buildId, versionState }) {
   const location = useLocation()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -117,6 +117,8 @@ function AppShell({ leagueData, updateAvailable, onApplyUpdate }) {
         isDark={isDark}
         onToggleTheme={toggleTheme}
         updateAvailable={updateAvailable}
+        buildId={buildId}
+        versionState={versionState}
         onApplyUpdate={onApplyUpdate}
       />
 
@@ -241,7 +243,7 @@ export default function App() {
   // Above the identity gate on purpose: a stale bundle that boots to the login
   // screen must self-heal too, and the check has nothing to do with which team
   // you are.
-  const { updateAvailable, applyUpdate } = useAppVersion()
+  const { updateAvailable, applyUpdate, buildId, versionState } = useAppVersion()
   return (
     <LeagueContext.Provider value={leagueData}>
       {rosterId == null ? (
@@ -252,6 +254,8 @@ export default function App() {
             leagueData={leagueData}
             updateAvailable={updateAvailable}
             onApplyUpdate={applyUpdate}
+            buildId={buildId}
+            versionState={versionState}
           />
         </HashRouter>
       )}

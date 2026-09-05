@@ -13,6 +13,7 @@ import { getTeamName } from '../../hooks/useLeague'
 import { loadNewsFeed, getNewsFeedUpdatedAt, getNewsFeedFetchedAt } from '../../hooks/usePlayerIntel'
 import { loadHistory, getHistoryFetchedAt } from '../../hooks/useValueHistory'
 import { loadRookieIntel, getRookieIntelFetchedAt } from '../../hooks/useRookieIntel'
+import { formatBuildId } from '../../utils/appVersion'
 
 // Feed-age readout for the two Actions-published feeds. Both die silently by
 // design (the client hides stale feeds), so the drawer is the one place their
@@ -108,6 +109,8 @@ export default function SideDrawer({
   isDark,
   onToggleTheme,
   updateAvailable = false,
+  buildId = null,
+  versionState = 'unknown',
   onApplyUpdate,
 }) {
   const { league, sleeperRetry, fcRetry, sleeperFetchedAt, fcFetchedAt } = useLeagueContext()
@@ -146,6 +149,8 @@ export default function SideDrawer({
   // Per-source status rows: app-side "last refreshed" for all five, plus the
   // publish age for the three Actions feeds (that's the number that only moves
   // when the cron publishes — labelled "feed" so it reads as a separate thing).
+  const buildLabel = formatBuildId(buildId)
+
   const dataStatus = [
     { key: 'sleeper', label: 'Rosters', refreshed: formatAgo(sleeperFetchedAt) },
     { key: 'fc', label: 'Values', refreshed: formatAgo(fcFetchedAt) },
@@ -418,6 +423,39 @@ export default function SideDrawer({
               )
             })}
           </div>
+
+          {/* Which BUILD is on screen. The version self-heal (useAppVersion.js)
+              already reloads a stale bundle silently, but silently is exactly
+              the problem: after a deploy there was no way to confirm the phone
+              had actually picked it up — the whole failure this mechanism
+              exists for is invisible by nature. So the running build id is
+              stamped here, next to the data ages, with what the last check
+              established. 'unknown' is shown as nothing rather than as
+              reassurance: the dev server emits no version.json and a failed
+              check proves nothing. */}
+          {buildLabel && (
+            <div className="px-3 pt-1.5 pb-1">
+              <div className="h-px bg-border-default/60 mb-1.5" />
+              <div className="flex items-center gap-2 text-[11px] font-body">
+                <span className="w-3 shrink-0 flex items-center justify-center">
+                  <span className={cn('w-1 h-1 rounded-full',
+                    versionState === 'current' ? 'bg-success'
+                      : versionState === 'stale' ? 'bg-warning'
+                        : 'bg-text-tertiary/50')} />
+                </span>
+                <span className="text-text-secondary">App build</span>
+                <span className="ml-auto text-text-tertiary tabular-nums">
+                  {buildLabel}
+                  {versionState === 'current' && (
+                    <span className="ml-1.5 text-text-tertiary/70">· up to date</span>
+                  )}
+                  {versionState === 'stale' && (
+                    <span className="ml-1.5 text-warning">· update ready</span>
+                  )}
+                </span>
+              </div>
+            </div>
+          )}
 
           <button
             onClick={onToggleTheme}

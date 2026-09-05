@@ -2130,6 +2130,18 @@ An **"Update available — Reload"** row appears above Refresh only when the
 running bundle is behind the deployed one (see App version self-heal). Cold
 starts fix themselves silently, so this row is the mid-session case.
 
+An **"App build"** row closes the block, below a hairline: the build id the
+running bundle was compiled from (`__BUILD_ID__`, an ISO timestamp) rendered
+as a local date-time by `formatBuildId`, with a leading dot and a suffix
+carrying what the last version check established — green **· up to date**
+(server agrees), amber **· update ready** (it does not), or nothing at all.
+**"Nothing" is the honest state and is never dressed up as reassurance:** the
+dev server emits no `version.json` and a failed check proves nothing, so both
+show the stamp alone. This exists because the self-heal is otherwise invisible
+— it reloads a stale bundle silently, so the failure it protects against
+leaves no trace, and after a deploy there was no way to confirm the phone had
+actually picked it up.
+
 **Refresh** is one button over five independent sources fired in parallel and
 non-blocking: a `phase` state drives the button (idle → refreshing → done)
 while each source tracks its own loading/done/error tick. Live APIs keep
@@ -2830,8 +2842,8 @@ honestly:** instead of "cannot find module" it prints `# tests 115 / # pass 110 
 ones transitively importing `react` (`tradeAnalysis.js` → `recommendations.js`
 → `useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
 `draftLive` loading their hooks) — the file fails to load, so its tests never
-run and the count silently drops from **174** to 115. `npm run build` in the
-same state fails with `sh: 1: vite: not found`. **If the test count isn't 174,
+run and the count silently drops from **177** to 115. `npm run build` in the
+same state fails with `sh: 1: vite: not found`. **If the test count isn't 177,
 run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-04
 by renaming `node_modules` aside; re-measure them whenever the suite grows.)
 
@@ -3006,6 +3018,10 @@ current one is. A mismatch means the HTML on screen is stale.
   they're told, and a URL nothing has seen can't be served from any of them.
 - The hook is called **above the identity gate** in `App`, so a stale bundle
   that boots to the login screen self-heals too.
+- It also returns **`buildId`** and **`versionState`** (`current` / `stale` /
+  `unknown`) for the drawer's "App build" row — the mechanism's only visible
+  surface. `unknown` is the default and covers both dev and a failed check;
+  neither may render as "up to date".
 - **Best-effort, fails open:** any fetch failure simply offers no update. It is
   deliberately **not** a service worker — a SW would also solve this, but a bad
   one can pin the app to a stale build permanently with no delete-and-re-add
