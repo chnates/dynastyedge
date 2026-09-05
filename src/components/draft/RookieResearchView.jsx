@@ -1,12 +1,9 @@
 import { useMemo, useRef, useState } from 'react'
 import { ChevronDown, TrendingUp, TrendingDown, Info, Target } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
-import { useRookieADP } from '../../hooks/useRookieADP'
-import { useRookieIntel } from '../../hooks/useRookieIntel'
-import { buildRookieProspects } from '../../utils/rookieAdp'
-import { buildRookieResearch, buildTeamFit, topTargets, splitDivergence } from '../../utils/rookieResearch'
-import { getDeficitPositions, joinAnd } from '../../utils/recommendations'
-import { getWinWindowTier } from '../../utils/rosterAnalysis'
+import { useRookieResearch } from '../../hooks/useRookieResearch'
+import { topTargets, splitDivergence } from '../../utils/rookieResearch'
+import { joinAnd } from '../../utils/recommendations'
 import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import {
@@ -168,9 +165,11 @@ function DivergenceCard({ row, onOpen, kind }) {
 }
 
 export default function RookieResearchView() {
-  const { loading: leagueLoading, error, retry, values, league } = useLeagueContext()
-  const { rookieMap, loading: rookiesLoading } = useRookieADP()
-  const { intel, loading: intelLoading } = useRookieIntel()
+  const { loading: leagueLoading, error, retry, values } = useLeagueContext()
+  // The board is composed by the shared hook, which the profile drawer reads
+  // too — one build of the class per data load, and no second copy of the
+  // composition to drift from this one.
+  const { rows, intel, deficits, tier, loading: researchLoading } = useRookieResearch()
 
   const [query, setQuery] = useState('')
   const [pos, setPos] = useState('ALL')
@@ -178,24 +177,6 @@ export default function RookieResearchView() {
   const [selected, setSelected] = useState(null)
   const [showHow, setShowHow] = useState(false)
   const boardRef = useRef(null)
-
-  // My roster's shape, from the same helpers every other recommendation
-  // surface uses — so "you need a TE" means the same thing here as it does in
-  // Free Agents and the Trade Analyzer.
-  const { deficits, tier } = useMemo(() => {
-    const myRoster = league?.myRoster
-    const allRosters = league?.allRosters
-    if (!myRoster || !allRosters?.length) return { deficits: new Set(), tier: null }
-    return {
-      deficits: getDeficitPositions(myRoster, allRosters),
-      tier: getWinWindowTier(myRoster.rosterId, allRosters),
-    }
-  }, [league])
-
-  const rows = useMemo(() => {
-    const prospects = buildRookieProspects(rookieMap, values?.playerMap)
-    return buildTeamFit(buildRookieResearch(prospects, intel), { deficits, tier })
-  }, [rookieMap, values, intel, deficits, tier])
 
   const targets = useMemo(() => topTargets(rows), [rows])
   const { undervalued, overvalued } = useMemo(() => splitDivergence(rows), [rows])
@@ -222,7 +203,7 @@ export default function RookieResearchView() {
   }, [rows, query, pos, sort])
 
   if (error) return <ErrorState message="Couldn't load the rookie class." onRetry={retry} />
-  if (leagueLoading || rookiesLoading || intelLoading) return <Spinner />
+  if (leagueLoading || researchLoading) return <Spinner />
 
   const asOf = intel?.asOf ?? null
   const needList = [...deficits]

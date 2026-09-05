@@ -7,6 +7,7 @@ import { usePlayerIntel, relativeTime, TOUCH_LABEL } from '../../hooks/usePlayer
 import { getPeakStatus } from '../../utils/peakWindows'
 import { measurables, ageAtDraftRead, positionArticle } from '../../utils/rookieResearch'
 import { useWatchlist } from '../../hooks/useWatchlist'
+import { useRookieResearchFor } from '../../hooks/useRookieResearch'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { getTeamName } from '../../hooks/useLeague'
@@ -133,6 +134,8 @@ const OPP_REASON_TONE = {
   bad:  'text-danger',
 }
 
+const spots = n => (Math.abs(n) === 1 ? 'spot' : 'spots')
+
 function RookieOpportunity({ research }) {
   const { score, tier, depthText, reasons = [], move, pick, round, slot, rank } = research
   const tone = OPP_TIER[tier] ?? OPP_TIER.weak
@@ -248,8 +251,8 @@ function RookieOpportunity({ research }) {
               {research.divergence === 0
                 ? ' — they agree.'
                 : research.divergence > 0
-                  ? ` — the model likes him ${research.divergence} spots more.`
-                  : ` — the market likes him ${Math.abs(research.divergence)} spots more.`}
+                  ? ` — the model likes him ${research.divergence} ${spots(research.divergence)} more.`
+                  : ` — the market likes him ${Math.abs(research.divergence)} ${spots(research.divergence)} more.`}
             </p>
           )}
 
@@ -334,6 +337,14 @@ export default function PlayerProfileDrawer({
   const ctx = useLeagueContext()
   const league = ctx?.league
   const values = ctx?.values
+
+  // Rookie opportunity, resolved by the drawer itself so the card appears
+  // wherever a rookie is opened — not only on Draft › Research, which used to
+  // be the one caller that passed `research`. An explicit prop still wins:
+  // that page hands over its own row (including its no-data state) for the
+  // player you tapped there.
+  const autoResearch = useRookieResearchFor(player.sleeperId)
+  const researchRow = research ?? autoResearch
 
   const { injuryFlag, injuryStatus, injuryDetail, injuryNotes, loading: newsLoading } = usePlayerNews(player.sleeperId)
   const intel = usePlayerIntel(player.sleeperId, ctx?.nflState)
@@ -504,7 +515,7 @@ export default function PlayerProfileDrawer({
 
         <div className="px-4 pb-6 pt-3 flex flex-col gap-4">
 
-          {research && <RookieOpportunity research={research} />}
+          {researchRow && <RookieOpportunity research={researchRow} />}
 
           {/* Player Status */}
           <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
