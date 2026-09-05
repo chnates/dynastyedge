@@ -50,21 +50,29 @@ export function loadRookieIntel(force = false) {
   return intelPromise
 }
 
-export function useRookieIntel() {
+// `enabled` keeps the fetch lazy at a second level: the feed is only worth
+// pulling for a consumer that will actually render a rookie. The profile
+// drawer opens on veterans far more often than rookies, so it passes false
+// until it knows the player is one (see useRookieResearchFor).
+export function useRookieIntel(enabled = true) {
   const [intel, setIntel] = useState(intelCache)
   // Distinguishes "still fetching" from "fetched, nothing there" so the view
   // can show a spinner once and then a real empty state, never both.
-  const [loading, setLoading] = useState(!intelCache && !intelFailed)
+  const [loading, setLoading] = useState(enabled && !intelCache && !intelFailed)
 
   useEffect(() => {
+    if (!enabled) return
     let cancelled = false
+    // A consumer that enables late (a rookie's drawer opening) starts its own
+    // spinner here rather than inheriting the disabled hook's initial false.
+    if (!intelCache && !intelFailed) setLoading(true)
     loadRookieIntel().then(data => {
       if (cancelled) return
       if (data) setIntel(data)
       setLoading(false)
     })
     return () => { cancelled = true }
-  }, [])
+  }, [enabled])
 
   return { intel, loading }
 }

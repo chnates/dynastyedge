@@ -474,7 +474,8 @@ in Actions and served as a static file, same architecture as news and values:
 - Publish contract matches `values-history.yml` — a missing output is
   recovered from the branch via git and the publish aborts rather than
   force-push an empty feed, so a bad run leaves yesterday's data in place.
-- The app reads it lazily once per session via `useRookieIntel` — **Class B /
+- The app reads it lazily once per session via `useRookieIntel` (Draft ›
+  Research, and the profile drawer for a rookie — see Feature 19) — **Class B /
   best-effort**: a missing branch or a failed fetch shows Draft › Research's
   "hasn't published yet" explainer, never an `ErrorState`. **The pipeline
   published its first run 2026-08-14** (235 rookies, 80 carrying draft capital,
@@ -2000,8 +2001,28 @@ collapsible "How this works" states the model, its back-test, that the fit
 re-ranking is a judgement call rather than a back-tested one, and why preseason
 stats are absent. Unranked rookies show `—` and are never dropped.
 
-**The drawer carries the research read.** Rows are handed to
-`PlayerProfileDrawer` as its `research` prop, which renders a **Rookie
+**The drawer carries the research read — everywhere a rookie is opened, not
+just here.** The card used to render only when `RookieResearchView` passed its
+`research` prop, so the same rookie opened from League › Free Agents, My
+Roster, Movers, News, the Draft Board or global search showed nothing but
+dynasty framing ("D — Deep Stash" on a rookie with a starting job). The
+composition now lives in **`useRookieResearch`** (`hooks/`), which both this
+page and `PlayerProfileDrawer` read, so the class is built once per data load
+and there is no second copy to drift. The drawer resolves its own row via
+`useRookieResearchFor(sleeperId)`; an explicit `research` prop still wins, so
+this page keeps handing over the exact row you tapped.
+- **The intel fetch stays lazy at a second level.** `useRookieIntel(enabled)`
+  doesn't load until a consumer will actually render a rookie — the drawer
+  passes `false` until the player is in the `useSleeperRookies` map (read from
+  the shared player DB cache, no extra request), so opening a veteran costs
+  nothing.
+- **Outside this page a rookie the feed has no entry for renders no card.**
+  `useRookieResearchFor` returns null without a score: an empty "no draft
+  record in the feed" card on every deep stash in the app is noise. Draft ›
+  Research still shows that state, where the player is on screen because you
+  tapped him on this board.
+
+`PlayerProfileDrawer` renders the row as a **Rookie
 Opportunity** card at the top of the sheet (score/100 + tier, depth read, NFL
 capital, camp move, a **"Measurables · context, not scored"** block — age at
 the draft read against his position, height/weight, and the combine drills each
@@ -2760,7 +2781,8 @@ dynastyedge/
 │   │   ├── useLeagueNews.js     ← news feed matched to my roster + watchlist
 │   │   ├── useNewsFeed.js       ← full aggregated feed for the News section
 │   │   ├── useValueHistory.js   ← daily value snapshots for sparklines (best-effort)
-│   │   ├── useRookieIntel.js    ← rookie depth-chart + draft-capital feed (best-effort)
+│   │   ├── useRookieIntel.js    ← rookie depth-chart + draft-capital feed (best-effort; `enabled` keeps it unfetched for a consumer with no rookie to show)
+│   │   ├── useRookieResearch.js ← THE rookie board, composed once: Draft › Research AND the profile drawer's per-player row
 │   │   ├── usePlayerIntel.js    ← production stats + depth chart + ESPN news
 │   │   ├── useScrollLock.js     ← freezes <main> while a bottom sheet is open
 │   │   ├── useSheetDrag.js      ← swipe-down-to-dismiss gesture for bottom sheets
@@ -2839,15 +2861,16 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 115 / # pass 110 /
+honestly:** instead of "cannot find module" it prints `# tests 130 / # pass 125 /
 # fail 5`, which reads like a code regression. The five files that fail are the
 ones transitively importing `react` (`tradeAnalysis.js` → `recommendations.js`
 → `useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
 `draftLive` loading their hooks) — the file fails to load, so its tests never
-run and the count silently drops from **177** to 115. `npm run build` in the
-same state fails with `sh: 1: vite: not found`. **If the test count isn't 177,
-run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-04
-by renaming `node_modules` aside; re-measure them whenever the suite grows.)
+run and the count silently drops from **178** to 130. `npm run build` in the
+same state fails with `sh: 1: vite: not found`. **If the test count isn't 178,
+run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-05
+by renaming `node_modules` aside; re-measure them whenever the suite grows —
+the pair had drifted to 177/115 by the time it was next checked.)
 
 **Tests:** `npm test` runs the `tests/` suite — plain `.mjs` scripts on Node's
 built-in `node:test` runner with `node:assert/strict`, zero new dependencies
