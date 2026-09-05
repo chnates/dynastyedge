@@ -2830,8 +2830,8 @@ honestly:** instead of "cannot find module" it prints `# tests 115 / # pass 110 
 ones transitively importing `react` (`tradeAnalysis.js` → `recommendations.js`
 → `useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
 `draftLive` loading their hooks) — the file fails to load, so its tests never
-run and the count silently drops from **168** to 115. `npm run build` in the
-same state fails with `sh: 1: vite: not found`. **If the test count isn't 168,
+run and the count silently drops from **174** to 115. `npm run build` in the
+same state fails with `sh: 1: vite: not found`. **If the test count isn't 174,
 run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-04
 by renaming `node_modules` aside; re-measure them whenever the suite grows.)
 

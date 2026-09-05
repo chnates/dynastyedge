@@ -506,4 +506,8 @@ test('the board reports whether a score was actually tilted', () => {
   assert.equal(undrafted.score, opportunityScore({ position: 'WR', rank: 2, pick: null }))
   // A young drafted rookie gets a reason line naming it.
   assert.ok(drafted.reasons.some(r => /young for a WR/i.test(r.text)))
+  // Article agreement across every surface that names a position — the
+  // measurables line and the reason line must not disagree ("an RB" vs "a RB").
+  const rb = scoreReasons({ position: 'RB', rank: 1, pick: 3, round: 1, age: 21 })
+  assert.ok(rb.some(r => /young for an RB/i.test(r.text)), rb.map(r => r.text).join(' | '))
 })

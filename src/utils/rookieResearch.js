@@ -330,10 +330,11 @@ export function scoreReasons({ position, rank, pick, round, age }) {
   // direction worth naming — a typical-age rookie gets no line, because
   // "he is exactly the normal age" is not a reason.
   const ageZ = ageAtDraftZ(position, age)
+  const art = positionArticle(position)
   if (ageZ != null && ageZ >= 0.75) {
-    out.push({ tone: 'good', text: `Young for a ${position} at ${age.toFixed(1)} — more upside years` })
+    out.push({ tone: 'good', text: `Young for ${art} ${position} at ${age.toFixed(1)} — more upside years` })
   } else if (ageZ != null && ageZ <= -0.75) {
-    out.push({ tone: 'bad', text: `Old for a ${position} at ${age.toFixed(1)} — fewer upside years` })
+    out.push({ tone: 'bad', text: `Old for ${art} ${position} at ${age.toFixed(1)} — fewer upside years` })
   }
   return out
 }
