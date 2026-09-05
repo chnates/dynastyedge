@@ -40,7 +40,7 @@ Highest rung this PR reaches (see `dynastyedge-validation-and-qa` §1):
 Machine gates — all three must pass before merge, and CI enforces them:
 
 - [ ] `npm run lint` exits 0
-- [ ] `npm test` — **177 passing**. A count near 115 means `node_modules` is
+- [ ] `npm test` — **178 passing**. A count near 130 means `node_modules` is
       missing; run `npm ci` before debugging anything.
 - [ ] `npm run build` ends `✓ built in …s`, bundle not wildly larger
 
