@@ -2002,6 +2002,18 @@ that opens `/league/trajectory/:rosterId`, so you can scout an opponent's window
   well-sampled 21–31 core over-weighted the shape prior and inflated the young-QB
   curve, flattening its real ascent — the thin 35+ tails still lean
   majority-prior. See `docs/analysis/trajectory-calibration-2026-07.md`, P3.)
+  - **The curve is a CROSS-SECTION, so it must never feed a score, a ranking,
+    or a recommendation** — it is descriptive shape only, which is all this
+    feature and its `getTrajectoryRead` consumers use it for. Measured
+    2026-09-06: the only 33-year-old TE still carrying value is the one who
+    didn't decline, so the curve reads survivorship as aging (TE 31 = 641 vs
+    TE 33 = 1,020; QB 25–26 = 790 vs QB 30–31 = 2,255). Fed into a keep-score
+    tilt it projected a 31-year-old Mark Andrews **+47%** and a 26-year-old Bo
+    Nix **+64%** (the latter just the `YEAR_RATIO_CEIL ** 3` clamp) — which is
+    why the shipped aging signal is the longitudinal one in
+    `docs/analysis/asset-aging-and-pick-value-2026-09.md` §2, not this. The
+    real fix is curves rebuilt from `values-archive.json` once it holds enough
+    months; until then this ruling stands.
 - **Projection** — a player's value `n` seasons out is
   `currentValue × curve(age + n) / curve(age)`, clamped per year (0.55×–1.18×).
   The talent residual cancels, so a stud and a scrub ride the same proportional
@@ -2932,6 +2944,7 @@ dynastyedge/
 │       ├── rookie-college-backtest.mjs ← analysis-only, RUNS IN ACTIONS: THE Phase 3b gate — dominator rating + breakout age vs years 2–3, also REJECTED; see docs/analysis/rookie-college-production-2026-09.md
 │       ├── trade-structure-backtest.mjs ← analysis-only: the DISCONFIRMED trade-structure profiling test (frontier Item 3); drives the shipped buildManagerProfiles so it cannot drift
 │       ├── optimizer-signal-backtest.mjs ← analysis-only: measures whether a better weekly PROJECTION is obtainable (it is not) and what DEF streaming is worth; see docs/analysis/optimizer-data-sources-2026-09.md
+│       ├── asset-aging-backtest.mjs ← analysis-only: THE keep-score calibration — longitudinal player aging (the survivorship trap the trajectory curves fall into) + whether rookie picks deliver their market price; see docs/analysis/asset-aging-and-pick-value-2026-09.md
 │       └── news-coverage.mjs ← analysis-only: THE news-pipeline acceptance metric — how many of my rostered players the app can actually resolve in the feed (no arg = live feed); see docs/analysis/news-sources-2026-09.md
 ├── public/
 │   └── favicon.ico
@@ -3081,7 +3094,7 @@ dynastyedge/
 │   ├── build-plan-2026-09.md        ← owner-approved four-phase build plan (Sept 2026) — per-phase kickoff prompts, gates, and the four measured NOT-to-build decisions
 │   ├── project-status-2026-08.md    ← dated status snapshot (superseded by newer dated files)
 │   ├── repo-review-2026-07.md       ← full read-only audit + ranked backlog (all items landed)
-│   ├── analysis/                    ← model calibration + research notes (incl. optimizer-data-sources-2026-09.md: the Optimizer data-source feasibility study)
+│   ├── analysis/                    ← model calibration + research notes (incl. optimizer-data-sources-2026-09.md: the Optimizer data-source feasibility study; asset-aging-and-pick-value-2026-09.md: THE keep-score calibration — player aging + pick realization)
 │   └── design/                      ← Phase 3 "Primetime Blackout" brief + reference render
 ├── tests/                       ← plain-Node test suite (node:test + node:assert/strict, zero deps)
 │   ├── fixtures/
