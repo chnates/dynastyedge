@@ -21,7 +21,9 @@ import assert from 'node:assert/strict'
 import {
   suggestSellMove, buildGivabilityContext, assetKeepScore,
   PICK_ROUND_KEEP, PICK_KEEP_DEFAULT, PICK_KEEP_CAP, PROTECT_THRESHOLD,
+  pastPeakTilt, AGE_TILT_BY_TIER, AGE_TILT_BY_POSITION, AGE_TILT_SPAN,
 } from '../src/utils/recommendations.js'
+import { PEAK_WINDOWS } from '../src/utils/peakWindows.js'
 
 const P = (id, name, pos, value, age = 26) =>
   ({ sleeperId: id, name, position: pos, value, age, isIR: false, isTaxi: false })
@@ -193,4 +195,92 @@ test('an unknown round keeps the old flat rate, never the cheapest', () => {
   assert.ok(unknown > assetKeepScore(pick(4), ctx))
   assert.equal(assetKeepScore({ type: 'pick', value: 1000, round: 7 }, ctx), PICK_KEEP_DEFAULT,
     'a round with no measured entry falls back rather than extrapolating')
+})
+
+// ── Past-peak age tilt ──────────────────────────────────────────────────────
+// Pins docs/analysis/asset-aging-and-pick-value-2026-09.md §2, measured over
+// n=762 player-seasons (2020-2025) following the same player year over year.
+
+const aged = (id, pos, age, value = 3000) => ({
+  type: 'player', sleeperId: id, name: `${pos} ${age}`, position: pos, age, value,
+})
+
+test('past a peak window an asset gets more expendable; inside it, nothing moves', () => {
+  const ctx = ctxFor(9)
+  // RB window ends at 26.
+  const inWindow = assetKeepScore(aged('x1', 'RB', 25), ctx)
+  const justPast = assetKeepScore(aged('x2', 'RB', 27), ctx)
+  const wellPast = assetKeepScore(aged('x3', 'RB', 30), ctx)
+  assert.ok(justPast < inWindow, 'past the window must be looser than inside it')
+  assert.ok(wellPast < justPast, 'further past must be looser still')
+  assert.equal(pastPeakTilt(aged('x1', 'RB', 25), 'Middle'), 0, 'inside the window is a no-op')
+})
+
+test('the disconfirmed pre-peak bonus stays dead — below the window is a no-op', () => {
+  // Protecting players younger than their window was tested and rejected:
+  // absent at RB (-0.02, p=0.853), one near-hit in four tests elsewhere.
+  for (const [pos, age] of [['RB', 21], ['WR', 22], ['QB', 23], ['TE', 22]])
+    assert.equal(pastPeakTilt(aged('y', pos, age), 'Middle'), 0,
+      `${pos} ${age} is below its window and must not be tilted`)
+})
+
+test('the tilt is per position — RB sheds fastest, TE barely at all', () => {
+  // Same years past peak at each position; only the measured weight differs.
+  const past2 = pos => Math.abs(pastPeakTilt(
+    { position: pos, age: PEAK_WINDOWS[pos][1] + 2 }, 'Middle'))
+  assert.ok(past2('RB') > past2('WR'), 'RB penalty measured 1.6x WR')
+  assert.ok(past2('WR') > past2('QB'), 'QB is not significant and is halved')
+  assert.ok(past2('QB') > past2('TE'), 'TE is the weakest measured effect')
+})
+
+test('it saturates at AGE_TILT_SPAN years and never runs away', () => {
+  const at = years => Math.abs(pastPeakTilt(
+    { position: 'RB', age: PEAK_WINDOWS.RB[1] + years }, 'Middle'))
+  assert.ok(at(AGE_TILT_SPAN + 5) === at(AGE_TILT_SPAN), 'saturated past the span')
+  assert.ok(at(AGE_TILT_SPAN) <= AGE_TILT_BY_TIER.Middle * AGE_TILT_BY_POSITION.RB + 1e-9,
+    'never exceeds the tier magnitude')
+})
+
+test('a rebuilder leans on age hardest, a contender barely', () => {
+  const old = { position: 'RB', age: 30 }
+  const reb = Math.abs(pastPeakTilt(old, 'Rebuilding'))
+  const mid = Math.abs(pastPeakTilt(old, 'Middle'))
+  const con = Math.abs(pastPeakTilt(old, 'Contending'))
+  assert.ok(reb > mid && mid > con, 'a contender wants the veteran who wins now')
+})
+
+test('no age is a no-op, not an imputed average', () => {
+  const ctx = ctxFor(9)
+  const withAge = { type: 'player', sleeperId: 'z1', name: 'A', position: 'RB', age: 30, value: 3000 }
+  const noAge = { type: 'player', sleeperId: 'z1', name: 'A', position: 'RB', value: 3000 }
+  assert.equal(pastPeakTilt(noAge, 'Middle'), 0)
+  assert.ok(assetKeepScore(noAge, ctx) > assetKeepScore(withAge, ctx),
+    'an unknown age must not be penalised as if it were old')
+  assert.equal(pastPeakTilt({ position: 'DEF', age: 40 }, 'Middle'), 0,
+    'a position with no window is a no-op')
+})
+
+test('the tilt can never protect an asset, only free one', () => {
+  // It is decline-only and negative, so it cannot reach past PROTECT_THRESHOLD
+  // or undo the cliff protection of ff116ba.
+  for (const tier of ['Contending', 'Middle', 'Rebuilding'])
+    for (const pos of ['QB', 'RB', 'WR', 'TE'])
+      for (const age of [20, 25, 30, 40])
+        assert.ok(pastPeakTilt({ position: pos, age }, tier) <= 0,
+          `${pos} ${age} ${tier}: the tilt must never be positive`)
+})
+
+test('an elite backup-less starter stays protected however old he is', () => {
+  // ff116ba's standing ruling: cliff protection is not negotiable. My TE1 at
+  // 7500 with a 900 backup is past his window at 32 and must still be excluded.
+  const all = tierRosters()
+  const mine = mk(11, [
+    P('m1', 'Old elite TE', 'TE', 7500, 32), P('m2', 'TE2', 'TE', 900, 24),
+    P('m3', 'QB1', 'QB', 4000, 27), P('m4', 'RB1', 'RB', 4000, 27),
+    P('m5', 'WR1', 'WR', 4000, 27),
+  ])
+  const ctx = buildGivabilityContext(mine, [...all, mine])
+  const te1 = { type: 'player', sleeperId: 'm1', name: 'Old elite TE', position: 'TE', value: 7500, age: 32 }
+  assert.ok(assetKeepScore(te1, ctx) >= PROTECT_THRESHOLD,
+    'cliff protection must survive the age tilt')
 })

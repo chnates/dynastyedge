@@ -11,6 +11,7 @@
 import { POSITIONS } from '../constants'
 import { computeLeagueAverages, getPositionalDeltas, assignWinWindowTiers } from './rosterAnalysis'
 import { buildValueLineup } from './lineupBuild'
+import { PEAK_WINDOWS } from './peakWindows'
 import { getTeamName } from '../hooks/useLeague'
 
 // The starters we protect hardest at each position in this 10-team Superflex
@@ -41,6 +42,49 @@ export const PICK_KEEP_DEFAULT = 0.5
 // builder of its main way to reach fair value. The cap preserves the round
 // ordering at every tier.
 export const PICK_KEEP_CAP = 0.85
+
+// How willing we are to move an asset PAST its position's peak window. Three
+// facts, all measured in docs/analysis/asset-aging-and-pick-value-2026-09.md §2
+// over n=762 player-seasons (2020-2025), following the SAME player year over
+// year with a departed player counted as 0 rather than dropped:
+//
+//   1. It is DECLINE-ONLY. Protecting players younger than their window was
+//      proposed and disconfirmed — absent at RB (-0.02, p=0.853), the position
+//      the tilt exists for, with one near-hit in four tests elsewhere. A player
+//      inside or below his window is untouched.
+//   2. The weight is PER POSITION, because the penalty is. Past-peak retention
+//      falls 0.94 -> 0.66 for RB (p=0.0001) and 0.84 -> 0.67 for WR (p=0.0016);
+//      QB and TE are not distinguishable from zero, so each takes its measured
+//      relative effect HALVED — unproven is not the same as known-small.
+//   3. It saturates over AGE_TILT_SPAN years, matching the RB shape (0.79 ->
+//      0.74 -> 0.40 -> 0.25 across the three years past 26).
+//
+// The peak windows themselves are NOT re-tuned here: RB ending at 26 and WR at
+// 28 both test significant at the boundary peakWindows.js already ships.
+export const AGE_TILT_BY_POSITION = { RB: 1, WR: 0.65, QB: 0.4, TE: 0.15 }
+// Base magnitude by win window. This is the ONE knob no measurement sets — it
+// is a preference weight (given two assets the market prices identically, which
+// do I want in three years), not an estimate, and it is deliberately small:
+// dynasty value already prices age, so the tilt exists to break near-ties, not
+// to argue with the market. Being decline-only, it can only ever make an asset
+// MORE available — it can never protect one, so it cannot reach past
+// PROTECT_THRESHOLD or undo the cliff protection below.
+export const AGE_TILT_BY_TIER = { Contending: 0.04, Middle: 0.1, Rebuilding: 0.16 }
+export const AGE_TILT_SPAN = 3
+
+// Negative (more expendable) once past the window, 0 otherwise. An unknown age
+// or position is a no-op, never an imputed average — the same contract the
+// rookie board's age tilt keeps for the rookies whose age the feed lacks.
+export function pastPeakTilt(asset, myTier) {
+  const window = PEAK_WINDOWS[asset?.position]
+  const age = asset?.age
+  if (!window || age == null || age <= 0) return 0
+  const past = age - window[1]
+  if (past <= 0) return 0
+  const magnitude = (AGE_TILT_BY_TIER[myTier] ?? AGE_TILT_BY_TIER.Middle)
+    * (AGE_TILT_BY_POSITION[asset.position] ?? 0)
+  return -Math.min(1, past / AGE_TILT_SPAN) * magnitude
+}
 
 const clamp = (v, lo = 0.05, hi = 1) => Math.max(lo, Math.min(hi, v))
 
@@ -119,15 +163,23 @@ export function assetKeepScore(asset, ctx) {
     if (top > 0 && next / top < 0.5) keep = Math.max(keep, 0.95)
   }
 
-  // Win-window lean on age.
+  // Win-window lean on age. Both surviving rules are WINDOW preferences (what
+  // do I want when my window opens), which is a different question from the
+  // aging tilt below (what will still be useful in three years) — a rebuilder's
+  // pull toward youth is not the disconfirmed pre-peak retention claim.
   const age = asset.age ?? null
   if (myTier === 'Contending') {
     // Win-now: young low-value fliers are spare currency, not core.
     if (age != null && age <= 24 && (asset.value || 0) < 1500) keep -= 0.15
   } else if (myTier === 'Rebuilding') {
     if (age != null && age <= 24) keep += 0.2  // build around youth
-    if (age != null && age >= 28) keep -= 0.2  // sell aging vets
   }
+
+  // Past-peak decline. This REPLACES a flat `age >= 28 => -0.2` that only fired
+  // for a rebuilder: 28 is two years past an RB's peak and mid-window for a QB,
+  // so one age cut-off could not be right for both, and a Middle team — which
+  // this league's owner has been all season — got no age opinion at all.
+  keep += pastPeakTilt(asset, myTier)
 
   return clamp(keep)
 }

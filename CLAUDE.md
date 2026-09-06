@@ -1096,7 +1096,7 @@ Counter or Decline.** The app proposed and then argued with itself.
 - **`suggestFairPackage` is two-phase.** Phase 1 enumerates every package in the
   fair band and ranks them by what they cost **me** — surplus and depth first,
   core starters never auto-included (`PROTECT_THRESHOLD`), win-window lean.
-  Phase 2 takes the cheapest `PACKAGE_SHORTLIST` (40) of those and scores each
+  Phase 2 takes the cheapest `PACKAGE_SHORTLIST` (150) of those and scores each
   with **`buildPartnerFit`** — the same Layer 4 the Analyzer will grade the
   suggestion with — then takes the best appeal, breaking ties by my own cost.
   - Phase 1's objective alone selects, by construction, the pieces a partner has
@@ -2332,7 +2332,31 @@ matter:
   once the 2027 class resolves. See
   `docs/analysis/asset-aging-and-pick-value-2026-09.md` §3.
 - **Win-window lean on age:** a contender cashes picks and young fliers; a
-  rebuilder hoards youth and picks and sells aging vets.
+  rebuilder hoards youth. These are *window* preferences (what do I want when
+  my window opens), distinct from the aging tilt below.
+- **Past-peak age tilt (`pastPeakTilt`)** — an asset past its
+  `peakWindows.js` window gets more expendable, saturating `AGE_TILT_SPAN` (3)
+  years past it. **Decline-only:** protecting players *younger* than their
+  window was proposed and disconfirmed — absent at RB (−0.02, p=0.853), the
+  position the tilt exists for, with one near-hit in four tests. **Weighted per
+  position** (`AGE_TILT_BY_POSITION` = RB 1.00 · WR 0.65 · QB 0.40 · TE 0.15),
+  because the penalty is: past-peak retention falls 0.94 → 0.66 for RB
+  (p=0.0001) and 0.84 → 0.67 for WR (p=0.0016), while QB and TE are not
+  distinguishable from zero and take their measured relative effect **halved**
+  — unproven is not the same as known-small. Magnitude by tier
+  (`AGE_TILT_BY_TIER` = Contending 0.04 · Middle 0.10 · Rebuilding 0.16) is the
+  one knob no measurement sets: it is a preference weight, bounded so the tilt
+  breaks near-ties rather than arguing with a market that already prices age.
+  Being decline-only it can only ever make an asset **more** available — it can
+  never protect one, so it cannot reach past `PROTECT_THRESHOLD` or undo cliff
+  protection. An unknown age or a position with no window is a **no-op**, never
+  an imputed average. This replaced a flat `age >= 28 → −0.2` that fired only
+  for a rebuilder — 28 is two years past an RB's peak and mid-window for a QB,
+  and a **Middle** team got no age opinion at all. Measured over n=762
+  player-seasons (2020–2025) following the same player year over year, a
+  departed player counted as 0; the peak windows themselves are **not**
+  re-tuned (RB 26 and WR 28 both test significant at the shipped boundary). See
+  `docs/analysis/asset-aging-and-pick-value-2026-09.md` §2.
 - **`PROTECT_THRESHOLD` = 0.9** — assets at or above this keep score are never
   *auto-*included in a suggested package. The user can still add them manually.
 

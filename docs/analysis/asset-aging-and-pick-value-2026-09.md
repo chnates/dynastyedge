@@ -1,6 +1,6 @@
 # Keep-score calibration — asset aging and pick realization
 
-**Date:** 2026-09-06 · **Status:** measurement complete; §3 pick tilt SHIPPED, §2 age tilt specced
+**Date:** 2026-09-06 · **Status:** measurement complete; §2 age tilt and §3 pick tilt both SHIPPED
 **Re-run every number here:** `node --import ./.claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs scripts/dev/asset-aging-backtest.mjs`
 (the script imports the shipped constants it grades — `PEAK_WINDOWS` and
 `PICK_ROUND_KEEP` — and fails loudly if the shipped ordering stops matching the
@@ -162,6 +162,49 @@ record:** FantasyCalc arguably prices age already, so tilting a keep score risks
 double-counting it. The defense is that keep score is *reluctance*, not value:
 given two assets the market prices the same, which do I want in three years.
 That is a legitimate owner preference and it is stated as one.
+
+### 2e. Verified live — and it moved the board the way it was meant to
+
+Shipped 2026-09-06 as `pastPeakTilt`, run against the live league before and
+after. Roster 6 (Middle) keep-scores: Jonathan Taylor 0.85 → 0.80, Chase Brown
+0.85 → 0.83, TreVeyon Henderson unchanged at 0.85 (inside his window). The
+ordering the owner asked for — protect the in-window back, spend the one past
+peak — now holds without touching `CORE_DEPTH`.
+
+On the 20-target board, against the pre-tilt baseline:
+
+- **Amon-Ra St. Brown** ← was `Jordan Love + Chase Brown`, now
+  `Kirk Cousins + Rachaad White + Jonathan Taylor`. This is the exact
+  substitution the investigation started from.
+- **Justin Jefferson** ← was `Kirk Cousins + Rachaad White + Jordan Love`
+  (**Weak**), now `2027 2nd + Jonathan Taylor` (**Fair**) — both tilts working
+  together, spending an aging starter and a second rather than three pieces.
+- **Tee Higgins** ← was `Jordan James + 2027 1st`, now
+  `Jordan James + Rachaad White + Rico Dowdle` — the first is kept and aging
+  depth pays instead, which is what §3's 0.65-vs-0.30 spread is for.
+- Appeal across the board: **Strong 6 · Fair 12 · Weak 2** → **Strong 6 · Fair
+  13 · Weak 1**.
+
+**One regression found and fixed on the way, worth recording.** At the shipped
+`PACKAGE_SHORTLIST` of 40, the tilt made aging depth cheap enough to crowd a
+**Strong** package off the list phase 2 ever scores — Jameson Williams fell
+from Strong to Fair. The shortlist orders by what a package costs *me* and
+knows nothing about the partner, so truncating it can hide the package they
+would actually want. Measured on the whole board:
+
+| shortlist | time | appeal |
+|---|---|---|
+| 40 | 102ms | Strong 5 · Fair 13 · Weak 2 |
+| 80 | 148ms | Strong 6 · Fair 12 · Weak 2 |
+| **150** | **211ms** | **Strong 6 · Fair 13 · Weak 1** |
+| all | 712ms | Strong 7 · Fair 13 · Weak 0 |
+
+Raised to 150. Scoring *everything* is strictly the best board — it leaves no
+target without a package the partner has a real reason to accept — but it is a
+7× hit on work the Targets tab does in one memo on mount, on a phone. **Open
+question for the owner:** whether eliminating the last Weak is worth ~700ms
+(more on device) or a deferred/incremental computation. Timings are from the
+dev container; a phone will be slower.
 
 ---
 

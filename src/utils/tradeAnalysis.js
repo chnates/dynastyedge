@@ -911,9 +911,21 @@ function packageRationale(assets, ctx) {
 }
 
 // How many of the cheapest-for-me packages get scored on the partner's side.
-// The shortlist exists purely to bound cost; measured on the live 20-target
-// board, widening it past ~40 changed no suggestion.
-const PACKAGE_SHORTLIST = 40
+// The shortlist exists purely to bound cost, but it is NOT free: truncating it
+// can hide the package a partner would actually want, because phase 1 orders by
+// what a package costs ME and knows nothing about them. Raised from 40 when the
+// past-peak age tilt (recommendations.js) made aging depth cheap enough to
+// crowd a Strong package off the list entirely. Measured on the live 20-target
+// board, whole board:
+//     40 -> 102ms, Strong 5 · Fair 13 · Weak 2
+//     80 -> 148ms, Strong 6 · Fair 12 · Weak 2
+//    150 -> 211ms, Strong 6 · Fair 13 · Weak 1
+//    all -> 712ms, Strong 7 · Fair 13 · Weak 0
+// 150 doubles the cost to recover the appeal; scoring everything is a 7x hit on
+// a board the Targets tab computes in one memo on mount, and this is a phone.
+// Re-measure before moving it again — the right value depends on how many
+// candidates land in the fair band, which grows with roster depth.
+const PACKAGE_SHORTLIST = 150
 
 // Suggest a fair package from MY roster to acquire targetPlayer.
 //
