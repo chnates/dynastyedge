@@ -8,6 +8,12 @@ import { rankTradePartners } from '../../utils/rosterAnalysis'
 import { buildAgeCurves, buildRosterTrajectory, getTrajectoryRead } from '../../utils/dynastyTrajectory'
 import { usePlayoffOdds } from '../../hooks/usePlayoffOdds'
 import { useManagerProfiles } from '../../hooks/useManagerProfiles'
+import { useTransactions } from '../../hooks/useTransactions'
+import { usePlayerDB } from '../../hooks/usePlayerDB'
+import { useWeeklyProjections } from '../../hooks/weeklyProjections'
+import { buildReplacementLevels } from '../../utils/positionalValue'
+import { getRosterLimits } from '../../utils/rosterSpace'
+import { buildPartnerActivity } from '../../utils/partnerActivity'
 import { fetchPlayerNews } from '../../hooks/usePlayerNews'
 import { getPlayerIntel } from '../../hooks/usePlayerIntel'
 import TradeBuilder from './TradeBuilder'
@@ -89,7 +95,7 @@ function StickySummary({ giveTotal, getTotal, verdict }) {
 }
 
 export default function TradeAnalyzer() {
-  const { league, values, loading, error, retry, nflState } = useLeagueContext()
+  const { league, values, loading, error, retry, nflState, leagueInfo } = useLeagueContext()
   // My live playoff odds feed Layer 3 (win-window fit). Null in the offseason
   // and until the sim has real games — Layer 3 falls back to the tier read.
   const { myOdds } = usePlayoffOdds()
@@ -158,6 +164,38 @@ export default function TradeAnalyzer() {
     return getTrajectoryRead(buildRosterTrajectory(opponentRoster, season, ageCurves.curves, ageCurves.generic))
   }, [opponentRoster, ageCurves, nflState])
 
+  // ── The five negotiating inputs. All best-effort: every one degrades to null
+  // and its block simply doesn't render, per the app's optional-source contract.
+
+  // Scarcity floors, learned from the live league (no fetch — pure over rosters).
+  const replacementLevels = useMemo(
+    () => (league?.allRosters?.length ? buildReplacementLevels(league.allRosters)?.levels ?? null : null),
+    [league]
+  )
+
+  // Real active-roster limits from the league's own roster_positions.
+  const rosterLimits = useMemo(() => getRosterLimits(leagueInfo), [leagueInfo])
+
+  // This week's projections — the shared session cache the Optimizer and Free
+  // Agents already use, so this costs no additional request. Offseason yields
+  // projMap null and the weekly block hides.
+  const { projMap, week: projWeek } = useWeeklyProjections()
+  const weeklyProjections = useMemo(
+    () => (projMap ? { projMap, week: projWeek } : null),
+    [projMap, projWeek]
+  )
+
+  // What the partner has been doing lately — from the transaction feed that
+  // League › Activity already caches. Best-effort: an error yields no block.
+  const { transactions } = useTransactions()
+  const { playerDB } = usePlayerDB()
+  const partnerActivity = useMemo(
+    () => (transactions && selectedOpponentId != null
+      ? buildPartnerActivity(transactions, selectedOpponentId, { playerMap: values?.playerMap, playerDB })
+      : null),
+    [transactions, selectedOpponentId, values, playerDB]
+  )
+
   // My rookie-draft hindsight record — the confidence nudge on acquired picks.
   // Best-effort: renders only once the lazy league-history fetch lands.
   const { analysis: managerAnalysis } = useManagerProfiles()
@@ -169,8 +207,13 @@ export default function TradeAnalyzer() {
       opponentTrajectoryRead,
       curves: ageCurves?.curves ?? null,
       myDraftGrade,
+      replacementLevels,
+      rosterLimits,
+      weeklyProjections,
+      partnerActivity,
     }),
-    [giveAssets, getAssets, league, opponentRoster, myOdds, opponentTrajectoryRead, ageCurves, myDraftGrade]
+    [giveAssets, getAssets, league, opponentRoster, myOdds, opponentTrajectoryRead, ageCurves,
+     myDraftGrade, replacementLevels, rosterLimits, weeklyProjections, partnerActivity]
   )
 
   const verdict = useMemo(() => getTradeVerdict(analysis), [analysis])

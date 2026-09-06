@@ -81,7 +81,11 @@ remain only as this league's original-owner reference.
 ### Roster slots
 
 QB · RB · RB · WR · WR · TE · FLEX × 3 (RB/WR/TE) · Superflex (QB/WR/RB/TE) · DEF
-12 bench · 5 taxi · 2 IR
+**13 bench** · 5 taxi · 2 IR — **24 active slots** in total.
+
+**Read the cap from `leagueInfo.roster_positions`, never from prose.** This
+line said 12 bench until 2026-09-06, when `getRosterLimits` was written against
+the live payload and found 13. Taxi and IR sit *outside* the 24.
 
 **Taxi rules (Sleeper settings):** only rookies can be *added*, but taxi
 duration is **2 years** — a player may stay through their rookie and 2nd-year
@@ -909,6 +913,77 @@ lineup, and why the piece you're asking for is one they can spare (or, when
 `weakens` fires, honestly says it isn't and asks what it would take). Every line
 is a number Layer 4 already computed, so it can never oversell. Needs both sides
 of the trade; returns null otherwise.
+
+#### The negotiating layer (five signals — none of them moves the verdict)
+
+Owner call 2026-09-06: verdict provenance stays **raw value / lineup-sim fit /
+win window / partner appeal**. These five change what you understand and how you
+negotiate, not the call — the same discipline that keeps usage stats, camp
+movement and combine numbers out of every score in this app. All five are
+best-effort: each degrades to `null` and its block simply doesn't render.
+
+- **Fair band** (`buildFairBand`) — the ±5% window of "you give" totals that
+  lands the deal fair for what you're getting, rendered as a track in THE CALL
+  with a marker for the current offer. A point estimate says the offer is
+  wrong; a band says how much room you have, which is what you need at the
+  table. Carries `gapToBand` — what closing it actually costs.
+- **Scarcity / value over replacement** (`utils/positionalValue.js`) — a sum of
+  raw values across positions quietly assumes a point of QB value and a point of
+  WR value are interchangeable, and in a 10-team Superflex they are not.
+  Replacement level is **derived from the league, never hardcoded** (same
+  discipline as the trajectory age curves): run the shipped slot-fill over all
+  10 rosters, count the starters at each position, and the (S+1)-th best
+  rostered player there is the replacement. Measured live 2026-09-06 — QB 3,086
+  · RB 1,806 · WR 1,883 · TE 1,946, against 19/32/38/11 starters. The
+  counter-intuitive result is that *mid* QBs are the least scarce thing on the
+  board (everyone already rosters a startable QB2); the scarcity is in elite
+  QBs only. **The flag speaks ONLY when the two scales disagree** — by 10
+  percentage points or a different winner — because a second number that agrees
+  is noise. FantasyCalc stays the headline everywhere so the pitch quotes a
+  total the other manager can look up.
+- **Roster space** (`utils/rosterSpace.js`) — nine of ten teams were at or over
+  the 24-man active cap the week after the rookie draft, so this is a binding
+  constraint on almost every trade here, and a real lever: a team carrying more
+  players than slots *wants* a 2-for-1. **It is never a legality check** — being
+  over the cap post-draft is a normal transient state (teams are simply owed
+  drops before the season), so it reports headroom and owed drops and never
+  refuses a trade. Taxi/IR players occupy no active slot, so dealing one frees
+  nothing while every arrival costs one.
+- **Weekly lineup impact** — the roster-fit question in the other currency:
+  both teams' optimal lineups re-solved on this week's Sleeper projections
+  (`selectOptimalStarters` fed points instead of dynasty value, via the shared
+  `weeklyProjections` session cache — no extra fetch). In-season only; the
+  offseason yields no `projMap` and the block hides. Labelled in-panel as one
+  week of context, never the reason for a dynasty call.
+- **Partner recent moves** (`utils/partnerActivity.js`) — a 21-day window over
+  the already-cached transaction feed, resolved to names and positions. A TE
+  surplus they just went out and bought is not spare depth. Descriptive only:
+  modelling manager *behavior* was tested on the full corpus and disconfirmed
+  (`docs/analysis/trade-structure-stability-2026-08.md`).
+
+#### Panel layout — THE CALL, then three acts
+
+The verdict used to sit at the **bottom** of ~7 sections of evidence, making the
+Analyzer the only surface in the app that doesn't lead with its answer (the
+Optimizer's moves card, The Edge's hero and Playoff Odds all do). With twelve
+signals feeding the panel, reading to the end to find out what to do stopped
+being viable at 390px. So:
+
+- **THE CALL** (`components/trade/TheCall.jsx`) — verdict + reasoning, the fair
+  band, the counter with its Apply button, and three tappable summary rows
+  (`FOR YOU` · `FOR THEM` · `ROSTER`) that scroll to their act. Injury alerts
+  ride directly beneath it.
+- **YOUR SIDE** (`#act-yours`) — raw value (+ scarcity flag), roster fit +
+  landing spots (+ weekly lineup), Giving Up depth chart, roster space, win
+  window.
+- **THEIR SIDE** (`#act-theirs`) — Layer 4's appeal read, landing spots, their
+  depth chart, their roster space, their recent moves, their weekly lineup and
+  trajectory (which previously sat oddly under *my* win window).
+- **CLOSING IT** (`#act-closing`) — the pitch, then Live Intelligence.
+
+**Nothing collapses and nothing hides** — the summary rows just tell you whether
+you need to scroll. Anchors carry `scroll-mt-28` so a jump clears the fixed
+header, sub-tabs and sticky summary (verified: the act lands 112px from the top).
 
 #### Verdict
 
@@ -2816,6 +2891,7 @@ dynastyedge/
 │   │   │   ├── TradeBuilder.jsx
 │   │   │   ├── TradeVerdict.jsx
 │   │   │   ├── PartnerSelect.jsx    ← THE opponent picker (fit-grouped) — Analyzer + Targets
+│   │   │   ├── TheCall.jsx         ← THE Analyzer hero: verdict + fair band + the three act summaries
 │   │   │   ├── PartnerContextStrip.jsx ← THE partner intelligence strip — Analyzer + Targets
 │   │   │   └── WhatsFair.jsx        ← Targets: league-wide board + per-team scouting mode
 │   │   ├── lineup/                  ← rendered as "My Team" sub-tabs (no own layout)
@@ -2904,6 +2980,9 @@ dynastyedge/
 │   │   ├── pickCapital.js       ← pick ownership resolution logic
 │   │   ├── rookieAdp.js         ← derived rookie-class ADP for the Draft section
 │   │   ├── rookieResearch.js    ← rookie opportunity model: depth × capital, market-vs-model divergence
+│   │   ├── positionalValue.js   ← scarcity / value over replacement — replacement levels LEARNED from the live league, DISPLAY ONLY
+│   │   ├── rosterSpace.js       ← active-slot headroom for a trade; reports owed drops, NEVER calls a trade illegal
+│   │   ├── partnerActivity.js   ← a partner's recent adds from the cached transaction feed (descriptive only)
 │   │   ├── pickTrades.js        ← pick trade calculator: slot pricing + packages
 │   │   ├── peakWindows.js       ← position peak-age windows + status helper
 │   │   ├── draftLive.js         ← THE rookie draft live path (on the clock, countdown, Best Available, capital, recap grades) — pure, extracted from DraftTracker so it is testable

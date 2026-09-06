@@ -1,8 +1,16 @@
 import { computeLeagueAverages, getPositionalDeltas, assignWinWindowTiers } from './rosterAnalysis'
 import { getDeadlineVerdict } from './playoffOdds'
-import { buildValueLineup } from './lineupBuild'
+import { buildValueLineup, selectOptimalStarters } from './lineupBuild'
+import { buildRosterSpace } from './rosterSpace'
+import { sideVorp } from './positionalValue'
 import { projectPlayerSeries, seriesDirection } from './dynastyTrajectory'
 import { buildGivabilityContext, assetKeepScore, getDeficitPositions, joinAnd, PROTECT_THRESHOLD } from './recommendations'
+
+// A scarcity read needs a side worth reading — two below-replacement sides
+// carry no signal. And the flag only speaks on a real disagreement: 10 points
+// of percentage gap, or the two scales naming different winners.
+const SCARCITY_FLOOR = 500
+const SCARCITY_GAP = 10
 
 const PICK_SUFFIXES = ['', '1st', '2nd', '3rd', '4th']
 
@@ -71,6 +79,40 @@ export function buildLandingSpots(arrivals, afterPlayers, afterLineup) {
     })
 }
 
+// The band of "you give" totals that lands the trade inside the ±5% fair window
+// for what you're getting. A point estimate ("you're 12% light") tells you the
+// offer is wrong; a band tells you how much room you have to haggle, which is
+// the thing you actually need at the table.
+export function buildFairBand(giveTotal, getTotal) {
+  if (!getTotal && !giveTotal) return null
+  const low  = Math.round(getTotal * 0.95)
+  const high = Math.round(getTotal * 1.05)
+  return {
+    low, high, target: getTotal, current: giveTotal,
+    inside: giveTotal >= low && giveTotal <= high,
+    // Signed distance to the near edge — what closing it actually costs.
+    gapToBand: giveTotal < low ? low - giveTotal : giveTotal > high ? giveTotal - high : 0,
+    // Rendering bounds, padded so the band never sits flush against an end.
+    axisLow:  Math.round(Math.min(low, giveTotal) * 0.9),
+    axisHigh: Math.round(Math.max(high, giveTotal) * 1.1),
+  }
+}
+
+// A roster's best lineup measured in THIS WEEK's projected points rather than
+// dynasty value — the same slot-fill, a different metric. In-season only; the
+// caller passes no projections in the offseason and this returns null.
+function pointsLineupTotal(players, projMap) {
+  if (!projMap) return null
+  const items = (players ?? [])
+    .filter(p => !p.isIR && !p.isTaxi && p.position)
+    .map(p => ({
+      key: String(p.sleeperId),
+      position: p.position,
+      metric: projMap[String(p.sleeperId)]?.pts_half_ppr ?? 0,
+    }))
+  return selectOptimalStarters(items).total
+}
+
 export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, allRosters, opts = {}) {
   if (!myRoster || !opponentRoster || !allRosters?.length) return null
 
@@ -79,6 +121,10 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
     opponentTrajectoryRead = null,
     curves = null,            // dynasty age curves (from buildAgeCurves) — enables the my-players trajectory lens
     myDraftGrade = null,      // { count, hits, avgDelta } from my Manager Scouting report card
+    replacementLevels = null, // scarcity floors from buildReplacementLevels — DISPLAY ONLY
+    rosterLimits = null,      // { activeSlots, … } from getRosterLimits(leagueInfo)
+    weeklyProjections = null, // { projMap, week } — in-season only
+    partnerActivity = null,   // buildPartnerActivity(...) for the opponent
   } = opts
 
   const giveTotal = giveAssets.reduce((s, a) => s + (a.value || 0), 0)
@@ -434,16 +480,95 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
     summary: APPEAL_SUMMARY[appeal],
     reasons: partnerReasons,
     concerns: partnerConcerns,
+    activity: partnerActivity,
   }
 
   // My side's mirror: where the players I'm ACQUIRING land on my own chart.
   const myLandingSpots = buildLandingSpots(getPlayers.map(addAsPlayer), afterPlayers, afterLineup)
+
+
+  // ── The negotiating instruments (all descriptive — none moves the verdict) ──
+  //
+  // Owner call 2026-09-06: verdict provenance stays raw value / lineup-sim fit /
+  // win window / partner appeal. Everything below changes what you understand
+  // and how you negotiate, not the call — the same discipline that keeps usage
+  // stats, camp movement and combine numbers out of every score in this app.
+
+  const fairBand = buildFairBand(giveTotal, getTotal)
+
+  // Scarcity (value over replacement). FantasyCalc prices Superflex demand into
+  // each player, but summing across positions assumes a point of QB value and a
+  // point of WR value are interchangeable, and in a 10-team Superflex they are
+  // not. The flag speaks ONLY when the two scales disagree — a second number
+  // that agrees with the first is noise, and FantasyCalc stays the headline
+  // everywhere so the pitch quotes a total the other manager can look up.
+  let scarcity = null
+  if (replacementLevels && (givePlayers.length > 0 || getPlayers.length > 0)) {
+    const giveVorp = Math.round(sideVorp(giveAssets, replacementLevels))
+    const getVorp  = Math.round(sideVorp(getAssets, replacementLevels))
+    const vorpMax  = Math.max(giveVorp, getVorp)
+    // Two below-replacement sides carry no scarcity signal worth a sentence.
+    if (vorpMax >= SCARCITY_FLOOR) {
+      const vorpDiff   = getVorp - giveVorp
+      const vorpPct    = Math.round(Math.abs(vorpDiff) / vorpMax * 100)
+      const vorpWinner = vorpPct <= 5 ? 'even' : vorpDiff > 0 ? 'you' : 'them'
+      const disagrees  = vorpWinner !== valueWinner || Math.abs(vorpPct - valuePct) >= SCARCITY_GAP
+      if (disagrees) {
+        // Name the mechanism with the piece doing the most work on each side.
+        const best = list => list
+          .map(a => ({ a, v: Math.round(sideVorp([a], replacementLevels)) }))
+          .sort((x, y) => y.v - x.v)[0] ?? null
+        const bg = best(getPlayers)
+        const bv = best(givePlayers)
+        const parts = []
+        if (bg) parts.push(`${bg.a.name} is +${bg.v.toLocaleString()} over a startable ${bg.a.position}`)
+        if (bv) parts.push(`${bv.a.name} is +${bv.v.toLocaleString()} over a startable ${bv.a.position}`)
+        scarcity = {
+          giveVorp, getVorp, vorpPct, vorpWinner,
+          note: vorpWinner === 'even'
+            ? `Against replacement level the two sides are much closer than the raw totals suggest — ${joinAnd(parts)}.`
+            : `Adjusted for positional scarcity this favors ${vorpWinner === 'you' ? 'you' : 'them'} by ${vorpPct}%${parts.length ? ` — ${joinAnd(parts)}` : ''}.`,
+          tone: vorpWinner === 'you' ? 'success' : vorpWinner === 'them' ? 'warning' : 'neutral',
+        }
+      }
+    }
+  }
+
+  // Roster space. Over the cap is a NORMAL post-draft state in this league —
+  // teams are simply owed drops before the season — so this never calls a trade
+  // illegal. It reports headroom, and flags the case that is genuinely a selling
+  // point: a partner carrying more players than slots wants a 2-for-1.
+  const myRosterSpace = rosterLimits
+    ? buildRosterSpace(myRoster, { arrivals: getPlayers, departures: givePlayers, limits: rosterLimits })
+    : null
+  const theirRosterSpace = rosterLimits
+    ? buildRosterSpace(opponentRoster, { arrivals: givePlayers, departures: getPlayers, limits: rosterLimits })
+    : null
+
+  // This week's projected points — roster fit in the other currency. A dynasty
+  // trade is not decided on one week, which is exactly why this is a note and
+  // never a score; it answers "what does this cost me on Sunday?"
+  let weeklyImpact = null
+  const projMap = weeklyProjections?.projMap ?? null
+  if (projMap && (givePlayers.length > 0 || getPlayers.length > 0)) {
+    const mineBefore  = pointsLineupTotal(myRoster.players, projMap)
+    const mineAfter   = pointsLineupTotal(afterPlayers, projMap)
+    const theirsBefore = pointsLineupTotal(opponentRoster.players, projMap)
+    const theirsAfter  = pointsLineupTotal(theirAfterPlayers, projMap)
+    const round1 = n => Math.round(n * 10) / 10
+    weeklyImpact = {
+      week: weeklyProjections.week ?? null,
+      mine:   { before: round1(mineBefore),   after: round1(mineAfter),   delta: round1(mineAfter - mineBefore) },
+      theirs: { before: round1(theirsBefore), after: round1(theirsAfter), delta: round1(theirsAfter - theirsBefore) },
+    }
+  }
 
   return {
     giveTotal, getTotal, valueDiff, valuePct, valueWinner,
     filledNeeds, hurtStrengths, fitScore,
     benchAcquisitions, starterDepartures, benchNote, starterLossNote, giveContext,
     myLandingSpots, partnerFit,
+    fairBand, scarcity, myRosterSpace, theirRosterSpace, weeklyImpact,
     myTier, windowScore, windowNote, myDeltas,
     playoffPct, oddsStance, oddsNote, oddsTone,
     partnerTrajectoryNote, partnerTrajectoryTone,
@@ -580,7 +705,33 @@ export function buildTradePitch(analysis, opts = {}) {
     })
   })
 
-  // 4. Window read, only when it's a genuine alignment.
+  // 4. Roster space, when it's a point in their favour. In this league that is
+  //    often the strongest argument available: a team carrying more players
+  //    than it has slots is owed drops, and a 2-for-1 pays that debt down.
+  const sp = analysis.theirRosterSpace
+  if (sp) {
+    if (sp.relievesCrunch) {
+      bullets.push(`It also frees you ${Math.abs(sp.net)} roster spot${Math.abs(sp.net) > 1 ? 's' : ''} — you're carrying ${sp.before} against ${sp.cap} slots.`)
+    } else if (sp.net < 0 && sp.headroomAfter > 0) {
+      bullets.push(`It opens ${Math.abs(sp.net)} roster spot${Math.abs(sp.net) > 1 ? 's' : ''} for you.`)
+    }
+  }
+
+  // 5. This week's lineup, when it moves in their favour (in-season only).
+  if (analysis.weeklyImpact?.theirs?.delta > 0) {
+    const w = analysis.weeklyImpact
+    bullets.push(`Week ${w.week}: your projected starting lineup goes up about ${w.theirs.delta} points.`)
+  }
+
+  // 6. Scarcity — volunteered ONLY when it argues their side. A pitch is
+  //    advocacy, and there is no reason to hand over the case against you; it
+  //    never states anything untrue, it just doesn't make your opponent's
+  //    argument for them. The analysis above tells YOU the whole picture.
+  if (analysis.scarcity?.vorpWinner === 'them') {
+    bullets.push(`Against replacement level at each position, this actually lands ${analysis.scarcity.vorpPct}% in your favor.`)
+  }
+
+  // 7. Window read, only when it's a genuine alignment.
   if (pf.tier === 'Rebuilding' && giveAssets.some(a => a.type === 'pick')) {
     bullets.push("You're building — this moves capital your way while I go win-now.")
   }
