@@ -22,8 +22,10 @@ import {
   suggestSellMove, buildGivabilityContext, assetKeepScore,
   PICK_ROUND_KEEP, PICK_KEEP_DEFAULT, PICK_KEEP_CAP, PROTECT_THRESHOLD,
   pastPeakTilt, AGE_TILT_BY_TIER, AGE_TILT_BY_POSITION, AGE_TILT_SPAN,
+  buildCashOutBoard, CASH_OUT_MIN_YEARS_YOUNGER,
 } from '../src/utils/recommendations.js'
 import { PEAK_WINDOWS } from '../src/utils/peakWindows.js'
+import { buildFairBand } from '../src/utils/fairBand.js'
 
 const P = (id, name, pos, value, age = 26) =>
   ({ sleeperId: id, name, position: pos, value, age, isIR: false, isTaxi: false })
@@ -283,4 +285,114 @@ test('an elite backup-less starter stays protected however old he is', () => {
   const te1 = { type: 'player', sleeperId: 'm1', name: 'Old elite TE', position: 'TE', value: 7500, age: 32 }
   assert.ok(assetKeepScore(te1, ctx) >= PROTECT_THRESHOLD,
     'cliff protection must survive the age tilt')
+})
+
+// ── The cash-out board ──────────────────────────────────────────────────────
+// Pins docs/analysis/asset-aging-and-pick-value-2026-09.md §5 item 3: the
+// Targets board ranks opponents' players by MY deficits, so it can never
+// surface a target sized to my most valuable aging asset. This board does.
+
+// Me: an aging RB1 worth cashing, a young RB behind him, plus filler.
+const cashOutMe = () => mk(11, [
+  P('c1', 'Aging RB1', 'RB', 6000, 29),      // 3 yrs past the RB window
+  P('c2', 'Young RB2', 'RB', 5800, 23),      // in window — not the candidate
+  P('c3', 'Ancient QB4', 'QB', 2100, 39),    // old but cheap — less at risk
+  P('c4', 'My WR1', 'WR', 1200, 25),
+  P('c5', 'My TE1', 'TE', 1200, 26),
+])
+const cashOutLeague = () => {
+  const opps = [12, 13, 14].map(i => mk(i, [
+    P(`${i}a`, `Young WR ${i}`, 'WR', 6000, 23),
+    P(`${i}b`, `Old WR ${i}`, 'WR', 6000, 30),
+    P(`${i}c`, `Cheap WR ${i}`, 'WR', 1500, 22),
+    P(`${i}d`, `Their QB ${i}`, 'QB', 3000, 27),
+  ]))
+  return [cashOutMe(), ...opps, ...tierRosters()]
+}
+
+test('the cash-out asset is the value AT RISK, not the oldest or the priciest', () => {
+  const all = cashOutLeague()
+  const board = buildCashOutBoard(cashOutMe(), all)
+  assert.equal(board.asset.name, 'Aging RB1',
+    'a 39-year-old QB4 is old but has little value to cash; the RB2 is not past peak')
+  assert.ok(board.asset.valueAtRisk > 0)
+  assert.ok(board.asset.yearsPastPeak > 0)
+})
+
+test('nothing past its peak means no board at all, never an invented one', () => {
+  const young = mk(11, [
+    P('y1', 'Young RB', 'RB', 6000, 23), P('y2', 'Young WR', 'WR', 5000, 24),
+    P('y3', 'Young QB', 'QB', 5000, 25), P('y4', 'Young TE', 'TE', 4000, 26),
+  ])
+  assert.equal(buildCashOutBoard(young, [young, ...tierRosters()]), null)
+  assert.equal(buildCashOutBoard(null, tierRosters()), null)
+  assert.equal(buildCashOutBoard(cashOutMe(), []), null)
+})
+
+test('targets must be meaningfully younger than the asset being cashed', () => {
+  const board = buildCashOutBoard(cashOutMe(), cashOutLeague())
+  for (const t of board.targets) {
+    assert.ok(t.yearsYounger >= CASH_OUT_MIN_YEARS_YOUNGER,
+      `${t.name} is only ${t.yearsYounger.toFixed(1)} years younger`)
+  }
+  assert.ok(board.targets.some(t => t.name.startsWith('Young WR')))
+  assert.ok(!board.targets.some(t => t.name.startsWith('Old WR')),
+    'a same-age target is not a cash-out, whatever he is worth')
+})
+
+test('a target too cheap to be a return is out of band', () => {
+  const board = buildCashOutBoard(cashOutMe(), cashOutLeague())
+  assert.ok(!board.targets.some(t => t.name.startsWith('Cheap WR')))
+  const [floor, ceil] = board.band
+  assert.ok(floor < board.asset.value && ceil > board.asset.value,
+    'the straight-swap band must straddle the asset it is derived from')
+})
+
+test('a reach target is labelled with what it would take, never dropped', () => {
+  // The deal the owner asked about is 2% short of a straight swap; cutting at
+  // the fair ceiling would hide exactly what this board exists to surface.
+  const reachy = mk(12, [P('r1', 'Reach WR', 'WR', 7200, 23), P('r2', 'x', 'QB', 900, 25)])
+  const me = cashOutMe()
+  const board = buildCashOutBoard(me, [me, reachy, ...tierRosters()])
+  const hit = board.targets.find(t => t.name === 'Reach WR')
+  assert.ok(hit, 'a reachable-with-a-sweetener target stays on the board')
+  assert.equal(hit.needsSweetener, true)
+  assert.ok(hit.gapToBand > 0)
+  assert.ok(hit.reasons.some(r => r.includes('to reach fair')))
+  assert.ok(7200 > board.band[1], 'and it really is above the straight-swap ceiling')
+})
+
+test('the gap the card promises is the gap the Analyzer will show', () => {
+  // The first cut computed this from suggestFairPackage's package-building
+  // window and told the owner a deal needed ~84 more that THE CALL then scored
+  // 408 light on the very next screen. Both now come from buildFairBand.
+  const reachy = mk(12, [P('r1', 'Reach WR', 'WR', 7200, 23), P('r2', 'x', 'QB', 900, 25)])
+  const me = cashOutMe()
+  const board = buildCashOutBoard(me, [me, reachy, ...tierRosters()])
+  for (const t of board.targets) {
+    const analyzerBand = buildFairBand(board.asset.value, t.value)
+    assert.equal(t.gapToBand, analyzerBand.gapToBand,
+      `${t.name}: the board and the Analyzer must agree on the gap`)
+  }
+})
+
+test('a target below the band is labelled a premium, not silently dropped', () => {
+  // Paying over the odds to convert age into youth is a real trade and the
+  // owner's call; the board states the cost rather than hiding the row.
+  const cheaper = mk(12, [P('p1', 'Younger cheaper WR', 'WR', 5300, 23), P('p2', 'x', 'QB', 900, 25)])
+  const me = cashOutMe()
+  const board = buildCashOutBoard(me, [me, cheaper, ...tierRosters()])
+  const hit = board.targets.find(t => t.name === 'Younger cheaper WR')
+  assert.ok(hit, 'a below-band target stays on the board')
+  assert.equal(hit.isPremium, true)
+  assert.ok(hit.reasons.some(r => r.includes('premium')))
+})
+
+test('movability tilts the order but hides nobody', () => {
+  const board = buildCashOutBoard(cashOutMe(), cashOutLeague())
+  assert.ok(board.targets.length > 1)
+  for (const t of board.targets) {
+    assert.ok(t.movability >= 0.7 && t.movability <= 1.35, 'the shipped MOVABILITY_RANGE')
+    assert.ok(Array.isArray(t.reasons) && t.reasons.length > 0, 'every row states why')
+  }
 })

@@ -4,7 +4,10 @@ import { buildValueLineup, selectOptimalStarters } from './lineupBuild'
 import { buildRosterSpace } from './rosterSpace'
 import { sideVorp } from './positionalValue'
 import { projectPlayerSeries, seriesDirection } from './dynastyTrajectory'
+import { buildFairBand } from './fairBand'
 import { buildGivabilityContext, assetKeepScore, getDeficitPositions, joinAnd, PROTECT_THRESHOLD } from './recommendations'
+// Re-exported so existing importers of the Analyzer's fair band keep working.
+export { buildFairBand, FAIR_BAND_PCT } from './fairBand'
 
 // A scarcity read needs a side worth reading — two below-replacement sides
 // carry no signal. And the flag only speaks on a real disagreement: 10 points
@@ -88,25 +91,6 @@ export function buildLandingSpots(arrivals, afterPlayers, afterLineup) {
         slot: starter?.slot ?? null,
       }
     })
-}
-
-// The band of "you give" totals that lands the trade inside the ±5% fair window
-// for what you're getting. A point estimate ("you're 12% light") tells you the
-// offer is wrong; a band tells you how much room you have to haggle, which is
-// the thing you actually need at the table.
-export function buildFairBand(giveTotal, getTotal) {
-  if (!getTotal && !giveTotal) return null
-  const low  = Math.round(getTotal * 0.95)
-  const high = Math.round(getTotal * 1.05)
-  return {
-    low, high, target: getTotal, current: giveTotal,
-    inside: giveTotal >= low && giveTotal <= high,
-    // Signed distance to the near edge — what closing it actually costs.
-    gapToBand: giveTotal < low ? low - giveTotal : giveTotal > high ? giveTotal - high : 0,
-    // Rendering bounds, padded so the band never sits flush against an end.
-    axisLow:  Math.round(Math.min(low, giveTotal) * 0.9),
-    axisHigh: Math.round(Math.max(high, giveTotal) * 1.1),
-  }
 }
 
 // A roster's best lineup measured in THIS WEEK's projected points rather than

@@ -285,10 +285,19 @@ September measures Week 1 news, not aging, and the cells hold 5–20 players.
 
 1. **Pick tilt** (§3) — strongest evidence, smallest diff, no interaction.
 2. **Age tilt** (§2) — per-position, decline-only, `SPAN = 3`.
-3. **Cash-out board** — surface the trade §0 could not: my most expendable
-   declining asset against younger targets inside its own price band. On
-   2026-09-06 that is Taylor (27.6) against Malik Nabers (6,480, age 23.1) —
-   a WR, this roster's deficit position, at a price Taylor can legally reach.
+3. **Cash-out board** — SHIPPED 2026-09-06 as `buildCashOutBoard`, rendered at
+   the top of Trade › Targets. It names Taylor (27.6, 3,068 of his value
+   exposed to decline) and lists Malik Nabers (23.1, "add ~408 to reach fair"),
+   Drake London (25.1, "you'd pay a ~107 premium") and Jeremiyah Love (21.3).
+   **A defect caught by screenshotting the handoff rather than the component:**
+   the first cut computed its gap from `suggestFairPackage`'s package-building
+   window and promised "needs ~84 more" on a deal THE CALL scored **408 light**
+   one tap later. `buildFairBand` was extracted to `utils/fairBand.js` so the
+   surface that predicts the verdict and the verdict itself run the same code,
+   and a test pins their agreement. Note the two windows are genuinely different
+   questions — the builder's `[0.9×, 1.15×]` is about what to ASSEMBLE, this
+   ±5% is the verdict's tolerance — which is exactly why conflating them was
+   silent.
 4. **Alternative-package line** — show the cheaper Fair package beside the
    chosen Strong one, including a pick-bridged version.
 

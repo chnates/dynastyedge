@@ -934,7 +934,7 @@ negotiate, not the call — the same discipline that keeps usage stats, camp
 movement and combine numbers out of every score in this app. All five are
 best-effort: each degrades to `null` and its block simply doesn't render.
 
-- **Fair band** (`buildFairBand`) — the ±5% window of "you give" totals that
+- **Fair band** (`buildFairBand`, in `utils/fairBand.js`) — the ±5% window of "you give" totals that
   lands the deal fair for what you're getting, rendered as a track in THE CALL
   with a marker for the current offer. A point estimate says the offer is
   wrong; a band says how much room you have, which is what you need at the
@@ -2382,6 +2382,30 @@ matter:
 - **Feature 3 — Trade Analyzer:** `buildGivabilityContext`, `assetKeepScore`,
   and `getDeficitPositions` back the "Giving Up" depth context and the fair
   package suggestions.
+- **Feature 3 — Trade › Targets, the cash-out board (`buildCashOutBoard`):**
+  the one move the Targets board structurally cannot surface. Targets ranks
+  opponents' players by **my positional deficits**, so a roster thin at WR sees
+  WRs priced around that deficit and never a target sized to its most valuable
+  aging asset — and `suggestFairPackage` won't bridge it either, since it never
+  offers an asset worth far more than its target. Measured live 2026-09-06: the
+  owner's 27.6-year-old RB1 (5,752) and the 23.1-year-old WR1 he'd want for him
+  (6,484) could not appear together on any surface in the app.
+  `pickCashOutAsset` names the asset bleeding most **value at risk** —
+  `value × how far past its peak window`, which is neither "my oldest" (a
+  38-year-old QB4 is worth nothing to cash) nor "my most valuable" (that is
+  just my best player) — excluding anything at `PROTECT_THRESHOLD`. Then it
+  lists younger targets (`CASH_OUT_MIN_YEARS_YOUNGER` = 2) around his price,
+  each tilted by the same `assetMovability` the Targets board uses (extracted
+  as `buildMovabilityIndex` so the two cannot drift) and **labelled with how it
+  misses fair**: above the band, what to add; below it, the premium you'd pay.
+  **The band and every gap come from `fairBand.js`, not from
+  `suggestFairPackage`'s package-building window** — the first cut borrowed the
+  latter and told the owner a deal needed "~84 more" that THE CALL then scored
+  **408 light** on the very next screen. Tapping a row hands the Analyzer a
+  two-sided `preloadTrade` built from the **full roster objects** (92657ae's
+  lesson: a preload must resolve to what the add sheet produces). Renders in
+  league-wide mode only — while a team is scoped the page is a scouting view of
+  one roster. No past-peak asset ⇒ no block, never an invented one.
 
 -----
 
@@ -3106,7 +3130,8 @@ dynastyedge/
 │   │   ├── edgeBriefing.js      ← The Edge: signals, briefing items, GM line
 │   │   ├── managerAnalysis.js   ← manager scouting: ledgers, tendencies, draft grades
 │   │   ├── rosterAnalysis.js    ← positional strength, win window tiers, Targets ranking (need × value × movability)
-│   │   ├── recommendations.js   ← THE assistant-GM brain: keep/givability scores, FA pickups, two-sided sell moves
+│   │   ├── recommendations.js   ← THE assistant-GM brain: keep/givability scores (round-priced picks, past-peak age tilt), FA pickups, two-sided sell moves, the cash-out board
+│   │   ├── fairBand.js          ← THE definition of "fair" (±5%), shared by the Analyzer's verdict and every surface that PREDICTS it
 │   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation
 │   │   ├── pickCapital.js       ← pick ownership resolution logic
 │   │   ├── rookieAdp.js         ← derived rookie-class ADP for the Draft section
@@ -3156,7 +3181,7 @@ dynastyedge/
 │   ├── lineupHistory.test.mjs       ← optimal-lineup slot-fill order (singles → FLEX → SFLX)
 │   ├── matchupWeeks.test.mjs        ← mocked-fetch: one fetch/week across both consumers, all-fail rejection
 │   ├── rookieResearch.test.mjs      ← opportunity blend, shared points scale (the backup-TE trap), within-position divergence, roster-fit re-ranking (need/window bonuses, score untouched), drawer hand-off fields, best-effort feed degradation, and the measurables NULL (age/combine can never move a score)
-│   ├── recommendations.test.mjs     ← suggestSellMove's two-sided partner pick: a concrete return beats a needier team with nothing, the neediest-team fallback, startsForThem, nav-ready shape
+│   ├── recommendations.test.mjs     ← suggestSellMove's two-sided partner pick (a concrete return beats a needier team with nothing, the neediest-team fallback, startsForThem, nav-ready shape); pick keep-scores by round (strict ordering under every tier, nothing auto-excluded, unknown round falls back); the past-peak age tilt (decline-only, per-position, saturating, never positive, cliff protection survives it); and the cash-out board (value-at-risk selection, the reach/premium labels, and the pin that its gap equals buildFairBand's)
 │   └── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
 ├── index.html
 ├── eslint.config.js             ← ESLint 9 flat config (recommended + react-hooks, src/ + scripts/)

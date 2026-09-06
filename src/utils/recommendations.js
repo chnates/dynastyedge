@@ -9,9 +9,10 @@
 // Zero new data sources: everything composes caches LeagueContext already holds.
 
 import { POSITIONS } from '../constants'
-import { computeLeagueAverages, getPositionalDeltas, assignWinWindowTiers } from './rosterAnalysis'
+import { computeLeagueAverages, getPositionalDeltas, assignWinWindowTiers, buildMovabilityIndex } from './rosterAnalysis'
 import { buildValueLineup } from './lineupBuild'
 import { PEAK_WINDOWS } from './peakWindows'
+import { buildFairBand, FAIR_BAND_PCT } from './fairBand'
 import { getTeamName } from '../hooks/useLeague'
 
 // The starters we protect hardest at each position in this 10-team Superflex
@@ -374,4 +375,132 @@ export function suggestSellMove(player, myRoster, allRosters) {
       ? `Shop ${player.name} to ${partnerName} — he'd start for them.`
       : `Shop ${player.name} to ${partnerName} — they're thin at ${pos}.`,
   }
+}
+
+// ── The cash-out board ──────────────────────────────────────────────────────
+// Answers the question the Targets board structurally cannot: "which of MY
+// assets is aging out, and who could I turn him into?"
+//
+// The Targets board ranks opponents' players by MY positional deficits, so on a
+// roster whose deficit is WR it surfaces WRs priced 3,300-4,500 and never a
+// 5,705 running back's worth of anything. That is correct for "who do I ask
+// about" and useless for "who do I cash out" — and the package builder cannot
+// close the gap either, because it will not propose an asset worth 39% more
+// than its target. The trade the owner wanted (an aging RB1 for a 23-year-old
+// WR1) was invisible from every surface in the app.
+//
+// This is DESCRIPTIVE ranking over roster facts, not a verdict: it names an
+// asset and lists who is in his price band. The Analyzer still grades whatever
+// you build from it.
+
+// A "significant" asset — below this, cashing out is roster churn, not a plan.
+export const CASH_OUT_MIN_VALUE = 2000
+// A target must be meaningfully younger or the trade has no point.
+export const CASH_OUT_MIN_YEARS_YOUNGER = 2
+// Targets worth less than this are not a return for a starter.
+export const CASH_OUT_MIN_TARGET_VALUE = 1000
+// The band a straight swap lands FAIR in, inverted from the Analyzer's own
+// definition: a give of V is fair against a target T when V is within
+// FAIR_BAND_PCT of T, i.e. T is in [V/(1+pct), V/(1-pct)]. This MUST stay
+// derived from fairBand.js — the first cut borrowed suggestFairPackage's
+// package-building window instead, and the card promised "needs ~84 more" on a
+// deal THE CALL then scored 408 light on the very next screen.
+export const CASH_OUT_BAND = [1 / (1 + FAIR_BAND_PCT), 1 / (1 - FAIR_BAND_PCT)]
+// A straight swap is a narrow window, and cutting the list there would hide
+// most of what this board exists to surface — including the deal that prompted
+// it. So the scan is wider and every row is LABELLED with how it misses: above
+// the band the asset alone is short (the Analyzer can bridge it with a bench
+// piece or a late pick), below it you would be paying a premium to convert age
+// into youth, which is a real trade and the owner's call to make.
+export const CASH_OUT_SCAN = [0.85, 1.25]
+
+// Which of my assets is bleeding the most value to age. Not simply "my oldest"
+// (a 38-year-old QB4 is worth nothing to cash) and not "my most valuable"
+// (that is just my best player) — the product of the two, which is the value
+// actually at risk. Protected assets are excluded on the same contract the
+// package builder uses: the cliff-protected starter is not a sell candidate.
+export function pickCashOutAsset(myRoster, ctx) {
+  const candidates = (myRoster?.players ?? [])
+    .filter(p => !p.isIR && !p.isTaxi && (p.value ?? 0) >= CASH_OUT_MIN_VALUE)
+    .map(p => {
+      const asset = {
+        type: 'player', sleeperId: p.sleeperId, name: p.name,
+        position: p.position, value: p.value, age: p.age,
+      }
+      const window = PEAK_WINDOWS[p.position]
+      const past = window && p.age != null ? p.age - window[1] : 0
+      // Reuse the shipped tilt's saturation so "how far past" means the same
+      // thing here as it does in the keep-score.
+      const exposure = past > 0 ? Math.min(1, past / AGE_TILT_SPAN) : 0
+      return { ...asset, keep: assetKeepScore(asset, ctx), yearsPastPeak: past, valueAtRisk: p.value * exposure }
+    })
+    .filter(c => c.valueAtRisk > 0 && c.keep < PROTECT_THRESHOLD)
+    .sort((a, b) => b.valueAtRisk - a.valueAtRisk)
+  return candidates[0] ?? null
+}
+
+export function buildCashOutBoard(myRoster, allRosters, { limit = 4 } = {}) {
+  if (!myRoster || !allRosters?.length) return null
+  const ctx = buildGivabilityContext(myRoster, allRosters)
+  const asset = pickCashOutAsset(myRoster, ctx)
+  if (!asset) return null
+
+  const leagueAverages = computeLeagueAverages(allRosters)
+  const myDeficits = new Set(POSITIONS.filter(pos => (ctx.myDeltas[pos] ?? 0) < 0))
+  const [lo, hi] = CASH_OUT_BAND
+  const floor = asset.value * lo, ceil = asset.value * hi
+  const [scanLo, scanHi] = CASH_OUT_SCAN
+
+  const targets = []
+  allRosters
+    .filter(r => r.rosterId !== myRoster.rosterId)
+    .forEach(r => {
+      const movabilityFor = buildMovabilityIndex(r, leagueAverages)
+      r.players.forEach(p => {
+        const value = p.value ?? 0
+        if (p.isIR || value < CASH_OUT_MIN_TARGET_VALUE) return
+        if (value < asset.value * scanLo || value > asset.value * scanHi) return
+        if (p.age == null || asset.age == null) return
+        const yearsYounger = asset.age - p.age
+        if (yearsYounger < CASH_OUT_MIN_YEARS_YOUNGER) return
+
+        const { movability, starts } = movabilityFor(p)
+        const fillsNeed = myDeficits.has(p.position)
+        // Computed by the Analyzer's OWN function, so the number this card
+        // shows is the number THE CALL shows on the next screen.
+        const band = buildFairBand(asset.value, value)
+        const needsSweetener = !band.inside && asset.value < band.low
+        const isPremium = !band.inside && asset.value > band.high
+        const gap = band.gapToBand
+        const reasons = [`${yearsYounger.toFixed(1)} years younger`]
+        if (fillsNeed) reasons.push(`fills your ${p.position} need`)
+        if (needsSweetener) reasons.push(`add ~${gap.toLocaleString()} to reach fair`)
+        else if (isPremium) reasons.push(`you'd pay a ~${gap.toLocaleString()} premium`)
+        else if (!starts) reasons.push("doesn't crack their lineup")
+
+        targets.push({
+          ...p,
+          ownerRosterId: r.rosterId,
+          owner: r.owner,
+          yearsYounger,
+          fillsNeed,
+          movability,
+          needsSweetener,
+          isPremium,
+          gapToBand: gap,
+          reasons,
+          // Same shape as the Targets board: movability TILTS, it never gates.
+          // A player his team would hate to lose stays on the list, below the
+          // ones they can spare.
+          // A straight swap outranks one that still needs closing, either way.
+          score: (yearsYounger + (fillsNeed ? 3 : 0) + value / 2000)
+            * movability * (band.inside ? 1 : 0.85),
+        })
+      })
+    })
+
+  targets.sort((a, b) => b.score - a.score || (b.value ?? 0) - (a.value ?? 0))
+  // No target in band means the honest answer is "nobody" — the surface says so
+  // rather than widening the band until something appears.
+  return { asset, band: [Math.round(floor), Math.round(ceil)], targets: targets.slice(0, limit) }
 }
