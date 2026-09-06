@@ -1,16 +1,12 @@
-import { useState } from 'react'
-import { CheckCircle2, XCircle, RefreshCw, CheckCircle, XCircle as XCircleSmall, Circle, AlertTriangle, LineChart, Target } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { CheckCircle2, XCircle as XCircleSmall, Circle, AlertTriangle, LineChart, Target, Users, Copy, Check, ArrowRight, Layers, CalendarClock, Scale, History } from 'lucide-react'
 import WinWindowBadge from '../shared/WinWindowBadge'
+import SectionHeader from '../shared/SectionHeader'
+import TheCall from './TheCall'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
-import { Card, Button } from '../ui'
+import { Card, Button, Badge } from '../ui'
 import { POS_TEXT } from '../../utils/positionColors'
 import { relativeTime } from '../../hooks/usePlayerIntel'
-
-const VERDICT_STYLES = {
-  Accept:  { Icon: CheckCircle2, color: 'text-success', bg: 'bg-success/10' },
-  Decline: { Icon: XCircle,      color: 'text-danger',  bg: 'bg-danger/10' },
-  Counter: { Icon: RefreshCw,    color: 'text-warning', bg: 'bg-warning/10' },
-}
 
 const FLAG_DOT = { red: 'bg-danger', yellow: 'bg-warning', green: 'bg-success' }
 const FLAG_LABEL = { red: 'Injured', yellow: 'Questionable', green: 'Active' }
@@ -198,6 +194,243 @@ function GivingUpBlock({ giveContext }) {
   )
 }
 
+// Where an arriving player lands on a depth chart — one compact row per player.
+// The question "does he actually start?" is the one a position tag can't answer,
+// so the row leads with the rank and states the slot when he does.
+function LandingRow({ spot, possessive }) {
+  return (
+    <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-snug">
+      <span className="font-semibold text-text-primary dark:text-text-primary">{spot.name}</span>
+      <ArrowRight size={10} strokeWidth={2.5} className="inline mx-1 -mt-px text-text-tertiary" />
+      {possessive}{' '}
+      <span className={`font-mono font-semibold ${POS_TEXT[spot.position] ?? 'text-text-secondary'}`}>
+        {spot.position}{spot.posRank}
+      </span>
+      {' of '}{spot.count}
+      {spot.starts
+        ? <span className="text-success"> · starts{spot.slot ? ` at ${spot.slot}` : ''}</span>
+        : <span className="text-text-tertiary dark:text-text-tertiary"> · bench</span>}
+    </p>
+  )
+}
+
+const APPEAL_STYLE = {
+  Strong: { text: 'text-success', tone: 'success', dot: 'bg-success' },
+  Fair:   { text: 'text-warning', tone: 'warning', dot: 'bg-warning' },
+  Weak:   { text: 'text-danger',  tone: 'danger',  dot: 'bg-danger' },
+}
+
+// Layer 4 — "would they even want this?", answered from their roster. Everything
+// here is deterministic: their post-trade lineup and their standing against
+// league average. It is deliberately NOT a prediction that they'll accept —
+// behavioral profiling of this league's managers was tested and disconfirmed.
+function TheirSideBlock({ partnerFit, partnerName }) {
+  if (!partnerFit) return null
+  const st = APPEAL_STYLE[partnerFit.appeal] ?? APPEAL_STYLE.Fair
+  const who = partnerName ?? 'They'
+  const sent = partnerFit.giveContext.flatMap(g =>
+    g.dealt.map(d => ({ ...d, position: g.position, count: g.count })))
+
+  return (
+    <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
+      <div className="flex items-center gap-2 mb-2">
+        <Users size={12} strokeWidth={2} className="text-text-tertiary shrink-0" />
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary">
+          Would they want it?
+        </p>
+        <Badge tone={st.tone} soft>{partnerFit.appeal}</Badge>
+      </div>
+
+      <p className={`font-body text-xs leading-relaxed flex items-center gap-1.5 mb-2 ${st.text}`}>
+        <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${st.dot}`} />
+        {partnerFit.summary}
+      </p>
+
+      {/* What they'd receive, and whether it changes anything for them */}
+      {partnerFit.landingSpots.length > 0 && (
+        <div className="flex flex-col gap-1 mb-2">
+          {partnerFit.landingSpots.map(spot => (
+            <LandingRow key={spot.sleeperId} spot={spot} possessive="their" />
+          ))}
+        </div>
+      )}
+
+      {/* What they'd send, and where it currently sits for them */}
+      {sent.length > 0 && (
+        <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-snug mb-2">
+          {who} would send{' '}
+          {sent.map((d, i) => (
+            <span key={d.name}>
+              {i > 0 && <span className="text-text-tertiary">, </span>}
+              <span className="font-semibold text-text-primary dark:text-text-primary">{d.name}</span>
+              {' — their '}
+              <span className={`font-mono font-semibold ${POS_TEXT[d.position] ?? 'text-text-secondary'}`}>
+                {d.position}{d.posRank}
+              </span>
+              {` of ${d.count}`}
+            </span>
+          ))}
+        </p>
+      )}
+
+      {/* The reasons carry the numbers in words — including the starting-lineup
+          delta, which is the measure the verdict gate quotes — so there is no
+          separate stat row repeating it. */}
+      <ul className="flex flex-col gap-1">
+        {partnerFit.reasons.map(r => (
+          <li key={r} className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-snug flex items-start gap-1.5">
+            <Circle size={9} strokeWidth={2} className="shrink-0 mt-1" />
+            <span>{r}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+// The message you actually send. Written entirely from THEIR side of the table,
+// because an argument for why the trade is good for you is not a pitch — and
+// every line is a number the app already computed, so it never oversells.
+function PitchCard({ pitch }) {
+  const [copied, setCopied] = useState(null)
+
+  useEffect(() => {
+    if (!copied) return
+    const t = setTimeout(() => setCopied(null), 2200)
+    return () => clearTimeout(t)
+  }, [copied])
+
+  if (!pitch) return null
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(pitch.text)
+      setCopied('ok')
+    } catch {
+      setCopied('fail')
+    }
+  }
+
+  return (
+    <Card padding="none" className="mb-4">
+      <div className="px-4 py-2.5 border-b border-border-default dark:border-border-default flex items-center gap-2">
+        <p className="flex-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary">
+          Pitch It
+        </p>
+        <Button
+          size="sm"
+          variant={copied === 'ok' ? 'tinted' : 'secondary'}
+          onClick={copy}
+          icon={copied === 'ok' ? <Check size={12} strokeWidth={2.5} /> : <Copy size={12} strokeWidth={2} />}
+          className="shrink-0 px-2.5 py-1 text-[11px]"
+        >
+          {copied === 'ok' ? 'Copied' : 'Copy'}
+        </Button>
+      </div>
+      <div className="px-4 py-3">
+        <p className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary mb-2 leading-snug">
+          Written from their side of the table — paste it into the league chat.
+        </p>
+        <div className="font-body text-[11px] text-text-primary dark:text-text-primary leading-relaxed whitespace-pre-wrap select-text">
+          {pitch.text}
+        </div>
+        {copied === 'fail' && (
+          <p className="font-body text-[10px] text-warning mt-2">
+            Copy was blocked — select the text above and copy it manually.
+          </p>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+
+// Roster space. Over the cap is a NORMAL post-draft state in this league — nine
+// of ten teams were at or over it the week after the rookie draft — so this
+// never says "illegal". It says how many active slots move, who is owed drops,
+// and when a trade pays that debt down (which is a selling point, not a cost).
+function RosterSpaceBlock({ space, who, icon: Icon = Layers }) {
+  if (!space) return null
+  const arrow = space.net === 0 ? 'no change' : `${space.net > 0 ? '+' : ''}${space.net}`
+  return (
+    <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
+      <div className="flex items-center gap-2 mb-1.5">
+        <Icon size={12} strokeWidth={2} className="text-text-tertiary shrink-0" />
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary">
+          Roster space
+        </p>
+      </div>
+      <p className="font-body text-xs text-text-secondary dark:text-text-secondary leading-snug">
+        {who}{' '}
+        <span className="font-mono font-semibold tabular-nums text-text-primary dark:text-text-primary">
+          {space.before} → {space.after}
+        </span>
+        {' of '}{space.cap} active slots ({arrow})
+      </p>
+      {space.overAfter > 0 ? (
+        <p className="font-body text-[11px] text-warning leading-snug mt-1">
+          {space.overAfter} over the cap afterwards — {space.overAfter === 1 ? 'a drop is' : 'drops are'} owed before the season.
+        </p>
+      ) : space.headroomAfter === 0 ? (
+        <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary leading-snug mt-1">
+          Full afterwards — no room to add without dropping.
+        </p>
+      ) : (
+        <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary leading-snug mt-1">
+          {space.headroomAfter} spot{space.headroomAfter > 1 ? 's' : ''} open afterwards.
+        </p>
+      )}
+      {space.relievesCrunch && (
+        <p className="font-body text-[11px] text-success leading-snug mt-1">
+          This pays down a roster-crunch debt — worth naming in the pitch.
+        </p>
+      )}
+    </div>
+  )
+}
+
+// The same roster-fit question in the other currency. A dynasty trade is not
+// decided on one week, which is exactly why this is a note and never a score —
+// it answers "what does this cost me on Sunday?"
+function WeeklyImpactRow({ side, label }) {
+  if (!side) return null
+  const up = side.delta > 0
+  const flat = side.delta === 0
+  return (
+    <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-snug">
+      {label}{' '}
+      <span className="font-mono tabular-nums">{side.before} → {side.after}</span>{' '}
+      <span className={`font-mono font-semibold tabular-nums ${flat ? 'text-text-tertiary' : up ? 'text-success' : 'text-danger'}`}>
+        ({up ? '+' : ''}{side.delta})
+      </span>
+    </p>
+  )
+}
+
+// What the partner has been doing lately — descriptive context, never a score.
+// A TE surplus they just went out and bought is not spare depth.
+function PartnerActivityBlock({ activity }) {
+  if (!activity?.summary) return null
+  return (
+    <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
+      <div className="flex items-center gap-2 mb-1.5">
+        <History size={12} strokeWidth={2} className="text-text-tertiary shrink-0" />
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary">
+          Recent moves
+        </p>
+      </div>
+      <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-snug">
+        {activity.summary}
+      </p>
+      {activity.positionsAdded.length > 0 && (
+        <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary leading-snug mt-1">
+          They've been adding {activity.positionsAdded.join(' / ')} — read their surplus there as bought, not spare.
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function TradeVerdict({
   analysis,
   verdict,
@@ -210,6 +443,8 @@ export default function TradeVerdict({
   onClearWhatsFair,
   liveIntelligence,
   intelligenceLoading,
+  pitch,
+  partnerName,
 }) {
   const [selectedPlayer, setSelectedPlayer] = useState(null)
 
@@ -223,15 +458,17 @@ export default function TradeVerdict({
     )
   }
 
-  const { giveTotal, getTotal, filledNeeds, hurtStrengths, windowScore, windowNote, myTier,
-    benchNote, starterLossNote, giveContext,
+  const {
+    giveTotal, getTotal, filledNeeds, hurtStrengths, windowScore, windowNote, myTier,
+    benchNote, starterLossNote, giveContext, myLandingSpots, partnerFit,
     playoffPct, oddsStance, oddsNote, oddsTone,
     partnerTrajectoryNote, partnerTrajectoryTone,
     myTrajectoryNote, myTrajectoryTone,
-    draftNote, draftTone } = analysis
+    draftNote, draftTone,
+    scarcity, myRosterSpace, theirRosterSpace, weeklyImpact,
+  } = analysis
   const ODDS_TONE_TEXT = { success: 'text-success', warning: 'text-warning', danger: 'text-danger' }
   const bothSides = giveCount > 0 && getCount > 0
-  const vs = verdict ? VERDICT_STYLES[verdict.verdict] : null
 
   const injuredWarnings = liveIntelligence
     ? liveIntelligence.filter(i => i.injuryFlag === 'red')
@@ -268,126 +505,20 @@ export default function TradeVerdict({
         </div>
       )}
 
-      <Card padding="none" className="mb-4">
-        {/* Section label */}
-        <div className="px-4 py-2.5 border-b border-border-default dark:border-border-default">
-          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary">
-            Analysis
-          </p>
-        </div>
+      {/* The answer, first — then the evidence in three acts below. */}
+      <TheCall
+        analysis={analysis}
+        verdict={verdict}
+        bothSides={bothSides}
+        counterSuggestion={counterSuggestion}
+        onApplyCounter={onApplyCounter}
+      />
 
-        {/* Layer 1: Raw value */}
-        <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
-          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary mb-2">
-            Raw Value
-          </p>
-          <ValueSummary giveTotal={giveTotal} getTotal={getTotal} bothSides={bothSides} />
-        </div>
-
-        {/* Layer 2: Roster fit */}
-        <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
-          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary mb-2">
-            Roster Fit
-          </p>
-          {filledNeeds.length === 0 && hurtStrengths.length === 0 ? (
-            <p className="font-body text-xs text-text-secondary dark:text-text-secondary flex items-center gap-1.5">
-              <Circle size={10} strokeWidth={2} className="text-text-tertiary" />
-              Neutral positional impact
-            </p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {filledNeeds.map(pos => (
-                <span
-                  key={`need-${pos}`}
-                  className="inline-flex items-center gap-1 font-body text-xs text-success bg-success/10 rounded-md px-2 py-0.5"
-                >
-                  <CheckCircle2 size={10} strokeWidth={2.5} />
-                  Fills {pos} need
-                </span>
-              ))}
-              {hurtStrengths.map(pos => (
-                <span
-                  key={`hurt-${pos}`}
-                  className="inline-flex items-center gap-1 font-body text-xs text-danger bg-danger/10 rounded-md px-2 py-0.5"
-                >
-                  <XCircleSmall size={10} strokeWidth={2.5} />
-                  Weakens {pos} depth
-                </span>
-              ))}
-            </div>
-          )}
-          {/* Lineup-sim caveats: an acquired player who won't start, or a
-              starter shipped out that didn't crater the position. */}
-          {benchNote && (
-            <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary leading-relaxed mt-2 flex items-start gap-1.5">
-              <Circle size={10} strokeWidth={2} className="text-text-tertiary shrink-0 mt-0.5" />
-              <span>{benchNote}</span>
-            </p>
-          )}
-          {starterLossNote && (
-            <p className="font-body text-[11px] text-warning leading-relaxed mt-1.5 flex items-start gap-1.5">
-              <AlertTriangle size={11} strokeWidth={2} className="shrink-0 mt-0.5" />
-              <span>{starterLossNote}</span>
-            </p>
-          )}
-        </div>
-
-        {/* Roster cost — where the dealt players stand at their position */}
-        <GivingUpBlock giveContext={giveContext} />
-
-        {/* Layer 3: Win window */}
-        <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
-          <div className="flex items-center gap-2 mb-1.5">
-            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary">
-              Win Window
-            </p>
-            <WinWindowBadge tier={myTier} />
-          </div>
-          <p className={`font-body text-xs leading-relaxed flex items-center gap-1.5 ${
-            windowScore > 0 ? 'text-success'
-              : windowScore < 0 ? 'text-warning'
-              : 'text-text-secondary dark:text-text-secondary'
-          }`}>
-            <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${
-              windowScore > 0 ? 'bg-success' : windowScore < 0 ? 'bg-warning' : 'bg-text-tertiary'
-            }`} />
-            {windowNote}
-          </p>
-          {/* Real playoff odds behind the win-window read (in-season only) */}
-          {playoffPct != null && (
-            <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-relaxed mt-1.5">
-              Playoff odds: <span className="font-mono font-semibold tabular-nums text-text-primary dark:text-text-primary">{Math.round(playoffPct * 100)}%</span>
-              {' · '}
-              <span className={`font-semibold ${ODDS_TONE_TEXT[oddsTone] ?? 'text-text-secondary'}`}>{oddsStance}</span>
-              {oddsNote ? ` — ${oddsNote}` : ''}
-            </p>
-          )}
-          {/* Partner's multi-year value direction (Dynasty Trajectory) */}
-          {partnerTrajectoryNote && (
-            <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-relaxed mt-1.5 flex items-start gap-1.5">
-              <LineChart size={12} strokeWidth={2} className={`shrink-0 mt-0.5 ${ODDS_TONE_TEXT[partnerTrajectoryTone] ?? 'text-text-tertiary'}`} />
-              <span>{partnerTrajectoryNote}</span>
-            </p>
-          )}
-          {/* My side's forward trajectory (selling a riser / buying a faller) */}
-          {myTrajectoryNote && (
-            <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-relaxed mt-1.5 flex items-start gap-1.5">
-              <LineChart size={12} strokeWidth={2} className={`shrink-0 mt-0.5 ${ODDS_TONE_TEXT[myTrajectoryTone] ?? 'text-text-tertiary'}`} />
-              <span>{myTrajectoryNote}</span>
-            </p>
-          )}
-          {/* Draft-grade confidence nudge on acquired picks */}
-          {draftNote && (
-            <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-relaxed mt-1.5 flex items-start gap-1.5">
-              <Target size={12} strokeWidth={2} className={`shrink-0 mt-0.5 ${ODDS_TONE_TEXT[draftTone] ?? 'text-text-tertiary'}`} />
-              <span>{draftNote}</span>
-            </p>
-          )}
-        </div>
-
-        {/* Injury warning banners — surface above verdict when any player is Out */}
-        {injuredWarnings.length > 0 && (
-          <div className="px-4 py-3 border-b border-border-default dark:border-border-default bg-danger/5">
+      {/* Injury alerts ride directly under the call — they're a "verify before
+          you send this" flag, not a section you should have to scroll for. */}
+      {injuredWarnings.length > 0 && (
+        <Card padding="none" className="mb-4 bg-danger/5">
+          <div className="px-4 py-3">
             {injuredWarnings.map(p => (
               <div key={p.playerName} className="flex items-start gap-2 mb-1 last:mb-0">
                 <AlertTriangle size={13} className="text-danger shrink-0 mt-0.5" strokeWidth={2} />
@@ -397,71 +528,210 @@ export default function TradeVerdict({
               </div>
             ))}
           </div>
-        )}
-
-        {/* Verdict — only once both sides have at least one asset */}
-        {bothSides && verdict && vs ? (
-          <div className={`px-4 py-3 ${vs.bg}`}>
-            <div className="flex items-center gap-2 mb-1.5">
-              <vs.Icon size={16} strokeWidth={2} className={vs.color} />
-              <span className={`font-display text-base uppercase tracking-wide ${vs.color}`}>
-                {verdict.verdict}
-              </span>
-            </div>
-            <p className="font-body text-sm text-text-primary dark:text-text-primary leading-relaxed">
-              {verdict.reasoning}
-            </p>
-            {counterSuggestion && (
-              <div className="flex items-center gap-2 mt-2 border-t border-current/20 pt-2">
-                <p className="flex-1 font-body text-xs text-text-secondary dark:text-text-secondary leading-relaxed">
-                  Counter: {counterSuggestion.text}
-                </p>
-                <Button
-                  size="sm"
-                  onClick={() => onApplyCounter?.(counterSuggestion)}
-                  className="shrink-0 px-2.5 py-1 text-[11px]"
-                >
-                  Apply
-                </Button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="px-4 py-3">
-            <p className="font-body text-xs text-text-tertiary dark:text-text-tertiary">
-              Add assets to both sides to get a verdict.
-            </p>
-          </div>
-        )}
-      </Card>
-
-      {/* Live Intelligence loading state — shown while agents run, non-blocking */}
-      {intelligenceLoading && (
-        <Card padding="none" className="flex items-center justify-center gap-2 py-3 mb-4">
-          <div className="h-3.5 w-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin" />
-          <span className="font-body text-xs text-text-secondary dark:text-text-secondary">
-            Loading player news…
-          </span>
         </Card>
       )}
 
-      {/* Live Intelligence section */}
-      {liveIntelligence && liveIntelligence.length > 0 && (
+      {/* ─────────────── ACT 1 — YOUR SIDE ─────────────── */}
+      <div id="act-yours" className="scroll-mt-28">
+        <SectionHeader label="Your side" />
         <Card padding="none" className="mb-4">
-          <div className="px-4 py-2.5 border-b border-border-default dark:border-border-default flex items-center gap-2">
-            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary">
-              Live Intelligence
+          {/* Layer 1: Raw value */}
+          <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary mb-2">
+              Raw Value
             </p>
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+            <ValueSummary giveTotal={giveTotal} getTotal={getTotal} bothSides={bothSides} />
+            {/* Scarcity speaks ONLY when it disagrees with the raw totals — a
+                second number that agrees is noise, and FantasyCalc stays the
+                headline so the pitch quotes something they can look up. */}
+            {scarcity && (
+              <p className="font-body text-[11px] leading-relaxed mt-2 pt-2 border-t border-border-default dark:border-border-default flex items-start gap-1.5 text-text-secondary dark:text-text-secondary">
+                <Scale size={12} strokeWidth={2} className={`shrink-0 mt-0.5 ${ODDS_TONE_TEXT[scarcity.tone] ?? 'text-text-tertiary'}`} />
+                <span>{scarcity.note}</span>
+              </p>
+            )}
           </div>
-          {liveIntelligence.map(intel => (
-            <PlayerNewsCard
-              key={intel.playerName}
-              intel={intel}
-              onTap={intel.player?.sleeperId ? () => setSelectedPlayer(intel.player) : undefined}
-            />
-          ))}
+
+          {/* Layer 2: Roster fit */}
+          <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary mb-2">
+              Roster Fit
+            </p>
+            {filledNeeds.length === 0 && hurtStrengths.length === 0 ? (
+              <p className="font-body text-xs text-text-secondary dark:text-text-secondary flex items-center gap-1.5">
+                <Circle size={10} strokeWidth={2} className="text-text-tertiary" />
+                Neutral positional impact
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {filledNeeds.map(pos => (
+                  <span key={`need-${pos}`} className="inline-flex items-center gap-1 font-body text-xs text-success bg-success/10 rounded-md px-2 py-0.5">
+                    <CheckCircle2 size={10} strokeWidth={2.5} />
+                    Fills {pos} need
+                  </span>
+                ))}
+                {hurtStrengths.map(pos => (
+                  <span key={`hurt-${pos}`} className="inline-flex items-center gap-1 font-body text-xs text-danger bg-danger/10 rounded-md px-2 py-0.5">
+                    <XCircleSmall size={10} strokeWidth={2.5} />
+                    Weakens {pos} depth
+                  </span>
+                ))}
+              </div>
+            )}
+            {benchNote && (
+              <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary leading-relaxed mt-2 flex items-start gap-1.5">
+                <Circle size={10} strokeWidth={2} className="text-text-tertiary shrink-0 mt-0.5" />
+                <span>{benchNote}</span>
+              </p>
+            )}
+            {starterLossNote && (
+              <p className="font-body text-[11px] text-warning leading-relaxed mt-1.5 flex items-start gap-1.5">
+                <AlertTriangle size={11} strokeWidth={2} className="shrink-0 mt-0.5" />
+                <span>{starterLossNote}</span>
+              </p>
+            )}
+            {/* Where each acquired player lands on MY post-trade depth chart —
+                the "fills WR need" chip names the position, this names the spot. */}
+            {myLandingSpots?.length > 0 && (
+              <div className="flex flex-col gap-1 mt-2 pt-2 border-t border-border-default dark:border-border-default">
+                {myLandingSpots.map(spot => (
+                  <LandingRow key={spot.sleeperId} spot={spot} possessive="your" />
+                ))}
+              </div>
+            )}
+            {/* The same question in weekly points (in-season only). */}
+            {weeklyImpact && (
+              <div className="mt-2 pt-2 border-t border-border-default dark:border-border-default">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <CalendarClock size={11} strokeWidth={2} className="text-text-tertiary shrink-0" />
+                  <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-text-tertiary dark:text-text-tertiary">
+                    Week {weeklyImpact.week} lineup
+                  </p>
+                </div>
+                <WeeklyImpactRow side={weeklyImpact.mine} label="Your projected starters" />
+                <p className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary leading-snug mt-1">
+                  One week of Sleeper projections — context for a dynasty call, never the reason for one.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Roster cost — where the dealt players stand at their position */}
+          <GivingUpBlock giveContext={giveContext} />
+
+          <RosterSpaceBlock space={myRosterSpace} who="You" />
+
+          {/* Layer 3: Win window */}
+          <div className="px-4 py-3">
+            <div className="flex items-center gap-2 mb-1.5">
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary">
+                Win Window
+              </p>
+              <WinWindowBadge tier={myTier} />
+            </div>
+            <p className={`font-body text-xs leading-relaxed flex items-center gap-1.5 ${
+              windowScore > 0 ? 'text-success'
+                : windowScore < 0 ? 'text-warning'
+                : 'text-text-secondary dark:text-text-secondary'
+            }`}>
+              <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${
+                windowScore > 0 ? 'bg-success' : windowScore < 0 ? 'bg-warning' : 'bg-text-tertiary'
+              }`} />
+              {windowNote}
+            </p>
+            {playoffPct != null && (
+              <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-relaxed mt-1.5">
+                Playoff odds: <span className="font-mono font-semibold tabular-nums text-text-primary dark:text-text-primary">{Math.round(playoffPct * 100)}%</span>
+                {' · '}
+                <span className={`font-semibold ${ODDS_TONE_TEXT[oddsTone] ?? 'text-text-secondary'}`}>{oddsStance}</span>
+                {oddsNote ? ` — ${oddsNote}` : ''}
+              </p>
+            )}
+            {myTrajectoryNote && (
+              <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-relaxed mt-1.5 flex items-start gap-1.5">
+                <LineChart size={12} strokeWidth={2} className={`shrink-0 mt-0.5 ${ODDS_TONE_TEXT[myTrajectoryTone] ?? 'text-text-tertiary'}`} />
+                <span>{myTrajectoryNote}</span>
+              </p>
+            )}
+            {draftNote && (
+              <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-relaxed mt-1.5 flex items-start gap-1.5">
+                <Target size={12} strokeWidth={2} className={`shrink-0 mt-0.5 ${ODDS_TONE_TEXT[draftTone] ?? 'text-text-tertiary'}`} />
+                <span>{draftNote}</span>
+              </p>
+            )}
+          </div>
         </Card>
+      </div>
+
+      {/* ─────────────── ACT 2 — THEIR SIDE ─────────────── */}
+      {giveCount > 0 && partnerFit && (
+        <div id="act-theirs" className="scroll-mt-28">
+          <SectionHeader label="Their side" />
+          <Card padding="none" className="mb-4">
+            <TheirSideBlock partnerFit={partnerFit} partnerName={partnerName} />
+            <RosterSpaceBlock space={theirRosterSpace} who={partnerName ?? 'They'} />
+            <PartnerActivityBlock activity={partnerFit.activity} />
+            {/* Their multi-year direction belongs with the rest of the read on
+                them, not buried under MY win window where it used to sit. */}
+            {(partnerTrajectoryNote || weeklyImpact) && (
+              <div className="px-4 py-3">
+                {weeklyImpact && (
+                  <>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <CalendarClock size={11} strokeWidth={2} className="text-text-tertiary shrink-0" />
+                      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-text-tertiary dark:text-text-tertiary">
+                        Week {weeklyImpact.week} lineup
+                      </p>
+                    </div>
+                    <WeeklyImpactRow side={weeklyImpact.theirs} label="Their projected starters" />
+                  </>
+                )}
+                {partnerTrajectoryNote && (
+                  <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-relaxed mt-1.5 flex items-start gap-1.5">
+                    <LineChart size={12} strokeWidth={2} className={`shrink-0 mt-0.5 ${ODDS_TONE_TEXT[partnerTrajectoryTone] ?? 'text-text-tertiary'}`} />
+                    <span>{partnerTrajectoryNote}</span>
+                  </p>
+                )}
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* ─────────────── ACT 3 — CLOSING IT ─────────────── */}
+      {(bothSides || (liveIntelligence?.length ?? 0) > 0 || intelligenceLoading) && (
+        <div id="act-closing" className="scroll-mt-28">
+          <SectionHeader label="Closing it" />
+
+          {bothSides && <PitchCard pitch={pitch} />}
+
+          {intelligenceLoading && (
+            <Card padding="none" className="flex items-center justify-center gap-2 py-3 mb-4">
+              <div className="h-3.5 w-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+              <span className="font-body text-xs text-text-secondary dark:text-text-secondary">
+                Loading player news…
+              </span>
+            </Card>
+          )}
+
+          {liveIntelligence && liveIntelligence.length > 0 && (
+            <Card padding="none" className="mb-4">
+              <div className="px-4 py-2.5 border-b border-border-default dark:border-border-default flex items-center gap-2">
+                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary">
+                  Live Intelligence
+                </p>
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+              </div>
+              {liveIntelligence.map(intel => (
+                <PlayerNewsCard
+                  key={intel.playerName}
+                  intel={intel}
+                  onTap={intel.player?.sleeperId ? () => setSelectedPlayer(intel.player) : undefined}
+                />
+              ))}
+            </Card>
+          )}
+        </div>
       )}
 
       {selectedPlayer && (
