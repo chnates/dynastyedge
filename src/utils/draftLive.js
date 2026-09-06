@@ -9,6 +9,8 @@
 //
 // Everything below is a pure function of already-fetched data. Nothing fetches.
 
+import { DRAFT_HIT_VALUE } from './managerAnalysis'
+
 // Where the draft stands right now, given the resolved order and the picks
 // made so far. `order` comes from buildDraftOrder (useSleeperDraft) and is
 // null when Sleeper knows no slot assignment yet.
@@ -89,9 +91,39 @@ export function buildMyCapital({ order, orderKnown, leaguePicks = [], picksMade 
   }))
 }
 
-// Post-draft recap: per-team value drafted, plus the biggest steals and
+// A team's value-over-expected inside this band is noise rather than a grade:
+// on the 0-10000 dynasty scale a hundred points is smaller than a single
+// FantasyCalc tick on one mid-round rookie.
+export const VOE_NEUTRAL = 100
+
+// Post-draft recap: per-team draft grades, plus the biggest steals and
 // reaches measured as pick slot vs the player's derived rookie ADP.
 // delta > 0 = fell past his ADP (a steal); delta < 0 = taken early (a reach).
+//
+// RAW VALUE DRAFTED IS NOT A STANDING. A team holding 8 picks out-drafts a
+// team holding 3 by picking more often, so the old total ranked volume and
+// called it skill. The grade is VALUE OVER EXPECTED: value drafted minus what
+// that team's pick SLOTS were owed.
+//
+// The expected curve comes from the class itself — sort every drafted player
+// by value descending, and the k-th best value becomes the expected return of
+// the k-th pick of the board. Three properties nothing external has:
+//
+//   1. Sum(expected) == Sum(actual) by construction, so VOE sums to EXACTLY
+//      zero league-wide. It is purely "who beat the field with the slots they
+//      held", and pick count cancels out.
+//   2. It needs no FantasyCalc pick entries, which do not survive the draft.
+//      Verified against the live feed 2026-09-06: all 24 pick entries on the
+//      board covered 2027-2029 — a season's picks are retired the moment its
+//      draft completes, so a recap opened the day after would have had nothing
+//      to price slots against.
+//   3. No level bias. Pricing slots off a LATER season's picks (the only ones
+//      that exist post-draft) prices them a year further out, i.e. cheap, which
+//      re-introduces the exact "more picks = better draft" artifact this fixes.
+//
+// Secondary columns are deliberately weaker measures kept alongside, not
+// instead of, the grade: value per pick (biased toward whoever picked least)
+// and hit count (immune to one stud inflating a total).
 export function buildRecap({ isComplete, sortedPicks = [], resolvePick, adpById = {} }) {
   if (!isComplete) return null
   const totals = {}
@@ -99,15 +131,44 @@ export function buildRecap({ isComplete, sortedPicks = [], resolvePick, adpById 
     const player = resolvePick(pick)
     const adp = adpById[String(pick.player_id)] ?? null
     const delta = adp != null ? pick.pick_no - adp : null
-    if (!totals[pick.roster_id]) totals[pick.roster_id] = { rosterId: pick.roster_id, total: 0, count: 0 }
-    totals[pick.roster_id].total += player.value ?? 0
-    totals[pick.roster_id].count += 1
+    const value = player.value ?? 0
+    if (!totals[pick.roster_id]) {
+      totals[pick.roster_id] = { rosterId: pick.roster_id, total: 0, count: 0, hits: 0, expected: 0 }
+    }
+    const team = totals[pick.roster_id]
+    team.total += value
+    team.count += 1
+    if (value >= DRAFT_HIT_VALUE) team.hits += 1
     return { pick, player, delta }
   })
+
+  // Pair the i-th pick of the BOARD with the i-th best value in the class.
+  // Indexed through pick_no rather than array position so the pairing holds
+  // even if a caller hands us picks out of order.
+  const curve = entries.map(e => e.player.value ?? 0).sort((a, b) => b - a)
+  entries
+    .map((e, i) => i)
+    .sort((a, b) => entries[a].pick.pick_no - entries[b].pick.pick_no)
+    .forEach((entryIdx, boardIdx) => {
+      totals[entries[entryIdx].pick.roster_id].expected += curve[boardIdx]
+    })
+
+  // With no priced player anywhere, every expectation is 0 and a "+0" grade
+  // would be fabricated confidence. Report no grade instead (rule 7).
+  const graded = curve.some(v => v > 0)
+  const teamTotals = Object.values(totals).map(t => ({
+    ...t,
+    expected: graded ? t.expected : null,
+    voe: graded ? t.total - t.expected : null,
+    perPick: t.count > 0 ? t.total / t.count : 0,
+  }))
+  teamTotals.sort((a, b) => (graded ? b.voe - a.voe : b.total - a.total))
+
   const withDelta = entries.filter(e => e.delta != null)
   return {
     entries,
-    teamTotals: Object.values(totals).sort((a, b) => b.total - a.total),
+    graded,
+    teamTotals,
     steals: [...withDelta].sort((a, b) => b.delta - a.delta).filter(e => e.delta >= 2).slice(0, 3),
     reaches: [...withDelta].sort((a, b) => a.delta - b.delta).filter(e => e.delta <= -2).slice(0, 3),
   }

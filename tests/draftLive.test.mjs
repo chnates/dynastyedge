@@ -277,20 +277,130 @@ test('capital falls back to round labels when the order is unknown', () => {
 })
 
 // ── Recap ─────────────────────────────────────────────────────────────────
-test('recap: null until complete, then per-team totals ranked high to low', () => {
+test('recap: null until complete, then per-team rows ranked by value over expected', () => {
   const resolvePick = pick => ({ name: `P${pick.player_id}`, value: pick.pick_no <= 10 ? 2000 : 500 })
   assert.equal(buildRecap({ isComplete: false, sortedPicks: REAL_PICKS, resolvePick }), null)
 
   const recap = buildRecap({ isComplete: true, sortedPicks: REAL_PICKS, resolvePick, adpById: {} })
   assert.equal(recap.entries.length, 40)
   assert.equal(recap.teamTotals.length, 10)
+  assert.equal(recap.graded, true)
   for (let i = 1; i < recap.teamTotals.length; i++) {
-    assert.ok(recap.teamTotals[i - 1].total >= recap.teamTotals[i].total, 'sorted descending')
+    assert.ok(recap.teamTotals[i - 1].voe >= recap.teamTotals[i].voe, 'sorted by grade, not volume')
   }
   assert.equal(recap.teamTotals.reduce((s, t) => s + t.count, 0), 40)
   // No ADP anywhere → no steals or reaches, rather than a page of noise.
   assert.deepEqual(recap.steals, [])
   assert.deepEqual(recap.reaches, [])
+})
+
+test('recap: value over expected sums to zero across the league', () => {
+  // THE invariant. Sum(expected) == Sum(actual) by construction, which is what
+  // makes the grade independent of how many picks a team held — the whole
+  // reason raw value drafted was not a standing.
+  const resolvePick = pick => ({ name: `P${pick.player_id}`, value: 4000 - pick.pick_no * 73 })
+  const recap = buildRecap({ isComplete: true, sortedPicks: REAL_PICKS, resolvePick, adpById: {} })
+
+  const sumVoe = recap.teamTotals.reduce((s, t) => s + t.voe, 0)
+  assert.ok(Math.abs(sumVoe) < 1e-9, `VOE must sum to zero, got ${sumVoe}`)
+
+  const sumActual = recap.teamTotals.reduce((s, t) => s + t.total, 0)
+  const sumExpected = recap.teamTotals.reduce((s, t) => s + t.expected, 0)
+  assert.ok(Math.abs(sumActual - sumExpected) < 1e-9)
+})
+
+test('recap: picking more often does not earn a better grade', () => {
+  // The bug this replaced: a team with more picks always topped the table.
+  // Here roster 2 takes four picks off the bottom of the board and roster 1
+  // takes one off the top — the volume team must NOT win.
+  const values = { a: 3000, b: 2900, c: 2800, d: 2700, e: 2600 }
+  const picks = [
+    { pick_no: 1, roster_id: 1, player_id: 'a' },
+    { pick_no: 2, roster_id: 2, player_id: 'b' },
+    { pick_no: 3, roster_id: 2, player_id: 'c' },
+    { pick_no: 4, roster_id: 2, player_id: 'd' },
+    { pick_no: 5, roster_id: 2, player_id: 'e' },
+  ]
+  const recap = buildRecap({
+    isComplete: true, sortedPicks: picks, adpById: {},
+    resolvePick: p => ({ name: p.player_id, value: values[p.player_id] }),
+  })
+  const one = recap.teamTotals.find(t => t.rosterId === 1)
+  const two = recap.teamTotals.find(t => t.rosterId === 2)
+
+  assert.ok(two.total > one.total, 'four picks still out-total one pick')
+  assert.equal(one.voe, 0, 'took the best player with the best slot: exactly par')
+  assert.equal(two.voe, 0, 'took picks 2-5 and got values 2-5: also exactly par')
+  // Both drafted precisely to slot, so neither outranks the other on volume.
+  assert.equal(recap.teamTotals[0].voe, recap.teamTotals[1].voe)
+})
+
+test('recap: VOE rewards beating your slots and punishes missing them', () => {
+  const values = { steal: 3000, bust: 100 }
+  const picks = [
+    { pick_no: 1, roster_id: 1, player_id: 'bust' },   // best slot, worst player
+    { pick_no: 2, roster_id: 2, player_id: 'steal' },  // worse slot, best player
+  ]
+  const recap = buildRecap({
+    isComplete: true, sortedPicks: picks, adpById: {},
+    resolvePick: p => ({ name: p.player_id, value: values[p.player_id] }),
+  })
+  assert.equal(recap.teamTotals[0].rosterId, 2, 'the team that beat its slot leads')
+  assert.equal(recap.teamTotals[0].voe, 2900)
+  assert.equal(recap.teamTotals[1].voe, -2900)
+})
+
+test('recap: per-pick value and hit count, with 1,000 as the starter-caliber bar', () => {
+  const values = { hit: 1000, big: 4000, miss: 999 }
+  const picks = [
+    { pick_no: 1, roster_id: 1, player_id: 'big' },
+    { pick_no: 2, roster_id: 1, player_id: 'hit' },
+    { pick_no: 3, roster_id: 1, player_id: 'miss' },
+    { pick_no: 4, roster_id: 2, player_id: 'miss' },
+  ]
+  const recap = buildRecap({
+    isComplete: true, sortedPicks: picks, adpById: {},
+    resolvePick: p => ({ name: p.player_id, value: values[p.player_id] }),
+  })
+  const one = recap.teamTotals.find(t => t.rosterId === 1)
+  assert.equal(one.hits, 2, '1,000 exactly is a hit; 999 is not')
+  assert.equal(one.total, 5999)
+  assert.equal(Math.round(one.perPick), 2000)
+  assert.equal(recap.teamTotals.find(t => t.rosterId === 2).hits, 0)
+})
+
+test('recap: an unpriced class reports no grade rather than a fabricated +0', () => {
+  // Rule 7 — an unranked player contributes 0, so with NOTHING priced every
+  // expectation is 0 and "+0" would read as a real result. Report null.
+  const picks = [
+    { pick_no: 1, roster_id: 1, player_id: 'x' },
+    { pick_no: 2, roster_id: 2, player_id: 'y' },
+  ]
+  const recap = buildRecap({
+    isComplete: true, sortedPicks: picks, adpById: {},
+    resolvePick: () => ({ name: 'unranked', value: null }),
+  })
+  assert.equal(recap.graded, false)
+  assert.deepEqual(recap.teamTotals.map(t => t.voe), [null, null])
+  assert.deepEqual(recap.teamTotals.map(t => t.expected), [null, null])
+  assert.deepEqual(recap.teamTotals.map(t => t.total), [0, 0])
+})
+
+test('recap: the expected curve follows board order, not argument order', () => {
+  // buildRecap is handed sortedPicks, but the pairing of "i-th pick of the
+  // board" to "i-th best value" must come from pick_no, not array position.
+  const values = { a: 3000, b: 100 }
+  const inOrder = [
+    { pick_no: 1, roster_id: 1, player_id: 'a' },
+    { pick_no: 2, roster_id: 2, player_id: 'b' },
+  ]
+  const resolvePick = p => ({ name: p.player_id, value: values[p.player_id] })
+  const forward = buildRecap({ isComplete: true, sortedPicks: inOrder, resolvePick, adpById: {} })
+  const shuffled = buildRecap({ isComplete: true, sortedPicks: [...inOrder].reverse(), resolvePick, adpById: {} })
+  assert.deepEqual(
+    forward.teamTotals.map(t => [t.rosterId, t.voe]),
+    shuffled.teamTotals.map(t => [t.rosterId, t.voe]),
+  )
 })
 
 test('recap: steals fell past their ADP, reaches went early, ±2 threshold, top 3 each', () => {
