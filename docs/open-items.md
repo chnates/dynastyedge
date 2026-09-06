@@ -464,6 +464,43 @@ findings wastes a session. Full detail in `docs/repo-review-2026-07.md`.
   so date-less trade pairs miss it (the net-value wash is arithmetic-invariant
   and unaffected).
 
+### OPEN-6 — Push Layer 4 into Trade › Targets and the fair-package builder
+
+**Opened 2026-09-06** by the two-sided Analyzer work (Feature 3 Layer 4 + the
+five negotiating signals).
+
+The Analyzer is now two-sided; **Targets and `suggestFairPackage` are not.**
+
+- `getTopTradeTargets` (`utils/rosterAnalysis.js`) still ranks purely by
+  `need × value` off MY positional deltas. It never asks whether the team
+  holding that player would move him, or whether anything I could send back
+  interests them.
+- `suggestFairPackage` (`utils/tradeAnalysis.js`) still reaches for the partner
+  only through one −0.08 pain nudge on their deficit positions. It has no
+  access to `partnerFit`, roster space, or scarcity.
+
+**The bad loop this creates:** tap a target → the app pre-fills a package →
+the Analyzer immediately grades that package `Weak appeal` and downgrades its
+own suggestion to Counter. The app proposes and then argues with itself. Not
+wrong (the Analyzer is right to catch it) but a poor experience, and the
+suggestion is doing less work than it could.
+
+**Why it wasn't done in the same pass:** scope. The two-sided engine and the
+panel restructure were the owner's ask; re-ranking Targets changes what the
+board *recommends*, which is a product decision of its own and deserves its own
+look — not a silent side effect of a layout PR.
+
+**Trigger:** owner asks for it, OR the loop above is observed to be annoying in
+real use. The pieces are all in place and pure — `buildLandingSpots`,
+`buildDepthContext`, the partner-fit block, `buildReplacementLevels`,
+`buildRosterSpace` are exported and tested, so this is composition, not new
+modelling.
+
+**Watch out for:** whatever it does, it must not turn Targets into a list that
+silently hides players. The team-scoped mode's existing contract — an
+explicitly chosen team never renders empty, and the split is stated honestly in
+a line above the list — has to survive.
+
 ### OPEN-5 — Model calibration (open research)
 
 **Status:** open. **Trigger:** live regular-season data — Week 1 starts the
