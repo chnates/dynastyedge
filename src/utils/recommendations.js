@@ -9,8 +9,10 @@
 // Zero new data sources: everything composes caches LeagueContext already holds.
 
 import { POSITIONS } from '../constants'
-import { computeLeagueAverages, getPositionalDeltas, assignWinWindowTiers } from './rosterAnalysis'
+import { computeLeagueAverages, getPositionalDeltas, assignWinWindowTiers, buildMovabilityIndex } from './rosterAnalysis'
 import { buildValueLineup } from './lineupBuild'
+import { PEAK_WINDOWS } from './peakWindows'
+import { buildFairBand, FAIR_BAND_PCT } from './fairBand'
 import { getTeamName } from '../hooks/useLeague'
 
 // The starters we protect hardest at each position in this 10-team Superflex
@@ -18,6 +20,72 @@ import { getTeamName } from '../hooks/useLeague'
 // depth matter). Players ranked beyond this within their position are treated as
 // tradeable depth.
 export const CORE_DEPTH = { QB: 2, RB: 3, WR: 3, TE: 1 }
+
+// How much we want to KEEP a pick, by round — replacing a flat 0.5 that made a
+// 2027 1st and a 2029 4th equally spendable. Measured over all 120 rookie picks
+// this league has ever made, valued at today's prices: a class's round-1 median
+// beat the DEAREST future 1st on the board in 3 of 3 classes (30/30 became
+// starter-caliber), while no class's round-4 median reached the CHEAPEST future
+// 4th (8/30). Hype flattens the pick curve and resolution steepens it — the
+// market prices a 1st at 3.5x a 4th; the most-resolved class delivered 8.0x.
+// Re-derive with scripts/dev/asset-aging-backtest.mjs rather than nudging
+// by feel; revisit once the 2027 class resolves.
+// See docs/analysis/asset-aging-and-pick-value-2026-09.md §3.
+export const PICK_ROUND_KEEP = { 1: 0.65, 2: 0.5, 3: 0.4, 4: 0.3 }
+// An unknown round keeps the old flat rate. Absence of a round is not evidence
+// that a pick is cheap — same contract as an unranked player, who is shown and
+// counted rather than priced at 0.
+export const PICK_KEEP_DEFAULT = 0.5
+// No pick has ever been auto-excluded from a package, and this does not start.
+// PROTECT_THRESHOLD exists for irreplaceable PLAYERS (the backup-less elite
+// starter of ff116ba); picks are the currency a package is built from, and a
+// rebuilder's +0.3 on a first would otherwise cross the line and strip the
+// builder of its main way to reach fair value. The cap preserves the round
+// ordering at every tier.
+export const PICK_KEEP_CAP = 0.85
+
+// How willing we are to move an asset PAST its position's peak window. Three
+// facts, all measured in docs/analysis/asset-aging-and-pick-value-2026-09.md §2
+// over n=762 player-seasons (2020-2025), following the SAME player year over
+// year with a departed player counted as 0 rather than dropped:
+//
+//   1. It is DECLINE-ONLY. Protecting players younger than their window was
+//      proposed and disconfirmed — absent at RB (-0.02, p=0.853), the position
+//      the tilt exists for, with one near-hit in four tests elsewhere. A player
+//      inside or below his window is untouched.
+//   2. The weight is PER POSITION, because the penalty is. Past-peak retention
+//      falls 0.94 -> 0.66 for RB (p=0.0001) and 0.84 -> 0.67 for WR (p=0.0016);
+//      QB and TE are not distinguishable from zero, so each takes its measured
+//      relative effect HALVED — unproven is not the same as known-small.
+//   3. It saturates over AGE_TILT_SPAN years, matching the RB shape (0.79 ->
+//      0.74 -> 0.40 -> 0.25 across the three years past 26).
+//
+// The peak windows themselves are NOT re-tuned here: RB ending at 26 and WR at
+// 28 both test significant at the boundary peakWindows.js already ships.
+export const AGE_TILT_BY_POSITION = { RB: 1, WR: 0.65, QB: 0.4, TE: 0.15 }
+// Base magnitude by win window. This is the ONE knob no measurement sets — it
+// is a preference weight (given two assets the market prices identically, which
+// do I want in three years), not an estimate, and it is deliberately small:
+// dynasty value already prices age, so the tilt exists to break near-ties, not
+// to argue with the market. Being decline-only, it can only ever make an asset
+// MORE available — it can never protect one, so it cannot reach past
+// PROTECT_THRESHOLD or undo the cliff protection below.
+export const AGE_TILT_BY_TIER = { Contending: 0.04, Middle: 0.1, Rebuilding: 0.16 }
+export const AGE_TILT_SPAN = 3
+
+// Negative (more expendable) once past the window, 0 otherwise. An unknown age
+// or position is a no-op, never an imputed average — the same contract the
+// rookie board's age tilt keeps for the rookies whose age the feed lacks.
+export function pastPeakTilt(asset, myTier) {
+  const window = PEAK_WINDOWS[asset?.position]
+  const age = asset?.age
+  if (!window || age == null || age <= 0) return 0
+  const past = age - window[1]
+  if (past <= 0) return 0
+  const magnitude = (AGE_TILT_BY_TIER[myTier] ?? AGE_TILT_BY_TIER.Middle)
+    * (AGE_TILT_BY_POSITION[asset.position] ?? 0)
+  return -Math.min(1, past / AGE_TILT_SPAN) * magnitude
+}
 
 const clamp = (v, lo = 0.05, hi = 1) => Math.max(lo, Math.min(hi, v))
 
@@ -60,10 +128,10 @@ export function assetKeepScore(asset, ctx) {
   const { myDeltas, myTier, posRank, posValues } = ctx
 
   if (asset.type === 'pick') {
-    let keep = 0.5
+    let keep = PICK_ROUND_KEEP[asset.round] ?? PICK_KEEP_DEFAULT
     if (myTier === 'Rebuilding') keep += 0.3       // hoard picks while building
     else if (myTier === 'Contending') keep -= 0.3  // cash picks for win-now
-    return clamp(keep)
+    return clamp(keep, 0.05, PICK_KEEP_CAP)
   }
 
   const pos = asset.position
@@ -96,15 +164,23 @@ export function assetKeepScore(asset, ctx) {
     if (top > 0 && next / top < 0.5) keep = Math.max(keep, 0.95)
   }
 
-  // Win-window lean on age.
+  // Win-window lean on age. Both surviving rules are WINDOW preferences (what
+  // do I want when my window opens), which is a different question from the
+  // aging tilt below (what will still be useful in three years) — a rebuilder's
+  // pull toward youth is not the disconfirmed pre-peak retention claim.
   const age = asset.age ?? null
   if (myTier === 'Contending') {
     // Win-now: young low-value fliers are spare currency, not core.
     if (age != null && age <= 24 && (asset.value || 0) < 1500) keep -= 0.15
   } else if (myTier === 'Rebuilding') {
     if (age != null && age <= 24) keep += 0.2  // build around youth
-    if (age != null && age >= 28) keep -= 0.2  // sell aging vets
   }
+
+  // Past-peak decline. This REPLACES a flat `age >= 28 => -0.2` that only fired
+  // for a rebuilder: 28 is two years past an RB's peak and mid-window for a QB,
+  // so one age cut-off could not be right for both, and a Middle team — which
+  // this league's owner has been all season — got no age opinion at all.
+  keep += pastPeakTilt(asset, myTier)
 
   return clamp(keep)
 }
@@ -299,4 +375,132 @@ export function suggestSellMove(player, myRoster, allRosters) {
       ? `Shop ${player.name} to ${partnerName} — he'd start for them.`
       : `Shop ${player.name} to ${partnerName} — they're thin at ${pos}.`,
   }
+}
+
+// ── The cash-out board ──────────────────────────────────────────────────────
+// Answers the question the Targets board structurally cannot: "which of MY
+// assets is aging out, and who could I turn him into?"
+//
+// The Targets board ranks opponents' players by MY positional deficits, so on a
+// roster whose deficit is WR it surfaces WRs priced 3,300-4,500 and never a
+// 5,705 running back's worth of anything. That is correct for "who do I ask
+// about" and useless for "who do I cash out" — and the package builder cannot
+// close the gap either, because it will not propose an asset worth 39% more
+// than its target. The trade the owner wanted (an aging RB1 for a 23-year-old
+// WR1) was invisible from every surface in the app.
+//
+// This is DESCRIPTIVE ranking over roster facts, not a verdict: it names an
+// asset and lists who is in his price band. The Analyzer still grades whatever
+// you build from it.
+
+// A "significant" asset — below this, cashing out is roster churn, not a plan.
+export const CASH_OUT_MIN_VALUE = 2000
+// A target must be meaningfully younger or the trade has no point.
+export const CASH_OUT_MIN_YEARS_YOUNGER = 2
+// Targets worth less than this are not a return for a starter.
+export const CASH_OUT_MIN_TARGET_VALUE = 1000
+// The band a straight swap lands FAIR in, inverted from the Analyzer's own
+// definition: a give of V is fair against a target T when V is within
+// FAIR_BAND_PCT of T, i.e. T is in [V/(1+pct), V/(1-pct)]. This MUST stay
+// derived from fairBand.js — the first cut borrowed suggestFairPackage's
+// package-building window instead, and the card promised "needs ~84 more" on a
+// deal THE CALL then scored 408 light on the very next screen.
+export const CASH_OUT_BAND = [1 / (1 + FAIR_BAND_PCT), 1 / (1 - FAIR_BAND_PCT)]
+// A straight swap is a narrow window, and cutting the list there would hide
+// most of what this board exists to surface — including the deal that prompted
+// it. So the scan is wider and every row is LABELLED with how it misses: above
+// the band the asset alone is short (the Analyzer can bridge it with a bench
+// piece or a late pick), below it you would be paying a premium to convert age
+// into youth, which is a real trade and the owner's call to make.
+export const CASH_OUT_SCAN = [0.85, 1.25]
+
+// Which of my assets is bleeding the most value to age. Not simply "my oldest"
+// (a 38-year-old QB4 is worth nothing to cash) and not "my most valuable"
+// (that is just my best player) — the product of the two, which is the value
+// actually at risk. Protected assets are excluded on the same contract the
+// package builder uses: the cliff-protected starter is not a sell candidate.
+export function pickCashOutAsset(myRoster, ctx) {
+  const candidates = (myRoster?.players ?? [])
+    .filter(p => !p.isIR && !p.isTaxi && (p.value ?? 0) >= CASH_OUT_MIN_VALUE)
+    .map(p => {
+      const asset = {
+        type: 'player', sleeperId: p.sleeperId, name: p.name,
+        position: p.position, value: p.value, age: p.age,
+      }
+      const window = PEAK_WINDOWS[p.position]
+      const past = window && p.age != null ? p.age - window[1] : 0
+      // Reuse the shipped tilt's saturation so "how far past" means the same
+      // thing here as it does in the keep-score.
+      const exposure = past > 0 ? Math.min(1, past / AGE_TILT_SPAN) : 0
+      return { ...asset, keep: assetKeepScore(asset, ctx), yearsPastPeak: past, valueAtRisk: p.value * exposure }
+    })
+    .filter(c => c.valueAtRisk > 0 && c.keep < PROTECT_THRESHOLD)
+    .sort((a, b) => b.valueAtRisk - a.valueAtRisk)
+  return candidates[0] ?? null
+}
+
+export function buildCashOutBoard(myRoster, allRosters, { limit = 4 } = {}) {
+  if (!myRoster || !allRosters?.length) return null
+  const ctx = buildGivabilityContext(myRoster, allRosters)
+  const asset = pickCashOutAsset(myRoster, ctx)
+  if (!asset) return null
+
+  const leagueAverages = computeLeagueAverages(allRosters)
+  const myDeficits = new Set(POSITIONS.filter(pos => (ctx.myDeltas[pos] ?? 0) < 0))
+  const [lo, hi] = CASH_OUT_BAND
+  const floor = asset.value * lo, ceil = asset.value * hi
+  const [scanLo, scanHi] = CASH_OUT_SCAN
+
+  const targets = []
+  allRosters
+    .filter(r => r.rosterId !== myRoster.rosterId)
+    .forEach(r => {
+      const movabilityFor = buildMovabilityIndex(r, leagueAverages)
+      r.players.forEach(p => {
+        const value = p.value ?? 0
+        if (p.isIR || value < CASH_OUT_MIN_TARGET_VALUE) return
+        if (value < asset.value * scanLo || value > asset.value * scanHi) return
+        if (p.age == null || asset.age == null) return
+        const yearsYounger = asset.age - p.age
+        if (yearsYounger < CASH_OUT_MIN_YEARS_YOUNGER) return
+
+        const { movability, starts } = movabilityFor(p)
+        const fillsNeed = myDeficits.has(p.position)
+        // Computed by the Analyzer's OWN function, so the number this card
+        // shows is the number THE CALL shows on the next screen.
+        const band = buildFairBand(asset.value, value)
+        const needsSweetener = !band.inside && asset.value < band.low
+        const isPremium = !band.inside && asset.value > band.high
+        const gap = band.gapToBand
+        const reasons = [`${yearsYounger.toFixed(1)} years younger`]
+        if (fillsNeed) reasons.push(`fills your ${p.position} need`)
+        if (needsSweetener) reasons.push(`add ~${gap.toLocaleString()} to reach fair`)
+        else if (isPremium) reasons.push(`you'd pay a ~${gap.toLocaleString()} premium`)
+        else if (!starts) reasons.push("doesn't crack their lineup")
+
+        targets.push({
+          ...p,
+          ownerRosterId: r.rosterId,
+          owner: r.owner,
+          yearsYounger,
+          fillsNeed,
+          movability,
+          needsSweetener,
+          isPremium,
+          gapToBand: gap,
+          reasons,
+          // Same shape as the Targets board: movability TILTS, it never gates.
+          // A player his team would hate to lose stays on the list, below the
+          // ones they can spare.
+          // A straight swap outranks one that still needs closing, either way.
+          score: (yearsYounger + (fillsNeed ? 3 : 0) + value / 2000)
+            * movability * (band.inside ? 1 : 0.85),
+        })
+      })
+    })
+
+  targets.sort((a, b) => b.score - a.score || (b.value ?? 0) - (a.value ?? 0))
+  // No target in band means the honest answer is "nobody" — the surface says so
+  // rather than widening the band until something appears.
+  return { asset, band: [Math.round(floor), Math.round(ceil)], targets: targets.slice(0, limit) }
 }

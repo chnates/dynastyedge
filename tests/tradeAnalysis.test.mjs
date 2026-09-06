@@ -655,3 +655,60 @@ test('without a partner roster the builder degrades to phase 1 and reports no ap
   assert.equal(pkg.appeal, null, 'no partner to read, so no read is invented')
   assert.equal(pkg.partnerSummary, null)
 })
+
+// ── The cheaper alternative package ─────────────────────────────────────────
+// Pins CLAUDE.md Feature 3: appeal stays lexicographically first (owner call —
+// knowing whether they would accept is the information the search exists to
+// produce), so this NEVER reorders. It only names what the winner cost and what
+// giving less would cost in their eyes.
+
+// A roster with two very different ways to pay: a QB the partner has no use
+// for (cheap for me, weak for them) and an RB who would start for them.
+function altScenario() {
+  const P = (id, name, pos, value, age = 26) =>
+    ({ sleeperId: id, name, position: pos, value, age, isIR: false, isTaxi: false })
+  const mk = (rosterId, players) => ({
+    rosterId, owner: { user_id: `u${rosterId}`, display_name: `T${rosterId}` },
+    players, picks: [],
+    totalValue: players.reduce((s, p) => s + p.value, 0),
+    pickCapitalScore: 0, avgStarterAge: 26,
+  })
+  const me = mk(1, [
+    P('a1', 'Spare QB', 'QB', 4000), P('a2', 'My QB1', 'QB', 6000), P('a3', 'My QB2', 'QB', 5500),
+    P('a4', 'My RB1', 'RB', 4300), P('a5', 'My RB2', 'RB', 4200), P('a6', 'My RB3', 'RB', 4100),
+    P('a7', 'My RB4', 'RB', 4000), P('a8', 'My WR1', 'WR', 3000), P('a9', 'My TE1', 'TE', 3000),
+  ])
+  // They are stacked at QB and thin at RB, so a QB reads weak and an RB strong.
+  const opp = mk(2, [
+    P('b1', 'Their QB1', 'QB', 7000), P('b2', 'Their QB2', 'QB', 6500),
+    P('b3', 'Their WR1', 'WR', 4200), P('b4', 'Their RB1', 'RB', 900),
+  ])
+  const others = [3, 4].map(i => mk(i, [
+    P(`${i}1`, `QB ${i}`, 'QB', 3000), P(`${i}2`, `RB ${i}`, 'RB', 3000),
+    P(`${i}3`, `WR ${i}`, 'WR', 3000), P(`${i}4`, `TE ${i}`, 'TE', 3000),
+  ]))
+  const all = [me, opp, ...others]
+  return { me, all, opp, target: { ...opp.players[2], type: 'player' } }
+}
+
+test('the alternative is cheaper AND reads worse to them, or it is not shown', () => {
+  const { me, all, opp, target } = altScenario()
+  const pkg = suggestFairPackage(target, me, all, opp)
+  assert.ok(pkg, 'a package is suggested')
+  if (!pkg.alternative) return  // no meaningful saving exists — a valid outcome
+  const rank = { Weak: 0, Fair: 1, Strong: 2 }
+  assert.ok(rank[pkg.alternative.appeal] < rank[pkg.appeal],
+    'an alternative at the same or better appeal would just be the winner')
+  assert.ok(pkg.alternative.totalValue !== pkg.totalValue,
+    'a package identical to the winner is not an alternative')
+})
+
+test('the alternative never becomes the suggestion', () => {
+  const { me, all, opp, target } = altScenario()
+  const pkg = suggestFairPackage(target, me, all, opp)
+  const rank = { Weak: 0, Fair: 1, Strong: 2 }
+  // Whatever the alternative reads, the chosen package must still be the best
+  // appeal the search found — the ranking is untouched by this feature.
+  if (pkg.alternative)
+    assert.ok(rank[pkg.appeal] >= rank[pkg.alternative.appeal])
+})

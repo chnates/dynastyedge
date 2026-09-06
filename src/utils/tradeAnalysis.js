@@ -4,7 +4,10 @@ import { buildValueLineup, selectOptimalStarters } from './lineupBuild'
 import { buildRosterSpace } from './rosterSpace'
 import { sideVorp } from './positionalValue'
 import { projectPlayerSeries, seriesDirection } from './dynastyTrajectory'
+import { buildFairBand } from './fairBand'
 import { buildGivabilityContext, assetKeepScore, getDeficitPositions, joinAnd, PROTECT_THRESHOLD } from './recommendations'
+// Re-exported so existing importers of the Analyzer's fair band keep working.
+export { buildFairBand, FAIR_BAND_PCT } from './fairBand'
 
 // A scarcity read needs a side worth reading — two below-replacement sides
 // carry no signal. And the flag only speaks on a real disagreement: 10 points
@@ -88,25 +91,6 @@ export function buildLandingSpots(arrivals, afterPlayers, afterLineup) {
         slot: starter?.slot ?? null,
       }
     })
-}
-
-// The band of "you give" totals that lands the trade inside the ±5% fair window
-// for what you're getting. A point estimate ("you're 12% light") tells you the
-// offer is wrong; a band tells you how much room you have to haggle, which is
-// the thing you actually need at the table.
-export function buildFairBand(giveTotal, getTotal) {
-  if (!getTotal && !giveTotal) return null
-  const low  = Math.round(getTotal * 0.95)
-  const high = Math.round(getTotal * 1.05)
-  return {
-    low, high, target: getTotal, current: giveTotal,
-    inside: giveTotal >= low && giveTotal <= high,
-    // Signed distance to the near edge — what closing it actually costs.
-    gapToBand: giveTotal < low ? low - giveTotal : giveTotal > high ? giveTotal - high : 0,
-    // Rendering bounds, padded so the band never sits flush against an end.
-    axisLow:  Math.round(Math.min(low, giveTotal) * 0.9),
-    axisHigh: Math.round(Math.max(high, giveTotal) * 1.1),
-  }
 }
 
 // A roster's best lineup measured in THIS WEEK's projected points rather than
@@ -910,10 +894,33 @@ function packageRationale(assets, ctx) {
     : 'Protects your core starters.'
 }
 
-// How many of the cheapest-for-me packages get scored on the partner's side.
-// The shortlist exists purely to bound cost; measured on the live 20-target
-// board, widening it past ~40 changed no suggestion.
-const PACKAGE_SHORTLIST = 40
+// Phase 2 scores EVERY candidate in the fair band on the partner's side — the
+// list is deliberately not truncated. It used to take the cheapest 40, which
+// was a cost guard with a real correctness price: phase 1 orders by what a
+// package costs ME and knows nothing about them, so cutting its output can hide
+// the package they would actually want. Measured on the live 20-target board:
+//
+//     40  -> 102ms, Strong 5 · Fair 13 · Weak 2
+//     150 -> 211ms, Strong 6 · Fair 13 · Weak 1
+//     all -> 731ms, Strong 7 · Fair 13 · Weak 0   <- shipped
+//
+// Scoring everything is the only setting that leaves NO target where the best
+// offer the app can find is one the other manager has no reason to accept.
+// The cost is affordable because WhatsFair no longer computes this during
+// render: it walks the targets one per tick off the render path, so the worst
+// single target (109ms here) is the longest the main thread is ever held, and
+// rows fill in progressively behind a "working on it" line.
+//
+// The search cannot run away: candidates are 1-3 assets, drawn only from assets
+// under PROTECT_THRESHOLD, and must land inside the fair band. If a much deeper
+// roster ever makes this bite, chunk WITHIN a target rather than truncating —
+// truncation is what this replaced.
+
+// How much keep-pain a cheaper alternative must actually save before it is
+// worth showing beside the suggestion. Below this the two packages cost about
+// the same and the only difference is that one reads worse to the partner,
+// which is not an option — it is just a worse offer.
+const ALTERNATIVE_MIN_SAVING = 0.25
 
 // Suggest a fair package from MY roster to acquire targetPlayer.
 //
@@ -958,7 +965,10 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
         sleeperId: p.sleeperId, position: p.position, age: p.age,
       })),
     ...myRoster.picks
-      .map(p => ({ type: 'pick', name: pickLabel(p), value: p.value ?? 0 })),
+      // `round` is load-bearing: assetKeepScore prices a pick's keep-score by
+      // round (PICK_ROUND_KEEP), and without it every pick falls back to the
+      // flat default this replaced.
+      .map(p => ({ type: 'pick', name: pickLabel(p), value: p.value ?? 0, round: p.round })),
   ].filter(a => a.value > 0)
 
   const available = allAssets
@@ -1019,6 +1029,7 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
   // negotiating signals (scarcity, roster space, weekly points, their recent
   // moves) stay out of it, exactly as they stay out of the verdict.
   let best = null
+  let alternative = null
   if (candidates.length) {
     candidates.sort((a, b) => a.pain - b.pain)
 
@@ -1027,22 +1038,37 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
       best = candidates[0]
     } else {
       // Computed once and injected — phase 2 runs buildPartnerFit up to
-      // PACKAGE_SHORTLIST times per target, and these are the same for all of them.
+      // once per candidate per target, and these are the same for all of them.
       const leagueAverages = computeLeagueAverages(allRosters)
       const winWindowTiers = assignWinWindowTiers(allRosters)
       const getAssets = [{ ...targetPlayer, type: 'player' }]
 
-      candidates.slice(0, PACKAGE_SHORTLIST).forEach(c => {
+      const scored = []
+      candidates.forEach(c => {
         const assets = c.idxs.map(i => available[i])
         const fit = buildPartnerFit(assets, getAssets, opponentRoster, allRosters, {
           leagueAverages, winWindowTiers,
         })
         if (!fit) return
         const rank = APPEAL_RANK[fit.appeal] ?? 0
+        scored.push({ ...c, appealRank: rank, partnerFit: fit })
         // Best appeal wins; among equals, the package that costs me least. The
         // shortlist is already sorted by pain, so a strict > keeps the first.
         if (!best || rank > best.appealRank) best = { ...c, appealRank: rank, partnerFit: fit }
       })
+      // The cheaper road not taken. Appeal stays lexicographically first — that
+      // was an owner call, because knowing whether they would accept is the
+      // information the search exists to produce, and a package needing a pick
+      // to bridge it is a different trade rather than a cheaper one. So this
+      // does NOT reorder anything; it just names what the winner cost you and
+      // what giving less would cost in their eyes. Only surfaced when the
+      // saving is real (ALTERNATIVE_MIN_SAVING) — a near-identical package at a
+      // worse appeal is noise, not an option.
+      if (best) {
+        alternative = scored
+          .filter(c => c.appealRank < best.appealRank && best.pain - c.pain >= ALTERNATIVE_MIN_SAVING)
+          .sort((a, b) => b.appealRank - a.appealRank || a.pain - b.pain)[0] ?? null
+      }
       // Every scored candidate returned null (no partner roster shape to read) —
       // fall back to the cheapest rather than suggesting nothing.
       if (!best) best = candidates[0]
@@ -1064,6 +1090,15 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
       partnerSummary: fit?.summary ?? null,
       partnerStartersDelta: fit?.startersDelta ?? null,
       partnerConcern: fit?.concerns?.[0] ?? null,
+      // The cheaper option, when giving less would genuinely cost less and the
+      // only price is how it reads to them. Null when no such package exists.
+      alternative: alternative
+        ? {
+          assets: alternative.idxs.map(i => available[i]),
+          totalValue: alternative.total,
+          appeal: alternative.partnerFit?.appeal ?? null,
+        }
+        : null,
     }
   }
 

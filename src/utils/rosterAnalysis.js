@@ -178,6 +178,42 @@ export function assetMovability({ depthRank, starts, weakensThem, theirDelta }) 
   return Math.max(MOVABILITY_RANGE[0], Math.min(MOVABILITY_RANGE[1], m))
 }
 
+// One roster's movability facts, indexed by player. Exported so a second
+// consumer (recommendations.js's cash-out board) reads a player's availability
+// exactly as the Targets board does, instead of re-deriving the same three
+// roster facts and drifting from it.
+export function buildMovabilityIndex(roster, leagueAverages) {
+  const theirDeltas = getPositionalDeltas(roster, leagueAverages)
+  const starterIds = buildValueLineup(roster.players).starterIds
+  // Their positional pecking order, so a player's depth rank is a lookup
+  // rather than a scan per player.
+  const depthRank = new Map()
+  POSITIONS.forEach(pos => {
+    roster.players
+      .filter(p => p.position === pos && !p.isIR)
+      .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
+      .forEach((p, i) => depthRank.set(String(p.sleeperId), i))
+  })
+
+  return player => {
+    const id = String(player.sleeperId)
+    // What losing him would do to THEM — the same below-average test Layer 4
+    // applies, run on their roster without him.
+    const withoutHim = roster.players.filter(x => String(x.sleeperId) !== id)
+    const afterDelta = getPositionalDeltas({ players: withoutHim }, leagueAverages)[player.position] ?? 0
+    const theirDelta = theirDeltas[player.position] ?? 0
+    const starts = starterIds.has(id)
+    const weakensThem = afterDelta < 0 && afterDelta < theirDelta
+    return {
+      theirDelta,
+      starts,
+      weakensThem,
+      depthRank: depthRank.get(id) ?? 0,
+      movability: assetMovability({ depthRank: depthRank.get(id) ?? 0, starts, weakensThem, theirDelta }),
+    }
+  }
+}
+
 export function getTopTradeTargets(myRoster, allRosters, limit = 20, opts = {}) {
   if (!myRoster || !allRosters?.length) return []
 
@@ -197,17 +233,7 @@ export function getTopTradeTargets(myRoster, allRosters, limit = 20, opts = {}) 
     .filter(r => r.rosterId !== myRoster.rosterId)
     .filter(r => !scoped || r.rosterId === ownerRosterId)
     .forEach(r => {
-      const theirDeltas = getPositionalDeltas(r, leagueAverages)
-      const starterIds = buildValueLineup(r.players).starterIds
-      // Their positional pecking order, so a target's depth rank is a lookup
-      // rather than a scan per player.
-      const depthRank = new Map()
-      POSITIONS.forEach(pos => {
-        r.players
-          .filter(p => p.position === pos && !p.isIR)
-          .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
-          .forEach((p, i) => depthRank.set(String(p.sleeperId), i))
-      })
+      const movabilityFor = buildMovabilityIndex(r, leagueAverages)
 
       r.players
         .filter(p => !p.isIR && (p.value ?? 0) >= 1000)
@@ -216,17 +242,7 @@ export function getTopTradeTargets(myRoster, allRosters, limit = 20, opts = {}) 
           // League-wide: skip positions where I'm not below average.
           if (need === 0 && !scoped) return
 
-          // What losing him would do to THEM — the same below-average test
-          // Layer 4 applies, run on their roster without him.
-          const withoutHim = r.players.filter(x => String(x.sleeperId) !== String(p.sleeperId))
-          const afterDelta = getPositionalDeltas({ players: withoutHim }, leagueAverages)[p.position] ?? 0
-          const theirDelta = theirDeltas[p.position] ?? 0
-          const movability = assetMovability({
-            depthRank: depthRank.get(String(p.sleeperId)) ?? 0,
-            starts: starterIds.has(String(p.sleeperId)),
-            weakensThem: afterDelta < 0 && afterDelta < theirDelta,
-            theirDelta,
-          })
+          const { movability } = movabilityFor(p)
 
           targets.push({
             ...p,

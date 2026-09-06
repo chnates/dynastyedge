@@ -16,16 +16,16 @@ description: >
 
 This repo's machine gates (re-verified 2026-09-04) are `npm run lint` (ESLint 9
 flat config, error severity) + `npm test` (`tests/*.test.mjs` on Node's
-built-in `node:test`, **163 passing**) + `npm run build` — enforced by `ci.yml`
+built-in `node:test`, **242 passing**) + `npm run build` — enforced by `ci.yml`
 on every branch push/PR and by `deploy.yml` before publishing.
 
 > **Run `npm ci` first.** A fresh clone (what every remote session gets) has
-> no `node_modules`, and `npm test` reports that as `# tests 115 / # pass 110 /
-> # fail 5` rather than a missing-module error — it looks like a regression.
-> **A run that doesn't say 163 is an environment problem, not a code problem**;
-> full mechanism in `dynastyedge-build-and-env` §7. Never report those 5 as
+> no `node_modules`, and `npm test` reports that as `# tests 136 / # pass 129 /
+> # fail 7` rather than a missing-module error — it looks like a regression.
+> **A run that doesn't say 242 is an environment problem, not a code problem**;
+> full mechanism in `dynastyedge-build-and-env` §7. Never report those 7 as
 > failing tests without checking dependencies first. (Counts re-measured
-> 2026-09-04 by moving `node_modules` aside.)
+> 2026-09-06 by moving `node_modules` aside.)
 
 But there is
 still **no typecheck**, and the suite pins the pure `src/utils` logic

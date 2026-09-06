@@ -934,7 +934,7 @@ negotiate, not the call — the same discipline that keeps usage stats, camp
 movement and combine numbers out of every score in this app. All five are
 best-effort: each degrades to `null` and its block simply doesn't render.
 
-- **Fair band** (`buildFairBand`) — the ±5% window of "you give" totals that
+- **Fair band** (`buildFairBand`, in `utils/fairBand.js`) — the ±5% window of "you give" totals that
   lands the deal fair for what you're getting, rendered as a track in THE CALL
   with a marker for the current offer. A point estimate says the offer is
   wrong; a band says how much room you have, which is what you need at the
@@ -1034,6 +1034,21 @@ the trade, reachable two ways:
 - Apply all three analysis layers to the suggested package too
 - The callout card above the analysis is dismissible (×)
 
+##### The package search runs off the render path
+
+Pricing every candidate for 20 targets is ~730ms, and it used to run in a
+`useMemo` — which executes **during** render, so it blocked the very paint that
+would have shown a loading state and the tab simply sat blank. `WhatsFair` now
+walks the targets **one per tick in an effect**: the board (and the cash-out
+block) paints immediately, each card shows *"Working out what it would cost…"*
+until its own package lands, and a line above the list counts down *"Pricing
+every package the targets could cost you — N to go."* The longest the main
+thread is ever held is a single target (109ms worst case on this roster). A team
+switch or data refresh cancels the walk in flight rather than letting a stale
+run write over the new board. **This is what makes the untruncated search
+affordable** — if a much deeper roster ever makes it bite, chunk *within* a
+target rather than truncating, which is what this replaced.
+
 ##### Targets has two modes — league-wide and team-scoped
 
 A **team selector** (`PartnerSelect`, the same control the Analyzer uses —
@@ -1096,9 +1111,14 @@ Counter or Decline.** The app proposed and then argued with itself.
 - **`suggestFairPackage` is two-phase.** Phase 1 enumerates every package in the
   fair band and ranks them by what they cost **me** — surplus and depth first,
   core starters never auto-included (`PROTECT_THRESHOLD`), win-window lean.
-  Phase 2 takes the cheapest `PACKAGE_SHORTLIST` (40) of those and scores each
-  with **`buildPartnerFit`** — the same Layer 4 the Analyzer will grade the
-  suggestion with — then takes the best appeal, breaking ties by my own cost.
+  Phase 2 scores **every** one of those with **`buildPartnerFit`** — the same
+  Layer 4 the Analyzer will grade the suggestion with — then takes the best
+  appeal, breaking ties by my own cost. It is deliberately **not** truncated:
+  phase 1 orders by what a package costs *me* and knows nothing about them, so
+  cutting its output hides packages they would actually want. Measured on the
+  live 20-target board — cheapest 40: 102ms, **Weak 2** · cheapest 150: 211ms,
+  **Weak 1** · all: 731ms, **Weak 0**. Only the full search leaves no target
+  whose best offer the other manager has no reason to accept.
   - Phase 1's objective alone selects, by construction, the pieces a partner has
     least use for: the cheapest asset by keep-score was a third quarterback, and
     nobody in a Superflex league needs one. The packages that work were inside
@@ -1114,6 +1134,18 @@ Counter or Decline.** The app proposed and then argued with itself.
     hiding the row.
   - Without a partner roster it degrades to phase 1 and reports `appeal: null`;
     no read is invented.
+  - **`alternative` — the cheaper road not taken.** The card also names the
+    best package at a *lower* appeal that genuinely costs less
+    (`ALTERNATIVE_MIN_SAVING` of keep-pain; below that the two cost the same and
+    one merely reads worse, which is not an option). This answers the question
+    the board previously left implicit — "why is it spending that piece?" — on
+    the card itself: *"Est. cost: Chase Brown · Strong for them / Or cheaper:
+    Jordan Love — weak for them."* **It never reorders anything.** Making
+    appeal trade off against my own cost was proposed and **declined by the
+    owner** (2026-09-06): knowing whether they would accept is the information
+    the search exists to produce, and a package that needs a pick to bridge it
+    is a different trade rather than a cheaper one. So appeal stays
+    lexicographically first and this is additive information beside it.
 - Each target card carries the read its package was chosen for — a `Badge`
   (`Strong` green / `Fair` neutral / `Weak` amber, never brand red) plus one
   short line. The board no longer hands over an offer without saying what it is
@@ -2002,6 +2034,18 @@ that opens `/league/trajectory/:rosterId`, so you can scout an opponent's window
   well-sampled 21–31 core over-weighted the shape prior and inflated the young-QB
   curve, flattening its real ascent — the thin 35+ tails still lean
   majority-prior. See `docs/analysis/trajectory-calibration-2026-07.md`, P3.)
+  - **The curve is a CROSS-SECTION, so it must never feed a score, a ranking,
+    or a recommendation** — it is descriptive shape only, which is all this
+    feature and its `getTrajectoryRead` consumers use it for. Measured
+    2026-09-06: the only 33-year-old TE still carrying value is the one who
+    didn't decline, so the curve reads survivorship as aging (TE 31 = 641 vs
+    TE 33 = 1,020; QB 25–26 = 790 vs QB 30–31 = 2,255). Fed into a keep-score
+    tilt it projected a 31-year-old Mark Andrews **+47%** and a 26-year-old Bo
+    Nix **+64%** (the latter just the `YEAR_RATIO_CEIL ** 3` clamp) — which is
+    why the shipped aging signal is the longitudinal one in
+    `docs/analysis/asset-aging-and-pick-value-2026-09.md` §2, not this. The
+    real fix is curves rebuilt from `values-archive.json` once it holds enough
+    months; until then this ruling stands.
 - **Projection** — a player's value `n` seasons out is
   `currentValue × curve(age + n) / curve(age)`, clamped per year (0.55×–1.18×).
   The talent residual cancels, so a stud and a scrub ride the same proportional
@@ -2303,8 +2347,48 @@ matter:
   next-best is protected regardless of how the summed positional value reads.
   This is what keeps an elite, backup-less starter out of auto-suggested
   packages.
+- **Picks are priced by ROUND, not flat (`PICK_ROUND_KEEP` = 1st 0.65 · 2nd
+  0.50 · 3rd 0.40 · 4th 0.30).** The old flat 0.5 made a 2027 1st and a 2029
+  4th equally spendable. Measured over all 120 rookie picks this league has
+  made, valued at today's prices: a class's round-1 median beat the **dearest**
+  future 1st on the board in **3 of 3** classes (30/30 became starter-caliber),
+  while no class's round-4 median reached the **cheapest** future 4th (8/30).
+  Hype flattens the pick curve and resolution steepens it — the market prices a
+  1st at 3.5× a 4th; the most-resolved class delivered **8.0×**. An unknown
+  round falls back to `PICK_KEEP_DEFAULT` (0.5) rather than the cheapest —
+  absence of a round is not evidence a pick is cheap (rule 7's discipline).
+  `PICK_KEEP_CAP` (0.85) holds every pick below `PROTECT_THRESHOLD` at every
+  tier: that threshold exists for irreplaceable *players*, and a rebuilder's
+  +0.3 on a first would otherwise strip the builder of the currency it builds
+  with. Re-derive with `scripts/dev/asset-aging-backtest.mjs` (needs the diagnostics resolver hook); revisit
+  once the 2027 class resolves. See
+  `docs/analysis/asset-aging-and-pick-value-2026-09.md` §3.
 - **Win-window lean on age:** a contender cashes picks and young fliers; a
-  rebuilder hoards youth and picks and sells aging vets.
+  rebuilder hoards youth. These are *window* preferences (what do I want when
+  my window opens), distinct from the aging tilt below.
+- **Past-peak age tilt (`pastPeakTilt`)** — an asset past its
+  `peakWindows.js` window gets more expendable, saturating `AGE_TILT_SPAN` (3)
+  years past it. **Decline-only:** protecting players *younger* than their
+  window was proposed and disconfirmed — absent at RB (−0.02, p=0.853), the
+  position the tilt exists for, with one near-hit in four tests. **Weighted per
+  position** (`AGE_TILT_BY_POSITION` = RB 1.00 · WR 0.65 · QB 0.40 · TE 0.15),
+  because the penalty is: past-peak retention falls 0.94 → 0.66 for RB
+  (p=0.0001) and 0.84 → 0.67 for WR (p=0.0016), while QB and TE are not
+  distinguishable from zero and take their measured relative effect **halved**
+  — unproven is not the same as known-small. Magnitude by tier
+  (`AGE_TILT_BY_TIER` = Contending 0.04 · Middle 0.10 · Rebuilding 0.16) is the
+  one knob no measurement sets: it is a preference weight, bounded so the tilt
+  breaks near-ties rather than arguing with a market that already prices age.
+  Being decline-only it can only ever make an asset **more** available — it can
+  never protect one, so it cannot reach past `PROTECT_THRESHOLD` or undo cliff
+  protection. An unknown age or a position with no window is a **no-op**, never
+  an imputed average. This replaced a flat `age >= 28 → −0.2` that fired only
+  for a rebuilder — 28 is two years past an RB's peak and mid-window for a QB,
+  and a **Middle** team got no age opinion at all. Measured over n=762
+  player-seasons (2020–2025) following the same player year over year, a
+  departed player counted as 0; the peak windows themselves are **not**
+  re-tuned (RB 26 and WR 28 both test significant at the shipped boundary). See
+  `docs/analysis/asset-aging-and-pick-value-2026-09.md` §2.
 - **`PROTECT_THRESHOLD` = 0.9** — assets at or above this keep score are never
   *auto-*included in a suggested package. The user can still add them manually.
 
@@ -2330,6 +2414,30 @@ matter:
 - **Feature 3 — Trade Analyzer:** `buildGivabilityContext`, `assetKeepScore`,
   and `getDeficitPositions` back the "Giving Up" depth context and the fair
   package suggestions.
+- **Feature 3 — Trade › Targets, the cash-out board (`buildCashOutBoard`):**
+  the one move the Targets board structurally cannot surface. Targets ranks
+  opponents' players by **my positional deficits**, so a roster thin at WR sees
+  WRs priced around that deficit and never a target sized to its most valuable
+  aging asset — and `suggestFairPackage` won't bridge it either, since it never
+  offers an asset worth far more than its target. Measured live 2026-09-06: the
+  owner's 27.6-year-old RB1 (5,752) and the 23.1-year-old WR1 he'd want for him
+  (6,484) could not appear together on any surface in the app.
+  `pickCashOutAsset` names the asset bleeding most **value at risk** —
+  `value × how far past its peak window`, which is neither "my oldest" (a
+  38-year-old QB4 is worth nothing to cash) nor "my most valuable" (that is
+  just my best player) — excluding anything at `PROTECT_THRESHOLD`. Then it
+  lists younger targets (`CASH_OUT_MIN_YEARS_YOUNGER` = 2) around his price,
+  each tilted by the same `assetMovability` the Targets board uses (extracted
+  as `buildMovabilityIndex` so the two cannot drift) and **labelled with how it
+  misses fair**: above the band, what to add; below it, the premium you'd pay.
+  **The band and every gap come from `fairBand.js`, not from
+  `suggestFairPackage`'s package-building window** — the first cut borrowed the
+  latter and told the owner a deal needed "~84 more" that THE CALL then scored
+  **408 light** on the very next screen. Tapping a row hands the Analyzer a
+  two-sided `preloadTrade` built from the **full roster objects** (92657ae's
+  lesson: a preload must resolve to what the add sheet produces). Renders in
+  league-wide mode only — while a team is scoped the page is a scouting view of
+  one roster. No past-peak asset ⇒ no block, never an invented one.
 
 -----
 
@@ -2932,6 +3040,7 @@ dynastyedge/
 │       ├── rookie-college-backtest.mjs ← analysis-only, RUNS IN ACTIONS: THE Phase 3b gate — dominator rating + breakout age vs years 2–3, also REJECTED; see docs/analysis/rookie-college-production-2026-09.md
 │       ├── trade-structure-backtest.mjs ← analysis-only: the DISCONFIRMED trade-structure profiling test (frontier Item 3); drives the shipped buildManagerProfiles so it cannot drift
 │       ├── optimizer-signal-backtest.mjs ← analysis-only: measures whether a better weekly PROJECTION is obtainable (it is not) and what DEF streaming is worth; see docs/analysis/optimizer-data-sources-2026-09.md
+│       ├── asset-aging-backtest.mjs ← analysis-only: THE keep-score calibration — longitudinal player aging (the survivorship trap the trajectory curves fall into) + whether rookie picks deliver their market price; see docs/analysis/asset-aging-and-pick-value-2026-09.md
 │       └── news-coverage.mjs ← analysis-only: THE news-pipeline acceptance metric — how many of my rostered players the app can actually resolve in the feed (no arg = live feed); see docs/analysis/news-sources-2026-09.md
 ├── public/
 │   └── favicon.ico
@@ -3053,7 +3162,8 @@ dynastyedge/
 │   │   ├── edgeBriefing.js      ← The Edge: signals, briefing items, GM line
 │   │   ├── managerAnalysis.js   ← manager scouting: ledgers, tendencies, draft grades
 │   │   ├── rosterAnalysis.js    ← positional strength, win window tiers, Targets ranking (need × value × movability)
-│   │   ├── recommendations.js   ← THE assistant-GM brain: keep/givability scores, FA pickups, two-sided sell moves
+│   │   ├── recommendations.js   ← THE assistant-GM brain: keep/givability scores (round-priced picks, past-peak age tilt), FA pickups, two-sided sell moves, the cash-out board
+│   │   ├── fairBand.js          ← THE definition of "fair" (±5%), shared by the Analyzer's verdict and every surface that PREDICTS it
 │   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation
 │   │   ├── pickCapital.js       ← pick ownership resolution logic
 │   │   ├── rookieAdp.js         ← derived rookie-class ADP for the Draft section
@@ -3081,7 +3191,7 @@ dynastyedge/
 │   ├── build-plan-2026-09.md        ← owner-approved four-phase build plan (Sept 2026) — per-phase kickoff prompts, gates, and the four measured NOT-to-build decisions
 │   ├── project-status-2026-08.md    ← dated status snapshot (superseded by newer dated files)
 │   ├── repo-review-2026-07.md       ← full read-only audit + ranked backlog (all items landed)
-│   ├── analysis/                    ← model calibration + research notes (incl. optimizer-data-sources-2026-09.md: the Optimizer data-source feasibility study)
+│   ├── analysis/                    ← model calibration + research notes (incl. optimizer-data-sources-2026-09.md: the Optimizer data-source feasibility study; asset-aging-and-pick-value-2026-09.md: THE keep-score calibration — player aging + pick realization)
 │   └── design/                      ← Phase 3 "Primetime Blackout" brief + reference render
 ├── tests/                       ← plain-Node test suite (node:test + node:assert/strict, zero deps)
 │   ├── fixtures/
@@ -3095,7 +3205,8 @@ dynastyedge/
 │   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
 │   ├── appVersion.test.mjs          ← reload URL: ?v= before the hash (HashRouter), encoding, null build id
 │   ├── tradeTargets.test.mjs        ← Targets ranking: deficit gate + value floor league-wide, team-scoped mode keeps depth (never empty), fillsNeed flag, and the movability TILT (band under 2×, spare depth outranks an equal-value untouchable, nothing ever hidden)
-│   ├── tradeAnalysis.test.mjs       ← verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge, Layer 4 (a benched acquisition reads Weak however valued; the gate downgrades an Accept but never lifts a Decline; landing spots both directions; the pitch speaks from their side), buildPartnerFit's extraction contract (standalone == via analyzeTrade), and the two-phase package builder (phase 2 rejects the piece they have no use for, never unlocks a protected asset, reports no appeal without a partner)
+│   ├── tradeAnalysis.test.mjs       ← the cheaper `alternative` (always lower-appeal, never the suggestion — the ranking is untouched), verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge, Layer 4 (a benched acquisition reads Weak however valued; the gate downgrades an Accept but never lifts a Decline; landing spots both directions; the pitch speaks from their side), buildPartnerFit's extraction contract (standalone == via analyzeTrade), and the two-phase package builder (phase 2 rejects the piece they have no use for, never unlocks a protected asset, reports no appeal without a partner)
+│   ├── tradeContext.test.mjs        ← the five negotiating signals (fair band, scarcity, roster space, weekly impact, partner activity) — and the contract that NONE of them may move the verdict
 │   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
 │   ├── lineupBuild.test.mjs         ← slot-fill order (singles → FLEX → SFLX), IR/taxi excluded, who-starts identity
 │   ├── lineupMoves.test.mjs         ← start/sit engine: Σ gains = headline invariant, the two superseded per-slot bugs (double-count, missed cascade), hard-block exclusion, empty DEF slot, swap algebra, confidence lookup + coin-flip demotion (demoted moves still sum to the headline)
@@ -3103,7 +3214,7 @@ dynastyedge/
 │   ├── lineupHistory.test.mjs       ← optimal-lineup slot-fill order (singles → FLEX → SFLX)
 │   ├── matchupWeeks.test.mjs        ← mocked-fetch: one fetch/week across both consumers, all-fail rejection
 │   ├── rookieResearch.test.mjs      ← opportunity blend, shared points scale (the backup-TE trap), within-position divergence, roster-fit re-ranking (need/window bonuses, score untouched), drawer hand-off fields, best-effort feed degradation, and the measurables NULL (age/combine can never move a score)
-│   ├── recommendations.test.mjs     ← suggestSellMove's two-sided partner pick: a concrete return beats a needier team with nothing, the neediest-team fallback, startsForThem, nav-ready shape
+│   ├── recommendations.test.mjs     ← suggestSellMove's two-sided partner pick (a concrete return beats a needier team with nothing, the neediest-team fallback, startsForThem, nav-ready shape); pick keep-scores by round (strict ordering under every tier, nothing auto-excluded, unknown round falls back); the past-peak age tilt (decline-only, per-position, saturating, never positive, cliff protection survives it); and the cash-out board (value-at-risk selection, the reach/premium labels, and the pin that its gap equals buildFairBand's)
 │   └── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
 ├── index.html
 ├── eslint.config.js             ← ESLint 9 flat config (recommended + react-hooks, src/ + scripts/)
@@ -3120,11 +3231,13 @@ honestly:** instead of "cannot find module" it prints `# tests 136 / # pass 129 
 transitively importing `react` (`tradeAnalysis.js` → `recommendations.js` →
 `useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
 `draftLive` loading their hooks) — the file fails to load, so its tests never
-run and the count silently drops from **219** to 136. `npm run build` in the
-same state fails with `sh: 1: vite: not found`. **If the test count isn't 219,
+run and the count silently drops from **242** to 136. `npm run build` in the
+same state fails with `sh: 1: vite: not found`. **If the test count isn't 242,
 run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-06
 by renaming `node_modules` aside; re-measure them whenever the suite grows —
-the pair had drifted twice before this, 178/130 and 177/115.)
+the pair had drifted three times before this, 178/130, 177/115 and 219/136.
+The broken-state signature has held at 136/129/7 across the last two
+re-measurements, so it is the passing count that moves.)
 
 **Tests:** `npm test` runs the `tests/` suite — plain `.mjs` scripts on Node's
 built-in `node:test` runner with `node:assert/strict`, zero new dependencies

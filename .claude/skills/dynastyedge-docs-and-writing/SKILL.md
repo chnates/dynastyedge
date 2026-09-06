@@ -249,7 +249,7 @@ cap and could not see a degraded run).
 `change-control` and `build-and-env` all still said **120 passing** and quoted
 the missing-`node_modules` signature as `47/44/3`; CLAUDE.md said `113/108/5`.
 Re-measured 2026-09-04 by moving `node_modules` aside: the suite is **163
-passing**, and the broken state reads **`# tests 115 / # pass 110 / # fail 5`**.
+passing**, and the broken state reads **`# tests 136 / # pass 129 / # fail 7`**.
 Lesson worth keeping: a number repeated across four files drifts four times.
 When you change the suite size, `grep -rn "passing" .claude/skills docs CLAUDE.md`.
 

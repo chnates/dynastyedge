@@ -18,7 +18,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { suggestSellMove } from '../src/utils/recommendations.js'
+import {
+  suggestSellMove, buildGivabilityContext, assetKeepScore,
+  PICK_ROUND_KEEP, PICK_KEEP_DEFAULT, PICK_KEEP_CAP, PROTECT_THRESHOLD,
+  pastPeakTilt, AGE_TILT_BY_TIER, AGE_TILT_BY_POSITION, AGE_TILT_SPAN,
+  buildCashOutBoard, CASH_OUT_MIN_YEARS_YOUNGER,
+} from '../src/utils/recommendations.js'
+import { PEAK_WINDOWS } from '../src/utils/peakWindows.js'
+import { buildFairBand } from '../src/utils/fairBand.js'
 
 const P = (id, name, pos, value, age = 26) =>
   ({ sleeperId: id, name, position: pos, value, age, isIR: false, isTaxi: false })
@@ -107,4 +114,285 @@ test('it degrades to null rather than guessing (degradation contract)', () => {
   assert.equal(suggestSellMove(spareQb, null, league), null)
   assert.equal(suggestSellMove(spareQb, me, []), null)
   assert.equal(suggestSellMove(spareQb, me, [me]), null, 'no opponents — no move')
+})
+
+// ── Pick keep-scores by round ───────────────────────────────────────────────
+// Pins docs/analysis/asset-aging-and-pick-value-2026-09.md §3: a pick's
+// keep-score is no longer flat. Measured over all 120 rookie picks this league
+// has made, round-1 medians beat the dearest future 1st in 3/3 classes (30/30
+// hits) while round-4 medians missed the cheapest future 4th in 3/3 (8/30).
+
+const pick = (round, value = 1000) => ({ type: 'pick', round, value })
+
+// Tier drives the sign of the adjustment; these rosters only exist to produce
+// one. Contending/Rebuilding are the top/bottom 3 by the win-window score.
+const tierRosters = () => {
+  const rich = [4, 3, 2].map(i => mk(i, [
+    P(`${i}01`, `A${i}`, 'QB', 9000), P(`${i}02`, `B${i}`, 'RB', 9000),
+    P(`${i}03`, `C${i}`, 'WR', 9000), P(`${i}04`, `D${i}`, 'TE', 9000),
+  ]))
+  const poor = [5, 6, 7].map(i => mk(i, [
+    P(`${i}01`, `A${i}`, 'QB', 100), P(`${i}02`, `B${i}`, 'RB', 100),
+    P(`${i}03`, `C${i}`, 'WR', 100), P(`${i}04`, `D${i}`, 'TE', 100),
+  ]))
+  const mid = [8, 9, 10].map(i => mk(i, [
+    P(`${i}01`, `A${i}`, 'QB', 3000), P(`${i}02`, `B${i}`, 'RB', 3000),
+    P(`${i}03`, `C${i}`, 'WR', 3000), P(`${i}04`, `D${i}`, 'TE', 3000),
+  ]))
+  return [...rich, ...poor, ...mid]
+}
+const ctxFor = rosterId => {
+  const all = tierRosters()
+  return buildGivabilityContext(all.find(r => r.rosterId === rosterId), all)
+}
+
+test('a first is held harder than a fourth, and the order is strict', () => {
+  const ctx = ctxFor(9) // a middle team
+  const keeps = [1, 2, 3, 4].map(r => assetKeepScore(pick(r), ctx))
+  assert.deepEqual(keeps, [
+    PICK_ROUND_KEEP[1], PICK_ROUND_KEEP[2], PICK_ROUND_KEEP[3], PICK_ROUND_KEEP[4],
+  ], 'a middle team reads the shipped table unadjusted')
+  for (let i = 1; i < keeps.length; i++)
+    assert.ok(keeps[i] < keeps[i - 1], `round ${i + 1} must be more spendable than round ${i}`)
+})
+
+test('the round ordering survives both win-window leans', () => {
+  for (const rosterId of [4, 6]) { // contending, rebuilding
+    const ctx = ctxFor(rosterId)
+    const keeps = [1, 2, 3, 4].map(r => assetKeepScore(pick(r), ctx))
+    for (let i = 1; i < keeps.length; i++)
+      assert.ok(keeps[i] < keeps[i - 1],
+        `roster ${rosterId}: round ${i + 1} must stay more spendable than round ${i}`)
+  }
+})
+
+test('a rebuilder holds picks harder than a contender does, round for round', () => {
+  const reb = ctxFor(6), con = ctxFor(4)
+  assert.equal(reb.myTier, 'Rebuilding')
+  assert.equal(con.myTier, 'Contending')
+  for (const r of [1, 2, 3, 4])
+    assert.ok(assetKeepScore(pick(r), reb) > assetKeepScore(pick(r), con),
+      `round ${r}: a rebuilder must hoard where a contender cashes`)
+})
+
+test('no pick is ever auto-excluded from a package, at any tier', () => {
+  // PROTECT_THRESHOLD is for irreplaceable PLAYERS (ff116ba). A rebuilder's
+  // +0.3 on a first would cross it and strip the package builder of the very
+  // currency it builds with, so PICK_KEEP_CAP holds picks below the line.
+  for (const rosterId of [4, 6, 9]) {
+    const ctx = ctxFor(rosterId)
+    for (const r of [1, 2, 3, 4])
+      assert.ok(assetKeepScore(pick(r), ctx) < PROTECT_THRESHOLD,
+        `roster ${rosterId} round ${r} must stay auto-includable`)
+  }
+  assert.ok(PICK_KEEP_CAP < PROTECT_THRESHOLD, 'the cap must sit below the protect line')
+})
+
+test('an unknown round keeps the old flat rate, never the cheapest', () => {
+  const ctx = ctxFor(9)
+  // Absence of a round is not evidence that a pick is cheap — the same contract
+  // as an unranked player, who is shown and counted rather than priced at 0.
+  const unknown = assetKeepScore({ type: 'pick', value: 1000 }, ctx)
+  assert.equal(unknown, PICK_KEEP_DEFAULT)
+  assert.ok(unknown > assetKeepScore(pick(4), ctx))
+  assert.equal(assetKeepScore({ type: 'pick', value: 1000, round: 7 }, ctx), PICK_KEEP_DEFAULT,
+    'a round with no measured entry falls back rather than extrapolating')
+})
+
+// ── Past-peak age tilt ──────────────────────────────────────────────────────
+// Pins docs/analysis/asset-aging-and-pick-value-2026-09.md §2, measured over
+// n=762 player-seasons (2020-2025) following the same player year over year.
+
+const aged = (id, pos, age, value = 3000) => ({
+  type: 'player', sleeperId: id, name: `${pos} ${age}`, position: pos, age, value,
+})
+
+test('past a peak window an asset gets more expendable; inside it, nothing moves', () => {
+  const ctx = ctxFor(9)
+  // RB window ends at 26.
+  const inWindow = assetKeepScore(aged('x1', 'RB', 25), ctx)
+  const justPast = assetKeepScore(aged('x2', 'RB', 27), ctx)
+  const wellPast = assetKeepScore(aged('x3', 'RB', 30), ctx)
+  assert.ok(justPast < inWindow, 'past the window must be looser than inside it')
+  assert.ok(wellPast < justPast, 'further past must be looser still')
+  assert.equal(pastPeakTilt(aged('x1', 'RB', 25), 'Middle'), 0, 'inside the window is a no-op')
+})
+
+test('the disconfirmed pre-peak bonus stays dead — below the window is a no-op', () => {
+  // Protecting players younger than their window was tested and rejected:
+  // absent at RB (-0.02, p=0.853), one near-hit in four tests elsewhere.
+  for (const [pos, age] of [['RB', 21], ['WR', 22], ['QB', 23], ['TE', 22]])
+    assert.equal(pastPeakTilt(aged('y', pos, age), 'Middle'), 0,
+      `${pos} ${age} is below its window and must not be tilted`)
+})
+
+test('the tilt is per position — RB sheds fastest, TE barely at all', () => {
+  // Same years past peak at each position; only the measured weight differs.
+  const past2 = pos => Math.abs(pastPeakTilt(
+    { position: pos, age: PEAK_WINDOWS[pos][1] + 2 }, 'Middle'))
+  assert.ok(past2('RB') > past2('WR'), 'RB penalty measured 1.6x WR')
+  assert.ok(past2('WR') > past2('QB'), 'QB is not significant and is halved')
+  assert.ok(past2('QB') > past2('TE'), 'TE is the weakest measured effect')
+})
+
+test('it saturates at AGE_TILT_SPAN years and never runs away', () => {
+  const at = years => Math.abs(pastPeakTilt(
+    { position: 'RB', age: PEAK_WINDOWS.RB[1] + years }, 'Middle'))
+  assert.ok(at(AGE_TILT_SPAN + 5) === at(AGE_TILT_SPAN), 'saturated past the span')
+  assert.ok(at(AGE_TILT_SPAN) <= AGE_TILT_BY_TIER.Middle * AGE_TILT_BY_POSITION.RB + 1e-9,
+    'never exceeds the tier magnitude')
+})
+
+test('a rebuilder leans on age hardest, a contender barely', () => {
+  const old = { position: 'RB', age: 30 }
+  const reb = Math.abs(pastPeakTilt(old, 'Rebuilding'))
+  const mid = Math.abs(pastPeakTilt(old, 'Middle'))
+  const con = Math.abs(pastPeakTilt(old, 'Contending'))
+  assert.ok(reb > mid && mid > con, 'a contender wants the veteran who wins now')
+})
+
+test('no age is a no-op, not an imputed average', () => {
+  const ctx = ctxFor(9)
+  const withAge = { type: 'player', sleeperId: 'z1', name: 'A', position: 'RB', age: 30, value: 3000 }
+  const noAge = { type: 'player', sleeperId: 'z1', name: 'A', position: 'RB', value: 3000 }
+  assert.equal(pastPeakTilt(noAge, 'Middle'), 0)
+  assert.ok(assetKeepScore(noAge, ctx) > assetKeepScore(withAge, ctx),
+    'an unknown age must not be penalised as if it were old')
+  assert.equal(pastPeakTilt({ position: 'DEF', age: 40 }, 'Middle'), 0,
+    'a position with no window is a no-op')
+})
+
+test('the tilt can never protect an asset, only free one', () => {
+  // It is decline-only and negative, so it cannot reach past PROTECT_THRESHOLD
+  // or undo the cliff protection of ff116ba.
+  for (const tier of ['Contending', 'Middle', 'Rebuilding'])
+    for (const pos of ['QB', 'RB', 'WR', 'TE'])
+      for (const age of [20, 25, 30, 40])
+        assert.ok(pastPeakTilt({ position: pos, age }, tier) <= 0,
+          `${pos} ${age} ${tier}: the tilt must never be positive`)
+})
+
+test('an elite backup-less starter stays protected however old he is', () => {
+  // ff116ba's standing ruling: cliff protection is not negotiable. My TE1 at
+  // 7500 with a 900 backup is past his window at 32 and must still be excluded.
+  const all = tierRosters()
+  const mine = mk(11, [
+    P('m1', 'Old elite TE', 'TE', 7500, 32), P('m2', 'TE2', 'TE', 900, 24),
+    P('m3', 'QB1', 'QB', 4000, 27), P('m4', 'RB1', 'RB', 4000, 27),
+    P('m5', 'WR1', 'WR', 4000, 27),
+  ])
+  const ctx = buildGivabilityContext(mine, [...all, mine])
+  const te1 = { type: 'player', sleeperId: 'm1', name: 'Old elite TE', position: 'TE', value: 7500, age: 32 }
+  assert.ok(assetKeepScore(te1, ctx) >= PROTECT_THRESHOLD,
+    'cliff protection must survive the age tilt')
+})
+
+// ── The cash-out board ──────────────────────────────────────────────────────
+// Pins docs/analysis/asset-aging-and-pick-value-2026-09.md §5 item 3: the
+// Targets board ranks opponents' players by MY deficits, so it can never
+// surface a target sized to my most valuable aging asset. This board does.
+
+// Me: an aging RB1 worth cashing, a young RB behind him, plus filler.
+const cashOutMe = () => mk(11, [
+  P('c1', 'Aging RB1', 'RB', 6000, 29),      // 3 yrs past the RB window
+  P('c2', 'Young RB2', 'RB', 5800, 23),      // in window — not the candidate
+  P('c3', 'Ancient QB4', 'QB', 2100, 39),    // old but cheap — less at risk
+  P('c4', 'My WR1', 'WR', 1200, 25),
+  P('c5', 'My TE1', 'TE', 1200, 26),
+])
+const cashOutLeague = () => {
+  const opps = [12, 13, 14].map(i => mk(i, [
+    P(`${i}a`, `Young WR ${i}`, 'WR', 6000, 23),
+    P(`${i}b`, `Old WR ${i}`, 'WR', 6000, 30),
+    P(`${i}c`, `Cheap WR ${i}`, 'WR', 1500, 22),
+    P(`${i}d`, `Their QB ${i}`, 'QB', 3000, 27),
+  ]))
+  return [cashOutMe(), ...opps, ...tierRosters()]
+}
+
+test('the cash-out asset is the value AT RISK, not the oldest or the priciest', () => {
+  const all = cashOutLeague()
+  const board = buildCashOutBoard(cashOutMe(), all)
+  assert.equal(board.asset.name, 'Aging RB1',
+    'a 39-year-old QB4 is old but has little value to cash; the RB2 is not past peak')
+  assert.ok(board.asset.valueAtRisk > 0)
+  assert.ok(board.asset.yearsPastPeak > 0)
+})
+
+test('nothing past its peak means no board at all, never an invented one', () => {
+  const young = mk(11, [
+    P('y1', 'Young RB', 'RB', 6000, 23), P('y2', 'Young WR', 'WR', 5000, 24),
+    P('y3', 'Young QB', 'QB', 5000, 25), P('y4', 'Young TE', 'TE', 4000, 26),
+  ])
+  assert.equal(buildCashOutBoard(young, [young, ...tierRosters()]), null)
+  assert.equal(buildCashOutBoard(null, tierRosters()), null)
+  assert.equal(buildCashOutBoard(cashOutMe(), []), null)
+})
+
+test('targets must be meaningfully younger than the asset being cashed', () => {
+  const board = buildCashOutBoard(cashOutMe(), cashOutLeague())
+  for (const t of board.targets) {
+    assert.ok(t.yearsYounger >= CASH_OUT_MIN_YEARS_YOUNGER,
+      `${t.name} is only ${t.yearsYounger.toFixed(1)} years younger`)
+  }
+  assert.ok(board.targets.some(t => t.name.startsWith('Young WR')))
+  assert.ok(!board.targets.some(t => t.name.startsWith('Old WR')),
+    'a same-age target is not a cash-out, whatever he is worth')
+})
+
+test('a target too cheap to be a return is out of band', () => {
+  const board = buildCashOutBoard(cashOutMe(), cashOutLeague())
+  assert.ok(!board.targets.some(t => t.name.startsWith('Cheap WR')))
+  const [floor, ceil] = board.band
+  assert.ok(floor < board.asset.value && ceil > board.asset.value,
+    'the straight-swap band must straddle the asset it is derived from')
+})
+
+test('a reach target is labelled with what it would take, never dropped', () => {
+  // The deal the owner asked about is 2% short of a straight swap; cutting at
+  // the fair ceiling would hide exactly what this board exists to surface.
+  const reachy = mk(12, [P('r1', 'Reach WR', 'WR', 7200, 23), P('r2', 'x', 'QB', 900, 25)])
+  const me = cashOutMe()
+  const board = buildCashOutBoard(me, [me, reachy, ...tierRosters()])
+  const hit = board.targets.find(t => t.name === 'Reach WR')
+  assert.ok(hit, 'a reachable-with-a-sweetener target stays on the board')
+  assert.equal(hit.needsSweetener, true)
+  assert.ok(hit.gapToBand > 0)
+  assert.ok(hit.reasons.some(r => r.includes('to reach fair')))
+  assert.ok(7200 > board.band[1], 'and it really is above the straight-swap ceiling')
+})
+
+test('the gap the card promises is the gap the Analyzer will show', () => {
+  // The first cut computed this from suggestFairPackage's package-building
+  // window and told the owner a deal needed ~84 more that THE CALL then scored
+  // 408 light on the very next screen. Both now come from buildFairBand.
+  const reachy = mk(12, [P('r1', 'Reach WR', 'WR', 7200, 23), P('r2', 'x', 'QB', 900, 25)])
+  const me = cashOutMe()
+  const board = buildCashOutBoard(me, [me, reachy, ...tierRosters()])
+  for (const t of board.targets) {
+    const analyzerBand = buildFairBand(board.asset.value, t.value)
+    assert.equal(t.gapToBand, analyzerBand.gapToBand,
+      `${t.name}: the board and the Analyzer must agree on the gap`)
+  }
+})
+
+test('a target below the band is labelled a premium, not silently dropped', () => {
+  // Paying over the odds to convert age into youth is a real trade and the
+  // owner's call; the board states the cost rather than hiding the row.
+  const cheaper = mk(12, [P('p1', 'Younger cheaper WR', 'WR', 5300, 23), P('p2', 'x', 'QB', 900, 25)])
+  const me = cashOutMe()
+  const board = buildCashOutBoard(me, [me, cheaper, ...tierRosters()])
+  const hit = board.targets.find(t => t.name === 'Younger cheaper WR')
+  assert.ok(hit, 'a below-band target stays on the board')
+  assert.equal(hit.isPremium, true)
+  assert.ok(hit.reasons.some(r => r.includes('premium')))
+})
+
+test('movability tilts the order but hides nobody', () => {
+  const board = buildCashOutBoard(cashOutMe(), cashOutLeague())
+  assert.ok(board.targets.length > 1)
+  for (const t of board.targets) {
+    assert.ok(t.movability >= 0.7 && t.movability <= 1.35, 'the shipped MOVABILITY_RANGE')
+    assert.ok(Array.isArray(t.reasons) && t.reasons.length > 0, 'every row states why')
+  }
 })
