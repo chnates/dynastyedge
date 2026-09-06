@@ -16,7 +16,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { analyzeTrade, getTradeVerdict, getCounterSuggestion } from '../src/utils/tradeAnalysis.js'
+import { analyzeTrade, getTradeVerdict, getCounterSuggestion, buildTradePitch } from '../src/utils/tradeAnalysis.js'
 
 // Minimal 4-team league so analyzeTrade's league-average / tier machinery has
 // real inputs. Values are arbitrary but fixed.
@@ -406,4 +406,132 @@ test('giveContext: two players dealt from one position share a single grouped de
   assert.equal(a.giveContext.length, 1, 'both TEs collapse into one TE group')
   assert.equal(a.giveContext[0].dealt.length, 2)
   assert.deepEqual(a.giveContext[0].dealt.map(d => d.posRank).sort(), [2, 3])
+})
+
+// ── Layer 4: their side ─────────────────────────────────────────────────────
+//
+// Behaviors pinned (CLAUDE.md Feature 3 Layer 4):
+//  - "does this deal do anything for the team being asked to accept it" is
+//    judged by their POST-TRADE optimal lineup, not by a position tag.
+//  - the verdict gate only ever DOWNGRADES, and only from Accept.
+//  - the pitch is stated from their side of the table.
+
+// A league where BOTH teams are QB-rich and the partner is WR-rich — the exact
+// shape of the screenshot bug this layer exists to catch: even value, fills my
+// WR need, and hands a QB to a team that starts three better ones.
+function makeStackedLeague() {
+  const P = (id, name, pos, value, age = 26) =>
+    ({ sleeperId: id, name, position: pos, value, age, isIR: false, isTaxi: false })
+  const mk = (rosterId, players) => ({
+    rosterId, players, picks: [],
+    totalValue: players.reduce((s, p) => s + p.value, 0),
+    pickCapitalScore: 0, avgStarterAge: 26,
+  })
+  const me = mk(1, [
+    P('101', 'Dart', 'QB', 4937), P('102', 'Nix', 'QB', 4704), P('103', 'Love', 'QB', 3902),
+    P('106', 'My WR1', 'WR', 2000), P('107', 'My WR2', 'WR', 1200),
+    P('108', 'My RB1', 'RB', 3000), P('110', 'My TE1', 'TE', 2500),
+  ])
+  const them = mk(2, [
+    P('201', 'Their QB1', 'QB', 6000), P('202', 'Their QB2', 'QB', 5000), P('203', 'Their QB3', 'QB', 4500),
+    P('204', 'Flowers', 'WR', 3891), P('205', 'Their WR1', 'WR', 5000), P('206', 'Their WR2', 'WR', 4500),
+    P('207', 'Their WR3', 'WR', 3000), P('209', 'Their RB1', 'RB', 900), P('210', 'Their TE1', 'TE', 700),
+  ])
+  const t3 = mk(3, [P('301', 'a', 'QB', 3000), P('302', 'b', 'RB', 3000), P('303', 'c', 'WR', 3000), P('304', 'd', 'TE', 1500)])
+  const t4 = mk(4, [P('401', 'a', 'QB', 2000), P('402', 'b', 'RB', 2000), P('403', 'c', 'WR', 2000), P('404', 'd', 'TE', 1000)])
+  return { me, them, all: [me, them, t3, t4] }
+}
+
+const asAsset = p => ({ ...p, type: 'player' })
+
+test('Layer 4: a player who cannot crack their lineup reads as Weak appeal, however he is valued', () => {
+  const { me, them, all } = makeStackedLeague()
+  const give = [asAsset(me.players.find(p => p.name === 'Love'))]
+  const get  = [asAsset(them.players.find(p => p.name === 'Flowers'))]
+  const a = analyzeTrade(give, get, me, them, all)
+
+  // Their QB4 — 3,902 of dynasty value that moves their starters not at all.
+  const landed = a.partnerFit.landingSpots[0]
+  assert.equal(landed.name, 'Love')
+  assert.equal(landed.starts, false)
+  assert.equal(landed.posRank, 4)
+  assert.deepEqual(a.partnerFit.stacks, ['QB'])
+  assert.deepEqual(a.partnerFit.fills, [])
+  assert.ok(a.partnerFit.startersDelta < 0)
+  assert.equal(a.partnerFit.appeal, 'Weak')
+})
+
+test('Layer 4: the verdict gate downgrades an otherwise-clean Accept (never upgrades)', () => {
+  const { me, them, all } = makeStackedLeague()
+  const give = [asAsset(me.players.find(p => p.name === 'Love'))]
+  const get  = [asAsset(them.players.find(p => p.name === 'Flowers'))]
+  const a = analyzeTrade(give, get, me, them, all)
+
+  // My side alone would say Accept: value is even and it fills my WR need.
+  assert.equal(a.valueWinner, 'even')
+  assert.deepEqual(a.filledNeeds, ['WR'])
+
+  const v = getTradeVerdict(a)
+  assert.equal(v.verdict, 'Counter')
+  assert.equal(v.partnerGated, true)
+  // It must quote the specific objection, not a generic line.
+  assert.match(v.reasoning, /wouldn't crack their lineup/)
+})
+
+test('Layer 4: a Decline is never gated upward by partner appeal', () => {
+  const { me, them, all } = makeStackedLeague()
+  // I hand over my QB1 for their worst piece: terrible for me, great for them.
+  const give = [asAsset(me.players.find(p => p.name === 'Dart'))]
+  const get  = [asAsset(them.players.find(p => p.name === 'Their TE1'))]
+  const a = analyzeTrade(give, get, me, them, all)
+  assert.equal(a.partnerFit.valueWinner, 'them')
+  assert.equal(getTradeVerdict(a).verdict, 'Decline')
+})
+
+test('Layer 4: a player who starts at their deficit position reads as a fill', () => {
+  const { me, them, all } = makeStackedLeague()
+  // They are thin at RB (900). Sending my RB1 (3,000) starts for them
+  // immediately, and the piece coming back is small enough that their best
+  // lineup genuinely gains — an equal-value swap would net to zero.
+  const give = [asAsset(me.players.find(p => p.name === 'My RB1'))]
+  const get  = [asAsset(them.players.find(p => p.name === 'Their TE1'))]
+  const a = analyzeTrade(give, get, me, them, all)
+  assert.deepEqual(a.partnerFit.fills, ['RB'])
+  assert.equal(a.partnerFit.landingSpots[0].starts, true)
+  assert.ok(a.partnerFit.startersDelta > 0)
+  assert.notEqual(a.partnerFit.appeal, 'Weak')
+})
+
+test('Layer 4: acquired players get a landing spot on MY post-trade depth chart', () => {
+  const { me, them, all } = makeStackedLeague()
+  const give = [asAsset(me.players.find(p => p.name === 'Love'))]
+  const get  = [asAsset(them.players.find(p => p.name === 'Flowers'))]
+  const a = analyzeTrade(give, get, me, them, all)
+  const mine = a.myLandingSpots[0]
+  assert.equal(mine.name, 'Flowers')
+  assert.equal(mine.posRank, 1)     // 3,891 tops my 2,000 / 1,200 WR room
+  assert.equal(mine.count, 3)
+  assert.equal(mine.starts, true)
+})
+
+test('the pitch states the case from THEIR side, and never from mine', () => {
+  const { me, them, all } = makeStackedLeague()
+  const give = [asAsset(me.players.find(p => p.name === 'My RB1'))]
+  const get  = [asAsset(them.players.find(p => p.name === 'Their WR3'))]
+  const a = analyzeTrade(give, get, me, them, all)
+  const pitch = buildTradePitch(a, { partnerName: 'Password Is Taco', giveAssets: give, getAssets: get })
+
+  // "You get" is what I'm giving — the perspective flip is the whole point.
+  assert.match(pitch.text, /You get: My RB1 \(RB\)/)
+  assert.match(pitch.text, /You give: Their WR3 \(WR\)/)
+  assert.match(pitch.text, /Password Is Taco/)
+  // It must say where the incoming piece lands for THEM.
+  assert.ok(pitch.bullets.some(b => /My RB1 slots in as your RB1/.test(b)))
+})
+
+test('the pitch needs both sides — a half-built trade produces none', () => {
+  const { me, them, all } = makeStackedLeague()
+  const give = [asAsset(me.players.find(p => p.name === 'My RB1'))]
+  const a = analyzeTrade(give, [], me, them, all)
+  assert.equal(buildTradePitch(a, { giveAssets: give, getAssets: [] }), null)
 })

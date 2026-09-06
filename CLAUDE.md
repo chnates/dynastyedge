@@ -859,6 +859,57 @@ Are you acquiring the right type of asset for where Nix Cage is now?
   See `docs/analysis/trajectory-calibration-2026-07.md`, Item 3.) Best-effort
   (renders only once the lazy league-history fetch lands).
 
+**Layer 4 — Their side (would they even want this?)**
+Layers 1–3 are entirely my-side; a verdict that never asks what the deal does
+for the team being asked to accept it produces green ACCEPTs on offers that go
+unanswered. Layer 4 is Layer 2 **run on the partner's roster** — their
+positional deltas against league average, and their optimal lineup
+(`buildValueLineup`) simulated before and after the swap:
+
+- **`startersDelta`** — the change in the value of their best startable lineup,
+  which is the one honest measure of "does this help them". A player who only
+  stacks their bench moves it by 0 however much he's worth.
+- **`fills`** — a deficit position where an arriving player would *start* for
+  them. **`stacks`** — arriving at a position they're already above league
+  average at. **`weakens`** — a position the trade drops them below average at
+  (the same test Layer 2 applies to me, so "they can't replace him" reads the
+  same in both directions).
+- **`landingSpots`** — where each arriving player lands on their post-trade
+  depth chart (`{position}{rank} of {count}`, whether he starts, and the slot).
+  The mirror, `myLandingSpots`, does the same for the players I'm acquiring and
+  renders inside Roster Fit — the "Fills WR need" chip names the position, the
+  landing spot names the actual spot.
+- **`giveContext`** — their depth chart at the position I'm asking from, so
+  "he's their WR2 of 10" is on screen before you send the offer.
+- **`appeal`** (Strong / Fair / Weak) from a small signed score over those
+  facts plus the win-window lean on picks (a rebuilder wants them; a contender
+  offered only picks does not).
+
+**A stack scores against the deal ONLY when the player can't crack their
+lineup.** When he does start, the upgrade is merely marginal and
+`startersDelta` already measures exactly how marginal — penalising it twice
+would also put the weaker of the two sentences in front of the verdict gate
+(observed live: Jordan Love → Password Is Taco, where he starts at their SFLX
+and their lineup still *loses* 1,183).
+
+**This is roster logic, never a prediction that they will accept.** Per-manager
+behavioral profiling was pre-registered, tested on this league's full 4-season
+corpus (95 trades / 176 sides) and **DISCONFIRMED** — the own-manager profile
+scored *below* the league baseline
+(`docs/analysis/trade-structure-stability-2026-08.md`, standing ruling). Layer 4
+models the roster and the copy says so.
+
+#### The pitch (`buildTradePitch`)
+
+The message you actually send, stated entirely from **their** side of the table
+— an argument for why the trade is good for you is not a pitch. Rendered as a
+"Pitch It" card under the analysis with a Copy button, it names what they get
+and give, the value from their seat, where each incoming piece lands in *their*
+lineup, and why the piece you're asking for is one they can spare (or, when
+`weakens` fires, honestly says it isn't and asks what it would take). Every line
+is a number Layer 4 already computed, so it can never oversell. Needs both sides
+of the trade; returns null otherwise.
+
 #### Verdict
 
 - **✅ Accept** / **❌ Decline** / **🔄 Counter**
@@ -871,6 +922,12 @@ Are you acquiring the right type of asset for where Nix Cage is now?
 > genuinely need in Superflex.”*
 - The verdict only renders once **both** sides have at least one asset — until
   then a quiet "add assets to both sides" hint shows instead (totals still show)
+- **Layer 4 gates the verdict, and only ever downgrades.** A `Weak`-appeal deal
+  turns an otherwise-clean **Accept** into a **Counter**, quoting the specific
+  objection ("…but there's little in it for them. Their best starting lineup
+  loses 1,183 in value."). It never upgrades: a trade that's bad for me doesn't
+  become good because they'd love it — their enthusiasm is evidence *against*
+  it, not for it. Nothing below Accept is touched.
 - **Counter:** Name a specific player or pick (never vague) that would make the trade fair.
   Show what needs to move to which side to get within ~5% raw value.
   The suggestion is structured (`getCounterSuggestion` returns `{side, type, item, text}`)
@@ -2881,7 +2938,7 @@ dynastyedge/
 │   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
 │   ├── appVersion.test.mjs          ← reload URL: ?v= before the hash (HashRouter), encoding, null build id
 │   ├── tradeTargets.test.mjs        ← Targets ranking: deficit gate + value floor league-wide, team-scoped mode keeps depth (never empty), fillsNeed flag
-│   ├── tradeAnalysis.test.mjs       ← verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge
+│   ├── tradeAnalysis.test.mjs       ← verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge, Layer 4 (a benched acquisition reads Weak however valued; the gate downgrades an Accept but never lifts a Decline; landing spots both directions; the pitch speaks from their side)
 │   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
 │   ├── lineupBuild.test.mjs         ← slot-fill order (singles → FLEX → SFLX), IR/taxi excluded, who-starts identity
 │   ├── lineupMoves.test.mjs         ← start/sit engine: Σ gains = headline invariant, the two superseded per-slot bugs (double-count, missed cascade), hard-block exclusion, empty DEF slot, swap algebra, confidence lookup + coin-flip demotion (demoted moves still sum to the headline)

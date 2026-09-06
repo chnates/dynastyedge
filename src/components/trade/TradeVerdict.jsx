@@ -1,8 +1,8 @@
-import { useState } from 'react'
-import { CheckCircle2, XCircle, RefreshCw, CheckCircle, XCircle as XCircleSmall, Circle, AlertTriangle, LineChart, Target } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { CheckCircle2, XCircle, RefreshCw, CheckCircle, XCircle as XCircleSmall, Circle, AlertTriangle, LineChart, Target, Users, Copy, Check, ArrowRight } from 'lucide-react'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
-import { Card, Button } from '../ui'
+import { Card, Button, Badge } from '../ui'
 import { POS_TEXT } from '../../utils/positionColors'
 import { relativeTime } from '../../hooks/usePlayerIntel'
 
@@ -198,6 +198,156 @@ function GivingUpBlock({ giveContext }) {
   )
 }
 
+// Where an arriving player lands on a depth chart — one compact row per player.
+// The question "does he actually start?" is the one a position tag can't answer,
+// so the row leads with the rank and states the slot when he does.
+function LandingRow({ spot, possessive }) {
+  return (
+    <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-snug">
+      <span className="font-semibold text-text-primary dark:text-text-primary">{spot.name}</span>
+      <ArrowRight size={10} strokeWidth={2.5} className="inline mx-1 -mt-px text-text-tertiary" />
+      {possessive}{' '}
+      <span className={`font-mono font-semibold ${POS_TEXT[spot.position] ?? 'text-text-secondary'}`}>
+        {spot.position}{spot.posRank}
+      </span>
+      {' of '}{spot.count}
+      {spot.starts
+        ? <span className="text-success"> · starts{spot.slot ? ` at ${spot.slot}` : ''}</span>
+        : <span className="text-text-tertiary dark:text-text-tertiary"> · bench</span>}
+    </p>
+  )
+}
+
+const APPEAL_STYLE = {
+  Strong: { text: 'text-success', tone: 'success', dot: 'bg-success' },
+  Fair:   { text: 'text-warning', tone: 'warning', dot: 'bg-warning' },
+  Weak:   { text: 'text-danger',  tone: 'danger',  dot: 'bg-danger' },
+}
+
+// Layer 4 — "would they even want this?", answered from their roster. Everything
+// here is deterministic: their post-trade lineup and their standing against
+// league average. It is deliberately NOT a prediction that they'll accept —
+// behavioral profiling of this league's managers was tested and disconfirmed.
+function TheirSideBlock({ partnerFit, partnerName }) {
+  if (!partnerFit) return null
+  const st = APPEAL_STYLE[partnerFit.appeal] ?? APPEAL_STYLE.Fair
+  const who = partnerName ?? 'They'
+  const sent = partnerFit.giveContext.flatMap(g =>
+    g.dealt.map(d => ({ ...d, position: g.position, count: g.count })))
+
+  return (
+    <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
+      <div className="flex items-center gap-2 mb-2">
+        <Users size={12} strokeWidth={2} className="text-text-tertiary shrink-0" />
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary">
+          Their Side
+        </p>
+        <Badge tone={st.tone} soft>{partnerFit.appeal} appeal</Badge>
+      </div>
+
+      <p className={`font-body text-xs leading-relaxed flex items-center gap-1.5 mb-2 ${st.text}`}>
+        <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${st.dot}`} />
+        {partnerFit.summary}
+      </p>
+
+      {/* What they'd receive, and whether it changes anything for them */}
+      {partnerFit.landingSpots.length > 0 && (
+        <div className="flex flex-col gap-1 mb-2">
+          {partnerFit.landingSpots.map(spot => (
+            <LandingRow key={spot.sleeperId} spot={spot} possessive="their" />
+          ))}
+        </div>
+      )}
+
+      {/* What they'd send, and where it currently sits for them */}
+      {sent.length > 0 && (
+        <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-snug mb-2">
+          {who} would send{' '}
+          {sent.map((d, i) => (
+            <span key={d.name}>
+              {i > 0 && <span className="text-text-tertiary">, </span>}
+              <span className="font-semibold text-text-primary dark:text-text-primary">{d.name}</span>
+              {' — their '}
+              <span className={`font-mono font-semibold ${POS_TEXT[d.position] ?? 'text-text-secondary'}`}>
+                {d.position}{d.posRank}
+              </span>
+              {` of ${d.count}`}
+            </span>
+          ))}
+        </p>
+      )}
+
+      {/* The reasons carry the numbers in words — including the starting-lineup
+          delta, which is the measure the verdict gate quotes — so there is no
+          separate stat row repeating it. */}
+      <ul className="flex flex-col gap-1">
+        {partnerFit.reasons.map(r => (
+          <li key={r} className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-snug flex items-start gap-1.5">
+            <Circle size={9} strokeWidth={2} className="shrink-0 mt-1" />
+            <span>{r}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+// The message you actually send. Written entirely from THEIR side of the table,
+// because an argument for why the trade is good for you is not a pitch — and
+// every line is a number the app already computed, so it never oversells.
+function PitchCard({ pitch }) {
+  const [copied, setCopied] = useState(null)
+
+  useEffect(() => {
+    if (!copied) return
+    const t = setTimeout(() => setCopied(null), 2200)
+    return () => clearTimeout(t)
+  }, [copied])
+
+  if (!pitch) return null
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(pitch.text)
+      setCopied('ok')
+    } catch {
+      setCopied('fail')
+    }
+  }
+
+  return (
+    <Card padding="none" className="mb-4">
+      <div className="px-4 py-2.5 border-b border-border-default dark:border-border-default flex items-center gap-2">
+        <p className="flex-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary">
+          Pitch It
+        </p>
+        <Button
+          size="sm"
+          variant={copied === 'ok' ? 'tinted' : 'secondary'}
+          onClick={copy}
+          icon={copied === 'ok' ? <Check size={12} strokeWidth={2.5} /> : <Copy size={12} strokeWidth={2} />}
+          className="shrink-0 px-2.5 py-1 text-[11px]"
+        >
+          {copied === 'ok' ? 'Copied' : 'Copy'}
+        </Button>
+      </div>
+      <div className="px-4 py-3">
+        <p className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary mb-2 leading-snug">
+          Written from their side of the table — paste it into the league chat.
+        </p>
+        <div className="font-body text-[11px] text-text-primary dark:text-text-primary leading-relaxed whitespace-pre-wrap select-text">
+          {pitch.text}
+        </div>
+        {copied === 'fail' && (
+          <p className="font-body text-[10px] text-warning mt-2">
+            Copy was blocked — select the text above and copy it manually.
+          </p>
+        )}
+      </div>
+    </Card>
+  )
+}
+
 export default function TradeVerdict({
   analysis,
   verdict,
@@ -210,6 +360,8 @@ export default function TradeVerdict({
   onClearWhatsFair,
   liveIntelligence,
   intelligenceLoading,
+  pitch,
+  partnerName,
 }) {
   const [selectedPlayer, setSelectedPlayer] = useState(null)
 
@@ -224,7 +376,7 @@ export default function TradeVerdict({
   }
 
   const { giveTotal, getTotal, filledNeeds, hurtStrengths, windowScore, windowNote, myTier,
-    benchNote, starterLossNote, giveContext,
+    benchNote, starterLossNote, giveContext, myLandingSpots, partnerFit,
     playoffPct, oddsStance, oddsNote, oddsTone,
     partnerTrajectoryNote, partnerTrajectoryTone,
     myTrajectoryNote, myTrajectoryTone,
@@ -330,6 +482,15 @@ export default function TradeVerdict({
               <span>{starterLossNote}</span>
             </p>
           )}
+          {/* Where each acquired player lands on MY post-trade depth chart —
+              the "fills WR need" chip says the position, this says the spot. */}
+          {myLandingSpots?.length > 0 && (
+            <div className="flex flex-col gap-1 mt-2 pt-2 border-t border-border-default dark:border-border-default">
+              {myLandingSpots.map(spot => (
+                <LandingRow key={spot.sleeperId} spot={spot} possessive="your" />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Roster cost — where the dealt players stand at their position */}
@@ -385,6 +546,9 @@ export default function TradeVerdict({
           )}
         </div>
 
+        {/* Layer 4: their side — the read that gates the verdict below */}
+        {giveCount > 0 && <TheirSideBlock partnerFit={partnerFit} partnerName={partnerName} />}
+
         {/* Injury warning banners — surface above verdict when any player is Out */}
         {injuredWarnings.length > 0 && (
           <div className="px-4 py-3 border-b border-border-default dark:border-border-default bg-danger/5">
@@ -434,6 +598,8 @@ export default function TradeVerdict({
           </div>
         )}
       </Card>
+
+      {bothSides && <PitchCard pitch={pitch} />}
 
       {/* Live Intelligence loading state — shown while agents run, non-blocking */}
       {intelligenceLoading && (
