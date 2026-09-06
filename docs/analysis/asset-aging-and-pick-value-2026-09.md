@@ -199,12 +199,18 @@ would actually want. Measured on the whole board:
 | **150** | **211ms** | **Strong 6 · Fair 13 · Weak 1** |
 | all | 712ms | Strong 7 · Fair 13 · Weak 0 |
 
-Raised to 150. Scoring *everything* is strictly the best board — it leaves no
-target without a package the partner has a real reason to accept — but it is a
-7× hit on work the Targets tab does in one memo on mount, on a phone. **Open
-question for the owner:** whether eliminating the last Weak is worth ~700ms
-(more on device) or a deferred/incremental computation. Timings are from the
-dev container; a phone will be slower.
+**Resolved 2026-09-06 — the owner took the third option.** The shortlist is
+gone entirely; phase 2 now scores every candidate, and the board reads **Strong
+7 · Fair 13 · Weak 0**. The cost was affordable only because the computation
+moved off the render path at the same time: it had been a `useMemo`, which runs
+*during* render, so the 731ms blocked the very paint that would have shown a
+loading state — the tab just sat blank, which is why "add a spinner" was not
+available as a fix on its own. `WhatsFair` now walks the targets one per tick in
+an effect, so the board paints immediately and each card fills its cost line in
+behind *"Working out what it would cost…"*. The longest the main thread is ever
+held is one target (109ms worst case here). Timings are from the dev container;
+a phone will be slower, but the blocking unit is now one target rather than
+twenty.
 
 ---
 

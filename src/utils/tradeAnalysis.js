@@ -894,22 +894,27 @@ function packageRationale(assets, ctx) {
     : 'Protects your core starters.'
 }
 
-// How many of the cheapest-for-me packages get scored on the partner's side.
-// The shortlist exists purely to bound cost, but it is NOT free: truncating it
-// can hide the package a partner would actually want, because phase 1 orders by
-// what a package costs ME and knows nothing about them. Raised from 40 when the
-// past-peak age tilt (recommendations.js) made aging depth cheap enough to
-// crowd a Strong package off the list entirely. Measured on the live 20-target
-// board, whole board:
-//     40 -> 102ms, Strong 5 · Fair 13 · Weak 2
-//     80 -> 148ms, Strong 6 · Fair 12 · Weak 2
-//    150 -> 211ms, Strong 6 · Fair 13 · Weak 1
-//    all -> 712ms, Strong 7 · Fair 13 · Weak 0
-// 150 doubles the cost to recover the appeal; scoring everything is a 7x hit on
-// a board the Targets tab computes in one memo on mount, and this is a phone.
-// Re-measure before moving it again — the right value depends on how many
-// candidates land in the fair band, which grows with roster depth.
-const PACKAGE_SHORTLIST = 150
+// Phase 2 scores EVERY candidate in the fair band on the partner's side — the
+// list is deliberately not truncated. It used to take the cheapest 40, which
+// was a cost guard with a real correctness price: phase 1 orders by what a
+// package costs ME and knows nothing about them, so cutting its output can hide
+// the package they would actually want. Measured on the live 20-target board:
+//
+//     40  -> 102ms, Strong 5 · Fair 13 · Weak 2
+//     150 -> 211ms, Strong 6 · Fair 13 · Weak 1
+//     all -> 731ms, Strong 7 · Fair 13 · Weak 0   <- shipped
+//
+// Scoring everything is the only setting that leaves NO target where the best
+// offer the app can find is one the other manager has no reason to accept.
+// The cost is affordable because WhatsFair no longer computes this during
+// render: it walks the targets one per tick off the render path, so the worst
+// single target (109ms here) is the longest the main thread is ever held, and
+// rows fill in progressively behind a "working on it" line.
+//
+// The search cannot run away: candidates are 1-3 assets, drawn only from assets
+// under PROTECT_THRESHOLD, and must land inside the fair band. If a much deeper
+// roster ever makes this bite, chunk WITHIN a target rather than truncating —
+// truncation is what this replaced.
 
 // How much keep-pain a cheaper alternative must actually save before it is
 // worth showing beside the suggestion. Below this the two packages cost about
@@ -1033,13 +1038,13 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
       best = candidates[0]
     } else {
       // Computed once and injected — phase 2 runs buildPartnerFit up to
-      // PACKAGE_SHORTLIST times per target, and these are the same for all of them.
+      // once per candidate per target, and these are the same for all of them.
       const leagueAverages = computeLeagueAverages(allRosters)
       const winWindowTiers = assignWinWindowTiers(allRosters)
       const getAssets = [{ ...targetPlayer, type: 'player' }]
 
       const scored = []
-      candidates.slice(0, PACKAGE_SHORTLIST).forEach(c => {
+      candidates.forEach(c => {
         const assets = c.idxs.map(i => available[i])
         const fit = buildPartnerFit(assets, getAssets, opponentRoster, allRosters, {
           leagueAverages, winWindowTiers,

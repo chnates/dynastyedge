@@ -1034,6 +1034,21 @@ the trade, reachable two ways:
 - Apply all three analysis layers to the suggested package too
 - The callout card above the analysis is dismissible (×)
 
+##### The package search runs off the render path
+
+Pricing every candidate for 20 targets is ~730ms, and it used to run in a
+`useMemo` — which executes **during** render, so it blocked the very paint that
+would have shown a loading state and the tab simply sat blank. `WhatsFair` now
+walks the targets **one per tick in an effect**: the board (and the cash-out
+block) paints immediately, each card shows *"Working out what it would cost…"*
+until its own package lands, and a line above the list counts down *"Pricing
+every package the targets could cost you — N to go."* The longest the main
+thread is ever held is a single target (109ms worst case on this roster). A team
+switch or data refresh cancels the walk in flight rather than letting a stale
+run write over the new board. **This is what makes the untruncated search
+affordable** — if a much deeper roster ever makes it bite, chunk *within* a
+target rather than truncating, which is what this replaced.
+
 ##### Targets has two modes — league-wide and team-scoped
 
 A **team selector** (`PartnerSelect`, the same control the Analyzer uses —
@@ -1096,9 +1111,14 @@ Counter or Decline.** The app proposed and then argued with itself.
 - **`suggestFairPackage` is two-phase.** Phase 1 enumerates every package in the
   fair band and ranks them by what they cost **me** — surplus and depth first,
   core starters never auto-included (`PROTECT_THRESHOLD`), win-window lean.
-  Phase 2 takes the cheapest `PACKAGE_SHORTLIST` (150) of those and scores each
-  with **`buildPartnerFit`** — the same Layer 4 the Analyzer will grade the
-  suggestion with — then takes the best appeal, breaking ties by my own cost.
+  Phase 2 scores **every** one of those with **`buildPartnerFit`** — the same
+  Layer 4 the Analyzer will grade the suggestion with — then takes the best
+  appeal, breaking ties by my own cost. It is deliberately **not** truncated:
+  phase 1 orders by what a package costs *me* and knows nothing about them, so
+  cutting its output hides packages they would actually want. Measured on the
+  live 20-target board — cheapest 40: 102ms, **Weak 2** · cheapest 150: 211ms,
+  **Weak 1** · all: 731ms, **Weak 0**. Only the full search leaves no target
+  whose best offer the other manager has no reason to accept.
   - Phase 1's objective alone selects, by construction, the pieces a partner has
     least use for: the cheapest asset by keep-score was a third quarterback, and
     nobody in a Superflex league needs one. The packages that work were inside

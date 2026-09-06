@@ -127,7 +127,7 @@ function CashOutBlock({ board, onTap }) {
   )
 }
 
-function TargetCard({ target, fairPackage, showNeedTag, onTap }) {
+function TargetCard({ target, fairPackage, packagePending, showNeedTag, onTap }) {
   const posTag = POS_TAGS[target.position] ?? 'bg-bg-secondary text-text-secondary'
 
   return (
@@ -171,7 +171,15 @@ function TargetCard({ target, fairPackage, showNeedTag, onTap }) {
           )}
       </div>
 
-      {/* Row 3: estimated package cost + why these pieces + how it reads to them */}
+      {/* Row 3: estimated package cost + why these pieces + how it reads to them.
+          The search runs off the render path (see the effect in WhatsFair), so
+          a card can be on screen before its cost is known — say so rather than
+          leaving a hole where the answer will appear. */}
+      {packagePending && (
+        <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
+          Working out what it would cost…
+        </span>
+      )}
       {fairPackage && (
         <div className="flex flex-col gap-0.5 min-w-0">
           <div className="flex items-baseline gap-1.5 min-w-0">
@@ -266,17 +274,47 @@ export default function WhatsFair() {
     })
   }, [league, scopedRosterId])
 
-  // Pre-compute fair packages for all targets (ascending algorithm)
-  const fairPackages = useMemo(() => {
-    if (!league?.myRoster) return {}
-    const map = {}
+  // Fair packages are computed OFF the render path, one target per tick.
+  //
+  // This used to be a useMemo, which runs *during* render — so the ~730ms of
+  // package search blocked the very paint that would have shown a loading
+  // state, and the tab simply sat blank. Walking the targets in an effect lets
+  // the board paint immediately and fill its cost lines in as they land; the
+  // longest the main thread is ever held is one target (109ms worst case on
+  // this roster). It is also what makes scoring EVERY candidate affordable —
+  // see the note above PACKAGE search in tradeAnalysis.js.
+  const [fairPackages, setFairPackages] = useState({})
+  const [packagesLeft, setPackagesLeft] = useState(0)
+
+  useEffect(() => {
+    if (!league?.myRoster || !targets.length) {
+      setFairPackages({})
+      setPackagesLeft(0)
+      return
+    }
+    let cancelled = false
+    let timer = null
     const rosterById = new Map(league.allRosters.map(r => [r.rosterId, r]))
-    targets.forEach(t => {
-      map[t.sleeperId] = suggestFairPackage(
+    const acc = {}
+    let i = 0
+    setFairPackages({})
+    setPackagesLeft(targets.length)
+
+    const step = () => {
+      if (cancelled) return
+      const t = targets[i]
+      acc[t.sleeperId] = suggestFairPackage(
         t, league.myRoster, league.allRosters, rosterById.get(t.ownerRosterId)
       )
-    })
-    return map
+      i += 1
+      setFairPackages({ ...acc })
+      setPackagesLeft(targets.length - i)
+      if (i < targets.length) timer = setTimeout(step, 0)
+    }
+    timer = setTimeout(step, 0)
+    // Switching teams or a data refresh abandons the walk in progress rather
+    // than letting a stale run write over the new board.
+    return () => { cancelled = true; clearTimeout(timer) }
   }, [targets, league])
 
   const filteredTargets = useMemo(() => {
@@ -387,6 +425,13 @@ export default function WhatsFair() {
         </p>
       )}
 
+      {packagesLeft > 0 && (
+        <p className="font-body text-[11px] text-accent mb-2 leading-relaxed" aria-live="polite">
+          Pricing every package the {filteredTargets.length === 1 ? 'target' : 'targets'} could
+          cost you — {packagesLeft} to go.
+        </p>
+      )}
+
       {filteredTargets.length === 0 ? (
         <div className="py-12 text-center">
           <p className="font-body text-sm text-text-tertiary dark:text-text-tertiary">
@@ -406,6 +451,7 @@ export default function WhatsFair() {
               key={target.sleeperId}
               target={target}
               fairPackage={fairPackages[target.sleeperId]}
+              packagePending={!(target.sleeperId in fairPackages)}
               showNeedTag={!!activeTeam}
               onTap={() =>
                 navigate('/trade/analyze', {
