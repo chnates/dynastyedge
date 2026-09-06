@@ -1,4 +1,5 @@
 import { POSITIONS } from '../constants'
+import { buildValueLineup } from './lineupBuild'
 
 const POSITION_DEPTH = { QB: 3, RB: 5, WR: 5, TE: 3 }
 
@@ -145,6 +146,38 @@ export function getWinWindowTier(rosterId, allRosters) {
   return assignWinWindowTiers(allRosters)[rosterId] ?? 'Middle'
 }
 
+// How willing the owning roster should be to part with a player, as a
+// multiplier on the need-based ranking. Three ROSTER FACTS only — his depth
+// rank on their chart, whether he cracks their optimal lineup, and whether
+// dealing him would drop them below league average at the position. No read on
+// the manager: behavioral profiling was tested on this league's full 4-season
+// corpus and disconfirmed (docs/analysis/trade-structure-stability-2026-08.md).
+//
+// Why it belongs in the ranking at all: `need × value` alone ranks the most
+// expensive player at my thinnest position first, every time — which on the
+// live board put an untouchable WR1 at the top of a list titled "who should I
+// call about?". The same facts already decide Layer 4's appeal, so the board
+// and the Analyzer now order by the same evidence.
+// It is a TILT, not a co-equal factor. The band is deliberately narrow enough
+// that movability can reorder players of comparable value but can never invert
+// a real value gap: max/min is 1.93, so a player must be worth less than half as
+// much to be outranked on movability alone. An early cut at 0.35–1.6 failed
+// that on live data — a 2,174 WR5 outranked a 4,395 WR2 purely for being
+// available, which is not a better target, it is a cheaper one. Same discipline
+// as the rookie board's age tilt.
+export const MOVABILITY_RANGE = [0.70, 1.35]
+
+export function assetMovability({ depthRank, starts, weakensThem, theirDelta }) {
+  let m = 1
+  // Each step down their positional chart is a step toward spare depth.
+  m += Math.min(0.18, Math.max(0, depthRank) * 0.06)
+  // He doesn't crack their lineup — genuinely available, whatever he's worth.
+  if (!starts) m += 0.12
+  if (weakensThem) m -= 0.30          // they can't replace him; expect resistance
+  else if (theirDelta > 0) m += 0.05  // above league average here — this is surplus
+  return Math.max(MOVABILITY_RANGE[0], Math.min(MOVABILITY_RANGE[1], m))
+}
+
 export function getTopTradeTargets(myRoster, allRosters, limit = 20, opts = {}) {
   if (!myRoster || !allRosters?.length) return []
 
@@ -164,17 +197,46 @@ export function getTopTradeTargets(myRoster, allRosters, limit = 20, opts = {}) 
     .filter(r => r.rosterId !== myRoster.rosterId)
     .filter(r => !scoped || r.rosterId === ownerRosterId)
     .forEach(r => {
+      const theirDeltas = getPositionalDeltas(r, leagueAverages)
+      const starterIds = buildValueLineup(r.players).starterIds
+      // Their positional pecking order, so a target's depth rank is a lookup
+      // rather than a scan per player.
+      const depthRank = new Map()
+      POSITIONS.forEach(pos => {
+        r.players
+          .filter(p => p.position === pos && !p.isIR)
+          .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
+          .forEach((p, i) => depthRank.set(String(p.sleeperId), i))
+      })
+
       r.players
         .filter(p => !p.isIR && (p.value ?? 0) >= 1000)
         .forEach(p => {
           const need = Math.max(0, -(myDeltas[p.position] ?? 0))
           // League-wide: skip positions where I'm not below average.
           if (need === 0 && !scoped) return
+
+          // What losing him would do to THEM — the same below-average test
+          // Layer 4 applies, run on their roster without him.
+          const withoutHim = r.players.filter(x => String(x.sleeperId) !== String(p.sleeperId))
+          const afterDelta = getPositionalDeltas({ players: withoutHim }, leagueAverages)[p.position] ?? 0
+          const theirDelta = theirDeltas[p.position] ?? 0
+          const movability = assetMovability({
+            depthRank: depthRank.get(String(p.sleeperId)) ?? 0,
+            starts: starterIds.has(String(p.sleeperId)),
+            weakensThem: afterDelta < 0 && afterDelta < theirDelta,
+            theirDelta,
+          })
+
           targets.push({
             ...p,
             ownerRosterId: r.rosterId,
             owner:         r.owner,
-            needScore:     need * p.value,
+            // Movability multiplies rather than gates: a player his team would
+            // hate to lose still belongs on the board, just below the ones they
+            // can spare. Nothing is ever hidden by it.
+            needScore:     need * p.value * movability,
+            movability,
             fillsNeed:     need > 0,
             positionDelta: myDeltas[p.position] ?? 0,
             leagueAvgAtPos: leagueAverages[p.position] ?? 1,

@@ -10,6 +10,7 @@
 
 import { POSITIONS } from '../constants'
 import { computeLeagueAverages, getPositionalDeltas, assignWinWindowTiers } from './rosterAnalysis'
+import { buildValueLineup } from './lineupBuild'
 import { getTeamName } from '../hooks/useLeague'
 
 // The starters we protect hardest at each position in this 10-team Superflex
@@ -199,10 +200,23 @@ export function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 
 }
 
 // Turn "you have a surplus you could convert" into the actual move: who to call
-// and what to ask for. Finds the partner who most needs `player`'s position
-// (or, if none are below average, the team weakest there), then — when they own
-// a comparable-value player at one of MY deficit positions — proposes a concrete
-// one-for-one swap. Otherwise it falls back to "shop them to <partner>".
+// and what to ask for.
+//
+// TWO-SIDED partner pick. It used to take whichever opponent's positional delta
+// was most negative and then hope a return existed on their roster — so the
+// neediest team won the call even when it had nothing I wanted, and the move
+// degraded to a bare "shop him to X". Now every opponent is scored on three
+// roster facts and the best complete move wins:
+//
+//   1. do they need this position (their delta, the original signal)
+//   2. would he actually START for them — a player who only stacks their bench
+//      is not a sale, however thin their summed value at the position reads
+//   3. do they own a comparable-value player at one of MY deficit positions,
+//      so the call is a concrete swap instead of an opening pleasantry
+//
+// A partner with a real return beats a needier one without: a two-sided move is
+// the thing worth surfacing. Falls back to the neediest team when nobody has a
+// return, which is the old behavior and still an honest "shop him here".
 //
 // Returns nav-ready state for the Trade Analyzer's preloadTrade / preloadGivePlayer.
 export function suggestSellMove(player, myRoster, allRosters) {
@@ -218,50 +232,71 @@ export function suggestSellMove(player, myRoster, allRosters) {
 
   const opponents = allRosters.filter(r => r.rosterId !== myRoster.rosterId)
   if (!opponents.length) return null
-  const oppDeltas = new Map(opponents.map(o => [o.rosterId, getPositionalDeltas(o, leagueAverages)]))
-  const theirNeed = o => oppDeltas.get(o.rosterId)[pos] ?? 0
 
-  // Partners who need this position (most negative first); if none are below
-  // average, the teams weakest at it are still the likeliest buyers.
-  const needy = opponents.filter(o => theirNeed(o) < 0)
-  const ranked = (needy.length ? needy : [...opponents]).sort((a, b) => theirNeed(a) - theirNeed(b))
-  const partner = ranked[0]
-  if (!partner) return null
-  const partnerName = getTeamName(partner.owner)
-
-  const give = [{ ...player, type: 'player' }]
-
-  // Best return: a comparable-value player they own at one of my deficit spots.
-  let returnPlayer = null, deficitPos = null
-  for (const dPos of myDeficits) {
-    const cand = partner.players
-      .filter(p =>
-        p.position === dPos && !p.isIR &&
-        (p.value ?? 0) >= targetVal * 0.8 && (p.value ?? 0) <= targetVal * 1.25
-      )
-      .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))[0]
-    if (cand) { returnPlayer = cand; deficitPos = dPos; break }
+  // The best return this opponent could send back: a comparable-value player at
+  // one of my deficit positions, deepest need first.
+  const findReturn = opp => {
+    for (const dPos of myDeficits) {
+      const cand = opp.players
+        .filter(p =>
+          p.position === dPos && !p.isIR &&
+          (p.value ?? 0) >= targetVal * 0.8 && (p.value ?? 0) <= targetVal * 1.25
+        )
+        .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))[0]
+      if (cand) return { returnPlayer: cand, deficitPos: dPos }
+    }
+    return null
   }
 
-  if (returnPlayer) {
+  const scored = opponents.map(opp => {
+    const theirDelta = getPositionalDeltas(opp, leagueAverages)[pos] ?? 0
+    const ret = findReturn(opp)
+    // Would he crack their lineup? Simulated on their roster with him added —
+    // the same "does this actually help them" test Layer 4 applies.
+    const starts = buildValueLineup([
+      ...opp.players,
+      { sleeperId: String(player.sleeperId), name: player.name, position: pos,
+        value: targetVal, isIR: false, isTaxi: false },
+    ]).starterIds.has(String(player.sleeperId))
+
+    // Need is the base; the two facts that make the call worth placing are
+    // weighted above it, so a needy team with nothing to send loses to a
+    // slightly-less-needy one holding what I'm short of.
+    let score = -theirDelta / Math.max(1, leagueAverages[pos] ?? 1)
+    if (starts) score += 1.2
+    if (ret)    score += 1.5
+    return { opp, theirDelta, ret, starts, score }
+  }).sort((a, b) => b.score - a.score)
+
+  const pick = scored[0]
+  if (!pick) return null
+  const partnerName = getTeamName(pick.opp.owner)
+  const give = [{ ...player, type: 'player' }]
+
+  if (pick.ret) {
+    const { returnPlayer, deficitPos } = pick.ret
     return {
-      opponentRosterId: partner.rosterId,
+      opponentRosterId: pick.opp.rosterId,
       partnerName,
       give,
       get: [{ ...returnPlayer, type: 'player' }],
       deficitPos,
+      startsForThem: pick.starts,
       ctaLabel: 'Build this trade',
       summary: `Flip ${player.name} to ${partnerName} for ${returnPlayer.name} — fills your ${deficitPos}.`,
     }
   }
 
   return {
-    opponentRosterId: partner.rosterId,
+    opponentRosterId: pick.opp.rosterId,
     partnerName,
     give,
     get: null,
     deficitPos: myDeficits[0] ?? null,
+    startsForThem: pick.starts,
     ctaLabel: `Shop to ${partnerName}`,
-    summary: `Shop ${player.name} to ${partnerName} — they're thin at ${pos}.`,
+    summary: pick.starts
+      ? `Shop ${player.name} to ${partnerName} — he'd start for them.`
+      : `Shop ${player.name} to ${partnerName} — they're thin at ${pos}.`,
   }
 }
