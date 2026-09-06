@@ -896,6 +896,18 @@ would also put the weaker of the two sentences in front of the verdict gate
 (observed live: Jordan Love → Password Is Taco, where he starts at their SFLX
 and their lineup still *loses* 1,183).
 
+**Layer 4 is exported as `buildPartnerFit` and shared with the recommenders.**
+`suggestFairPackage` scores its candidate packages with this exact function, so
+the package the app suggests and the appeal the Analyzer shows for it are
+computed by one piece of code and cannot disagree. It is extracted rather than
+reached by calling `analyzeTrade` because the package search runs it hundreds of
+times per board — measured on the live league, scoring the full candidate set
+through `analyzeTrade` takes 1.5s against 78ms through this alone, and the rest
+of `analyzeTrade` (trajectory, scarcity, weekly points, the draft nudge) answers
+questions a package search never asks. `leagueAverages` / `winWindowTiers` are
+accepted as options so a caller in a loop computes them once; both are derived
+from `allRosters` when omitted, and injecting them can never change the answer.
+
 **This is roster logic, never a prediction that they will accept.** Per-manager
 behavioral profiling was pre-registered, tested on this league's full 4-season
 corpus (95 trades / 176 sides) and **DISCONFIRMED** — the own-manager profile
@@ -1030,7 +1042,8 @@ between the header and the position chips. It turns one fixed list into two
 modes; the position chips compose with both.
 
 - **All teams (default)** — the league-wide board: every opponent's players at
-  a position where I'm below league average, ranked by `need × value`, top 20.
+  a position where I'm below league average, ranked by
+  `need × value × movability`, top 20.
 - **One team ("scout this team")** — `getTopTradeTargets`'s `ownerRosterId`
   option scopes the ranking to that opponent **and keeps their non-deficit
   pieces**, ranked below the need-matched ones and tagged `Depth` (need-matched
@@ -1054,6 +1067,63 @@ modes; the position chips compose with both.
   state (Partners → "See their targets →") takes priority over it — the same
   precedence the Analyzer uses for its pre-fills. A stale or foreign roster id
   (identity switch, departed team) silently falls back to the league-wide list.
+
+##### The board is two-sided too — movability, and a package they'd take
+
+Both halves of a suggestion used to be computed entirely from my own roster,
+which produced a loop worth naming: tap a target → the app pre-fills a package →
+the Analyzer grades it `Weak` appeal and downgrades its own suggestion to
+Counter. **Measured against the live league before the fix: 19 of 20 suggested
+packages graded `Weak`, none graded `Strong`, and every verdict came back
+Counter or Decline.** The app proposed and then argued with itself.
+
+- **`getTopTradeTargets` ranks by `need × value × movability`.** Movability
+  (`assetMovability`) is three **roster facts** about the team that holds him —
+  his depth rank on their chart, whether he cracks their optimal lineup
+  (`buildValueLineup`), and whether dealing him would drop them below league
+  average. `need × value` alone ranks the most expensive player at my thinnest
+  position first, every time, which put an untouchable WR1 at the top of a list
+  answering "who should I call about?".
+  - **It is a TILT, not a co-equal factor.** `MOVABILITY_RANGE` is
+    `[0.70, 1.35]` — max/min is 1.93, so a player must be worth less than half
+    as much to be outranked on movability alone. A first cut at `[0.35, 1.6]`
+    failed that on live data: a 2,174 WR5 outranked a 4,395 WR2 purely for being
+    available, which is not a better target, only a cheaper one. Same discipline
+    as the rookie board's age tilt.
+  - **It multiplies, it never gates.** A player his team would hate to lose
+    stays on the board, ranked below the ones they can spare. Nothing is hidden
+    by it, and the team-scoped contract above is untouched.
+- **`suggestFairPackage` is two-phase.** Phase 1 enumerates every package in the
+  fair band and ranks them by what they cost **me** — surplus and depth first,
+  core starters never auto-included (`PROTECT_THRESHOLD`), win-window lean.
+  Phase 2 takes the cheapest `PACKAGE_SHORTLIST` (40) of those and scores each
+  with **`buildPartnerFit`** — the same Layer 4 the Analyzer will grade the
+  suggestion with — then takes the best appeal, breaking ties by my own cost.
+  - Phase 1's objective alone selects, by construction, the pieces a partner has
+    least use for: the cheapest asset by keep-score was a third quarterback, and
+    nobody in a Superflex league needs one. The packages that work were inside
+    the same band the whole time — an exhaustive search found a Fair-or-better
+    package for **all 20** targets (8 Strong, 12 Fair) without touching a
+    protected asset. Phase 1 simply never looked at their side. After the fix
+    the live board reads **Strong 4 · Fair 13 · Weak 3**, with 5 Accepts.
+  - **Phase 2 reorders candidates; it never widens the pool.** The fair band and
+    the protected-asset rule are unchanged, so the builder still never reaches
+    for a core starter to make a deal palatable.
+  - **A surviving `Weak` is real information, not a failure** — it means nothing
+    you can spare interests them at this price. The card says so rather than
+    hiding the row.
+  - Without a partner roster it degrades to phase 1 and reports `appeal: null`;
+    no read is invented.
+- Each target card carries the read its package was chosen for — a `Badge`
+  (`Strong` green / `Fair` neutral / `Weak` amber, never brand red) plus one
+  short line. The board no longer hands over an offer without saying what it is
+  worth to the team being asked to accept it.
+- **The five negotiating signals stay out of all of this.** The rule the app
+  runs on is *roster facts may score; second opinions describe* (owner call,
+  2026-09-06) — one rule for verdicts and rankings alike. Layer 4 and movability
+  are arithmetic over a roster, so they score; scarcity, roster space, weekly
+  points and a partner's recent moves are unbacktested second opinions about
+  value or intent, so they describe and never reorder a recommendation.
 
 **No saved history.** The in-progress trade survives the session via
 sessionStorage, but there is no multi-trade history — that lives in Sleeper.
@@ -2240,10 +2310,18 @@ matter:
 
 **Consumers:**
 - **Feature 1 / Feature 12 — Action Items:** `suggestSellMove` turns "you have
-  a surplus" into the actual move — the partner who most needs that position
-  (or, if nobody is below average, the team weakest there), plus a concrete
-  one-for-one when they own a comparable-value player at one of my deficit
-  spots. Returns nav-ready `preloadTrade` state for the Analyzer.
+  a surplus" into the actual move, and its partner pick is **two-sided**. It
+  used to take whichever opponent's positional delta was most negative and then
+  hope a return existed on their roster — so the neediest team won the call even
+  holding nothing I wanted, and the move degraded to a bare "shop him to X".
+  Every opponent is now scored on three roster facts: do they need the position,
+  would he actually **start** for them (`buildValueLineup` — a player who only
+  stacks their bench is not a sale, however thin their summed value reads), and
+  do they own a comparable-value player at one of **my** deficit positions. A
+  partner with a real return beats a needier one without, because the two-sided
+  move is the thing worth surfacing; it still falls back to the neediest team
+  when nobody has a return. Returns nav-ready `preloadTrade` state for the
+  Analyzer, plus `startsForThem`.
 - **League › Free Agents (Feature 1) and The Edge's `pickup` briefing item
   (Feature 12):** `recommendFreeAgents` ranks available players by what they'd
   do for *my* roster — fill a deficit, beat my replacement level at the
@@ -2974,8 +3052,8 @@ dynastyedge/
 │   │   ├── tradeAnalysis.js     ← trade scoring, verdict logic
 │   │   ├── edgeBriefing.js      ← The Edge: signals, briefing items, GM line
 │   │   ├── managerAnalysis.js   ← manager scouting: ledgers, tendencies, draft grades
-│   │   ├── rosterAnalysis.js    ← positional strength, win window tiers
-│   │   ├── recommendations.js   ← THE assistant-GM brain: keep/givability scores, FA pickups, sell moves
+│   │   ├── rosterAnalysis.js    ← positional strength, win window tiers, Targets ranking (need × value × movability)
+│   │   ├── recommendations.js   ← THE assistant-GM brain: keep/givability scores, FA pickups, two-sided sell moves
 │   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation
 │   │   ├── pickCapital.js       ← pick ownership resolution logic
 │   │   ├── rookieAdp.js         ← derived rookie-class ADP for the Draft section
@@ -3016,8 +3094,8 @@ dynastyedge/
 │   ├── pickTrades.test.mjs          ← slot tiers (as coded), slot pricing fallback, package constraints
 │   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
 │   ├── appVersion.test.mjs          ← reload URL: ?v= before the hash (HashRouter), encoding, null build id
-│   ├── tradeTargets.test.mjs        ← Targets ranking: deficit gate + value floor league-wide, team-scoped mode keeps depth (never empty), fillsNeed flag
-│   ├── tradeAnalysis.test.mjs       ← verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge, Layer 4 (a benched acquisition reads Weak however valued; the gate downgrades an Accept but never lifts a Decline; landing spots both directions; the pitch speaks from their side)
+│   ├── tradeTargets.test.mjs        ← Targets ranking: deficit gate + value floor league-wide, team-scoped mode keeps depth (never empty), fillsNeed flag, and the movability TILT (band under 2×, spare depth outranks an equal-value untouchable, nothing ever hidden)
+│   ├── tradeAnalysis.test.mjs       ← verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge, Layer 4 (a benched acquisition reads Weak however valued; the gate downgrades an Accept but never lifts a Decline; landing spots both directions; the pitch speaks from their side), buildPartnerFit's extraction contract (standalone == via analyzeTrade), and the two-phase package builder (phase 2 rejects the piece they have no use for, never unlocks a protected asset, reports no appeal without a partner)
 │   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
 │   ├── lineupBuild.test.mjs         ← slot-fill order (singles → FLEX → SFLX), IR/taxi excluded, who-starts identity
 │   ├── lineupMoves.test.mjs         ← start/sit engine: Σ gains = headline invariant, the two superseded per-slot bugs (double-count, missed cascade), hard-block exclusion, empty DEF slot, swap algebra, confidence lookup + coin-flip demotion (demoted moves still sum to the headline)
@@ -3025,6 +3103,7 @@ dynastyedge/
 │   ├── lineupHistory.test.mjs       ← optimal-lineup slot-fill order (singles → FLEX → SFLX)
 │   ├── matchupWeeks.test.mjs        ← mocked-fetch: one fetch/week across both consumers, all-fail rejection
 │   ├── rookieResearch.test.mjs      ← opportunity blend, shared points scale (the backup-TE trap), within-position divergence, roster-fit re-ranking (need/window bonuses, score untouched), drawer hand-off fields, best-effort feed degradation, and the measurables NULL (age/combine can never move a score)
+│   ├── recommendations.test.mjs     ← suggestSellMove's two-sided partner pick: a concrete return beats a needier team with nothing, the neediest-team fallback, startsForThem, nav-ready shape
 │   └── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
 ├── index.html
 ├── eslint.config.js             ← ESLint 9 flat config (recommended + react-hooks, src/ + scripts/)
@@ -3036,16 +3115,16 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 130 / # pass 125 /
-# fail 5`, which reads like a code regression. The five files that fail are the
-ones transitively importing `react` (`tradeAnalysis.js` → `recommendations.js`
-→ `useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
+honestly:** instead of "cannot find module" it prints `# tests 136 / # pass 129 /
+# fail 7`, which reads like a code regression. The files that fail are the ones
+transitively importing `react` (`tradeAnalysis.js` → `recommendations.js` →
+`useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
 `draftLive` loading their hooks) — the file fails to load, so its tests never
-run and the count silently drops from **178** to 130. `npm run build` in the
-same state fails with `sh: 1: vite: not found`. **If the test count isn't 178,
-run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-05
+run and the count silently drops from **219** to 136. `npm run build` in the
+same state fails with `sh: 1: vite: not found`. **If the test count isn't 219,
+run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-06
 by renaming `node_modules` aside; re-measure them whenever the suite grows —
-the pair had drifted to 177/115 by the time it was next checked.)
+the pair had drifted twice before this, 178/130 and 177/115.)
 
 **Tests:** `npm test` runs the `tests/` suite — plain `.mjs` scripts on Node's
 built-in `node:test` runner with `node:assert/strict`, zero new dependencies

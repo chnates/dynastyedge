@@ -11,6 +11,19 @@ import { POS_CHIP_ACTIVE, POS_TAG as POS_TAGS } from '../../utils/positionColors
 
 const POSITION_FILTERS = ['All', 'QB', 'RB', 'WR', 'TE']
 
+// Layer 4's appeal, in the app's status colors: green = they have a clear
+// reason to say yes, amber = they don't. Never brand red — that is reserved
+// for "you" accents.
+const APPEAL_TONE = { Strong: 'success', Fair: 'neutral', Weak: 'warning' }
+
+// Deliberately terser than partnerFit's own `summary`, which is written for the
+// Analyzer panel and truncates to nothing on a 390px card.
+const APPEAL_LINE = {
+  Strong: 'clear reason for them to say yes',
+  Fair:   'something here, but not compelling',
+  Weak:   'little reason for them to say yes',
+}
+
 // Session-scoped so drilling into the Analyzer and coming back keeps the
 // scouted team — same contract as the League tab's sort/position filters.
 // Roster-scoped: useIdentity wipes it on any identity change (the valid
@@ -76,7 +89,7 @@ function TargetCard({ target, fairPackage, showNeedTag, onTap }) {
           )}
       </div>
 
-      {/* Row 3: estimated package cost + why these pieces */}
+      {/* Row 3: estimated package cost + why these pieces + how it reads to them */}
       {fairPackage && (
         <div className="flex flex-col gap-0.5 min-w-0">
           <div className="flex items-baseline gap-1.5 min-w-0">
@@ -94,6 +107,21 @@ function TargetCard({ target, fairPackage, showNeedTag, onTap }) {
             <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary truncate min-w-0">
               {fairPackage.rationale}
             </span>
+          )}
+          {/* The package was chosen for this read, so it belongs on the card:
+              the board no longer hands over an offer without saying what it's
+              worth to the team being asked to accept it. A Weak here is real —
+              nothing spare interests them at this price — so it says so rather
+              than being hidden. */}
+          {fairPackage.appeal && (
+            <div className="flex items-center gap-1.5 min-w-0 pt-0.5">
+              <Badge tone={APPEAL_TONE[fairPackage.appeal] ?? 'neutral'} soft>
+                {fairPackage.appeal} for them
+              </Badge>
+              <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary truncate min-w-0">
+                {APPEAL_LINE[fairPackage.appeal]}
+              </span>
+            </div>
           )}
         </div>
       )}

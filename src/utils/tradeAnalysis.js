@@ -12,7 +12,18 @@ import { buildGivabilityContext, assetKeepScore, getDeficitPositions, joinAnd, P
 const SCARCITY_FLOOR = 500
 const SCARCITY_GAP = 10
 
+// Appeal is ordinal, so a comparison needs an explicit order. Used by the
+// package builder to prefer the candidate their roster likes most.
+const APPEAL_RANK = { Weak: 0, Fair: 1, Strong: 2 }
+
 const PICK_SUFFIXES = ['', '1st', '2nd', '3rd', '4th']
+
+// Normalize a trade asset into the player shape the lineup sim expects. An
+// arriving player can never land on taxi or IR, so both are false by definition.
+const addAsPlayer = a => ({
+  sleeperId: String(a.sleeperId), name: a.name, position: a.position,
+  value: a.value || 0, age: a.age, unranked: a.unranked, isIR: false, isTaxi: false,
+})
 
 function pickLabel(pick) {
   const suffix = PICK_SUFFIXES[pick.round] ?? `R${pick.round}`
@@ -113,6 +124,187 @@ function pointsLineupTotal(players, projMap) {
   return selectOptimalStarters(items).total
 }
 
+// ── Layer 4: their side ─────────────────────────────────────────────────────
+// Layer 2 run on the PARTNER's roster: does this deal do anything for the team
+// being asked to accept it?
+//
+// Exported because the RECOMMENDERS need it too. `suggestFairPackage` scores its
+// candidate packages with this exact function, so the package the app suggests
+// and the appeal the Analyzer will show it are computed by one piece of code and
+// cannot disagree — the "app proposes, then argues with itself" loop (OPEN-6).
+// It is extracted rather than reached by calling analyzeTrade because the
+// package search runs it hundreds of times per board: measured on the live
+// league, scoring the full candidate set through analyzeTrade takes 1.5s against
+// 78ms through this alone, and the rest of analyzeTrade (trajectory, scarcity,
+// weekly points, the draft nudge) answers questions a package search never asks.
+//
+// leagueAverages / winWindowTiers are accepted so a caller in a loop computes
+// them once; both are derived from allRosters when omitted.
+export function buildPartnerFit(giveAssets, getAssets, opponentRoster, allRosters, opts = {}) {
+  if (!opponentRoster || !allRosters?.length) return null
+
+  const { leagueAverages: injectedAverages = null, winWindowTiers = null, partnerActivity = null } = opts
+  const leagueAverages = injectedAverages ?? computeLeagueAverages(allRosters)
+
+  const getPlayers  = getAssets.filter(a => a.type === 'player')
+  const givePlayers = giveAssets.filter(a => a.type === 'player')
+  const givePicks   = giveAssets.filter(a => a.type === 'pick')
+
+  const giveTotal = giveAssets.reduce((s, a) => s + (a.value || 0), 0)
+  const getTotal  = getAssets.reduce((s, a)  => s + (a.value || 0), 0)
+  // Measured on the larger side, so the read is symmetric with Layer 1's —
+  // only the winner flips between the two seats.
+  const valuePct  = Math.round(Math.abs(getTotal - giveTotal) / Math.max(giveTotal, getTotal, 1) * 100)
+
+  // Layer 2 run on the PARTNER's roster: does this deal do anything for the
+  // team being asked to accept it? Everything here is deterministic roster
+  // logic — what the trade does to their positional standing against league
+  // average and to their optimal starting lineup.
+  //
+  // It is explicitly NOT a prediction that they will accept. Per-manager
+  // behavioral profiling was pre-registered, tested on this league's full
+  // 4-season corpus (95 trades / 176 sides) and DISCONFIRMED — the own-manager
+  // profile scored *below* the league baseline
+  // (docs/analysis/trade-structure-stability-2026-08.md, standing ruling). So
+  // this models the roster, never the human, and the copy says so.
+  const tiers = winWindowTiers ?? assignWinWindowTiers(allRosters)
+  const theirTier         = tiers[opponentRoster.rosterId] ?? 'Middle'
+  const theirDeltas       = getPositionalDeltas(opponentRoster, leagueAverages)
+  const theirBeforeLineup = buildValueLineup(opponentRoster.players)
+
+  const getIds = new Set(getPlayers.map(p => String(p.sleeperId)))
+  const theirAfterPlayers = [
+    ...opponentRoster.players.filter(p => !getIds.has(String(p.sleeperId))),
+    ...givePlayers.map(addAsPlayer),
+  ]
+  const theirAfterLineup = buildValueLineup(theirAfterPlayers)
+  const theirAfterDeltas = getPositionalDeltas({ players: theirAfterPlayers }, leagueAverages)
+
+  // Where what they'd RECEIVE lands on their chart, and where what they'd SEND
+  // currently sits on it — the two halves of "what does this look like to you?"
+  const theirLandingSpots = buildLandingSpots(
+    givePlayers.map(addAsPlayer), theirAfterPlayers, theirAfterLineup
+  )
+  const theirGiveContext = buildDepthContext(
+    opponentRoster.players, getPlayers, theirBeforeLineup.starterIds
+  )
+
+  // The single honest measure of "does this help them": the change in the value
+  // of their best startable lineup. A player who only stacks their bench moves
+  // this by 0, however much he's worth.
+  const theirStartersDelta = Math.round(theirAfterLineup.startingValue - theirBeforeLineup.startingValue)
+
+  const theirFills  = []  // a deficit position an arriving player would actually start at
+  const theirStacks = []  // arriving at a position they're already above league average
+  theirLandingSpots.forEach(l => {
+    const d = theirDeltas[l.position] ?? 0
+    if (d < 0 && l.starts && !theirFills.includes(l.position)) theirFills.push(l.position)
+    if (d > 0 && !theirStacks.includes(l.position)) theirStacks.push(l.position)
+  })
+
+  // Positions the trade actually costs them — the same test Layer 2 applies to
+  // me, so "they can't replace him" reads consistently in both directions.
+  const theirWeakens = []
+  getPlayers.forEach(p => {
+    const pos = p.position
+    if (!pos) return
+    if (theirAfterDeltas[pos] < 0 && theirAfterDeltas[pos] < theirDeltas[pos] && !theirWeakens.includes(pos))
+      theirWeakens.push(pos)
+  })
+
+  // Raw value from their seat. valuePct is measured on the larger side, so it's
+  // symmetric — only the winner flips.
+  const theirValueDiff   = giveTotal - getTotal
+  const theirValueWinner = valuePct <= 5 ? 'even' : theirValueDiff > 0 ? 'them' : 'you'
+
+  // Reasons render in order; `partnerConcerns` is the negative subset, so the
+  // verdict gate can quote the most specific objection rather than whichever
+  // line happened to land first.
+  const partnerReasons  = []
+  const partnerConcerns = []
+  let appealScore = 0
+  const against = txt => { partnerReasons.push(txt); partnerConcerns.push(txt) }
+
+  if (theirValueWinner === 'them') {
+    appealScore += 1
+    partnerReasons.push(`They come out ${valuePct}% ahead on raw dynasty value.`)
+  } else if (theirValueWinner === 'you') {
+    appealScore -= 1
+    against(`They'd be giving up ${valuePct}% more value than they get back.`)
+  }
+
+  // Arriving into a position they're already strong at. This scores against the
+  // deal ONLY when the player can't crack their lineup — that's a fact the value
+  // total hides entirely. When he does start, the upgrade is merely marginal,
+  // and `theirStartersDelta` already measures exactly how marginal; penalising
+  // it here too would charge the same fact twice and would put the weaker of
+  // the two sentences in front of the verdict gate.
+  const benchedForThem = theirLandingSpots.filter(l => theirStacks.includes(l.position) && !l.starts)
+  if (theirFills.length === 0 && benchedForThem.length > 0) {
+    appealScore -= 1
+    against(`${joinAnd(benchedForThem.map(b => b.name))} wouldn't crack their lineup — they're already above league average at ${joinAnd([...new Set(benchedForThem.map(b => b.position))])}.`)
+  } else if (theirFills.length === 0 && theirStacks.length > 0) {
+    partnerReasons.push(`They're already above league average at ${joinAnd(theirStacks)} — this is a marginal upgrade for them, not a hole filled.`)
+  }
+
+  if (theirStartersDelta > 0) {
+    appealScore += 1
+    partnerReasons.push(`Their best starting lineup gains ${theirStartersDelta.toLocaleString()} in value.`)
+  } else if (theirStartersDelta < 0) {
+    appealScore -= 1
+    against(`Their best starting lineup loses ${Math.abs(theirStartersDelta).toLocaleString()} in value.`)
+  } else if (givePlayers.length > 0) {
+    partnerReasons.push("Nothing you're sending changes their starting lineup.")
+  }
+
+  if (theirFills.length > 0) {
+    appealScore += 1
+    partnerReasons.push(`It covers their ${joinAnd(theirFills)} deficit with a player who starts for them right away.`)
+  }
+
+  if (theirWeakens.length > 0) {
+    appealScore -= 1
+    against(`Making it drops them below league average at ${joinAnd(theirWeakens)}.`)
+  }
+
+  // Win-window lean on picks — the mirror of Layer 3's read, from their seat.
+  if (givePicks.length > 0) {
+    if (theirTier === 'Rebuilding') {
+      appealScore += 1
+      partnerReasons.push(`They're rebuilding — the ${givePicks.length > 1 ? 'picks' : 'pick'} you're offering is what they're collecting.`)
+    } else if (theirTier === 'Contending' && givePlayers.length === 0) {
+      appealScore -= 1
+      against("They're contending and you're offering only picks — they want win-now help.")
+    }
+  }
+
+  const appeal = appealScore >= 2 ? 'Strong' : appealScore >= 0 ? 'Fair' : 'Weak'
+  const APPEAL_SUMMARY = {
+    Strong: 'Their roster gives them a clear reason to say yes.',
+    Fair:   "There's something here for them, but it isn't compelling on its own.",
+    Weak:   'Their roster gives them little reason to take this.',
+  }
+
+  return {
+    afterPlayers: theirAfterPlayers,
+    tier: theirTier,
+    deltas: theirDeltas,
+    valueWinner: theirValueWinner,
+    startersDelta: theirStartersDelta,
+    fills: theirFills,
+    stacks: theirStacks,
+    weakens: theirWeakens,
+    landingSpots: theirLandingSpots,
+    giveContext: theirGiveContext,
+    appeal,
+    appealScore,
+    summary: APPEAL_SUMMARY[appeal],
+    reasons: partnerReasons,
+    concerns: partnerConcerns,
+    activity: partnerActivity,
+  }
+}
+
 export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, allRosters, opts = {}) {
   if (!myRoster || !opponentRoster || !allRosters?.length) return null
 
@@ -139,7 +331,6 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
   const getPlayers  = getAssets.filter(a => a.type === 'player')
   const getPicks    = getAssets.filter(a => a.type === 'pick')
   const givePlayers = giveAssets.filter(a => a.type === 'player')
-  const givePicks   = giveAssets.filter(a => a.type === 'pick')
 
   // Layer 2: Roster fit — simulated against the ACTUAL post-trade starting
   // lineup (optimal by dynasty value), not a bare position-tag match. So an
@@ -149,10 +340,6 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
   const myDeltas = getPositionalDeltas(myRoster, leagueAverages)
 
   const giveIds = new Set(givePlayers.map(p => String(p.sleeperId)))
-  const addAsPlayer = a => ({
-    sleeperId: String(a.sleeperId), name: a.name, position: a.position,
-    value: a.value || 0, age: a.age, unranked: a.unranked, isIR: false, isTaxi: false,
-  })
 
   const beforeLineup = buildValueLineup(myRoster.players)
   const afterPlayers = [
@@ -335,157 +522,15 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
     }
   }
 
-
-  // ── Layer 4: Their side ───────────────────────────────────────────────────
-  // Layer 2 run on the PARTNER's roster: does this deal do anything for the
-  // team being asked to accept it? Everything here is deterministic roster
-  // logic — what the trade does to their positional standing against league
-  // average and to their optimal starting lineup.
-  //
-  // It is explicitly NOT a prediction that they will accept. Per-manager
-  // behavioral profiling was pre-registered, tested on this league's full
-  // 4-season corpus (95 trades / 176 sides) and DISCONFIRMED — the own-manager
-  // profile scored *below* the league baseline
-  // (docs/analysis/trade-structure-stability-2026-08.md, standing ruling). So
-  // this models the roster, never the human, and the copy says so.
-  const theirTier         = winWindowTiers[opponentRoster.rosterId] ?? 'Middle'
-  const theirDeltas       = getPositionalDeltas(opponentRoster, leagueAverages)
-  const theirBeforeLineup = buildValueLineup(opponentRoster.players)
-
-  const getIds = new Set(getPlayers.map(p => String(p.sleeperId)))
-  const theirAfterPlayers = [
-    ...opponentRoster.players.filter(p => !getIds.has(String(p.sleeperId))),
-    ...givePlayers.map(addAsPlayer),
-  ]
-  const theirAfterLineup = buildValueLineup(theirAfterPlayers)
-  const theirAfterDeltas = getPositionalDeltas({ players: theirAfterPlayers }, leagueAverages)
-
-  // Where what they'd RECEIVE lands on their chart, and where what they'd SEND
-  // currently sits on it — the two halves of "what does this look like to you?"
-  const theirLandingSpots = buildLandingSpots(
-    givePlayers.map(addAsPlayer), theirAfterPlayers, theirAfterLineup
-  )
-  const theirGiveContext = buildDepthContext(
-    opponentRoster.players, getPlayers, theirBeforeLineup.starterIds
-  )
-
-  // The single honest measure of "does this help them": the change in the value
-  // of their best startable lineup. A player who only stacks their bench moves
-  // this by 0, however much he's worth.
-  const theirStartersDelta = Math.round(theirAfterLineup.startingValue - theirBeforeLineup.startingValue)
-
-  const theirFills  = []  // a deficit position an arriving player would actually start at
-  const theirStacks = []  // arriving at a position they're already above league average
-  theirLandingSpots.forEach(l => {
-    const d = theirDeltas[l.position] ?? 0
-    if (d < 0 && l.starts && !theirFills.includes(l.position)) theirFills.push(l.position)
-    if (d > 0 && !theirStacks.includes(l.position)) theirStacks.push(l.position)
+  // Layer 4 — their side. Extracted (see buildPartnerFit) so the recommenders
+  // score their suggestions with the same function that grades them here.
+  const partnerFit = buildPartnerFit(giveAssets, getAssets, opponentRoster, allRosters, {
+    leagueAverages, winWindowTiers, partnerActivity,
   })
-
-  // Positions the trade actually costs them — the same test Layer 2 applies to
-  // me, so "they can't replace him" reads consistently in both directions.
-  const theirWeakens = []
-  getPlayers.forEach(p => {
-    const pos = p.position
-    if (!pos) return
-    if (theirAfterDeltas[pos] < 0 && theirAfterDeltas[pos] < theirDeltas[pos] && !theirWeakens.includes(pos))
-      theirWeakens.push(pos)
-  })
-
-  // Raw value from their seat. valuePct is measured on the larger side, so it's
-  // symmetric — only the winner flips.
-  const theirValueDiff   = giveTotal - getTotal
-  const theirValueWinner = valuePct <= 5 ? 'even' : theirValueDiff > 0 ? 'them' : 'you'
-
-  // Reasons render in order; `partnerConcerns` is the negative subset, so the
-  // verdict gate can quote the most specific objection rather than whichever
-  // line happened to land first.
-  const partnerReasons  = []
-  const partnerConcerns = []
-  let appealScore = 0
-  const against = txt => { partnerReasons.push(txt); partnerConcerns.push(txt) }
-
-  if (theirValueWinner === 'them') {
-    appealScore += 1
-    partnerReasons.push(`They come out ${valuePct}% ahead on raw dynasty value.`)
-  } else if (theirValueWinner === 'you') {
-    appealScore -= 1
-    against(`They'd be giving up ${valuePct}% more value than they get back.`)
-  }
-
-  // Arriving into a position they're already strong at. This scores against the
-  // deal ONLY when the player can't crack their lineup — that's a fact the value
-  // total hides entirely. When he does start, the upgrade is merely marginal,
-  // and `theirStartersDelta` already measures exactly how marginal; penalising
-  // it here too would charge the same fact twice and would put the weaker of
-  // the two sentences in front of the verdict gate.
-  const benchedForThem = theirLandingSpots.filter(l => theirStacks.includes(l.position) && !l.starts)
-  if (theirFills.length === 0 && benchedForThem.length > 0) {
-    appealScore -= 1
-    against(`${joinAnd(benchedForThem.map(b => b.name))} wouldn't crack their lineup — they're already above league average at ${joinAnd([...new Set(benchedForThem.map(b => b.position))])}.`)
-  } else if (theirFills.length === 0 && theirStacks.length > 0) {
-    partnerReasons.push(`They're already above league average at ${joinAnd(theirStacks)} — this is a marginal upgrade for them, not a hole filled.`)
-  }
-
-  if (theirStartersDelta > 0) {
-    appealScore += 1
-    partnerReasons.push(`Their best starting lineup gains ${theirStartersDelta.toLocaleString()} in value.`)
-  } else if (theirStartersDelta < 0) {
-    appealScore -= 1
-    against(`Their best starting lineup loses ${Math.abs(theirStartersDelta).toLocaleString()} in value.`)
-  } else if (givePlayers.length > 0) {
-    partnerReasons.push("Nothing you're sending changes their starting lineup.")
-  }
-
-  if (theirFills.length > 0) {
-    appealScore += 1
-    partnerReasons.push(`It covers their ${joinAnd(theirFills)} deficit with a player who starts for them right away.`)
-  }
-
-  if (theirWeakens.length > 0) {
-    appealScore -= 1
-    against(`Making it drops them below league average at ${joinAnd(theirWeakens)}.`)
-  }
-
-  // Win-window lean on picks — the mirror of Layer 3's read, from their seat.
-  if (givePicks.length > 0) {
-    if (theirTier === 'Rebuilding') {
-      appealScore += 1
-      partnerReasons.push(`They're rebuilding — the ${givePicks.length > 1 ? 'picks' : 'pick'} you're offering is what they're collecting.`)
-    } else if (theirTier === 'Contending' && givePlayers.length === 0) {
-      appealScore -= 1
-      against("They're contending and you're offering only picks — they want win-now help.")
-    }
-  }
-
-  const appeal = appealScore >= 2 ? 'Strong' : appealScore >= 0 ? 'Fair' : 'Weak'
-  const APPEAL_SUMMARY = {
-    Strong: 'Their roster gives them a clear reason to say yes.',
-    Fair:   "There's something here for them, but it isn't compelling on its own.",
-    Weak:   'Their roster gives them little reason to take this.',
-  }
-
-  const partnerFit = {
-    tier: theirTier,
-    deltas: theirDeltas,
-    valueWinner: theirValueWinner,
-    startersDelta: theirStartersDelta,
-    fills: theirFills,
-    stacks: theirStacks,
-    weakens: theirWeakens,
-    landingSpots: theirLandingSpots,
-    giveContext: theirGiveContext,
-    appeal,
-    appealScore,
-    summary: APPEAL_SUMMARY[appeal],
-    reasons: partnerReasons,
-    concerns: partnerConcerns,
-    activity: partnerActivity,
-  }
+  const { afterPlayers: theirAfterPlayers } = partnerFit
 
   // My side's mirror: where the players I'm ACQUIRING land on my own chart.
   const myLandingSpots = buildLandingSpots(getPlayers.map(addAsPlayer), afterPlayers, afterLineup)
-
 
   // ── The negotiating instruments (all descriptive — none moves the verdict) ──
   //
@@ -865,17 +910,35 @@ function packageRationale(assets, ctx) {
     : 'Protects your core starters.'
 }
 
+// How many of the cheapest-for-me packages get scored on the partner's side.
+// The shortlist exists purely to bound cost; measured on the live 20-target
+// board, widening it past ~40 changed no suggestion.
+const PACKAGE_SHORTLIST = 40
+
 // Suggest a fair package from MY roster to acquire targetPlayer.
 //
-// Roster-aware ("balanced" posture): instead of grabbing the cheapest assets
-// that reach the value, it draws from positions of surplus and depth, protects
-// starters at thin positions, leans into my win window (a contender spends
-// picks/young fliers; a rebuilder keeps youth/picks and moves aging vets), and
-// — when the partner roster is known — prefers pieces at the partner's deficit
-// positions so the package is one they'd actually accept.
+// TWO-PHASE, and the second phase is the point. Phase 1 enumerates every
+// package inside the fair band and ranks them by what they cost ME — surplus
+// and depth first, core starters never auto-included, win-window lean. Phase 2
+// takes that shortlist and scores each candidate on the PARTNER's side with
+// `buildPartnerFit` — the same Layer 4 the Analyzer will grade the suggestion
+// with — then picks the best appeal, breaking ties by my own cost.
+//
+// Phase 2 is what stops the app arguing with itself. Phase 1's objective alone
+// selects, by construction, the pieces a partner has least use for: measured
+// against the live league, 19 of 20 suggested packages graded `Weak` appeal and
+// every verdict came back Counter or Decline, because the cheapest asset by
+// keep-score was a third quarterback nobody in a Superflex league needs. The
+// packages that work were already inside the same band — an exhaustive search
+// found a Fair-or-better package for all 20 targets (8 Strong, 12 Fair) without
+// touching a protected asset. Phase 1 simply never looked at their side.
+//
+// A `Weak` result that survives phase 2 is therefore real information, not a
+// failure: it means nothing you can spare interests them at this price.
 //
 // allRosters + opponentRoster are optional; without them it degrades to a
-// depth-aware package (no surplus/window/partner lean).
+// depth-aware package (no surplus/window/partner lean) and skips phase 2 —
+// there is no partner to score against.
 export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, opponentRoster = null) {
   if (!targetPlayer || !myRoster) return null
   const targetValue = targetPlayer.value || 0
@@ -914,7 +977,7 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
   // value and toward assets the partner needs. bestUnder tracks the closest
   // package that still undershoots — used only when nothing reaches fair value,
   // so we surface an honest "covers ~X%, add a piece" instead of a stud.
-  let best = null
+  const candidates = []
   let bestUnder = null
   const consider = idxs => {
     let total = 0, pain = 0
@@ -930,7 +993,7 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
     }
     pain += 0.2 * (idxs.length - 1)
     pain += Math.abs(total - targetValue) / targetValue * 0.3
-    if (!best || pain < best.pain) best = { idxs, total, pain }
+    candidates.push({ idxs, total, pain })
   }
 
   const n = available.length
@@ -951,13 +1014,56 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
     }
   }
 
+  // ── Phase 2: score the shortlist on THEIR side ────────────────────────────
+  // Only appeal and my own cost decide this — both roster facts. The
+  // negotiating signals (scarcity, roster space, weekly points, their recent
+  // moves) stay out of it, exactly as they stay out of the verdict.
+  let best = null
+  if (candidates.length) {
+    candidates.sort((a, b) => a.pain - b.pain)
+
+    const canScorePartner = !!opponentRoster && !!allRosters?.length
+    if (!canScorePartner) {
+      best = candidates[0]
+    } else {
+      // Computed once and injected — phase 2 runs buildPartnerFit up to
+      // PACKAGE_SHORTLIST times per target, and these are the same for all of them.
+      const leagueAverages = computeLeagueAverages(allRosters)
+      const winWindowTiers = assignWinWindowTiers(allRosters)
+      const getAssets = [{ ...targetPlayer, type: 'player' }]
+
+      candidates.slice(0, PACKAGE_SHORTLIST).forEach(c => {
+        const assets = c.idxs.map(i => available[i])
+        const fit = buildPartnerFit(assets, getAssets, opponentRoster, allRosters, {
+          leagueAverages, winWindowTiers,
+        })
+        if (!fit) return
+        const rank = APPEAL_RANK[fit.appeal] ?? 0
+        // Best appeal wins; among equals, the package that costs me least. The
+        // shortlist is already sorted by pain, so a strict > keeps the first.
+        if (!best || rank > best.appealRank) best = { ...c, appealRank: rank, partnerFit: fit }
+      })
+      // Every scored candidate returned null (no partner roster shape to read) —
+      // fall back to the cheapest rather than suggesting nothing.
+      if (!best) best = candidates[0]
+    }
+  }
+
   if (best) {
     const assets = best.idxs.map(i => available[i])
     const gapPct = Math.round(Math.abs(best.total - targetValue) / targetValue * 100)
+    const fit = best.partnerFit ?? null
     return {
       assets, totalValue: best.total, gapPct,
       over: best.total >= targetValue,
       rationale: packageRationale(assets, ctx),
+      // The partner read this package was CHOSEN for, so a surface showing the
+      // suggestion can show what it's worth to them instead of implying it's
+      // agreeable. Null when there's no partner roster to read.
+      appeal: fit?.appeal ?? null,
+      partnerSummary: fit?.summary ?? null,
+      partnerStartersDelta: fit?.startersDelta ?? null,
+      partnerConcern: fit?.concerns?.[0] ?? null,
     }
   }
 

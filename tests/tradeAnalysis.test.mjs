@@ -16,7 +16,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { analyzeTrade, getTradeVerdict, getCounterSuggestion, buildTradePitch } from '../src/utils/tradeAnalysis.js'
+import { analyzeTrade, getTradeVerdict, getCounterSuggestion, buildTradePitch, buildPartnerFit, suggestFairPackage } from '../src/utils/tradeAnalysis.js'
+import { computeLeagueAverages, assignWinWindowTiers } from '../src/utils/rosterAnalysis.js'
+import { buildGivabilityContext, assetKeepScore, PROTECT_THRESHOLD } from '../src/utils/recommendations.js'
 
 // Minimal 4-team league so analyzeTrade's league-average / tier machinery has
 // real inputs. Values are arbitrary but fixed.
@@ -534,4 +536,122 @@ test('the pitch needs both sides — a half-built trade produces none', () => {
   const give = [asAsset(me.players.find(p => p.name === 'My RB1'))]
   const a = analyzeTrade(give, [], me, them, all)
   assert.equal(buildTradePitch(a, { giveAssets: give, getAssets: [] }), null)
+})
+
+// ── OPEN-6: the recommenders are two-sided too ──────────────────────────────
+// CLAUDE.md Feature 3: `suggestFairPackage` is two-phase — phase 1 ranks every
+// package in the fair band by what it costs ME, phase 2 scores that shortlist
+// with `buildPartnerFit` (the same Layer 4 the Analyzer grades it with) and
+// takes the best appeal. This is what stops the app suggesting a package its
+// own panel immediately downgrades.
+
+test('buildPartnerFit is the SAME computation analyzeTrade uses (extraction contract)', () => {
+  const { me, them, all } = makeStackedLeague()
+  const give = [asAsset(me.players.find(p => p.name === 'Love'))]
+  const get  = [asAsset(them.players.find(p => p.name === 'Flowers'))]
+
+  const standalone = buildPartnerFit(give, get, them, all)
+  const viaAnalyze = analyzeTrade(give, get, me, them, all).partnerFit
+
+  assert.equal(standalone.appeal, viaAnalyze.appeal)
+  assert.equal(standalone.appealScore, viaAnalyze.appealScore)
+  assert.equal(standalone.startersDelta, viaAnalyze.startersDelta)
+  assert.deepEqual(standalone.reasons, viaAnalyze.reasons)
+  assert.deepEqual(standalone.fills, viaAnalyze.fills)
+})
+
+test('buildPartnerFit needs no injected averages or tiers (standalone contract)', () => {
+  const { them, all } = makeStackedLeague()
+  const fit = buildPartnerFit(
+    [{ type: 'player', sleeperId: 'x', name: 'X', position: 'RB', value: 3000 }],
+    [asAsset(them.players.find(p => p.name === 'Flowers'))],
+    them, all
+  )
+  assert.ok(fit && ['Strong', 'Fair', 'Weak'].includes(fit.appeal))
+  // Injecting them must not change the answer — they are a cost optimization
+  // for a caller in a loop, never a different model.
+  const injected = buildPartnerFit(
+    [{ type: 'player', sleeperId: 'x', name: 'X', position: 'RB', value: 3000 }],
+    [asAsset(them.players.find(p => p.name === 'Flowers'))],
+    them, all,
+    { leagueAverages: computeLeagueAverages(all), winWindowTiers: assignWinWindowTiers(all) }
+  )
+  assert.equal(injected.appeal, fit.appeal)
+  assert.equal(injected.appealScore, fit.appealScore)
+})
+
+test('buildPartnerFit returns null without a partner roster (degradation contract)', () => {
+  const { them, all } = makeStackedLeague()
+  assert.equal(buildPartnerFit([], [], null, all), null)
+  assert.equal(buildPartnerFit([], [], them, []), null)
+})
+
+// The bad loop needs a roster with a REAL alternative in the band, otherwise
+// Weak is the honest ceiling and the builder is right to report it. Here my
+// cheapest single asset by keep-score is still a third quarterback (into a room
+// of three better ones), but spare RB and TE depth reaches the same band — and
+// the partner is threadbare at both.
+function makeSpareDepthLeague() {
+  const P = (id, name, pos, value, age = 26) =>
+    ({ sleeperId: id, name, position: pos, value, age, isIR: false, isTaxi: false })
+  const mk = (rosterId, players) => ({
+    rosterId, players, picks: [],
+    totalValue: players.reduce((s, p) => s + p.value, 0),
+    pickCapitalScore: 0, avgStarterAge: 26,
+  })
+  const me = mk(1, [
+    P('101', 'Dart', 'QB', 4937), P('102', 'Nix', 'QB', 4704), P('103', 'Love', 'QB', 3902),
+    P('104', 'My RB1', 'RB', 3000), P('105', 'My RB2', 'RB', 2800), P('106', 'My RB3', 'RB', 2600),
+    P('107', 'My TE1', 'TE', 2500), P('108', 'My TE2', 'TE', 2300), P('111', 'My RB4', 'RB', 1400),
+    P('109', 'My WR1', 'WR', 2000), P('110', 'My WR2', 'WR', 1200),
+  ])
+  const them = mk(2, [
+    P('201', 'Their QB1', 'QB', 6000), P('202', 'Their QB2', 'QB', 5000), P('203', 'Their QB3', 'QB', 4500),
+    P('204', 'Flowers', 'WR', 3891), P('205', 'Their WR1', 'WR', 5000), P('206', 'Their WR2', 'WR', 4500),
+    P('207', 'Their WR3', 'WR', 3000),
+    P('208', 'Their RB1', 'RB', 900), P('209', 'Their TE1', 'TE', 700),   // threadbare
+  ])
+  const t3 = mk(3, [P('301', 'a', 'QB', 3000), P('302', 'b', 'RB', 3000), P('303', 'c', 'WR', 3000), P('304', 'd', 'TE', 1500)])
+  const t4 = mk(4, [P('401', 'a', 'QB', 2000), P('402', 'b', 'RB', 2000), P('403', 'c', 'WR', 2000), P('404', 'd', 'TE', 1000)])
+  return { me, them, all: [me, them, t3, t4] }
+}
+
+test('phase 2 stops the builder reaching for the piece they have no use for (OPEN-6)', () => {
+  // The exact shape of the bad loop, measured live: my cheapest asset by
+  // keep-score is a third quarterback, and the partner already starts three
+  // better ones — so the one-sided builder handed over a package its own
+  // Layer 4 graded Weak. Pieces they'd actually start sit in the same band.
+  const { me, them, all } = makeSpareDepthLeague()
+  const flowers = them.players.find(p => p.name === 'Flowers')
+
+  const pkg = suggestFairPackage(flowers, me, all, them)
+  assert.ok(pkg, 'a package is still suggested')
+
+  // The suggestion now carries the read it was chosen for.
+  assert.ok(['Strong', 'Fair', 'Weak'].includes(pkg.appeal))
+  assert.notEqual(pkg.appeal, 'Weak', 'phase 2 rejects the package they have no use for')
+
+  // And it is no longer the lone spare QB into a room of three better ones.
+  const isLoneSpareQb = pkg.assets.length === 1 && pkg.assets[0].name === 'Love'
+  assert.equal(isLoneSpareQb, false)
+})
+
+test('the package still comes from spare parts — phase 2 never unlocks a protected core piece (OPEN-6)', () => {
+  const { me, them, all } = makeSpareDepthLeague()
+  const flowers = them.players.find(p => p.name === 'Flowers')
+  const ctx = buildGivabilityContext(me, all)
+  const pkg = suggestFairPackage(flowers, me, all, them)
+  assert.ok(pkg.assets.every(a => assetKeepScore(a, ctx) < PROTECT_THRESHOLD),
+    'appeal may reorder the candidates, never widen the pool')
+  // The fair band is unchanged too.
+  assert.ok(pkg.totalValue >= flowers.value * 0.9 && pkg.totalValue <= flowers.value * 1.15)
+})
+
+test('without a partner roster the builder degrades to phase 1 and reports no appeal (OPEN-6)', () => {
+  const { me, them, all } = makeSpareDepthLeague()
+  const flowers = them.players.find(p => p.name === 'Flowers')
+  const pkg = suggestFairPackage(flowers, me, all, null)
+  assert.ok(pkg, 'still suggests a package')
+  assert.equal(pkg.appeal, null, 'no partner to read, so no read is invented')
+  assert.equal(pkg.partnerSummary, null)
 })

@@ -16,7 +16,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { getTopTradeTargets } from '../src/utils/rosterAnalysis.js'
+import { getTopTradeTargets, assetMovability, MOVABILITY_RANGE } from '../src/utils/rosterAnalysis.js'
 
 // Roster factory: `getPositionalStrength` sums the top N by value per
 // position, so the counts below control who reads as above/below average.
@@ -83,4 +83,51 @@ test('value floor and IR exclusion hold in team-scoped mode too (Feature 3 / rul
 
 test('an unknown ownerRosterId yields an empty scoped board rather than the whole league', () => {
   assert.deepEqual(getTopTradeTargets(me, league, 20, { ownerRosterId: 99 }), [])
+})
+
+// ── Movability (OPEN-6) ─────────────────────────────────────────────────────
+// CLAUDE.md Feature 2/3: the board ranks by need × value × movability, where
+// movability is three ROSTER FACTS about the owning team — the target's depth
+// rank on their chart, whether he cracks their optimal lineup, and whether
+// dealing him drops them below league average. Never a read on the manager.
+
+test('movability multiplies the ranking without ever hiding a player (OPEN-6)', () => {
+  const targets = getTopTradeTargets(me, league, 20, { ownerRosterId: 2 })
+  // Every row still carries the factor, and the full board still comes back.
+  assert.deepEqual(targets.map(t => t.sleeperId), ['r2', 'r3', 'w4'])
+  assert.ok(targets.every(t => typeof t.movability === 'number'))
+  assert.ok(targets.every(t => t.movability >= MOVABILITY_RANGE[0] && t.movability <= MOVABILITY_RANGE[1]))
+})
+
+test('movability is a TILT — it can never invert a real value gap (OPEN-6)', () => {
+  // The band's own contract: max/min < 2, so a player worth less than half as
+  // much can never outrank a better one on movability alone. An early cut at
+  // 0.35–1.6 failed this on live data (a 2,174 WR5 outranked a 4,395 WR2).
+  const [lo, hi] = MOVABILITY_RANGE
+  assert.ok(hi / lo < 2, `movability swing ${(hi / lo).toFixed(2)} must stay under 2×`)
+})
+
+test('a player his team would drop below average for scores below one (OPEN-6)', () => {
+  // Their only starter at the position, and losing him craters it.
+  const untouchable = assetMovability({ depthRank: 0, starts: true, weakensThem: true, theirDelta: 500 })
+  // Their fifth at a position they're already deep at, riding the bench.
+  const spare = assetMovability({ depthRank: 4, starts: false, weakensThem: false, theirDelta: 4000 })
+  assert.ok(untouchable < 1, 'a piece they cannot replace ranks below neutral')
+  assert.ok(spare > 1, 'genuine surplus depth ranks above neutral')
+  assert.ok(spare > untouchable)
+})
+
+test('movability reorders a real board: spare depth outranks an equal-value untouchable (OPEN-6)', () => {
+  // Two opponents each holding one 4,000 RB at my deficit position. Team 5
+  // would fall below average without him; team 6 has RBs to spare.
+  const tight = roster(5, [player('r7', 'RB', 4000)])
+  const deep  = roster(6, [
+    player('r8', 'RB', 4000), player('r9', 'RB', 3800), player('r10', 'RB', 3600),
+  ])
+  const targets = getTopTradeTargets(me, [me, tight, deep], 20)
+  const tightRow = targets.find(t => t.sleeperId === 'r7')
+  const deepRow  = targets.find(t => t.sleeperId === 'r8')
+  assert.ok(tightRow && deepRow, 'both are still on the board — nothing is hidden')
+  assert.ok(deepRow.needScore > tightRow.needScore,
+    'at equal value, the team that can spare him ranks first')
 })

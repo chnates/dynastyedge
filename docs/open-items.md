@@ -5,8 +5,8 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-09-04 (owner approved a four-phase build plan — see
-`docs/build-plan-2026-09.md`, now the active work queue).
+**Last reviewed:** 2026-09-06 (OPEN-6 closed; the active work queue remains
+`docs/build-plan-2026-09.md`).
 
 **How to use it:**
 - Each item states its **trigger** — the condition that makes it ready. An item
@@ -464,42 +464,56 @@ findings wastes a session. Full detail in `docs/repo-review-2026-07.md`.
   so date-less trade pairs miss it (the net-value wash is arithmetic-invariant
   and unaffected).
 
-### OPEN-6 — Push Layer 4 into Trade › Targets and the fair-package builder
+### 2026-09-06 — OPEN-6 closed: the recommendation surfaces are two-sided
 
-**Opened 2026-09-06** by the two-sided Analyzer work (Feature 3 Layer 4 + the
-five negotiating signals).
+The Analyzer went two-sided in PR #36; the surfaces that *suggest* a trade did
+not, which produced a loop worth naming — tap a target, the app pre-fills a
+package, the Analyzer grades it `Weak` and downgrades its own suggestion.
 
-The Analyzer is now two-sided; **Targets and `suggestFairPackage` are not.**
+**Measured on the live league before the change: 19 of 20 suggested packages
+graded `Weak` appeal, none graded `Strong`, and all 20 verdicts came back
+Counter or Decline.** The board did not recommend a single trade its own panel
+would stand behind. Root cause was `suggestFairPackage`'s objective, not the
+ranking: minimizing my own pain selects, by construction, the pieces a partner
+has least use for — my cheapest asset by keep-score was a third quarterback, and
+it appeared in 11 of the 20 packages.
 
-- `getTopTradeTargets` (`utils/rosterAnalysis.js`) still ranks purely by
-  `need × value` off MY positional deltas. It never asks whether the team
-  holding that player would move him, or whether anything I could send back
-  interests them.
-- `suggestFairPackage` (`utils/tradeAnalysis.js`) still reaches for the partner
-  only through one −0.08 pain nudge on their deficit positions. It has no
-  access to `partnerFit`, roster space, or scarcity.
+An exhaustive search proved the ceiling: **a Fair-or-better package existed for
+all 20 targets (8 Strong, 12 Fair) inside the same fair band, without touching a
+protected asset.** Phase 1 never looked at their side. After the fix the live
+board reads **Strong 4 · Fair 13 · Weak 3** with 5 Accepts; the surviving Weaks
+are the two targets I genuinely cannot pay for, which is information rather than
+a failure.
 
-**The bad loop this creates:** tap a target → the app pre-fills a package →
-the Analyzer immediately grades that package `Weak appeal` and downgrades its
-own suggestion to Counter. The app proposes and then argues with itself. Not
-wrong (the Analyzer is right to catch it) but a poor experience, and the
-suggestion is doing less work than it could.
+What shipped: `buildPartnerFit` extracted from `analyzeTrade` and shared;
+`suggestFairPackage` two-phase (cheap enumeration → 40-candidate shortlist →
+exact Layer 4 appeal); `getTopTradeTargets` ranked by `need × value ×
+movability`; `suggestSellMove`'s partner pick made two-sided; the appeal read
+surfaced on each target card. 219 tests (up from 204), lint + build clean, all
+of it verified against the live league.
 
-**Why it wasn't done in the same pass:** scope. The two-sided engine and the
-panel restructure were the owner's ask; re-ranking Targets changes what the
-board *recommends*, which is a product decision of its own and deserves its own
-look — not a silent side effect of a layout PR.
+**Owner ruling, 2026-09-06 — the rule is now "roster facts may score; second
+opinions describe."** This replaces the narrower "the five negotiating signals
+never move a verdict" with one rule covering verdicts and rankings alike. Layer
+4 and movability are arithmetic over a roster, so they score. Scarcity, roster
+space, weekly lineup impact and a partner's recent moves are unbacktested second
+opinions about value or intent, so they describe and never reorder a
+recommendation. Roster space was considered as an exception and rejected: "they
+are 3 over the cap" is a fact, but "so they want a 2-for-1" is a guess about
+behavior, and behavioral modelling is disconfirmed here.
 
-**Trigger:** owner asks for it, OR the loop above is observed to be annoying in
-real use. The pieces are all in place and pure — `buildLandingSpots`,
-`buildDepthContext`, the partner-fit block, `buildReplacementLevels`,
-`buildRosterSpace` are exported and tested, so this is composition, not new
-modelling.
+**Two findings recorded but NOT acted on:**
 
-**Watch out for:** whatever it does, it must not turn Targets into a list that
-silently hides players. The team-scoped mode's existing contract — an
-explicitly chosen team never renders empty, and the split is stated honestly in
-a line above the list — has to survive.
+1. **The league-wide board is single-position by construction.** `need` is a
+   per-position constant, so `need × value` collapses to a value sort within
+   whichever position I'm thinnest at — today that is WR, and all 20 rows are
+   WRs. Owner call 2026-09-06: **keep the deficit gate.** That is the board's
+   job; converting a surplus is `suggestSellMove`'s, and the team-scoped mode
+   already shows non-deficit pieces.
+2. **Movability's band is load-bearing and was tuned once already.** The first
+   cut, `[0.35, 1.6]`, let a 2,174 WR5 outrank a 4,395 WR2 on live data. If it
+   is ever widened past a 2× swing, that inversion comes back —
+   `tests/tradeTargets.test.mjs` pins the ratio.
 
 ### OPEN-5 — Model calibration (open research)
 
@@ -519,6 +533,7 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 
 | Item | Closed | How |
 |---|---|---|
+| OPEN-6 — push Layer 4 into Targets and the fair-package builder | 2026-09-06 | Layer 4 extracted as `buildPartnerFit` and shared; `suggestFairPackage` made two-phase; Targets ranked by `need × value × movability`; `suggestSellMove` partner pick made two-sided. Detail retained in §1 |
 | July 2026 repo-review backlog B1–B11 | 2026-07/08 | All eleven landed — mapping in `docs/repo-review-2026-07.md`'s status banner |
 | Navigation Refactor Phases 1–3 | 2026-07-20 | Consolidation → `/my-team` + `/league` rename → "Primetime Blackout" visual pass |
 | Frontier Item 2 blocking question (are losing FAAB bids visible?) | 2026-08-08 | Verified yes; see `docs/analysis/faab-bid-corpus-2026-08.md`. Superseded by OPEN-3 |
