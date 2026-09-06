@@ -298,8 +298,11 @@ September measures Week 1 news, not aging, and the cells hold 5–20 players.
    questions — the builder's `[0.9×, 1.15×]` is about what to ASSEMBLE, this
    ±5% is the verdict's tolerance — which is exactly why conflating them was
    silent.
-4. **Alternative-package line** — show the cheaper Fair package beside the
-   chosen Strong one, including a pick-bridged version.
+4. **Alternative-package line** — SHIPPED 2026-09-06 as `suggestFairPackage`'s
+   `alternative`. On the live board, A.J. Brown now reads *"Est. cost: Chase
+   Brown · Strong for them / Or cheaper: Jordan Love — weak for them"*, which
+   is the answer to the question that opened this investigation, on the card
+   itself. It adds information and reorders nothing.
 
 **Explicitly NOT adopted.** Making `suggestFairPackage`'s phase 2 trade partner
 appeal off against my own cost was proposed and **rejected by the owner**:

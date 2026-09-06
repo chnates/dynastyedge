@@ -205,6 +205,24 @@ function TargetCard({ target, fairPackage, showNeedTag, onTap }) {
               </span>
             </div>
           )}
+          {/* The cheaper road not taken. The ranking is unchanged — appeal
+              still wins, on the owner's call — so this only names what the
+              suggestion cost you and what giving less would cost in their
+              eyes. Showing it beside the pick is information; reordering on it
+              would have thrown away the read the search exists to produce. */}
+          {fairPackage.alternative && (
+            <div className="flex items-baseline gap-1.5 min-w-0">
+              <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary shrink-0">
+                Or cheaper:
+              </span>
+              <span className="font-body text-[10px] text-text-secondary dark:text-text-secondary truncate min-w-0">
+                {fairPackage.alternative.assets.map(a => a.name).join(' + ')}
+              </span>
+              <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary shrink-0">
+                — {fairPackage.alternative.appeal?.toLowerCase()} for them
+              </span>
+            </div>
+          )}
         </div>
       )}
     </Card>

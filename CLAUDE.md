@@ -1114,6 +1114,18 @@ Counter or Decline.** The app proposed and then argued with itself.
     hiding the row.
   - Without a partner roster it degrades to phase 1 and reports `appeal: null`;
     no read is invented.
+  - **`alternative` — the cheaper road not taken.** The card also names the
+    best package at a *lower* appeal that genuinely costs less
+    (`ALTERNATIVE_MIN_SAVING` of keep-pain; below that the two cost the same and
+    one merely reads worse, which is not an option). This answers the question
+    the board previously left implicit — "why is it spending that piece?" — on
+    the card itself: *"Est. cost: Chase Brown · Strong for them / Or cheaper:
+    Jordan Love — weak for them."* **It never reorders anything.** Making
+    appeal trade off against my own cost was proposed and **declined by the
+    owner** (2026-09-06): knowing whether they would accept is the information
+    the search exists to produce, and a package that needs a pick to bridge it
+    is a different trade rather than a cheaper one. So appeal stays
+    lexicographically first and this is additive information beside it.
 - Each target card carries the read its package was chosen for — a `Badge`
   (`Strong` green / `Fair` neutral / `Weak` amber, never brand red) plus one
   short line. The board no longer hands over an offer without saying what it is
@@ -3173,7 +3185,7 @@ dynastyedge/
 │   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
 │   ├── appVersion.test.mjs          ← reload URL: ?v= before the hash (HashRouter), encoding, null build id
 │   ├── tradeTargets.test.mjs        ← Targets ranking: deficit gate + value floor league-wide, team-scoped mode keeps depth (never empty), fillsNeed flag, and the movability TILT (band under 2×, spare depth outranks an equal-value untouchable, nothing ever hidden)
-│   ├── tradeAnalysis.test.mjs       ← verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge, Layer 4 (a benched acquisition reads Weak however valued; the gate downgrades an Accept but never lifts a Decline; landing spots both directions; the pitch speaks from their side), buildPartnerFit's extraction contract (standalone == via analyzeTrade), and the two-phase package builder (phase 2 rejects the piece they have no use for, never unlocks a protected asset, reports no appeal without a partner)
+│   ├── tradeAnalysis.test.mjs       ← the cheaper `alternative` (always lower-appeal, never the suggestion — the ranking is untouched), verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge, Layer 4 (a benched acquisition reads Weak however valued; the gate downgrades an Accept but never lifts a Decline; landing spots both directions; the pitch speaks from their side), buildPartnerFit's extraction contract (standalone == via analyzeTrade), and the two-phase package builder (phase 2 rejects the piece they have no use for, never unlocks a protected asset, reports no appeal without a partner)
 │   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
 │   ├── lineupBuild.test.mjs         ← slot-fill order (singles → FLEX → SFLX), IR/taxi excluded, who-starts identity
 │   ├── lineupMoves.test.mjs         ← start/sit engine: Σ gains = headline invariant, the two superseded per-slot bugs (double-count, missed cascade), hard-block exclusion, empty DEF slot, swap algebra, confidence lookup + coin-flip demotion (demoted moves still sum to the headline)

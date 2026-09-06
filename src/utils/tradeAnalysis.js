@@ -911,6 +911,12 @@ function packageRationale(assets, ctx) {
 // candidates land in the fair band, which grows with roster depth.
 const PACKAGE_SHORTLIST = 150
 
+// How much keep-pain a cheaper alternative must actually save before it is
+// worth showing beside the suggestion. Below this the two packages cost about
+// the same and the only difference is that one reads worse to the partner,
+// which is not an option — it is just a worse offer.
+const ALTERNATIVE_MIN_SAVING = 0.25
+
 // Suggest a fair package from MY roster to acquire targetPlayer.
 //
 // TWO-PHASE, and the second phase is the point. Phase 1 enumerates every
@@ -1018,6 +1024,7 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
   // negotiating signals (scarcity, roster space, weekly points, their recent
   // moves) stay out of it, exactly as they stay out of the verdict.
   let best = null
+  let alternative = null
   if (candidates.length) {
     candidates.sort((a, b) => a.pain - b.pain)
 
@@ -1031,6 +1038,7 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
       const winWindowTiers = assignWinWindowTiers(allRosters)
       const getAssets = [{ ...targetPlayer, type: 'player' }]
 
+      const scored = []
       candidates.slice(0, PACKAGE_SHORTLIST).forEach(c => {
         const assets = c.idxs.map(i => available[i])
         const fit = buildPartnerFit(assets, getAssets, opponentRoster, allRosters, {
@@ -1038,10 +1046,24 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
         })
         if (!fit) return
         const rank = APPEAL_RANK[fit.appeal] ?? 0
+        scored.push({ ...c, appealRank: rank, partnerFit: fit })
         // Best appeal wins; among equals, the package that costs me least. The
         // shortlist is already sorted by pain, so a strict > keeps the first.
         if (!best || rank > best.appealRank) best = { ...c, appealRank: rank, partnerFit: fit }
       })
+      // The cheaper road not taken. Appeal stays lexicographically first — that
+      // was an owner call, because knowing whether they would accept is the
+      // information the search exists to produce, and a package needing a pick
+      // to bridge it is a different trade rather than a cheaper one. So this
+      // does NOT reorder anything; it just names what the winner cost you and
+      // what giving less would cost in their eyes. Only surfaced when the
+      // saving is real (ALTERNATIVE_MIN_SAVING) — a near-identical package at a
+      // worse appeal is noise, not an option.
+      if (best) {
+        alternative = scored
+          .filter(c => c.appealRank < best.appealRank && best.pain - c.pain >= ALTERNATIVE_MIN_SAVING)
+          .sort((a, b) => b.appealRank - a.appealRank || a.pain - b.pain)[0] ?? null
+      }
       // Every scored candidate returned null (no partner roster shape to read) —
       // fall back to the cheapest rather than suggesting nothing.
       if (!best) best = candidates[0]
@@ -1063,6 +1085,15 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
       partnerSummary: fit?.summary ?? null,
       partnerStartersDelta: fit?.startersDelta ?? null,
       partnerConcern: fit?.concerns?.[0] ?? null,
+      // The cheaper option, when giving less would genuinely cost less and the
+      // only price is how it reads to them. Null when no such package exists.
+      alternative: alternative
+        ? {
+          assets: alternative.idxs.map(i => available[i]),
+          totalValue: alternative.total,
+          appeal: alternative.partnerFit?.appeal ?? null,
+        }
+        : null,
     }
   }
 
