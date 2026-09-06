@@ -3206,6 +3206,7 @@ dynastyedge/
 │   ├── appVersion.test.mjs          ← reload URL: ?v= before the hash (HashRouter), encoding, null build id
 │   ├── tradeTargets.test.mjs        ← Targets ranking: deficit gate + value floor league-wide, team-scoped mode keeps depth (never empty), fillsNeed flag, and the movability TILT (band under 2×, spare depth outranks an equal-value untouchable, nothing ever hidden)
 │   ├── tradeAnalysis.test.mjs       ← the cheaper `alternative` (always lower-appeal, never the suggestion — the ranking is untouched), verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge, Layer 4 (a benched acquisition reads Weak however valued; the gate downgrades an Accept but never lifts a Decline; landing spots both directions; the pitch speaks from their side), buildPartnerFit's extraction contract (standalone == via analyzeTrade), and the two-phase package builder (phase 2 rejects the piece they have no use for, never unlocks a protected asset, reports no appeal without a partner)
+│   ├── tradeContext.test.mjs        ← the five negotiating signals (fair band, scarcity, roster space, weekly impact, partner activity) — and the contract that NONE of them may move the verdict
 │   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
 │   ├── lineupBuild.test.mjs         ← slot-fill order (singles → FLEX → SFLX), IR/taxi excluded, who-starts identity
 │   ├── lineupMoves.test.mjs         ← start/sit engine: Σ gains = headline invariant, the two superseded per-slot bugs (double-count, missed cascade), hard-block exclusion, empty DEF slot, swap algebra, confidence lookup + coin-flip demotion (demoted moves still sum to the headline)
@@ -3230,11 +3231,13 @@ honestly:** instead of "cannot find module" it prints `# tests 136 / # pass 129 
 transitively importing `react` (`tradeAnalysis.js` → `recommendations.js` →
 `useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
 `draftLive` loading their hooks) — the file fails to load, so its tests never
-run and the count silently drops from **219** to 136. `npm run build` in the
-same state fails with `sh: 1: vite: not found`. **If the test count isn't 219,
+run and the count silently drops from **242** to 136. `npm run build` in the
+same state fails with `sh: 1: vite: not found`. **If the test count isn't 242,
 run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-06
 by renaming `node_modules` aside; re-measure them whenever the suite grows —
-the pair had drifted twice before this, 178/130 and 177/115.)
+the pair had drifted three times before this, 178/130, 177/115 and 219/136.
+The broken-state signature has held at 136/129/7 across the last two
+re-measurements, so it is the passing count that moves.)
 
 **Tests:** `npm test` runs the `tests/` suite — plain `.mjs` scripts on Node's
 built-in `node:test` runner with `node:assert/strict`, zero new dependencies

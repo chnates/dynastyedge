@@ -7,6 +7,10 @@ description: >-
   containers or anything iOS-gesture related; touching index.html PWA metas,
   theme-color, or status-bar styling; touching pick valuation code
   (managerAnalysis.js, pickTrades.js, findPickValue, makePickPricer); touching
+  keep-score calibration (recommendations.js — PICK_ROUND_KEEP, pastPeakTilt,
+  PROTECT_THRESHOLD) or reaching for dynastyTrajectory's age curves to feed any
+  score; touching fairBand.js or any surface that predicts the Analyzer's
+  verdict; touching
   Trade Analyzer preload / nav-state / sessionStorage-draft wiring or fair
   package suggestions; adding dark-mode glow effects to cards; changing taxi
   rules, sparkline thresholds, or the drafted trade UX. Also load when a bug
@@ -359,6 +363,92 @@ sessionStorage draft. The precedence rule (verified in
 
 ---
 
+## 4e. Keep-score calibration — three settled prohibitions (2026-09-06)
+
+All three came out of one owner question ("why is it offering my RB2 and not my
+RB1?") and are recorded because each is a plausible-looking idea that measurement
+killed. Full method + numbers:
+`docs/analysis/asset-aging-and-pick-value-2026-09.md`; re-runnable via
+`scripts/dev/asset-aging-backtest.mjs`.
+
+### 4e-i. The trajectory age curves must never feed a score
+
+- **Symptom:** the obvious way to teach `assetKeepScore` about aging is to reuse
+  `dynastyTrajectory.js`, which already labels players declining/ascending. Run
+  across a live roster it makes a **31-year-old Mark Andrews a +47% riser** and a
+  26-year-old Bo Nix **+64%** (the latter is just the `YEAR_RATIO_CEIL ** 3`
+  clamp).
+- **Root cause:** `buildAgeCurves` learns from **today's FantasyCalc pool** — a
+  cross-section, not a cohort. The only 33-year-old TE still carrying value is
+  the one who didn't decline, so the curve reads survivorship as aging. Measured
+  live: TE 31 = 641 vs TE 33 = 1,020; QB 25–26 = 790 vs QB 30–31 = 2,255.
+- **Standing ruling:** `projectPlayer` / `buildAgeCurves` are **descriptive shape
+  only** — Feature 17's chart and `getTrajectoryRead`'s one-liners, nothing else.
+  Never a score, a ranking, or a recommendation input. The aging signal that
+  *does* score is the longitudinal one built from production
+  (`pastPeakTilt`). Lifting the prohibition requires rebuilding the curves from
+  `values-archive.json` (open-items OPEN-9, ~2027-07).
+
+### 4e-ii. The pre-peak bonus is disconfirmed
+
+- **Symptom:** "protect players younger than their position's peak window" reads
+  as obviously right and was in the first spec.
+- **Evidence:** RB **−0.02, p=0.853** — absent at the position the tilt exists
+  for. WR +0.12 (p=0.032), TE +0.17 (p=0.063), QB +0.09 (p=0.363): one hit near
+  0.05 across four tests is what chance produces. It also produced a live
+  artifact — a 23-year-old backup QB became *protected* purely for being young.
+- **Standing ruling:** `pastPeakTilt` is **decline-only**. Inside or below the
+  window is a no-op. An unknown age is a no-op too, never an imputed average.
+
+### 4e-iii. A 30-day trend snapshot cannot calibrate anything
+
+- **Symptom:** `trend30Day` is right there in the cached FantasyCalc payload and
+  looks like a free aging signal.
+- **Evidence:** bucketed by age on the live pool it puts **RB 26–28 at +7.7%**
+  and RB 22–24 at −2.0%, QB 22–24 at −12.1% and QB 32–40 at +7.2%. One September
+  window measures Week 1 news, not aging; cells hold 5–20 players.
+- **Standing ruling:** don't re-run it expecting signal. `§1` of the back-test
+  reproduces the null on purpose.
+
+### 4e-iv. Two definitions of "fair" existed, and conflating them was silent
+
+- **Symptom:** the new cash-out card promised a target "needs ~84 more to reach
+  fair"; the Analyzer it handed off to said **408 light of fair** on the very
+  next screen.
+- **Root cause:** `suggestFairPackage`'s package-building window is
+  `[0.9×, 1.15×]` of the target; `buildFairBand`'s verdict tolerance is **±5%**.
+  Genuinely different questions — what to ASSEMBLE vs how much slack the verdict
+  allows — so the numbers disagreed without either being wrong.
+- **Standing ruling:** `buildFairBand` now lives in `src/utils/fairBand.js` and
+  **every surface that predicts what the Analyzer will say imports it**
+  (`tradeAnalysis.js` re-exports it for existing callers). A test pins that the
+  cash-out board's gap equals `buildFairBand`'s. Never re-derive a fair band
+  locally, and never reuse the package window for it.
+- **Method note worth keeping:** this was caught by screenshotting the
+  *handoff* (`--click` through to the Analyzer), not the component. A component
+  screenshot would have shown a perfectly good card.
+
+### 4e-v. `PACKAGE_SHORTLIST` truncation cost real appeal — do not reintroduce it
+
+- **Symptom:** phase 2 scored only the cheapest 40 candidate packages, and the
+  board left targets whose best offer the other manager had no reason to accept.
+- **Root cause:** phase 1 orders by what a package costs **me** and knows nothing
+  about them, so truncating its output hides packages they would want. Measured
+  whole-board: 40 → 102ms, **Weak 2** · 150 → 211ms, **Weak 1** · all → 731ms,
+  **Weak 0**.
+- **Standing ruling:** the search is untruncated. It is affordable only because
+  `WhatsFair` moved it **off the render path** — it had been a `useMemo`, which
+  runs *during* render, so the work blocked the very paint that would have shown
+  a loading state and the tab sat blank. It now walks one target per tick with a
+  per-card "Working out what it would cost…" and a countdown line. **If a deeper
+  roster ever makes it bite, chunk WITHIN a target — truncation is what this
+  replaced.**
+- **General lesson:** "add a spinner" is not available as a fix while the work
+  runs inside render. Move the work first, then the loading state becomes
+  possible.
+
+---
+
 ## 5. Design-taste rulings (SETTLED)
 
 ### 5a. Dark-mode neon glow on cards — `e31deaf` → `aa0892b` (both 2026-06-12, 2 minutes apart)
@@ -423,7 +513,9 @@ sessionStorage draft. The precedence rule (verified in
 
 ## Provenance and maintenance
 
-Written 2026-07-05 against local HEAD `6fb85f3` (2026-06-20). Every hash
+Written 2026-07-05 against local HEAD `6fb85f3` (2026-06-20). §4e was added
+2026-09-06 from the keep-score calibration work (branch
+`claude/trading-analyzer-review-acslwm`). Every hash
 above was inspected via `git show <hash>` in that session; sandbox had no
 network access, so no live-API or on-device claims are made here.
 

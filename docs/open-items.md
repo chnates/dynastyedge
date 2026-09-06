@@ -5,7 +5,8 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-09-06 (OPEN-6 closed; the active work queue remains
+**Last reviewed:** 2026-09-06 (OPEN-7 closed — the keep-score calibration;
+OPEN-8 and OPEN-9 opened from it. The active work queue remains
 `docs/build-plan-2026-09.md`).
 
 **How to use it:**
@@ -487,7 +488,8 @@ a failure.
 
 What shipped: `buildPartnerFit` extracted from `analyzeTrade` and shared;
 `suggestFairPackage` two-phase (cheap enumeration → 40-candidate shortlist →
-exact Layer 4 appeal); `getTopTradeTargets` ranked by `need × value ×
+exact Layer 4 appeal — **the shortlist is gone as of the 2026-09-06 keep-score
+work below; do not reintroduce it**); `getTopTradeTargets` ranked by `need × value ×
 movability`; `suggestSellMove`'s partner pick made two-sided; the appeal read
 surfaced on each target card. 219 tests (up from 204), lint + build clean, all
 of it verified against the live league.
@@ -515,6 +517,119 @@ behavior, and behavioral modelling is disconfirmed here.
    is ever widened past a 2× swing, that inversion comes back —
    `tests/tradeTargets.test.mjs` pins the ratio.
 
+### OPEN-8 — Re-derive `PICK_ROUND_KEEP` once the 2027 class resolves
+
+**Status:** deferred. **Trigger:** the 2027 rookie draft has happened *and* that
+class has played a season — realistically autumn 2028.
+
+The shipped keep-scores (1st 0.65 · 2nd 0.50 · 3rd 0.40 · 4th 0.30) rest on
+three classes of this league's own picks, n=10 per round per class, and the
+newest of them has not resolved at all. Every class points the same way — round
+1 beat the dearest future 1st on the board 3/3, round 4 missed the cheapest 4th
+0/3 — but three classes cannot distinguish "the market underprices firsts" from
+"this league drafts well".
+
+`node --import ./.claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs scripts/dev/asset-aging-backtest.mjs`
+re-runs it and prints a drift check; the script imports the shipped constants,
+so it fails loudly if the measured ordering stops matching them. **If round 1
+ever stops beating its price in a resolved class, re-derive rather than nudge.**
+Full method: `docs/analysis/asset-aging-and-pick-value-2026-09.md` §3.
+
+### OPEN-9 — Rebuild the trajectory age curves longitudinally
+
+**Status:** deferred, and it blocks a standing prohibition. **Trigger:**
+`values-archive.json` holds ~12 monthly columns (started 2026-07, so around
+2027-07).
+
+`buildAgeCurves` learns what the market pays at each age from *today's*
+FantasyCalc pool — a cross-section. The only 33-year-old TE still carrying value
+is the one who didn't decline, so the curve reads survivorship as aging: TE 31 =
+641 against TE 33 = 1,020, QB 25–26 = 790 against QB 30–31 = 2,255. Fed into a
+keep-score tilt it projected a 31-year-old Mark Andrews **+47%**.
+
+**Standing ruling until this is fixed: `projectPlayer` / `buildAgeCurves` are
+descriptive shape only and must never feed a score, a ranking, or a
+recommendation** (recorded in CLAUDE.md Feature 17 and
+`dynastyedge-failure-archaeology`). Feature 17's own UI is fine — it reads the
+shape and says so. The aging signal that *does* score is the longitudinal one in
+`asset-aging-and-pick-value-2026-09.md` §2, built from production rather than
+price. Rebuilding the curves from the monthly archive would let the trajectory
+model itself be scored, and is a prerequisite for OPEN-5's multi-season
+back-test.
+
+### 2026-09-06 — OPEN-7 closed: the keep-score learns age and pick rounds
+
+Opened by an owner question about a live board: *"it wants me to give up Chase
+Brown for A.J. Brown — why him and not Jonathan Taylor?"* The answer was that
+`assetKeepScore` scored both at **exactly 0.85** — every player inside
+`CORE_DEPTH` got a flat rate, age only entered the function inside the
+Contending and Rebuilding branches (this roster is Middle), and every pick
+scored 0.5 regardless of round or year. Taylor was never a candidate at all: at
+5,705 against a 4,106 target he is a 39% overpay, excluded by the band before
+scoring. Nothing was broken; the function had never been given the facts.
+
+**Measured before changing anything** (`scripts/dev/asset-aging-backtest.mjs`,
+memo `docs/analysis/asset-aging-and-pick-value-2026-09.md`):
+
+- **Aging, longitudinally** — n=762 player-seasons 2020–2025, same player year
+  over year, a player who required a real season and then left the league
+  counted as 0 rather than dropped. RB past 26 retains 0.66 vs 0.94
+  (p=0.0001); WR past 28, 0.67 vs 0.84 (p=0.0016); QB and TE not significant.
+  **`PEAK_WINDOWS` survives at the boundaries it already shipped** — do not
+  re-tune it.
+- **Picks** — all 120 rookie picks this league has made, at today's prices.
+  Round 1 beat the dearest future 1st on the board in 3/3 classes (30/30 hits);
+  round 4 missed the cheapest 4th in 3/3 (8/30). Hype flattens the pick curve,
+  resolution steepens it: the market prices a 1st at 3.5× a 4th, the
+  most-resolved class delivered **8.0×**.
+
+**Three things the evidence killed, recorded so they stay dead:**
+
+1. **The obvious implementation.** Tilting the keep-score with the shipped
+   `dynastyTrajectory` curves projects a 31-year-old Mark Andrews **+47%** —
+   they are a survivorship-biased cross-section. See OPEN-9; the prohibition on
+   scoring off them stands until the curves are rebuilt longitudinally.
+2. **The pre-peak half of the age tilt.** Protecting players *younger* than
+   their window is absent at RB (−0.02, p=0.853) — the position the tilt exists
+   for — with one near-hit in four tests. The tilt is decline-only.
+3. **A single 30-day trend snapshot as an aging signal.** It puts old RBs
+   rising and young QBs falling; one September window measures Week 1 news.
+   `§1` of the back-test reproduces the null so nobody re-runs it.
+
+**Shipped:** `PICK_ROUND_KEEP` (1st 0.65 · 2nd 0.50 · 3rd 0.40 · 4th 0.30, with
+`PICK_KEEP_CAP` holding every pick below `PROTECT_THRESHOLD` at every tier);
+`pastPeakTilt` (decline-only, per-position RB 1.00 / WR 0.65 / QB 0.40 / TE
+0.15, saturating over 3 years, magnitude by tier); `buildCashOutBoard`;
+`suggestFairPackage`'s cheaper `alternative`; and the removal of
+`PACKAGE_SHORTLIST`. 242 tests (up from 219), lint + build clean, every change
+verified against the live league.
+
+**Owner rulings this session:**
+
+- **Appeal stays lexicographically first in the package search.** Making it
+  trade off against my own cost was proposed and declined: knowing whether they
+  would accept is the information the search exists to produce, and a package
+  needing a pick to bridge it is a different trade rather than a cheaper one.
+  The `alternative` line adds that information beside the suggestion instead.
+- **`CORE_DEPTH` stays rank-blind.** Making it rank-sensitive would protect the
+  *older* RB1 hardest, which is backwards for the question that opened this.
+  The age tilt addresses the same ordering from the correct direction.
+
+**Two findings recorded but NOT acted on:**
+
+1. **`packageRationale` still says "protects your starters" unconditionally**
+   whenever a package draws from a surplus. On the live board it said that
+   while spending the owner's RB2 — who starts in `buildValueLineup`. It means
+   "touched nothing scoring ≥ 0.9", which is not what it says. The honest fix
+   is to check the package against `buildValueLineup(myRoster).starterIds` and
+   name the starter when one is in it. Small, and not blocked on anything.
+2. **`PROTECT_THRESHOLD` (0.9) protects almost nothing on a healthy roster.**
+   Core starters land on exactly 0.85; only a position in deficit (+0.22, which
+   clamps to 1.0) or a cliff (0.95) ever crosses it. That is *by design* —
+   ff116ba's ruling is about the irreplaceable starter — but it means the
+   threshold is doing less work than its name suggests, and anyone reading
+   "protected" should know it means "deficit or cliff", not "starter".
+
 ### OPEN-5 — Model calibration (open research)
 
 **Status:** open. **Trigger:** live regular-season data — Week 1 starts the
@@ -533,6 +648,7 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 
 | Item | Closed | How |
 |---|---|---|
+| OPEN-7 — the keep-score had no opinion about age or about which pick is which | 2026-09-06 | Measured both (n=762 player-seasons; all 120 of this league's rookie picks), then shipped `PICK_ROUND_KEEP`, `pastPeakTilt`, the cash-out board, the cheaper-`alternative` line, and the untruncated package search. Detail retained in §1 |
 | OPEN-6 — push Layer 4 into Targets and the fair-package builder | 2026-09-06 | Layer 4 extracted as `buildPartnerFit` and shared; `suggestFairPackage` made two-phase; Targets ranked by `need × value × movability`; `suggestSellMove` partner pick made two-sided. Detail retained in §1 |
 | July 2026 repo-review backlog B1–B11 | 2026-07/08 | All eleven landed — mapping in `docs/repo-review-2026-07.md`'s status banner |
 | Navigation Refactor Phases 1–3 | 2026-07-20 | Consolidation → `/my-team` + `/league` rename → "Primetime Blackout" visual pass |
