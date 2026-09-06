@@ -2315,6 +2315,22 @@ matter:
   next-best is protected regardless of how the summed positional value reads.
   This is what keeps an elite, backup-less starter out of auto-suggested
   packages.
+- **Picks are priced by ROUND, not flat (`PICK_ROUND_KEEP` = 1st 0.65 · 2nd
+  0.50 · 3rd 0.40 · 4th 0.30).** The old flat 0.5 made a 2027 1st and a 2029
+  4th equally spendable. Measured over all 120 rookie picks this league has
+  made, valued at today's prices: a class's round-1 median beat the **dearest**
+  future 1st on the board in **3 of 3** classes (30/30 became starter-caliber),
+  while no class's round-4 median reached the **cheapest** future 4th (8/30).
+  Hype flattens the pick curve and resolution steepens it — the market prices a
+  1st at 3.5× a 4th; the most-resolved class delivered **8.0×**. An unknown
+  round falls back to `PICK_KEEP_DEFAULT` (0.5) rather than the cheapest —
+  absence of a round is not evidence a pick is cheap (rule 7's discipline).
+  `PICK_KEEP_CAP` (0.85) holds every pick below `PROTECT_THRESHOLD` at every
+  tier: that threshold exists for irreplaceable *players*, and a rebuilder's
+  +0.3 on a first would otherwise strip the builder of the currency it builds
+  with. Re-derive with `scripts/dev/asset-aging-backtest.mjs` (needs the diagnostics resolver hook); revisit
+  once the 2027 class resolves. See
+  `docs/analysis/asset-aging-and-pick-value-2026-09.md` §3.
 - **Win-window lean on age:** a contender cashes picks and young fliers; a
   rebuilder hoards youth and picks and sells aging vets.
 - **`PROTECT_THRESHOLD` = 0.9** — assets at or above this keep score are never

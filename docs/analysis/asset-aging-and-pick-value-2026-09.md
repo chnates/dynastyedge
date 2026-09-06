@@ -1,9 +1,10 @@
 # Keep-score calibration — asset aging and pick realization
 
-**Date:** 2026-09-06 · **Status:** measurement complete; pick tilt building, age tilt specced
-**Re-run every number here:** `node scripts/dev/asset-aging-backtest.mjs`
-(the script imports the shipped constants it grades — `PEAK_WINDOWS`, and
-`PICK_ROUND_KEEP` once §3 lands — so the analysis and the app cannot drift)
+**Date:** 2026-09-06 · **Status:** measurement complete; §3 pick tilt SHIPPED, §2 age tilt specced
+**Re-run every number here:** `node --import ./.claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs scripts/dev/asset-aging-backtest.mjs`
+(the script imports the shipped constants it grades — `PEAK_WINDOWS` and
+`PICK_ROUND_KEEP` — and fails loudly if the shipped ordering stops matching the
+measurement, so the analysis and the app cannot drift)
 
 Owner's question, from a live Trade › Targets board: *"the engine wants me to
 give up Chase Brown for A.J. Brown — why him and not Jonathan Taylor?"*
@@ -198,6 +199,24 @@ Adopted, replacing the flat 0.5:
 Win-window tier adjustment (±0.3) still applies on top, unchanged, so a
 rebuilder still hoards and a contender still cashes — they now do it with the
 right relative preference between rounds.
+
+### 3a. Verified live — and it changes nothing on today's board
+
+Shipped 2026-09-06 and run against the live league before and after. All eight
+of roster 6's priced picks now score by round (2027/2028 1sts 0.65, 2nds 0.50,
+3rds 0.40, 4ths 0.30) where every one previously read 0.5 — the constant is
+wired and `round` flows through `suggestFairPackage`'s asset mapping.
+
+**And the 20-target board is byte-identical before and after.** That is the
+honest result, not a disappointment to spin: only 1 of 20 suggested packages
+contains a pick at all (Tee Higgins ← Jordan James + 2027 1st), and a
+keep-score reorders *candidates within an appeal tier* — it cannot bite unless
+two pick-containing packages of the same appeal compete. It will bite when they
+do: a Contending or Rebuilding roster (where the ±0.3 tier lean stacks on a
+now-unequal base), a target whose band several of my picks can reach, or any
+package weighing a 1st against two 3rds. This is a correctness fix landing
+ahead of the cases that need it, and the drift check in §3 of the script is
+what keeps it honest.
 
 **Caveats, stated rather than buried:** n=10 per round per class, one league,
 three classes, and 2026 has not resolved. Three classes cannot distinguish *"the

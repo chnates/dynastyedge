@@ -18,7 +18,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { suggestSellMove } from '../src/utils/recommendations.js'
+import {
+  suggestSellMove, buildGivabilityContext, assetKeepScore,
+  PICK_ROUND_KEEP, PICK_KEEP_DEFAULT, PICK_KEEP_CAP, PROTECT_THRESHOLD,
+} from '../src/utils/recommendations.js'
 
 const P = (id, name, pos, value, age = 26) =>
   ({ sleeperId: id, name, position: pos, value, age, isIR: false, isTaxi: false })
@@ -107,4 +110,87 @@ test('it degrades to null rather than guessing (degradation contract)', () => {
   assert.equal(suggestSellMove(spareQb, null, league), null)
   assert.equal(suggestSellMove(spareQb, me, []), null)
   assert.equal(suggestSellMove(spareQb, me, [me]), null, 'no opponents — no move')
+})
+
+// ── Pick keep-scores by round ───────────────────────────────────────────────
+// Pins docs/analysis/asset-aging-and-pick-value-2026-09.md §3: a pick's
+// keep-score is no longer flat. Measured over all 120 rookie picks this league
+// has made, round-1 medians beat the dearest future 1st in 3/3 classes (30/30
+// hits) while round-4 medians missed the cheapest future 4th in 3/3 (8/30).
+
+const pick = (round, value = 1000) => ({ type: 'pick', round, value })
+
+// Tier drives the sign of the adjustment; these rosters only exist to produce
+// one. Contending/Rebuilding are the top/bottom 3 by the win-window score.
+const tierRosters = () => {
+  const rich = [4, 3, 2].map(i => mk(i, [
+    P(`${i}01`, `A${i}`, 'QB', 9000), P(`${i}02`, `B${i}`, 'RB', 9000),
+    P(`${i}03`, `C${i}`, 'WR', 9000), P(`${i}04`, `D${i}`, 'TE', 9000),
+  ]))
+  const poor = [5, 6, 7].map(i => mk(i, [
+    P(`${i}01`, `A${i}`, 'QB', 100), P(`${i}02`, `B${i}`, 'RB', 100),
+    P(`${i}03`, `C${i}`, 'WR', 100), P(`${i}04`, `D${i}`, 'TE', 100),
+  ]))
+  const mid = [8, 9, 10].map(i => mk(i, [
+    P(`${i}01`, `A${i}`, 'QB', 3000), P(`${i}02`, `B${i}`, 'RB', 3000),
+    P(`${i}03`, `C${i}`, 'WR', 3000), P(`${i}04`, `D${i}`, 'TE', 3000),
+  ]))
+  return [...rich, ...poor, ...mid]
+}
+const ctxFor = rosterId => {
+  const all = tierRosters()
+  return buildGivabilityContext(all.find(r => r.rosterId === rosterId), all)
+}
+
+test('a first is held harder than a fourth, and the order is strict', () => {
+  const ctx = ctxFor(9) // a middle team
+  const keeps = [1, 2, 3, 4].map(r => assetKeepScore(pick(r), ctx))
+  assert.deepEqual(keeps, [
+    PICK_ROUND_KEEP[1], PICK_ROUND_KEEP[2], PICK_ROUND_KEEP[3], PICK_ROUND_KEEP[4],
+  ], 'a middle team reads the shipped table unadjusted')
+  for (let i = 1; i < keeps.length; i++)
+    assert.ok(keeps[i] < keeps[i - 1], `round ${i + 1} must be more spendable than round ${i}`)
+})
+
+test('the round ordering survives both win-window leans', () => {
+  for (const rosterId of [4, 6]) { // contending, rebuilding
+    const ctx = ctxFor(rosterId)
+    const keeps = [1, 2, 3, 4].map(r => assetKeepScore(pick(r), ctx))
+    for (let i = 1; i < keeps.length; i++)
+      assert.ok(keeps[i] < keeps[i - 1],
+        `roster ${rosterId}: round ${i + 1} must stay more spendable than round ${i}`)
+  }
+})
+
+test('a rebuilder holds picks harder than a contender does, round for round', () => {
+  const reb = ctxFor(6), con = ctxFor(4)
+  assert.equal(reb.myTier, 'Rebuilding')
+  assert.equal(con.myTier, 'Contending')
+  for (const r of [1, 2, 3, 4])
+    assert.ok(assetKeepScore(pick(r), reb) > assetKeepScore(pick(r), con),
+      `round ${r}: a rebuilder must hoard where a contender cashes`)
+})
+
+test('no pick is ever auto-excluded from a package, at any tier', () => {
+  // PROTECT_THRESHOLD is for irreplaceable PLAYERS (ff116ba). A rebuilder's
+  // +0.3 on a first would cross it and strip the package builder of the very
+  // currency it builds with, so PICK_KEEP_CAP holds picks below the line.
+  for (const rosterId of [4, 6, 9]) {
+    const ctx = ctxFor(rosterId)
+    for (const r of [1, 2, 3, 4])
+      assert.ok(assetKeepScore(pick(r), ctx) < PROTECT_THRESHOLD,
+        `roster ${rosterId} round ${r} must stay auto-includable`)
+  }
+  assert.ok(PICK_KEEP_CAP < PROTECT_THRESHOLD, 'the cap must sit below the protect line')
+})
+
+test('an unknown round keeps the old flat rate, never the cheapest', () => {
+  const ctx = ctxFor(9)
+  // Absence of a round is not evidence that a pick is cheap — the same contract
+  // as an unranked player, who is shown and counted rather than priced at 0.
+  const unknown = assetKeepScore({ type: 'pick', value: 1000 }, ctx)
+  assert.equal(unknown, PICK_KEEP_DEFAULT)
+  assert.ok(unknown > assetKeepScore(pick(4), ctx))
+  assert.equal(assetKeepScore({ type: 'pick', value: 1000, round: 7 }, ctx), PICK_KEEP_DEFAULT,
+    'a round with no measured entry falls back rather than extrapolating')
 })

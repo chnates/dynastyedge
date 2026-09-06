@@ -958,7 +958,10 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
         sleeperId: p.sleeperId, position: p.position, age: p.age,
       })),
     ...myRoster.picks
-      .map(p => ({ type: 'pick', name: pickLabel(p), value: p.value ?? 0 })),
+      // `round` is load-bearing: assetKeepScore prices a pick's keep-score by
+      // round (PICK_ROUND_KEEP), and without it every pick falls back to the
+      // flat default this replaced.
+      .map(p => ({ type: 'pick', name: pickLabel(p), value: p.value ?? 0, round: p.round })),
   ].filter(a => a.value > 0)
 
   const available = allAssets

@@ -19,6 +19,29 @@ import { getTeamName } from '../hooks/useLeague'
 // tradeable depth.
 export const CORE_DEPTH = { QB: 2, RB: 3, WR: 3, TE: 1 }
 
+// How much we want to KEEP a pick, by round — replacing a flat 0.5 that made a
+// 2027 1st and a 2029 4th equally spendable. Measured over all 120 rookie picks
+// this league has ever made, valued at today's prices: a class's round-1 median
+// beat the DEAREST future 1st on the board in 3 of 3 classes (30/30 became
+// starter-caliber), while no class's round-4 median reached the CHEAPEST future
+// 4th (8/30). Hype flattens the pick curve and resolution steepens it — the
+// market prices a 1st at 3.5x a 4th; the most-resolved class delivered 8.0x.
+// Re-derive with scripts/dev/asset-aging-backtest.mjs rather than nudging
+// by feel; revisit once the 2027 class resolves.
+// See docs/analysis/asset-aging-and-pick-value-2026-09.md §3.
+export const PICK_ROUND_KEEP = { 1: 0.65, 2: 0.5, 3: 0.4, 4: 0.3 }
+// An unknown round keeps the old flat rate. Absence of a round is not evidence
+// that a pick is cheap — same contract as an unranked player, who is shown and
+// counted rather than priced at 0.
+export const PICK_KEEP_DEFAULT = 0.5
+// No pick has ever been auto-excluded from a package, and this does not start.
+// PROTECT_THRESHOLD exists for irreplaceable PLAYERS (the backup-less elite
+// starter of ff116ba); picks are the currency a package is built from, and a
+// rebuilder's +0.3 on a first would otherwise cross the line and strip the
+// builder of its main way to reach fair value. The cap preserves the round
+// ordering at every tier.
+export const PICK_KEEP_CAP = 0.85
+
 const clamp = (v, lo = 0.05, hi = 1) => Math.max(lo, Math.min(hi, v))
 
 export function joinAnd(parts) {
@@ -60,10 +83,10 @@ export function assetKeepScore(asset, ctx) {
   const { myDeltas, myTier, posRank, posValues } = ctx
 
   if (asset.type === 'pick') {
-    let keep = 0.5
+    let keep = PICK_ROUND_KEEP[asset.round] ?? PICK_KEEP_DEFAULT
     if (myTier === 'Rebuilding') keep += 0.3       // hoard picks while building
     else if (myTier === 'Contending') keep -= 0.3  // cash picks for win-now
-    return clamp(keep)
+    return clamp(keep, 0.05, PICK_KEEP_CAP)
   }
 
   const pos = asset.position

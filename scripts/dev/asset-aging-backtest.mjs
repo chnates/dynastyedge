@@ -28,8 +28,10 @@
 // mean drags every retention figure below 1.0. That bias is constant across age
 // bands, so compare bands to EACH OTHER, never to 1.0.
 //
-// Usage:
-//   node scripts/dev/asset-aging-backtest.mjs
+// Usage (the resolver hook is required — this script imports the shipped
+// recommendations.js, whose extensionless imports plain node cannot resolve):
+//   node --import ./.claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs \
+//     scripts/dev/asset-aging-backtest.mjs
 //
 // Zero dependencies, read-only, public data. Safe to re-run. Caches ~25MB of
 // Sleeper payloads on first run (DYNASTYEDGE_CACHE to override).
@@ -40,6 +42,7 @@ import { tmpdir } from 'node:os'
 // The SHIPPED constants, imported rather than restated: this script measures
 // what the app actually uses, so the analysis and the product cannot drift.
 import { PEAK_WINDOWS } from '../../src/utils/peakWindows.js'
+import { PICK_ROUND_KEEP } from '../../src/utils/recommendations.js'
 
 const SLEEPER = 'https://api.sleeper.app/v1'
 const FANTASYCALC = 'https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=2&numTeams=10&ppr=0.5'
@@ -286,13 +289,41 @@ async function pickTest(fc) {
   }
 
   console.log('\n  Round medians across all classes vs the cheapest future price on the board:')
+  const beatsByRound = {}
   for (const r of Object.keys(realized).sort()) {
     const prices = (byRound[r] ?? []).map(([, v]) => v)
     if (!prices.length) { console.log(`    round ${r}: no market entry`); continue }
     const cheapest = Math.min(...prices), dearest = Math.max(...prices)
     const beats = realized[r].filter(v => v > dearest).length
+    beatsByRound[r] = beats / realized[r].length
     console.log(`    round ${r}  realized ${realized[r].map(v => Math.round(v)).join(' / ')}   market ${cheapest}-${dearest}   classes beating the DEAREST future price: ${beats}/${realized[r].length}`)
   }
+
+  // Drift check — the shipped keep-scores must stay ordered the way the
+  // measurement orders the rounds. This is what stops a future session from
+  // nudging PICK_ROUND_KEEP by feel: the numbers are a judgement, the ORDER is
+  // measured, and a reversal here means the constants need re-deriving.
+  console.log('\n  Drift check — shipped PICK_ROUND_KEEP vs the measurement:')
+  const rounds = Object.keys(PICK_ROUND_KEEP).map(Number).sort((a, b) => a - b)
+  let drift = false
+  for (const r of rounds) {
+    const share = beatsByRound[r]
+    console.log(`    round ${r}  keep ${PICK_ROUND_KEEP[r].toFixed(2)}   beat their price in ${share == null ? 'n/a' : `${Math.round(share * 100)}% of classes`}`)
+  }
+  for (let i = 1; i < rounds.length; i++) {
+    const [prev, cur] = [rounds[i - 1], rounds[i]]
+    if (PICK_ROUND_KEEP[cur] >= PICK_ROUND_KEEP[prev]) {
+      drift = true
+      console.log(`    !! round ${cur} is not held more loosely than round ${prev}`)
+    }
+    if (beatsByRound[prev] != null && beatsByRound[cur] != null && beatsByRound[cur] > beatsByRound[prev]) {
+      drift = true
+      console.log(`    !! round ${cur} now beats its price MORE often than round ${prev} — re-derive PICK_ROUND_KEEP`)
+    }
+  }
+  console.log(drift
+    ? '    DRIFT: the shipped ordering no longer matches the measurement.'
+    : '    OK: shipped ordering matches the measurement.')
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────
