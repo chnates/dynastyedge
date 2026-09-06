@@ -1319,8 +1319,47 @@ slots + FantasyCalc pick values + taxi usage), and an on-the-clock **Best
 Available** card (best overall + top prospect at each deficit position). The
 undrafted list has search, position chips, and a My Board / ADP sort toggle so
 board prep carries into draft day. Rows open the Player Profile drawer (with
-notes). When the draft completes: recap with per-team value drafted, biggest
-steals/reaches (pick slot vs rookie ADP), and full results.
+notes). When the draft completes: the recap below, biggest steals/reaches
+(pick slot vs rookie ADP), and full results.
+
+**Draft recap — the standing is Value Over Expected, not value drafted.**
+Raw value drafted ranks *volume*: a team holding 8 picks out-drafts a team
+holding 3 by picking more often, which is what the original table measured and
+called a result. Verified on the real 2026 recap — the 7-pick team led on raw
+total (15,113) and sits **3rd** on the grade. Each row now carries three
+numbers, strongest first:
+
+- **Value over expected** (the sort) — value drafted minus what that team's
+  pick *slots* were owed. The expected curve is built from the class itself:
+  sort every drafted player by value descending, and the k-th best value is
+  the expected return of the k-th pick of the board. `Σ expected == Σ actual`
+  by construction, so **VOE sums to exactly zero league-wide** (pinned by
+  `tests/draftLive.test.mjs`) and pick count cancels out of the ranking.
+  Colored as a verdict outside a `VOE_NEUTRAL` (100) noise band — a hundred
+  points on the 0–10000 scale is less than one FantasyCalc tick.
+- **Value per pick** — the weaker efficiency read, biased toward whoever
+  picked least, kept as a secondary column rather than a sort.
+- **Hits** — picks already worth `DRAFT_HIT_VALUE` (1000, starter-caliber),
+  the same bar Manager Scouting grades rookie picks against and now **exported
+  from `managerAnalysis.js`** so the two can't drift. Immune to one stud
+  inflating a total.
+
+**The expected curve deliberately does NOT come from FantasyCalc's pick
+entries, because they don't survive the draft.** Verified against the live feed
+2026-09-06: all 24 pick entries on the board covered 2027–2029 only — a
+season's picks are retired the moment its draft completes, so a recap opened
+the day after would have had nothing to price slots against. Pricing slots off
+a *later* season's picks (the only ones that exist post-draft) prices them a
+year further out, i.e. cheap, which re-introduces the exact "more picks =
+better draft" artifact this replaces.
+
+With no priced player anywhere in the class, every expectation is 0 and a
+"+0" grade would be fabricated confidence: `graded` goes false, `voe` and
+`expected` are `null`, the header falls back to "Value Drafted by Team", and
+the raw total takes the column (rule 7). The card states in-page what the
+number means and closes with the honest caveat that it grades at *today's*
+prices, pointing at Trade › Managers, which regrades the same picks in
+hindsight every season.
 
 **Rookie Research** is the third Draft sub-tab — see Feature 19.
 
@@ -2810,7 +2849,7 @@ dynastyedge/
 │   │   ├── rookieResearch.js    ← rookie opportunity model: depth × capital, market-vs-model divergence
 │   │   ├── pickTrades.js        ← pick trade calculator: slot pricing + packages
 │   │   ├── peakWindows.js       ← position peak-age windows + status helper
-│   │   ├── draftLive.js         ← THE rookie draft live path (on the clock, countdown, Best Available, capital, recap) — pure, extracted from DraftTracker so it is testable
+│   │   ├── draftLive.js         ← THE rookie draft live path (on the clock, countdown, Best Available, capital, recap grades) — pure, extracted from DraftTracker so it is testable
 │   │   ├── lineupBuild.js       ← THE optimal starting-lineup slot-fill (metric-agnostic); fed points (Optimizer) or dynasty value (Trade Analyzer fit sim)
 │   │   ├── lineupMoves.js       ← THE weekly start/sit engine: solves the lineup, diffs it against yours, emits the move list (gains sum to the headline)
 │   │   ├── lineupConfidence.js  ← the MEASURED hit-rate curve behind "61% likely to be the right call" — regenerate, never hand-edit
@@ -2833,7 +2872,7 @@ dynastyedge/
 ├── tests/                       ← plain-Node test suite (node:test + node:assert/strict, zero deps)
 │   ├── fixtures/
 │   │   └── draft-2025.json          ← this league's REAL 2025 rookie draft (board, 40 picks, 24 traded picks) — replayed by truncation to synthesize every mid-draft state
-│   ├── draftLive.test.mjs           ← draft live path: order resolution (both tiers), real traded-pick replay, on-the-clock/countdown at all 40 board positions, Best Available, capital, recap steal/reach banding
+│   ├── draftLive.test.mjs           ← draft live path: order resolution (both tiers), real traded-pick replay, on-the-clock/countdown at all 40 board positions, Best Available, capital, recap steal/reach banding, and the recap GRADE — VOE sums to zero league-wide, volume never earns a better grade, per-pick/hits banding, the unpriced-class no-grade contract, board-order-not-argument-order pairing
 │   ├── sleeperDraft.test.mjs        ← mocked-fetch: single-draft endpoint merged over the list (slot_to_roster_id), session cache, best-effort sub-fetch degradation
 │   ├── projections.test.mjs         ← Week 1 lineup engine: defense rankings joined via player DB + schedule, home/away fields, Week-1 empty-stats contract, red/yellow/green flags, best bench
 │   ├── playoffOdds.test.mjs         ← fixed-seed determinism, Σ odds = playoff teams, verdict thresholds

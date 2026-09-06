@@ -15,7 +15,10 @@ import { findPickValue } from './pickCapital'
 const ROUND_LABELS = ['', '1st', '2nd', '3rd', '4th', '5th']
 const TRADE_EDGE = 0.05        // net beyond ±5% of trade size = win / loss
 const STARTUP_ROUNDS = 6       // drafts longer than this are startup drafts
-const DRAFT_HIT_VALUE = 1000   // a drafted player worth this today is a "hit"
+// A drafted player worth this today is a "hit" — starter-caliber dynasty
+// value. Exported because the Draft Tracker's recap grades the same picks
+// against the same bar; two copies of the number would drift.
+export const DRAFT_HIT_VALUE = 1000
 export const STEAL_DELTA = 5   // slots beaten (pick no. vs class value rank)
 
 // ── Season normalization ─────────────────────────────────────────────────────

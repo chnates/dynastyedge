@@ -7,15 +7,16 @@ import { useLeagueContext } from '../../context/LeagueContext'
 import { useRookieADP } from '../../hooks/useRookieADP'
 import { buildRookieProspects } from '../../utils/rookieAdp'
 import { useSleeperDraft, buildDraftOrder, DRAFT_SEASON } from '../../hooks/useSleeperDraft'
-import { deriveDraftState, buildBestAvailable, buildMyCapital, buildRecap } from '../../utils/draftLive'
+import { deriveDraftState, buildBestAvailable, buildMyCapital, buildRecap, VOE_NEUTRAL } from '../../utils/draftLive'
 import { getTeamName } from '../../hooks/useLeague'
-import { Sheet, Modal, Button } from '../ui'
+import { Sheet, Modal, Button, Card } from '../ui'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { BOARD_ORDER_KEY, NOTES_KEY, readJSON } from './boardStorage'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
+import { rankClass } from '../../utils/rankColors'
 
 const MANUAL_STORAGE_KEY = `dynastyedge_draft_tracker_${DRAFT_SEASON}`
 const POS_FILTERS = ['ALL', 'QB', 'RB', 'WR', 'TE']
@@ -34,6 +35,21 @@ function relTime(ts) {
   const m = Math.round(s / 60)
   if (m < 60) return `${m}m ago`
   return `${Math.round(m / 60)}h ago`
+}
+
+// Value over expected reads as a verdict, so it takes the verdict colors —
+// but only outside the noise band (see VOE_NEUTRAL).
+function voeTone(voe) {
+  if (voe == null) return 'text-accent'
+  if (voe > VOE_NEUTRAL) return 'text-success'
+  if (voe < -VOE_NEUTRAL) return 'text-danger'
+  return 'text-text-secondary'
+}
+
+function formatVoe(voe) {
+  if (voe == null) return null
+  const rounded = Math.round(voe)
+  return `${rounded > 0 ? '+' : ''}${rounded.toLocaleString()}`
 }
 
 function pickSlotLabel(pick, teams) {
@@ -501,31 +517,56 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects, my
           <div className="px-4 pt-4">
             <h2 className="font-display text-lg uppercase text-text-primary mb-2">Draft Recap</h2>
 
-            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary mb-1.5">
-              Value Drafted by Team
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary mb-1">
+              {recap.graded ? 'Value Over Expected' : 'Value Drafted by Team'}
             </p>
-            <div className="rounded-none bg-bg-card border border-border-default px-3 mb-4">
+            {recap.graded && (
+              <p className="font-body text-[11px] leading-snug text-text-tertiary mb-1.5">
+                Value drafted minus what those pick slots were owed — the Nth pick of
+                the draft is expected to return the Nth-best player in the class, so
+                teams holding different numbers of picks land on one scale. Sums to
+                zero league-wide. Hits are picks already worth 1,000+ (starter-caliber).
+              </p>
+            )}
+            <Card padding="px-3" className="mb-1.5">
               {recap.teamTotals.map((t, i) => {
                 const isMine = t.rosterId === myRosterId
                 return (
                   <div
                     key={t.rosterId}
-                    className={`py-2.5 flex items-center gap-2 ${i < recap.teamTotals.length - 1 ? 'border-b border-border-default' : ''} ${
+                    className={`py-2.5 ${i < recap.teamTotals.length - 1 ? 'border-b border-border-default' : ''} ${
                       isMine ? 'bg-brand/5 -mx-3 px-3' : ''
                     }`}
                   >
-                    <span className="font-mono text-xs font-bold text-text-tertiary w-5 flex-shrink-0">{i + 1}</span>
-                    <span className={`font-body text-sm flex-1 truncate ${isMine ? 'text-brand-bright font-medium' : 'text-text-primary'}`}>
-                      {getTeamName(userMap[t.rosterId])}{isMine ? ' · You' : ''}
-                    </span>
-                    <span className="font-body text-[10px] text-text-tertiary flex-shrink-0">{t.count} picks</span>
-                    <span className="font-mono text-xs font-medium text-accent tabular-nums flex-shrink-0">
-                      {Math.round(t.total).toLocaleString()}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={`font-mono text-xs font-bold w-5 flex-shrink-0 ${rankClass(i + 1)}`}>{i + 1}</span>
+                      <span className={`font-body text-sm flex-1 truncate ${isMine ? 'text-brand-bright font-medium' : 'text-text-primary'}`}>
+                        {getTeamName(userMap[t.rosterId])}{isMine ? ' · You' : ''}
+                      </span>
+                      <span className={`font-mono text-xs font-bold tabular-nums flex-shrink-0 ${voeTone(t.voe)}`}>
+                        {formatVoe(t.voe) ?? Math.round(t.total).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-2 pl-7 mt-0.5">
+                      <span className="font-body text-[10px] text-text-tertiary flex-1 truncate">
+                        {t.count} {t.count === 1 ? 'pick' : 'picks'}
+                        {' · '}{Math.round(t.perPick).toLocaleString()}/pick
+                        {' · '}{t.hits} {t.hits === 1 ? 'hit' : 'hits'}
+                      </span>
+                      {t.voe != null && (
+                        <span className="font-mono text-[10px] text-text-tertiary tabular-nums flex-shrink-0">
+                          {Math.round(t.total).toLocaleString()} vs {Math.round(t.expected).toLocaleString()} exp
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )
               })}
-            </div>
+            </Card>
+            <p className="font-body text-[10px] leading-snug text-text-tertiary mb-4">
+              Graded at today's prices, when a rookie class is still mostly consensus.
+              Trade › Managers regrades these same picks every season in hindsight.
+            </p>
 
             {(recap.steals.length > 0 || recap.reaches.length > 0) && (
               <div className="mb-4">
