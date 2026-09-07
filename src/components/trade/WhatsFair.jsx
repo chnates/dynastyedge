@@ -213,15 +213,15 @@ function TargetCard({ target, fairPackage, packagePending, showNeedTag, onTap })
               </span>
             </div>
           )}
-          {/* The cheaper road not taken. The ranking is unchanged — appeal
-              still wins, on the owner's call — so this only names what the
-              suggestion cost you and what giving less would cost in their
-              eyes. Showing it beside the pick is information; reordering on it
-              would have thrown away the read the search exists to produce. */}
+          {/* The road not taken. The suggestion now weighs their appeal against
+              what the package costs ME, so the option worth naming is the one
+              they'd like MORE that it declined to pay for — the reverse of when
+              appeal won outright. The read the search exists to produce is
+              still on the card; it just no longer picks the offer by itself. */}
           {fairPackage.alternative && (
             <div className="flex items-baseline gap-1.5 min-w-0">
               <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary shrink-0">
-                Or cheaper:
+                Costs more:
               </span>
               <span className="font-body text-[10px] text-text-secondary dark:text-text-secondary truncate min-w-0">
                 {fairPackage.alternative.assets.map(a => a.name).join(' + ')}

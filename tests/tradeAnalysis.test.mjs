@@ -16,7 +16,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { analyzeTrade, getTradeVerdict, getCounterSuggestion, buildTradePitch, buildPartnerFit, suggestFairPackage } from '../src/utils/tradeAnalysis.js'
+import { analyzeTrade, getTradeVerdict, getCounterSuggestion, buildTradePitch, buildPartnerFit, suggestFairPackage, APPEAL_BONUS } from '../src/utils/tradeAnalysis.js'
 import { computeLeagueAverages, assignWinWindowTiers } from '../src/utils/rosterAnalysis.js'
 import { buildGivabilityContext, assetKeepScore, PROTECT_THRESHOLD } from '../src/utils/recommendations.js'
 
@@ -691,14 +691,17 @@ function altScenario() {
   return { me, all, opp, target: { ...opp.players[2], type: 'player' } }
 }
 
-test('the alternative is cheaper AND reads worse to them, or it is not shown', () => {
+test('the alternative costs MORE and reads better to them, or it is not shown', () => {
   const { me, all, opp, target } = altScenario()
   const pkg = suggestFairPackage(target, me, all, opp)
   assert.ok(pkg, 'a package is suggested')
-  if (!pkg.alternative) return  // no meaningful saving exists — a valid outcome
+  if (!pkg.alternative) return  // no meaningfully pricier upgrade exists — valid
   const rank = { Weak: 0, Fair: 1, Strong: 2 }
-  assert.ok(rank[pkg.alternative.appeal] < rank[pkg.appeal],
-    'an alternative at the same or better appeal would just be the winner')
+  // The direction reversed when phase 2 stopped being lexicographic. The
+  // suggestion now already weighs my cost, so the road not taken is the one
+  // they'd like MORE that it declined to pay for.
+  assert.ok(rank[pkg.alternative.appeal] > rank[pkg.appeal],
+    'an alternative at the same or worse appeal is not an upgrade worth naming')
   assert.ok(pkg.alternative.totalValue !== pkg.totalValue,
     'a package identical to the winner is not an alternative')
 })
@@ -706,9 +709,220 @@ test('the alternative is cheaper AND reads worse to them, or it is not shown', (
 test('the alternative never becomes the suggestion', () => {
   const { me, all, opp, target } = altScenario()
   const pkg = suggestFairPackage(target, me, all, opp)
-  const rank = { Weak: 0, Fair: 1, Strong: 2 }
-  // Whatever the alternative reads, the chosen package must still be the best
-  // appeal the search found — the ranking is untouched by this feature.
+  // The suggestion is chosen on appeal traded off against my keep-pain, so a
+  // higher-appeal alternative existing is EXPECTED — it was passed over on
+  // cost. What must never happen is the two being the same package.
   if (pkg.alternative)
-    assert.ok(rank[pkg.appeal] >= rank[pkg.alternative.appeal])
+    assert.notDeepEqual(pkg.alternative.assets.map(a => a.name), pkg.assets.map(a => a.name))
+})
+
+// ── The three fixes from the 2026-09 "does it care too much about them?" review ──
+
+// A roster where the two selection rules genuinely disagree: a spare RB the
+// partner will accept (Fair, cheap to lose) and a core WR they'd prefer
+// (Strong, expensive), both inside the same [0.9x, 1.15x] band and both under
+// the protect threshold. Their TE room is deep enough that taking the target
+// does not drop them below league average, which is what lets the pricier
+// package reach Strong at all.
+function divergentScenario() {
+  const P = (id, name, pos, value, age = 26) =>
+    ({ sleeperId: id, name, position: pos, value, age, isIR: false, isTaxi: false })
+  const mk = (rosterId, players) => ({
+    rosterId, players, picks: [], totalValue: players.reduce((s, p) => s + p.value, 0),
+    pickCapitalScore: 0, avgStarterAge: 26,
+  })
+  const me = mk(1, [
+    P('a1', 'My QB1', 'QB', 6000), P('a2', 'My QB2', 'QB', 5800),
+    P('a3', 'My RB1', 'RB', 5200), P('a4', 'My RB2', 'RB', 5100), P('a5', 'My RB3', 'RB', 5000),
+    P('a6', 'SpareRB', 'RB', 4300), P('a7', 'SpareRB2', 'RB', 4250),
+    P('a8', 'My WR1', 'WR', 5400), P('a9', 'My WR2', 'WR', 4500), P('a10', 'My TE1', 'TE', 3000),
+  ])
+  const opp = mk(2, [
+    P('b1', 'TQB1', 'QB', 5000), P('b2', 'TRB1', 'RB', 3800), P('b3', 'TWR1', 'WR', 3700),
+    P('b4', 'TTE1', 'TE', 4000), P('b6', 'TTE2', 'TE', 3900), P('b5', 'TARGET', 'TE', 4100),
+  ])
+  const others = [3, 4].map(i => mk(i, [P(`${i}1`, `QB${i}`, 'QB', 5500),
+    P(`${i}2`, `RB${i}`, 'RB', 4800), P(`${i}3`, `WR${i}`, 'WR', 4800), P(`${i}4`, `TE${i}`, 'TE', 3000)]))
+  const all = [me, opp, ...others]
+  return { me, all, opp, target: { ...opp.players[5], type: 'player' } }
+}
+
+test('phase 2 declines to buy Strong appeal when it costs more than the bonus', () => {
+  const { me, all, opp, target } = divergentScenario()
+  const ctx = buildGivabilityContext(me, all)
+  const pkg = suggestFairPackage(target, me, all, opp)
+  assert.ok(pkg, 'a package is suggested')
+
+  // The board on offer: a Fair package at ~0.25 keep-pain and a Strong one at
+  // ~0.85. The gap (~0.60) exceeds APPEAL_BONUS.Strong, so the Strong package
+  // must lose. The old lexicographic rule took it every time.
+  const pain = assets => assets.reduce((s, a) => s + assetKeepScore(a, ctx), 0)
+  assert.equal(pkg.appeal, 'Fair', 'the cheaper acceptable package wins')
+  assert.ok(pain(pkg.assets) < 0.5, 'and it is genuinely the cheap one')
+  assert.ok(pkg.alternative, 'the Strong package it passed over is still named')
+  assert.equal(pkg.alternative.appeal, 'Strong')
+  assert.ok(pain(pkg.alternative.assets) - pain(pkg.assets) > APPEAL_BONUS.Strong,
+    'it was passed over precisely because it cost more than a step of appeal is worth')
+
+  // Nothing about the guardrails moved.
+  pkg.assets.forEach(a => assert.ok(assetKeepScore(a, ctx) < PROTECT_THRESHOLD))
+  assert.ok(pkg.totalValue >= target.value * 0.9 && pkg.totalValue <= target.value * 1.15,
+    'the fair band still binds')
+})
+
+test('phase 2 maximizes appeal-minus-my-cost, not appeal alone', () => {
+  // The invariant form of the rule: no package the search could have picked
+  // may beat the one it did on (APPEAL_BONUS[appeal] - my keep-pain). Under the
+  // old lexicographic rule this fails the moment a pricier higher-appeal
+  // package exists, which is exactly the case the review found live (2 of 20
+  // suggestions on the real board, both reaching for an asset just under the
+  // protect line). Written as an invariant rather than a staged divergence
+  // because the [0.9x, 1.15x] band is narrow enough that a synthetic
+  // Fair-vs-Strong pair is fragile; the behaviour change itself was measured
+  // against the live league.
+  const { me, all, opp, target } = altScenario()
+  const pkg = suggestFairPackage(target, me, all, opp)
+  assert.ok(pkg, 'a package is suggested')
+  const ctx = buildGivabilityContext(me, all)
+  const net = assets => {
+    const fit = buildPartnerFit(assets, [target], opp, all)
+    const pain = assets.reduce((s, a) => s + assetKeepScore(a, ctx), 0)
+    return (APPEAL_BONUS[fit?.appeal] ?? 0) - pain
+  }
+  const chosenNet = net(pkg.assets)
+  // Every single-asset package inside the same band is a candidate the search saw.
+  me.players
+    .filter(p => assetKeepScore({ type: 'player', ...p }, ctx) < PROTECT_THRESHOLD)
+    .filter(p => p.value >= target.value * 0.9 && p.value <= target.value * 1.15)
+    .forEach(p => {
+      const rival = [{ type: 'player', name: p.name, value: p.value, sleeperId: p.sleeperId, position: p.position, age: p.age }]
+      assert.ok(chosenNet >= net(rival) - 1e-9,
+        `${p.name} scores better on appeal-minus-cost than the package that was chosen`)
+    })
+  // The protect threshold still binds first — the trade-off never unlocks a core asset.
+  pkg.assets.forEach(a => assert.ok(assetKeepScore(a, ctx) < PROTECT_THRESHOLD))
+})
+
+test('APPEAL_BONUS keeps Weak near-prohibitive and Strong a small nudge', () => {
+  // The asymmetry is the point: a Weak package means the offer goes unanswered
+  // (§4e-v), while Strong-over-Fair is negotiating comfort. Pinning the SHAPE,
+  // not the exact values, so retuning inside the plateau stays free.
+  assert.ok(APPEAL_BONUS.Weak <= -1, 'Weak must cost about a whole untouchable-tier asset')
+  assert.equal(APPEAL_BONUS.Fair, 0, 'Fair is the reference point')
+  assert.ok(APPEAL_BONUS.Strong > 0 && APPEAL_BONUS.Strong < 0.6,
+    'Strong is a nudge — above ~0.6 the rule collapses back to lexicographic')
+})
+
+test('Layer 4 scores a filled deficit and the lineup gain it causes ONCE', () => {
+  // A "fill" is defined as an arriving player who STARTS at a position they are
+  // below average in — which is exactly what raises their startersDelta. Before
+  // the fix both fired, so one event earned the 2 points that mean Strong.
+  const P = (id, name, pos, value) =>
+    ({ sleeperId: id, name, position: pos, value, age: 25, isIR: false, isTaxi: false })
+  const mk = (rosterId, players) => ({
+    rosterId, players, picks: [], totalValue: players.reduce((s, p) => s + p.value, 0),
+    pickCapitalScore: 0, avgStarterAge: 26,
+  })
+  // Partner holds no TE at all, so TE is a clear deficit for them.
+  const opp = mk(2, [P('b1', 'Their QB', 'QB', 3000), P('b2', 'Their RB', 'RB', 3000),
+    P('b3', 'Their WR', 'WR', 3000)])
+  const others = [1, 3, 4].map(i => mk(i, [P(`${i}1`, `QB${i}`, 'QB', 3000),
+    P(`${i}2`, `RB${i}`, 'RB', 3000), P(`${i}3`, `WR${i}`, 'WR', 3000), P(`${i}4`, `TE${i}`, 'TE', 3000)]))
+  const all = [others[0], opp, others[1], others[2]]
+
+  // Two arms that take the SAME player out of their roster (so `weakens` and
+  // the value read are identical) and differ only in whether the incoming
+  // player lands on a position they are short at. Send 4,000 for a 3,000 so
+  // their lineup genuinely GAINS — an equal swap nets zero and would not
+  // exercise the branch at all.
+  const takeRB = [{ ...opp.players[1], type: 'player' }]
+  const fit = buildPartnerFit(
+    [{ ...P('x1', 'Big TE', 'TE', 4000), type: 'player' }], takeRB, opp, all)
+  const noFillFit = buildPartnerFit(
+    [{ ...P('x2', 'Big WR', 'WR', 4000), type: 'player' }], takeRB, opp, all)
+
+  assert.ok(fit.fills.includes('TE'), 'the TE fills their deficit')
+  assert.ok(fit.startersDelta > 0, 'and therefore raises their starting lineup')
+  assert.deepEqual(noFillFit.fills, [], 'the control fills nothing')
+  assert.equal(noFillFit.startersDelta, fit.startersDelta, 'both arms move their lineup equally')
+  assert.deepEqual(noFillFit.weakens, fit.weakens, 'both arms cost them the same position')
+
+  // Both facts still RENDER — naming where the hole is, is information the
+  // delta alone does not carry.
+  assert.ok(fit.reasons.some(r => r.includes('TE deficit')))
+  assert.ok(fit.reasons.some(r => r.includes('starting lineup gains')))
+
+  // But they are worth ONE point between them. Before the fix the fill added a
+  // second point for the same event, and this equality was 1 apart — which is
+  // exactly the gap between `Fair` and `Strong`.
+  assert.equal(fit.appealScore, noFillFit.appealScore,
+    'a filled deficit adds no point beyond the lineup gain that IS the fill')
+})
+
+test('a material drop in MY starting lineup downgrades an Accept, and only downgrades', () => {
+  const P = (id, name, pos, value) =>
+    ({ sleeperId: id, name, position: pos, value, age: 25, isIR: false, isTaxi: false })
+  const mk = (rosterId, players) => ({
+    rosterId, players, picks: [], totalValue: players.reduce((s, p) => s + p.value, 0),
+    pickCapitalScore: 0, avgStarterAge: 26,
+  })
+  // I am below league average at WR, so acquiring a starting WR "fills a need"
+  // and the position COUNT balances against the RB I ship — the exact tie that
+  // let an Accept sit on top of a worse lineup.
+  const me = mk(1, [
+    P('m1', 'My QB', 'QB', 6000),
+    // Age 32 deliberately: Layer 3's Contending branch scores -1 for "giving up
+    // proven starters" on any player over 5,000 aged <= 30, which would knock
+    // the base verdict off Accept and leave this test measuring nothing.
+    { ...P('m2', 'My RB1', 'RB', 9000), age: 32 },
+    P('m3', 'My RB2', 'RB', 5000),
+    P('m4', 'My WR1', 'WR', 1200), P('m5', 'My WR2', 'WR', 1100), P('m6', 'My TE', 'TE', 3000),
+  ])
+  const opp = mk(2, [P('o1', 'Their QB', 'QB', 6000), P('o2', 'Their RB', 'RB', 3000),
+    P('o3', 'Their WR', 'WR', 8600), P('o4', 'Their TE', 'TE', 3000)])
+  const others = [3, 4].map(i => mk(i, [P(`${i}1`, `QB${i}`, 'QB', 6000),
+    P(`${i}2`, `RB${i}`, 'RB', 5000), P(`${i}3`, `WR${i}`, 'WR', 5000), P(`${i}4`, `TE${i}`, 'TE', 3000)]))
+  const all = [me, opp, ...others]
+
+  const give = [{ ...me.players[1], type: 'player' }]   // My RB1, 9000
+  const get  = [{ ...opp.players[2], type: 'player' }]  // Their WR, 8600
+  const a = analyzeTrade(give, get, me, opp, all)
+
+  assert.equal(typeof a.myStartersDelta, 'number', 'my own lineup delta is measured at all')
+  assert.ok(a.myStartersDelta < 0, 'this specific swap lowers my best starting lineup')
+  assert.ok(a.myLineupMaterial, 'and by more than the materiality floor')
+
+  const v = getTradeVerdict(a)
+  assert.notEqual(v.verdict, 'Accept', 'a materially worse lineup cannot be a clean Accept')
+  assert.equal(v.verdict, 'Counter', 'the gate downgrades to Counter, never to Decline')
+  assert.match(v.reasoning, /starting lineup drops/)
+})
+
+test('the lineup gate never fires on noise, and never upgrades a verdict', () => {
+  const P = (id, name, pos, value) =>
+    ({ sleeperId: id, name, position: pos, value, age: 25, isIR: false, isTaxi: false })
+  const mk = (rosterId, players) => ({
+    rosterId, players, picks: [], totalValue: players.reduce((s, p) => s + p.value, 0),
+    pickCapitalScore: 0, avgStarterAge: 26,
+  })
+  const me = mk(1, [
+    P('m1', 'My QB', 'QB', 6000), P('m2', 'My RB1', 'RB', 5000), P('m3', 'My RB2', 'RB', 5000),
+    P('m4', 'My WR1', 'WR', 5000), P('m5', 'My WR2', 'WR', 5000), P('m6', 'My TE', 'TE', 5000),
+  ])
+  const opp = mk(2, [P('o1', 'Their QB', 'QB', 6000), P('o2', 'Their RB', 'RB', 4999),
+    P('o3', 'Their WR', 'WR', 5000), P('o4', 'Their TE', 'TE', 5000)])
+  const others = [3, 4].map(i => mk(i, [P(`${i}1`, `QB${i}`, 'QB', 6000),
+    P(`${i}2`, `RB${i}`, 'RB', 5000), P(`${i}3`, `WR${i}`, 'WR', 5000), P(`${i}4`, `TE${i}`, 'TE', 5000)]))
+  const all = [me, opp, ...others]
+  // A 1-point lineup move on a ~30,000 lineup — far under MY_LINEUP_MATERIAL_PCT.
+  const a = analyzeTrade(
+    [{ ...me.players[1], type: 'player' }], [{ ...opp.players[1], type: 'player' }], me, opp, all)
+  assert.equal(a.myLineupMaterial, false, 'a 1-point move is noise, not a signal')
+
+  // And the gate is one-directional: a lineup GAIN never lifts a Decline.
+  const bad = analyzeTrade(
+    [{ type: 'pick', name: '2027 1st', value: 9000 }],
+    [{ type: 'pick', name: '2027 4th', value: 500 }], me, opp, all)
+  assert.equal(getTradeVerdict(bad).verdict, 'Decline',
+    'no lineup number rescues a trade that loses on value')
 })
