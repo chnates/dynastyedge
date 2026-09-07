@@ -3530,6 +3530,7 @@ export const FANTASYCALC_PARAMS = {
   ppr: 0.5,        // Half PPR
 }
 
+// SEED ONLY — the live window is derived per load (see the note below).
 export const PICK_YEARS = ['2026', '2027', '2028']
 export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 

@@ -126,7 +126,12 @@ League ID: `1313933520715907072` (constant `LEAGUE_ID`).
   `owner_id` (**current** owner). One entry per moved pick (current state,
   not a history). Any pick absent from this list is still owned by its
   original roster. Resolution lives in `utils/pickCapital.js`
-  (`resolvePickOwnership`, key format `"season-round-originalRosterId"`).
+  (`resolvePickOwnership`, key format `"season-round-originalRosterId"`) and
+  takes the **live** pick window as an argument — it has no season default,
+  deliberately (see `PICK_YEARS` in the constants table).
+  **Sleeper never removes a spent season's entries**: `/traded_picks` still
+  carried 2026 rows after the 2026 draft completed. It is the window, not this
+  endpoint, that decides which seasons are live.
 - **`/state/nfl`**: `season_type` (`!== 'regular'` ⇒ offseason mode),
   `week`, `season`. usePlayerIntel also checks `season_type === 'post'`.
 - **`/matchups/{week}`**: `matchup_id` (groups the two sides), `roster_id`,
@@ -237,10 +242,21 @@ Fields read per entry (verified in `useFantasyCalc.js`):
 | `overallRank` / `positionRank` | Ranks |
 | `trend30Day` | 30-day delta; arrows: > 50 ↑ green, < −50 ↓ red, else → grey |
 
-The hook splits the response into `playerMap` (string sleeperId → player)
-and `pickEntries` (`{name, value}` for entries with no sleeperId — picks like
-"2026 Early 1st"). Pick pricing uses median-of-round via
-`utils/pickCapital.js` `findPickValue`.
+The hook splits the response into `playerMap` (**numeric** sleeperId →
+player) and `pickEntries` (picks — entries whose `sleeperId` is non-numeric,
+like `FP_2027_1`/`DP_0_8`, or absent). The split is by **ID shape, not mere
+presence**: FantasyCalc began stamping synthetic ids on picks, and splitting
+on presence dumped every pick into `playerMap` and priced all picks at 0.
+
+Pick pricing uses median-of-round via `utils/pickCapital.js` `findPickValue`.
+**A season's pick entries are RETIRED the moment its rookie draft completes**
+— verified live 2026-09-07, three days after this league's 2026 draft: all 24
+pick entries were 2027/2028/2029. So `findPickValue` legitimately returns 0
+for a spent pick, and any surface showing one must fall back rather than print
+a blank: `buildDraftPickIndex` (what the pick became) then
+`buildGenericRoundValues` (round median across every listed season, marked ≈).
+Both live in `pickCapital.js` and are shared by League › Activity and the
+manager scouting ledger.
 
 **Bans and gotchas (as of 2026-07-05):**
 
@@ -486,7 +502,7 @@ Derived from `grep -rn "dynastyedge_" src`. All keys prefixed `dynastyedge_`.
 | `dynastyedge_board_order` | local | `DraftBoard.jsx` (keys in `draft/boardStorage.js`) | JSON array (My Board order) | Never |
 | `dynastyedge_prospect_notes` | local | `DraftBoard.jsx` + `DraftTracker.jsx` (shared) | JSON object map (sleeperId → note) | Never |
 | `dynastyedge_csv_rankings` | local | `DraftBoard.jsx` | `{version: 1, savedAt: epoch-ms, columns: [...]}` | Removed when last CSV column deleted |
-| `dynastyedge_draft_tracker_2026` | local | `DraftTracker.jsx` (template `dynastyedge_draft_tracker_${DRAFT_SEASON}`, DRAFT_SEASON = `PICK_YEARS[0]`) | JSON array of manually logged picks | Never |
+| `dynastyedge_draft_tracker_{season}` | local | `DraftTracker.jsx` (`manualStorageKey(season)`; season = `pickYears[0]`, the upcoming rookie draft — **derived**, see `utils/seasonWindow.js`) | JSON array of manually logged picks | Never — but the key changes with the season, so one draft's log can't leak into the next |
 | `dynastyedge_trade_draft` | **session** | `TradeAnalyzer.jsx` | in-progress trade object | **Wiped on identity switch** (`ROSTER_SCOPED_SESSION`); nav-state preloads take priority over it |
 | `dynastyedge_league_sort` | **session** | `LeagueOverview.jsx` | sort mode string | Session end |
 | `dynastyedge_league_pos` | **session** | `LeagueOverview.jsx` | position filter string | Session end |
@@ -522,7 +538,7 @@ pattern; storage failure must degrade to in-memory behavior, never crash.
 | `ESPN_BASE` / `ESPN_WEB_BASE` | Unofficial ESPN bases (best-effort news only) |
 | `NEWS_FEED_URL` / `VALUES_HISTORY_URL` / `TRADE_VALUES_URL` / `ROOKIE_INTEL_URL` | The four static feeds (section 3) |
 | `FANTASYCALC_PARAMS` | The four immutable market params (section 2) |
-| `PICK_YEARS` | `['2026','2027','2028']` — pick-capital horizon; `PICK_YEARS[0]` is `DRAFT_SEASON` (useSleeperDraft, DraftTracker storage key). Rolls forward once a year |
+| `PICK_YEARS` | **SEED ONLY.** The live pick-capital horizon is `pickYears` on LeagueContext, derived per load by `utils/seasonWindow.js` from `/state/nfl` + the drafts list (no extra request): the upcoming rookie draft plus the two after it, rolling itself the moment a season's non-auction draft reports `status: "complete"`. This constant is only what renders before NFL state resolves. Do not write new code against it, and never key anything on a literal year |
 | `POSITIONS` | `['QB','RB','WR','TE']` |
 | `ROSTER_SLOTS` | Ordered starting-slot spec — **indices match Sleeper's `starters` array positions**: QB, RB, RB, WR, WR, TE, FLEX×3, SFLX, DEF |
 

@@ -65,7 +65,8 @@ documented in §5 below.
 | Can't sign in / login list empty | Is it Sleeper or FantasyCalc that's failing? | Login must depend on Sleeper **only** — `signInRosters` in `src/hooks/useLeague.js:146` | Block `api.fantasycalc.com` in devtools; login must still work. If it doesn't, someone rewired LoginScreen to `league`/`values` | `src/components/auth/LoginScreen.jsx` (reads `signInRosters`, `sleeperError`) | `dynastyedge-architecture-contract` |
 | Player shows `—` for value | Is the player in FantasyCalc's response? | **By design**: unranked-player contract — name from player DB, value `—`, contributes 0 | §8.2: check `playerMap[String(id)]` in Node/console | Only a bug if the player *is* FantasyCalc-ranked → join bug, `src/hooks/useLeague.js:44-93` | `dynastyedge-data-contracts` |
 | Player entirely missing from roster | Has the ~5–8MB player DB loaded yet? | `useLeague.js:65` skips players unknown to *both* FantasyCalc and the (still-loading) player DB — they appear when the DB lands | Wait/refresh; if still missing check ID string normalization (`String(pid)`) | `src/hooks/useLeague.js`, `src/hooks/usePlayerDB.js` | `dynastyedge-data-contracts` |
-| Pick valued 0 / `—` | Which season is the pick? | Pick-valuation trap family — FantasyCalc only lists *future* generic picks; entries retire after the NFL draft | §3: run `findPickValue` in Node against live `pickEntries` | `src/utils/pickCapital.js:53`, `src/utils/pickTrades.js` (`makePickPricer`), `src/utils/managerAnalysis.js` | `dynastyedge-failure-archaeology` |
+| Pick valued 0 / `—` | Which season is the pick, and has its draft been HELD? | Pick-valuation trap family — FantasyCalc lists only *future* generic picks, and **retires a season's entries the moment that season's rookie draft completes** | §3: run `findPickValue` in Node against live `pickEntries`; check what `resolvePickYears` returns | `src/utils/pickCapital.js` (`findPickValue`, `buildDraftPickIndex`, `buildGenericRoundValues`), `src/utils/seasonWindow.js`, `src/utils/pickTrades.js` (`makePickPricer`) | `dynastyedge-failure-archaeology` |
+| Picks shown for a season whose draft already happened | What does `pickYears` say? | Was the #1 symptom of the hand-rolled `PICK_YEARS`; the window is now derived. If it recurs, the drafts list or `/state/nfl` didn't resolve and the seed is showing | §3: `resolvePickYears(nflState, drafts, PICK_YEARS)` in Node against the live endpoints | `src/utils/seasonWindow.js`, `src/hooks/useLeague.js` | `dynastyedge-failure-archaeology` §3c |
 | Trade totals "wrong" | Are you expecting trade-time prices? | **By design**: Activity + manager ledgers grade at *today's* prices; FAAB displays but counts 0 | Compare against the "At trade time" line (only if archived) | `src/components/league/LeagueActivity.jsx:73`, `src/utils/managerAnalysis.js:243` | `dynasty-fantasy-reference` |
 | Sparkline missing | How many snapshots does the player have? | **By design**: hidden under 4 points (`MIN_SPARKLINE_POINTS`) | Fetch `values-history.json` raw URL, count non-null entries for that sleeperId | `src/hooks/useValueHistory.js:38` | — |
 | News section vanished | Nothing — this is the contract | **By design**: news hides on *any* failure, never errors | Fetch `news.json` raw URL yourself | `loadNewsFeed` in `src/hooks/usePlayerIntel.js:82` (`.catch(() => [])`) | — |
@@ -119,8 +120,8 @@ does a string match — `name.includes(season) && name.includes('1st'|…)` —
 and takes the **median** of matches. No match → **returns 0**, and a 0 sails
 silently through every sum.
 
-Two documented incidents (run `git show <sha>` for the full story; deep
-narrative in `dynastyedge-failure-archaeology`):
+Three documented incidents (run `git show <sha>` for the full story; deep
+narrative in `dynastyedge-failure-archaeology` §3a–3c):
 
 - **4f31aad** (2026-06-12) — Manager scouting priced every traded *past*
   pick at 0 (FantasyCalc lists no past drafts) and pick→player resolution
@@ -138,12 +139,25 @@ narrative in `dynastyedge-failure-archaeology`):
   projected at its slot (derived rookie ADP) or the round-median rookie.
   Same commit fixed a latent `p.value ?? 0` on roster pick objects (they
   carry no `.value`).
+- **0efb102 / eeeba25** (2026-09-07) — the *third* calendar window, three
+  days after the league's own rookie draft. FantasyCalc had retired every
+  2026 pick entry, but `PICK_YEARS` was still a hand-rolled constant, so the
+  app generated **40 spent picks priced at 0** and hid 2029 entirely; and
+  League › Activity printed `—` for a pick spent in the same season it was
+  traded, which also zeroed the per-side totals behind the green
+  larger-haul flag. Fix: `src/utils/seasonWindow.js` derives the window from
+  `/state/nfl` + the drafts list, and the §3a ladder moved into
+  `pickCapital.js` (`buildDraftPickIndex`, `buildGenericRoundValues`) so
+  Activity and the manager ledger share it.
 
-**Triage rule:** any 0/`—` pick value → ask *which season* and *which pricing
-path* (generic `findPickValue`, slot-level `findSlotPickValue`, rookie-class
-`makePickPricer`, or manager-ledger median fallback). The calendar matters:
-the danger window is between the NFL draft (late April) and the league's
-rookie draft.
+**Triage rule:** any 0/`—` pick value → ask *which season*, *has that
+season's draft been held*, and *which pricing path* (generic
+`findPickValue`, slot-level `findExactSlotValue`, rookie-class
+`makePickPricer`, or the spent-pick ladder
+`buildDraftPickIndex` → `buildGenericRoundValues`). The calendar matters and
+there are **three** danger windows, not one: before the NFL draft, between
+the NFL draft and the league's rookie draft, and after the league's rookie
+draft (when that season's entries are gone for good).
 
 Other "wrong numbers" that are contracts, not bugs:
 
@@ -251,7 +265,7 @@ Likely causes, in order:
 |---|---|---|
 | Module cache (JS memory) | FantasyCalc values (`useFantasyCalc`), player DB (`usePlayerDB`), value history, trade archive, news feed, transactions, league history, draft sync | Per *session* (page load). FantasyCalc alone gets 30-min stale-while-revalidate on tab focus (`STALE_AFTER_MS`, `src/App.jsx:55,88-101` — silent, keeps stale data on screen). Draft sync refetches on focus at 10s (live) / 5min (idle) and polls 30s while drafting (`useSleeperDraft.js:9-10`). Hard reset = reload the page. |
 | sessionStorage | `dynastyedge_trade_draft` (in-progress trade), `dynastyedge_league_sort/pos/tier` (League filters) | Tab lifetime. A "stuck" trade builder or pre-filtered League view is usually one of these. |
-| localStorage | `dynastyedge_theme`, `dynastyedge_watchlist_v1`, `dynastyedge_identity_v1` (login — clear to force the LoginScreen), `dynastyedge_action_dismissals`, `dynastyedge_edge_last_visit`, `dynastyedge_board_order`, `dynastyedge_prospect_notes`, `dynastyedge_csv_rankings`, `dynastyedge_draft_tracker_2026` | Persistent. Full key contract + shapes: `dynastyedge-data-contracts`. |
+| localStorage | `dynastyedge_theme`, `dynastyedge_watchlist_v1`, `dynastyedge_identity_v1` (login — clear to force the LoginScreen), `dynastyedge_action_dismissals`, `dynastyedge_edge_last_visit`, `dynastyedge_board_order`, `dynastyedge_prospect_notes`, `dynastyedge_csv_rankings`, `dynastyedge_draft_tracker_{season}` | Persistent. Full key contract + shapes: `dynastyedge-data-contracts`. |
 
 **Reset surgically** — clear the one key implicated, never
 `localStorage.clear()` (it nukes the owner's board order, notes, and CSV

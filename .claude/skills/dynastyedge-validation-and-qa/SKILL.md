@@ -159,9 +159,23 @@ probes: `scripts/probe-league.mjs` and `scripts/check-feeds.mjs` — prefer
 those for broad health checks; use the recipes below for verifying a
 *specific* changed computation by hand.
 
-### Recipe A — changed pick valuation (`pickCapital.js` / `pickTrades.js`)
+### Recipe A — changed pick valuation (`pickCapital.js` / `pickTrades.js` / `seasonWindow.js`)
 
-Verify one traded pick's price against FantasyCalc's raw entry:
+**Step 0 — which seasons should even exist?** Pick pricing is downstream of
+the pick *window*, so check it first; a right price on a season that shouldn't
+be there is still wrong.
+
+```bash
+# Has this season's rookie draft been held? `status` is the whole answer.
+curl -s "https://api.sleeper.app/v1/league/1313933520715907072/drafts" \
+  | jq '[.[] | {season, type, status}]'
+curl -s "https://api.sleeper.app/v1/state/nfl" | jq '{season, season_type}'
+# Then: resolvePickYears(nflState, drafts, PICK_YEARS) must agree with the
+# seasons FantasyCalc is actually pricing (below). If they disagree, the app
+# is inventing worthless picks, hiding real ones, or both.
+```
+
+Then verify one traded pick's price against FantasyCalc's raw entry:
 
 ```bash
 # 1. Who owns which traded picks?
@@ -175,6 +189,26 @@ curl -s "https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=2&numT
 # 3. Round-median check (findPickValue = median of the round's Early/Mid/Late
 #    entries). Compute the median of the values from step 2 by hand and
 #    compare to what the app / your changed function returns for that pick.
+
+# 4. Which pick SEASONS does FantasyCalc still price? A season disappears
+#    from this list the moment its rookie draft completes — that is the
+#    single most re-offending trap in this repo.
+curl -s "https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=2&numTeams=10&ppr=0.5" \
+  | jq -r '[.[] | select((.player.sleeperId // "" | test("^[0-9]+$")) | not)
+            | .player.name] | unique | .[]'
+```
+
+**A pick whose draft has already happened** must not be checked against
+step 2 — it has no entry there by design. Verify it against the ladder
+instead: `buildDraftPickIndex` should resolve it to the player actually
+drafted at that slot, and only an unresolvable one falls to
+`buildGenericRoundValues` (shown `≈`). Confirm the join by eye:
+
+```bash
+D=$(curl -s "https://api.sleeper.app/v1/league/1313933520715907072/drafts" | jq -r '.[0].draft_id')
+curl -s "https://api.sleeper.app/v1/draft/$D" | jq '.slot_to_roster_id'
+curl -s "https://api.sleeper.app/v1/draft/$D/picks" \
+  | jq '[.[] | {round, draft_slot, pick_no, name: (.metadata.first_name + " " + .metadata.last_name)}] | .[0:5]'
 ```
 
 Slot-tier note (verified in source 2026-07-06): `slotTier` in
