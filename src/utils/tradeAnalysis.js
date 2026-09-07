@@ -432,54 +432,91 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
   }
 
   // Layer 3: Win window fit
+  //
+  // WHAT DECIDES "am I buying or selling?" — live playoff odds in season, the
+  // win-window tier only when there are no odds (offseason).
+  //
+  // The tier is a RANKING of accumulated assets: 50% total roster value (bench
+  // and picks included), 30% pick capital, 20% youth, top 3 Contending / bottom
+  // 3 Rebuilding. Measured on the live league it tracks total assets at
+  // Spearman 0.952 but the actual STARTING LINEUP at only 0.721 — it scores
+  // what you own, not the team you field. Playoff odds track the starting
+  // lineup at 0.988, which is the question this layer is asking.
+  //
+  // Two live mislabels the tier produced and the odds fix: roster 5 has the
+  // 2nd-best starting lineup and 87.7% odds but reads `Rebuilding` (top-heavy,
+  // no picks left — in fact the most win-now team in the league), and Jake &
+  // Bake has the 9th-best lineup and 8.3% odds but reads `Middle` because
+  // hoarding picks props up their tier score.
+  //
+  // The tier ALSO has no branch at all for `Middle`, so four teams by
+  // construction — 40% of the league every season, this owner included — got
+  // windowScore 0 and the placeholder note on every trade they ever analyzed.
+  // "On the bubble" is a measured state that can hold any number of teams,
+  // including none; `Middle` is a fixed-size bucket.
+  //
+  // The asset-type tests below are UNCHANGED — only what selects them moved.
+  // See docs/analysis/trade-engine-my-side-2026-09.md §4.
   const winWindowTiers = assignWinWindowTiers(allRosters)
   const myTier = winWindowTiers[myRoster.rosterId] ?? 'Middle'
 
-  let windowScore = 0
-  let windowNote  = 'Neutral — fits your current win window'
+  // `getDeadlineVerdict` is the ONE definition of buyer/seller in the app — the
+  // Playoffs page, Trade Partner Finder and The Edge all read it. Reusing it
+  // here means the Analyzer can never disagree with the odds page about what
+  // your own stance is.
+  const deadlineVerdict = myPlayoffPct != null ? getDeadlineVerdict(myPlayoffPct, myTier) : null
+  const oddsStanceLive = deadlineVerdict?.stance ?? null
+  const windowBasis = oddsStanceLive ? 'odds' : 'tier'
+  // Buyer/Seller come from odds when they exist; Contending/Rebuilding are the
+  // offseason stand-in. Anything else ("On the bubble", "Middle") takes no lean.
+  const buying  = oddsStanceLive ? oddsStanceLive === 'Buyer'  : myTier === 'Contending'
+  const selling = oddsStanceLive ? oddsStanceLive === 'Seller' : myTier === 'Rebuilding'
+  const oddsPctLabel = myPlayoffPct != null ? `${Math.round(myPlayoffPct * 100)}% playoff odds` : null
+  const basisLabel = windowBasis === 'odds' ? oddsPctLabel : `${myTier} window`
 
-  if (myTier === 'Contending') {
+  let windowScore = 0
+  let windowNote  = windowBasis === 'odds'
+    ? `You're on the bubble at ${oddsPctLabel} — no strong buy or sell lean, so this trade stands on value and lineup fit`
+    : 'Neutral — fits your current win window'
+
+  if (buying) {
     const gettingOnlyPicks  = getPicks.length > 0 && getPlayers.length === 0
     const givingProvenVets  = givePlayers.some(p => p.value > 5000 && (p.age ?? 99) <= 30)
 
     if (gettingOnlyPicks) {
       windowScore = -1
-      windowNote  = 'Getting only picks conflicts with your Contending window — proven players serve you better'
+      windowNote  = `Getting only picks conflicts with your ${basisLabel} — proven players serve you better`
     } else if (givingProvenVets) {
       windowScore = -1
-      windowNote  = 'Giving up proven starters conflicts with your Contending window'
+      windowNote  = `Giving up proven starters conflicts with your ${basisLabel}`
     } else {
       windowScore = 1
-      windowNote  = 'Proven players fit your Contending window'
+      windowNote  = `Proven players fit your ${basisLabel}`
     }
-  } else if (myTier === 'Rebuilding') {
+  } else if (selling) {
     const gettingExpVets       = getPlayers.some(p => p.value > 6000 && (p.age ?? 0) >= 28)
     const gettingYouthOrPicks  = getPlayers.some(p => (p.age ?? 99) < 25) || getPicks.length > 0
 
     if (gettingExpVets) {
       windowScore = -1
-      windowNote  = 'Acquiring expensive veterans conflicts with your Rebuilding window'
+      windowNote  = `Acquiring expensive veterans conflicts with your ${basisLabel}`
     } else if (gettingYouthOrPicks) {
       windowScore = 1
-      windowNote  = 'Youth and picks align with your Rebuilding window'
+      windowNote  = `Youth and picks align with your ${basisLabel}`
     } else {
-      windowNote  = 'Neutral for your Rebuilding window'
+      windowNote  = windowBasis === 'odds'
+        ? `Neutral for a season your ${oddsPctLabel} call a long shot`
+        : 'Neutral for your Rebuilding window'
     }
   }
 
-  // Playoff-odds context (real probability behind the win-window read). Only
-  // present in-season once the simulation has live odds; null otherwise.
-  let playoffPct = null
-  let oddsStance = null
-  let oddsNote   = null
-  let oddsTone   = null
-  if (myPlayoffPct != null) {
-    const dv = getDeadlineVerdict(myPlayoffPct, myTier)
-    playoffPct = myPlayoffPct
-    oddsStance = dv.stance
-    oddsNote   = dv.text
-    oddsTone   = dv.tone ?? null
-  }
+  // Playoff-odds context. This is the SAME verdict object that selected the
+  // window lean above — computed once, so the stance the panel prints and the
+  // stance the score used can never drift apart.
+  const playoffPct = myPlayoffPct ?? null
+  const oddsStance = deadlineVerdict?.stance ?? null
+  const oddsNote   = deadlineVerdict?.text ?? null
+  const oddsTone   = deadlineVerdict?.tone ?? null
 
   // Partner's multi-year value direction (Dynasty Trajectory). Most relevant
   // when you're acquiring their players: a declining team is motivated to sell
@@ -635,7 +672,7 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
     benchAcquisitions, starterDepartures, benchNote, starterLossNote, giveContext,
     myLandingSpots, partnerFit,
     fairBand, scarcity, myRosterSpace, theirRosterSpace, weeklyImpact,
-    myTier, windowScore, windowNote, myDeltas,
+    myTier, windowScore, windowNote, windowBasis, myDeltas,
     playoffPct, oddsStance, oddsNote, oddsTone,
     partnerTrajectoryNote, partnerTrajectoryTone,
     myTrajectoryNote, myTrajectoryTone,

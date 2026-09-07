@@ -830,11 +830,51 @@ makes the roster cost legible before you confirm.
 **Layer 3 — Win window fit**
 Are you acquiring the right type of asset for where Nix Cage is now?
 
-- Contending → favor proven players, not picks or unproven youth
-- Rebuilding → favor picks and young players, not aging veterans
-- When live playoff odds exist (in-season), Layer 3 adds a real
-  "Playoff odds: N% · Buyer/Seller — …" line (via `analyzeTrade`'s optional
-  `myPlayoffPct` + `getDeadlineVerdict`); offseason falls back to the tier read.
+- Buyer / Contending → favor proven players, not picks or unproven youth
+- Seller / Rebuilding → favor picks and young players, not aging veterans
+
+**Live playoff odds decide the lean in season; the win-window tier is the
+offseason fallback (2026-09-07).** `analyzeTrade` exposes `windowBasis`
+(`'odds'` | `'tier'`) so the panel can name what actually scored the layer.
+The asset-type tests above are unchanged — only what *selects* them moved.
+
+- **Why.** The tier is a RANKING of accumulated assets (50% total roster value
+  including bench and picks · 30% pick capital · 20% youth; top 3 Contending,
+  bottom 3 Rebuilding). Measured live 2026-09-07 it tracks total assets at
+  Spearman **0.952** but the actual **starting lineup at only 0.721**. Playoff
+  odds track the starting lineup at **0.988** — which is the question this
+  layer asks. Two live mislabels the swap fixes: roster 5 has the **2nd-best
+  starting lineup and 87.7% odds** yet reads `Rebuilding` (top-heavy, picks
+  spent — in fact the most win-now team in the league, and the old read told
+  you to expect them to ask for picks); Jake & Bake has the **9th-best lineup
+  and 8.3% odds** yet reads `Middle` because hoarding picks props up their tier.
+- **`Middle` was a dead branch and that was the sharper bug.** The tier has no
+  `Middle` case at all, and top-3/bottom-3 makes `Middle` a **fixed-size bucket
+  of four teams every season** — 40% of the league, this owner included. Live
+  effect on the 20-target board: `windowScore` was **0 on 20 of 20** trades and
+  the panel printed "Neutral — fits your current win window" every time; on
+  odds it reads **15 aligned / 5 conflicting**. "On the bubble" is a *measured*
+  state that can hold any number of teams, including none.
+- **The verdicts did not move on that board** (17 Counter · 1 Decline ·
+  2 Accept, before and after) — `windowScore` only reaches the ladder via the
+  clean-Accept gate and the "winning value but off-window" Counter branch. The
+  gain here is a layer that says something true instead of a placeholder; it
+  will change verdicts when odds fall and win-now buying turns into a mistake.
+- **`getDeadlineVerdict` stays the ONE definition of buyer/seller** (shared with
+  League › Playoffs, Trade Partner Finder and The Edge) and is now called
+  **once** per analysis, feeding both the score and the printed stance — so the
+  badge can never contradict the note. Its thresholds (≥70% Buyer, <35% Seller)
+  are unchanged; note that **6 of 10 teams make these playoffs, so 60% is
+  baseline** and the middle of the league compresses. Recalibrating them is a
+  separate, unmeasured change that would ripple to three other surfaces.
+- **Offseason / odds-not-yet-loaded** ⇒ `windowBasis: 'tier'` and the exact
+  pre-existing tier behavior, pinned by test. The fallback copy deliberately
+  does **not** say "offseason" — odds are also null while the simulation loads,
+  and asserting the wrong reason is worse than naming the basis.
+- **Scope.** Only Layer 3's *score* moved. `assignWinWindowTiers` still backs
+  the other eight consumers (League Overview, Managers, Movers, Playoffs,
+  Optimizer, rookie fit, keep-scores, The Edge) — changing the tier itself
+  would ripple through all of them and is NOT part of this change.
 - When you're acquiring the partner's players, Layer 3 also adds a **partner
   trajectory** line from the Dynasty Trajectory model (Feature 17, via
   `analyzeTrade`'s optional `opponentTrajectoryRead`): a declining team reads
@@ -2014,16 +2054,28 @@ loading / `ErrorState` + retry; mobile-first at 390px.
 **Odds consumers (wired via `getDeadlineVerdict` + `usePlayoffOdds`):**
 
 - **Trade Analyzer Layer 3** (`analyzeTrade` takes an optional `myPlayoffPct`):
-  the Win Window layer shows a real "Playoff odds: N% · Buyer/Seller — …" line
-  under the tier read.
+  the odds **SCORE** the Win Window layer in season — they are not a line
+  printed under a tier read any more (2026-09-07, see Feature 3 Layer 3 for the
+  measurement). `getDeadlineVerdict`'s stance selects the buyer/seller branch;
+  the win-window tier is the offseason fallback and rides along as context.
+  This is the only consumer where the odds affect a **score** rather than
+  display — everywhere else they describe.
 - **Trade Partner Finder:** each opponent card flags a likely **seller**
   (< 35% odds) or **buyer** (≥ 70% odds) from their live odds.
 - **The Edge:** a "Playoff odds: N% · stance" briefing item (Trophy icon) deep-
   links to League › Playoffs.
 
 All three read `usePlayoffOdds`'s `oddsByRoster` / `myOdds` and **degrade
-silently in the offseason** (no odds yet → the line/flag/item simply doesn't
-render, and Layer 3 falls back to the tier-only read).
+silently in the offseason** (no odds yet → the flag/item simply doesn't render,
+and Layer 3 falls back to the tier-only read).
+
+**Baseline caveat, unaddressed:** this league seats **6 of 10** teams in the
+playoffs, so 60% is the coin-flip baseline and the ≥70% Buyer threshold sits
+only modestly above it — measured at 2026 Week 1, five teams bunched between
+76% and 88%. The thresholds separate the top and bottom of the league cleanly
+and compress the middle. Recalibrating them relative to
+`playoff_teams / numTeams` is a real option but would move three surfaces at
+once and has not been measured; do not change them casually.
 
 -----
 
@@ -3315,7 +3367,7 @@ dynastyedge/
 │   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
 │   ├── appVersion.test.mjs          ← reload URL: ?v= before the hash (HashRouter), encoding, null build id
 │   ├── tradeTargets.test.mjs        ← Targets ranking: deficit gate + value floor league-wide, team-scoped mode keeps depth (never empty), fillsNeed flag, and the movability TILT (band under 2×, spare depth outranks an equal-value untouchable, nothing ever hidden)
-│   ├── tradeAnalysis.test.mjs       ← the `alternative` (now always HIGHER-appeal — the pricier road the cost-aware search passed over), the phase-2 trade-off (a Strong package costing more than APPEAL_BONUS loses to a Fair one; the fair band and protect threshold still bind), Layer 4's fills/lineup-gain scored ONCE, the my-lineup verdict gate (downgrades an Accept, never upgrades, never fires on noise), verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge, Layer 4 (a benched acquisition reads Weak however valued; the gate downgrades an Accept but never lifts a Decline; landing spots both directions; the pitch speaks from their side), buildPartnerFit's extraction contract (standalone == via analyzeTrade), and the two-phase package builder (phase 2 rejects the piece they have no use for, never unlocks a protected asset, reports no appeal without a partner)
+│   ├── tradeAnalysis.test.mjs       ← Layer 3's basis swap (odds score the window in season, tier is the offseason fallback byte-for-byte, a bubble team gets a real read, the printed stance is the one that scored it), the `alternative` (now always HIGHER-appeal — the pricier road the cost-aware search passed over), the phase-2 trade-off (a Strong package costing more than APPEAL_BONUS loses to a Fair one; the fair band and protect threshold still bind), Layer 4's fills/lineup-gain scored ONCE, the my-lineup verdict gate (downgrades an Accept, never upgrades, never fires on noise), verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge, Layer 4 (a benched acquisition reads Weak however valued; the gate downgrades an Accept but never lifts a Decline; landing spots both directions; the pitch speaks from their side), buildPartnerFit's extraction contract (standalone == via analyzeTrade), and the two-phase package builder (phase 2 rejects the piece they have no use for, never unlocks a protected asset, reports no appeal without a partner)
 │   ├── tradeContext.test.mjs        ← the five negotiating signals (fair band, scarcity, roster space, weekly impact, partner activity) — and the contract that NONE of them may move the verdict
 │   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
 │   ├── lineupBuild.test.mjs         ← slot-fill order (singles → FLEX → SFLX), IR/taxi excluded, who-starts identity
@@ -3341,8 +3393,8 @@ honestly:** instead of "cannot find module" it prints `# tests 152 / # pass 145 
 transitively importing `react` (`tradeAnalysis.js` → `recommendations.js` →
 `useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
 `draftLive` loading their hooks) — the file fails to load, so its tests never
-run and the count silently drops from **264** to 152. `npm run build` in the
-same state fails with `sh: 1: vite: not found`. **If the test count isn't 264,
+run and the count silently drops from **269** to 152. `npm run build` in the
+same state fails with `sh: 1: vite: not found`. **If the test count isn't 269,
 run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-07
 by renaming `node_modules` aside; re-measure them whenever the suite grows —
 the pair had drifted four times before this, 178/130, 177/115, 219/136 and
@@ -3350,7 +3402,7 @@ the pair had drifted four times before this, 178/130, 177/115, 219/136 and
 re-measurement. Note the two counts do **not** always move together: the
 2026-09-07 trade-engine work added 6 tests to `tradeAnalysis.test.mjs`, which
 is already one of the 7 files that cannot load without `node_modules`, so the
-full count went 258 → 264 while the broken-state count stayed at **152**. Only
+full count went 258 → 264 → 269 while the broken-state count stayed at **152**. Only
 tests added to a file outside those 7 move the second number.)
 
 **Tests:** `npm test` runs the `tests/` suite — plain `.mjs` scripts on Node's

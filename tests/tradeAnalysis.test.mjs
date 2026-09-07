@@ -718,6 +718,122 @@ test('the alternative never becomes the suggestion', () => {
 
 // ── The three fixes from the 2026-09 "does it care too much about them?" review ──
 
+// ── Layer 3: live playoff odds drive the window in season, tier in the offseason ──
+
+// A league where the tier and the live odds DISAGREE about me, which is the
+// whole point of the swap. I am mid-pack on total assets (so the tier ranking
+// puts me in the fixed-size `Middle` bucket and scores nothing), while my odds
+// say I am a clear buyer. Mirrors roster 5 on the live league: strong starters,
+// thin depth, no picks left, tier says Rebuilding, odds say 87.7%.
+function windowScenario() {
+  const P = (id, name, pos, value, age = 26) =>
+    ({ sleeperId: id, name, position: pos, value, age, isIR: false, isTaxi: false })
+  const mk = (rosterId, mult) => ({
+    rosterId,
+    players: [
+      P(`${rosterId}a`, `QB${rosterId}`, 'QB', 6000 * mult), P(`${rosterId}b`, `QB2${rosterId}`, 'QB', 5000 * mult),
+      P(`${rosterId}c`, `RB${rosterId}`, 'RB', 5000 * mult), P(`${rosterId}d`, `RB2${rosterId}`, 'RB', 4000 * mult),
+      P(`${rosterId}e`, `WR${rosterId}`, 'WR', 5000 * mult), P(`${rosterId}f`, `WR2${rosterId}`, 'WR', 4000 * mult),
+      P(`${rosterId}g`, `TE${rosterId}`, 'TE', 3000 * mult),
+    ],
+    picks: [], totalValue: 32000 * mult, pickCapitalScore: 1000 * mult, avgStarterAge: 26,
+  })
+  // EIGHT teams, not six: the tier is top-3 Contending / bottom-3 Rebuilding,
+  // so a six-team league has no `Middle` bucket at all and the fixture could
+  // not express the case it exists to test.
+  const all = [mk(1, 1.5), mk(2, 1.4), mk(3, 1.3), mk(4, 1.1), mk(5, 1.0),
+    mk(6, 0.9), mk(7, 0.8), mk(8, 0.7)]
+  return { me: all[3], opp: all[1], all }   // rank 4 of 8 => tier `Middle`
+}
+
+test('Layer 3 takes its lean from live playoff odds when they exist', () => {
+  const { me, opp, all } = windowScenario()
+  const give = [{ type: 'pick', name: '2027 1st', value: 4000 }]
+  const get  = [{ ...me.players[0], sleeperId: 'x9', name: 'A Proven Vet', value: 4100, age: 27, type: 'player' }]
+
+  // Offseason: no odds. The tier is the only basis, and this roster is Middle —
+  // the bucket with no branch, which is exactly the hole the swap fills.
+  const off = analyzeTrade(give, get, me, opp, all)
+  assert.equal(off.windowBasis, 'tier')
+  assert.equal(off.myTier, 'Middle')
+  assert.equal(off.windowScore, 0, 'the tier has no opinion for a Middle team — the documented gap')
+
+  // In season at 80%: getDeadlineVerdict says Buyer, so acquiring a proven
+  // player for a pick now scores POSITIVELY where the tier scored nothing.
+  const on = analyzeTrade(give, get, me, opp, all, { myPlayoffPct: 0.80 })
+  assert.equal(on.windowBasis, 'odds')
+  assert.equal(on.windowScore, 1)
+  assert.match(on.windowNote, /80% playoff odds/)
+  assert.equal(on.oddsStance, 'Buyer')
+})
+
+test('Layer 3 flips with the odds, not with the roster', () => {
+  const { me, opp, all } = windowScenario()
+  // Acquiring ONLY picks: right for a seller, wrong for a buyer. Same rosters,
+  // same assets — only the odds move, and the score moves with them.
+  const give = [{ ...me.players[2], type: 'player' }]
+  const get  = [{ type: 'pick', name: '2028 1st', value: 4000 }]
+
+  const buyer  = analyzeTrade(give, get, me, opp, all, { myPlayoffPct: 0.85 })
+  const seller = analyzeTrade(give, get, me, opp, all, { myPlayoffPct: 0.10 })
+  assert.equal(buyer.windowScore, -1, 'a buyer cashing a starter for picks is off-window')
+  assert.equal(seller.windowScore, 1, 'a seller doing the identical trade is on-window')
+  assert.equal(buyer.oddsStance, 'Buyer')
+  assert.equal(seller.oddsStance, 'Seller')
+})
+
+test('a bubble team gets a real read instead of a placeholder', () => {
+  const { me, opp, all } = windowScenario()
+  const give = [{ ...me.players[2], type: 'player' }]
+  const get  = [{ type: 'pick', name: '2028 1st', value: 4000 }]
+  // 50% sits between the Seller (<35%) and Buyer (>=70%) thresholds.
+  const a = analyzeTrade(give, get, me, opp, all, { myPlayoffPct: 0.50 })
+  assert.equal(a.windowBasis, 'odds')
+  assert.equal(a.windowScore, 0, 'no lean either way on the bubble')
+  assert.match(a.windowNote, /on the bubble at 50%/, 'but it says so, with the number')
+  assert.equal(a.oddsStance, 'On the bubble')
+})
+
+test('the offseason fallback is byte-for-byte the old tier behaviour', () => {
+  // The swap must not change what a Contending or Rebuilding team sees with no
+  // odds available — that is the half of the year the tier still owns.
+  const P = (id, name, pos, value, age = 26) =>
+    ({ sleeperId: id, name, position: pos, value, age, isIR: false, isTaxi: false })
+  const mk = (rosterId, mult) => ({
+    rosterId,
+    players: [P(`${rosterId}a`, `QB${rosterId}`, 'QB', 6000 * mult), P(`${rosterId}c`, `RB${rosterId}`, 'RB', 5000 * mult),
+      P(`${rosterId}e`, `WR${rosterId}`, 'WR', 5000 * mult), P(`${rosterId}g`, `TE${rosterId}`, 'TE', 3000 * mult)],
+    picks: [], totalValue: 19000 * mult, pickCapitalScore: 1000 * mult, avgStarterAge: 26,
+  })
+  const all = [mk(1, 1.5), mk(2, 1.3), mk(3, 1.1), mk(4, 0.9), mk(5, 0.7), mk(6, 0.5)]
+  const contender = all[0]
+  const a = analyzeTrade(
+    [{ ...contender.players[1], type: 'player' }], [{ type: 'pick', name: '2028 1st', value: 4000 }],
+    contender, all[1], all)
+  assert.equal(a.windowBasis, 'tier')
+  assert.equal(a.myTier, 'Contending')
+  assert.equal(a.windowScore, -1)
+  assert.match(a.windowNote, /Contending window/, 'offseason copy still names the tier, not a percentage')
+  assert.equal(a.playoffPct, null)
+  assert.equal(a.oddsStance, null)
+})
+
+test('the odds stance the panel prints is the one that scored the layer', () => {
+  // One getDeadlineVerdict call feeds both, so the badge can never contradict
+  // the note. Checked across the whole probability range.
+  const { me, opp, all } = windowScenario()
+  const give = [{ type: 'pick', name: '2027 1st', value: 4000 }]
+  const get  = [{ ...me.players[0], sleeperId: 'x9', name: 'Vet', value: 4100, age: 27, type: 'player' }]
+  for (const pct of [0.05, 0.34, 0.35, 0.5, 0.69, 0.70, 0.99]) {
+    const a = analyzeTrade(give, get, me, opp, all, { myPlayoffPct: pct })
+    assert.equal(a.playoffPct, pct)
+    assert.equal(a.windowBasis, 'odds')
+    if (a.oddsStance === 'Buyer')  assert.equal(a.windowScore, 1)
+    if (a.oddsStance === 'Seller') assert.equal(a.windowScore, 0, 'a vet for a pick is neutral, not aligned, for a seller')
+    if (a.oddsStance === 'On the bubble') assert.equal(a.windowScore, 0)
+  }
+})
+
 // A roster where the two selection rules genuinely disagree: a spare RB the
 // partner will accept (Fair, cheap to lose) and a core WR they'd prefer
 // (Strong, expensive), both inside the same [0.9x, 1.15x] band and both under

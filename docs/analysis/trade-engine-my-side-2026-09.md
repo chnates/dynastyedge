@@ -151,3 +151,99 @@ higher-appeal package the search passed over is now named explicitly.
   this owner's tier — so the layer is currently inert for him. Untouched.
 - The deficit test is pass/fail, so being 200 below average at a position pulls
   as hard as being 4,000 below. Untouched.
+
+---
+
+# 4. Layer 3: the win-window tier was measuring the wrong thing
+
+**Date:** 2026-09-07 (same branch, owner-approved follow-up)
+**Question (owner):** "Measure whether swapping in playoff odds holds up."
+**Answer:** It holds up. Shipped, scoped to Layer 3's score only.
+
+## The tier scores what you OWN; the odds score the team you FIELD
+
+Measured across the live 10-team league (Spearman rank correlation):
+
+| pairing | rho |
+|---|---|
+| playoff odds ↔ **starting lineup** value | **0.988** |
+| win-window tier ↔ **total assets** (bench + picks) | **0.952** |
+| win-window tier ↔ starting lineup value | 0.721 |
+| win-window tier ↔ youth | 0.018 |
+
+The tier is 50% total roster value / 30% pick capital / 20% youth, ranked, with
+the top 3 Contending and bottom 3 Rebuilding. That is a measure of accumulated
+assets. "Should I buy or sell **this season**" is a question about the lineup
+that actually plays, and the odds answer it almost exactly.
+
+Note the last row: the youth term is 20% of the formula and correlates **0.018**
+with the resulting order. It is very nearly inert.
+
+## Two teams the tier flatly mislabels
+
+| team | starting lineup | pick capital | playoff odds | tier says |
+|---|---|---|---|---|
+| roster 5 | **2nd of 10** | **10th of 10** | **87.7%** | `Rebuilding` |
+| Jake & Bake | 9th of 10 | 4th of 10 | **8.3%** | `Middle` |
+
+Roster 5 is the most win-now team in the league — strong starters, thin depth,
+picks already spent. The old read told the owner to expect them to ask for
+picks. Jake & Bake are rebuilding and the tier would not say so, because
+hoarding picks props up their score.
+
+## The sharper bug: `Middle` is a dead branch AND a fixed-size bucket
+
+`analyzeTrade`'s Layer 3 had cases for Contending and Rebuilding and **none for
+Middle**. Top-3/bottom-3 means `Middle` always holds exactly four teams — 40% of
+the league, every season, this owner included. So for four owners the layer was
+permanently inert.
+
+Live, on the owner's 20-target board: `windowScore` was **0 on 20 of 20** and
+the panel printed "Neutral — fits your current win window" every single time.
+On odds it reads **15 aligned / 5 conflicting**.
+
+"On the bubble" is a *measured* state that can hold any number of teams,
+including zero. `Middle` is a bucket of four by construction.
+
+## What shipped
+
+- Odds select the branch in season (`getDeadlineVerdict`'s stance); the tier
+  selects it in the offseason. `windowBasis` (`'odds'`|`'tier'`) is exposed so
+  the panel names what scored the layer.
+- **The asset-type tests are untouched.** Only the selector moved.
+- `getDeadlineVerdict` is called **once** and feeds both the score and the
+  printed stance, so the badge cannot contradict the note.
+- The panel swaps its tier badge for the playoff stance when odds drive it, and
+  the odds line is reworded from a footnote to the stated basis, carrying the
+  tier as parenthetical context.
+
+## Honest limits
+
+- **Verdicts did not change on the live board** (17 Counter · 1 Decline ·
+  2 Accept, before and after). `windowScore` reaches the ladder only via the
+  clean-Accept gate and the "winning value but off-window" Counter branch. The
+  win here is a layer that says something true rather than a placeholder; it
+  bites when odds fall and win-now buying becomes a mistake.
+- **Measured at Week 1 with zero games played**, so today's odds are the
+  roster-strength prior plus schedule, not observed performance. What is
+  established is that the odds ask the *right question* — not that they are
+  well-calibrated. That needs a season.
+- **6 of 10 teams make these playoffs**, so 60% is baseline and the ≥70% Buyer
+  threshold sits only modestly above it; five teams bunched 76–88% at Week 1.
+  Recalibrating the thresholds relative to `playoff_teams / numTeams` is a live
+  option, would ripple to three other surfaces, and was **not** measured here.
+- **Scope held to Layer 3's score.** `assignWinWindowTiers` still backs eight
+  other consumers; the tier itself was not touched.
+
+## Verification
+
+- `npm run lint` clean · `npm test` **269/269** · `npm run build` clean.
+- Five tests added. The three that pin the new selection were confirmed to
+  **fail** against a tier-only revert; the offseason-fallback test pins that the
+  old behaviour is byte-for-byte intact.
+- Rendered at 390px in headless Chromium against live data — the block reads:
+  `WIN WINDOW [BUYER] · "Proven players fit your 78% playoff odds" · "Scored on
+  live playoff odds: 78% · Buyer — … (roster tier: Middle)"`.
+- Fixture note: the first Layer 3 fixture used six teams, where top-3/bottom-3
+  leaves **no `Middle` bucket at all** and the case under test could not exist.
+  Widened to eight.
