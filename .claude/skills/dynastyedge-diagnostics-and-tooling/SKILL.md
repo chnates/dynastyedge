@@ -162,12 +162,18 @@ give: RB_t6_2 (523) + WR_t6_1 (1,948)  → total 2,471
 get:  WR_t1_0 (5,375)  → total 5,375
 raw value: winner=you diff=2,904 (54%)
 fit: filledNeeds=[] hurtStrengths=[] fitScore=0
-window: myTier=Middle windowScore=0 — Neutral — fits your current win window
+window: basis=tier myTier=Middle windowScore=0 — Neutral — fits your current win window
 VERDICT: Accept — You're winning 54% on raw value.
 CHECK analyzeTrade returns a complete verdict: PASS
 
 Done. All checks passed.
 ```
+
+`basis=tier` is expected here: the harness calls `analyzeTrade` without
+`myPlayoffPct`, which is the offseason path. **In season the Win Window layer is
+scored on live playoff odds** (`basis=odds`, buyer/seller from
+`getDeadlineVerdict`) and the tier is only the fallback — see CLAUDE.md Feature
+3 Layer 3. Pass `myPlayoffPct` if you want to exercise the in-season branch.
 
 **Graceful-failure path (`--live` in this sandbox, real output, exit 1):**
 
