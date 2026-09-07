@@ -2,9 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchJSON } from '../utils/fetchJSON'
 import { SLEEPER_BASE, LEAGUE_ID, PICK_YEARS } from '../constants'
 import { buildDraftSlots } from '../utils/pickCapital'
+import { selectTrackedDraft } from '../utils/seasonWindow'
 
-// The upcoming rookie draft season — same convention as the pick tracker.
-export const DRAFT_SEASON = PICK_YEARS[0]
+// The seed season, used only until Sleeper's drafts list resolves. The tracked
+// draft is chosen from live data (see selectTrackedDraft) — the upcoming one
+// whenever it exists, otherwise the most recent completed one so its recap
+// survives the ~10 months before the league creates next year's draft.
+export const FALLBACK_DRAFT_SEASON = PICK_YEARS[0]
 
 const LIVE_POLL_MS     = 30 * 1000      // poll cadence while the draft is live
 const LIVE_STALE_MS    = 10 * 1000      // focus refetch threshold while live
@@ -20,9 +24,7 @@ async function fetchDraftData() {
     `${SLEEPER_BASE}/league/${LEAGUE_ID}/drafts`,
     { label: 'Sleeper drafts' }
   )
-  const listed = (drafts ?? []).find(
-    d => String(d.season) === DRAFT_SEASON && d.type !== 'auction'
-  ) ?? null
+  const listed = selectTrackedDraft(drafts)
   if (!listed) return { draft: null, picks: [], tradedPicks: [] }
 
   // `/league/{id}/drafts` OMITS `slot_to_roster_id` entirely — only the

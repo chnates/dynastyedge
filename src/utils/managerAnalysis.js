@@ -1,4 +1,4 @@
-import { findPickValue } from './pickCapital'
+import { findPickValue, buildDraftPickIndex, buildGenericRoundValues } from './pickCapital'
 
 // Manager scouting analysis: turns multi-season league history (trades,
 // waivers, drafts) into per-manager behavioral profiles — trade scorecards,
@@ -92,59 +92,25 @@ function normalizeSeasons(history, currentLeague) {
 function buildPickIndex(seasons) {
   const idx = {}
   seasons.forEach(s => {
-    const ownerToRoster = {}
-    Object.entries(s.ownerByRoster).forEach(([rid, oid]) => { ownerToRoster[oid] = rid })
+    // buildDraftPickIndex takes roster objects (it resolves draft_order through
+    // owner ids); this season's owner map is the same information transposed.
+    const rosters = Object.entries(s.ownerByRoster)
+      .map(([roster_id, owner_id]) => ({ roster_id, owner_id }))
 
     s.drafts.forEach(({ draft, picks }) => {
       if (!picks?.length) return
-
-      let slotToRoster = draft?.slot_to_roster_id
-      if (!slotToRoster || Object.keys(slotToRoster).length === 0) {
-        slotToRoster = {}
-        Object.entries(draft?.draft_order ?? {}).forEach(([userId, slot]) => {
-          const rid = ownerToRoster[userId]
-          if (rid != null) slotToRoster[slot] = rid
-        })
-      }
-      if (Object.keys(slotToRoster).length === 0) {
+      const forDraft = buildDraftPickIndex(draft, picks, rosters)
+      if (!Object.keys(forDraft).length) {
         console.warn(`managerAnalysis: no draft order for ${draft?.season} draft — its picks can't resolve to players`)
         return
       }
-
-      picks.forEach(p => {
-        if (!p?.player_id || p.draft_slot == null || p.round == null) return
-        const originalRoster = slotToRoster[p.draft_slot]
-        if (originalRoster == null) return
-        idx[`${draft.season}-${p.round}-${originalRoster}`] = {
-          playerId: String(p.player_id),
-          overall: p.pick_no,
-          slotLabel: `${p.round}.${String(p.draft_slot).padStart(2, '0')}`,
-        }
-      })
+      Object.assign(idx, forDraft)
     })
   })
   return idx
 }
 
 // ── Asset resolution (today's prices) ────────────────────────────────────────
-
-// Median value per round across every pick FantasyCalc currently lists,
-// season-agnostic. FantasyCalc only prices FUTURE drafts, so a past-season
-// pick that can't be resolved to its drafted player would otherwise value at
-// 0 and badly skew trade grades — "a 2nd is a 2nd" is a far better estimate.
-function buildGenericRoundValues(pickEntries) {
-  const byRound = {}
-  for (let round = 1; round < ROUND_LABELS.length; round++) {
-    const suffix = ROUND_LABELS[round]
-    const matches = (pickEntries ?? [])
-      .filter(e => e.name.includes(suffix))
-      .sort((a, b) => a.value - b.value)
-    byRound[round] = matches.length
-      ? matches[Math.floor(matches.length / 2)].value
-      : 0
-  }
-  return byRound
-}
 
 function makeResolvers(playerMap, playerDB, pickEntries, pickIndex) {
   const genericRoundValues = buildGenericRoundValues(pickEntries)

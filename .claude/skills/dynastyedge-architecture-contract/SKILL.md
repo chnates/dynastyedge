@@ -160,13 +160,20 @@ to this trim list — do not fetch `/players/nfl` a second time anywhere.
 **`src/hooks/useLeague.js`**, whose memoized return object *is* the provider
 value (set once in `App.jsx`). It exposes, verified:
 
-- `league` → `{ allRosters, myRoster, userMap, leagueInfo }` — `allRosters`
-  are fully resolved rosters: players joined to FantasyCalc + player DB (see
-  section 4), owned picks with values (`resolvePickOwnership` +
+- `league` → `{ allRosters, myRoster, userMap, leagueInfo, pickYears }` —
+  `allRosters` are fully resolved rosters: players joined to FantasyCalc +
+  player DB (see section 4), owned picks with values (`resolvePickOwnership` +
   `findPickValue` from `src/utils/pickCapital.js`), `totalValue`, FAAB
   (free-agent bidding budget) fields,
   `record`/`hasRecord`, points for/against, `pickCapitalScore`,
   `avgStarterAge`, `starterOrder`.
+- `pickYears` — the live three-season pick window, **also exposed at the top
+  level** of the context (not only inside `league`). It is derived from
+  `sleeperData` alone by `utils/seasonWindow.js`, in its own memo *outside*
+  the FantasyCalc-gated `league` memo, so it resolves the moment Sleeper does
+  — same discipline as `signInRosters`. Everything that renders pick seasons
+  reads this; `PICK_YEARS` in `constants.js` is only the pre-resolution seed.
+  See section 4's pick-window note.
 - `nflState`, `isOffseason` (`season_type !== 'regular'`), `leagueInfo`,
   `tradeDeadline`, `matchups` (current week, paired by `matchup_id`).
 - `myRosterId` (from `useIdentity` — runtime state, see section 3).
@@ -235,10 +242,26 @@ Verified mechanics:
   skipped only when *neither* source knows them (which self-heals once the
   player DB loads — it arrives in the background, non-blocking). Any new
   roster-consuming view must honor this: show the player, show `—`, count 0.
-- **FantasyCalc entries without a `sleeperId` are picks** ("2026 Mid 1st") —
-  collected into `pickEntries`, priced via `findPickValue`
-  (`src/utils/pickCapital.js`), and absent from `playerMap` (hence absent
-  from player search — by design).
+- **The player/pick split is by ID SHAPE, not by presence.** FantasyCalc now
+  stamps its pick entries with synthetic **non-numeric** `sleeperId`s
+  (`FP_2027_1`, `DP_0_8`); they used to have none. Numeric → player (into
+  `playerMap`), non-numeric-or-absent → pick (into `pickEntries`, priced via
+  `findPickValue` in `src/utils/pickCapital.js`, absent from player search by
+  design). Splitting on mere presence — the pre-2026-07 bug — dumped every
+  pick into `playerMap` under a key no roster references and priced every pick
+  at 0 app-wide.
+- **Which pick SEASONS exist is derived, never declared.** FantasyCalc retires
+  a season's pick entries the moment that season's rookie draft completes
+  (verified live 2026-09-07, three days after this league's: all 24 pick
+  entries were 2027/2028/2029). So a hardcoded season list does not merely go
+  stale — it manufactures picks that nothing will price and hides ones that
+  are real. `utils/seasonWindow.js` resolves the window from `/state/nfl` plus
+  the league's drafts list (both already in the `useSleeper` payload — **no
+  extra request**) by asking whether this season's non-auction draft reports
+  `status: "complete"`. It surfaces as `pickYears` on the context; treat
+  `PICK_YEARS` as a seed only. Anything keyed on a literal year — the
+  pick-capital weights were, before this — silently mis-scores the day the
+  window rolls.
 - `useFantasyCalc.js` also guards against silent API shape drift: a non-array
   response or an empty `playerMap` **throws** (core source → loud failure,
   see section 5).

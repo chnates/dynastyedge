@@ -315,7 +315,7 @@ export default function EdgeView() {
 
       {/* ── Roster action items (shared component, dismissible) ── */}
       <div {...rise()}>
-        <RosterActionItems myRoster={myRoster} nflState={nflState} allRosters={league.allRosters} />
+        <RosterActionItems myRoster={myRoster} nflState={nflState} allRosters={league.allRosters} pickYears={league.pickYears} />
       </div>
 
       {/* ── Roster Analysis shortcut (opens the same sheet as My Roster) ── */}

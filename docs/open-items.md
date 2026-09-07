@@ -5,14 +5,17 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-09-06 (OPEN-7 closed — the keep-score calibration;
-OPEN-8 and OPEN-9 opened from it. The active work queue remains
-`docs/build-plan-2026-09.md`).
+**Last reviewed:** 2026-09-07 (OPEN-2 closed — the pick window now derives
+itself from live data, so it never needs rolling by hand again. The active work
+queue remains `docs/build-plan-2026-09.md`).
 
 **How to use it:**
 - Each item states its **trigger** — the condition that makes it ready. An item
-  whose trigger hasn't fired is **not** ready work; doing it early is a bug
-  (see OPEN-2, where acting early actively breaks the app).
+  whose trigger hasn't fired is **not** ready work; doing it early is a bug.
+  (OPEN-2 was the canonical example — rolling the pick window before the draft
+  ran broke the Tracker during the one event it exists for. It is now closed,
+  and closed in the way to prefer: the trigger was designed out rather than
+  waited on.)
 - Items marked **[owner ask required]** must not be built without an explicit
   request, per CLAUDE.md's Future Features gate.
 - When you close an item, move it to §3 with the date and commit. Don't delete
@@ -301,7 +304,9 @@ So slot-accurate pick capital is correct on every roster-derived surface today.
 
 Note for OPEN-2: FantasyCalc already lists 2029 round-level picks, but
 `PICK_YEARS` must still not roll until the 2026 draft runs and its picks are
-spent.
+spent. *(Superseded 2026-09-07 — the window now derives itself from the draft's
+own `status`, so "not until the draft runs" is enforced by the code rather than
+by a note. OPEN-2 closed.)*
 
 ### Verified 2026-08-08 — draft render rehearsal
 
@@ -418,24 +423,47 @@ same behavior); `npm test` green; verified against the live league, not
 fixtures. Context: `docs/analysis/faab-bid-corpus-2026-08.md`; documented in
 CLAUDE.md Feature 11.
 
-### OPEN-2 — Roll `PICK_YEARS` forward after the rookie draft
+### OPEN-2 — ~~Roll `PICK_YEARS` forward after the rookie draft~~ **CLOSED 2026-09-07**
 
-**Status:** scheduled maintenance. **Trigger:** the 2026 rookie draft completes
-**and** its picks are spent.
-**⚠ Do NOT do this early** — rolling before the draft runs points
-`useSleeperDraft`'s `DRAFT_SEASON = PICK_YEARS[0]` at a draft that doesn't
-exist and breaks the Tracker during the one event it's built for.
+**Closed by removing the chore, not by doing it.** The 2026 rookie draft
+completed 2026-09-04 (`status: "complete"`), and the owner reported the Trade
+Analyzer still offering 2026 picks. Rather than roll the constant and re-book
+the same maintenance for next September, the window is now **derived from live
+data** by `src/utils/seasonWindow.js` — `/state/nfl` plus the league's drafts
+list, both already in the `useSleeper` payload, so **zero extra requests**. It
+reaches the app as `pickYears` on `LeagueContext`; `PICK_YEARS` survives only as
+the pre-resolution seed.
 
-`PICK_YEARS = ['2026', '2027', '2028']` in `src/constants.js` is a
-hand-maintained, season-scoped constant. It drives pick capital across every
-roster-derived surface, and `DRAFT_SEASON` reads its first element. Once 2026's
-picks are spent it must become `['2027', '2028', '2029']`, or the app keeps
-showing a dead season and never surfaces the new third year.
+**What the stale window actually cost, measured on the live league the day it
+was fixed:** FantasyCalc retires a season's pick entries the moment its draft
+completes (all 24 of its pick entries were 2027/2028/2029 three days after the
+draft), so the app was generating **40 spent picks priced at 0** across the ten
+rosters, and **2029's 40 picks — four per team, a 1st worth 1,933 — were
+invisible everywhere**. After: 120 picks, **0 priced at 0**.
 
-**Acceptance:** pick capital shows 2027/2028/2029 on every surface (roster
-badges, TeamCard grids, Trade Analyzer, Pick Trade Calculator); the Draft
-Tracker points at the 2027 draft; `npm test` green. Documented in CLAUDE.md's
-Constants File section.
+Three traps the roll exposed, all now pinned by tests:
+
+1. `computePickCapitalScore`'s weights were keyed by literal year
+   (`{ '2026': 3, '2027': 2, '2028': 1 }`), so the newly surfaced third season
+   would have scored **0** — silently deflating the pick-capital ranking that
+   drives Trade Partner Finder and the League sort. Now keyed by distance from
+   the upcoming draft.
+2. Pointing the Draft Tracker at the next season would have replaced a
+   completed recap with an empty "no 2027 draft yet" placeholder for ~10
+   months. `selectTrackedDraft` prefers the upcoming draft and falls back to
+   the most recent completed one.
+3. Trade › Pick Trades must plan the **next** draft (`pickYears[0]`) while the
+   Tracker shows the finished one — and must not borrow the finished draft's
+   board to price next year's slots.
+
+**Verified:** live pick window resolves `['2027','2028','2029']`; per-roster
+pick counts and capital scores recomputed against the live Sleeper +
+FantasyCalc payloads; League Overview TeamCards render `'27 · '28 · '29`
+matching those counts team for team; Pick Trades targets 2027 at round medians
+with the correct "Sleeper hasn't set the 2027 draft order yet" note; the Draft
+Tracker still renders the completed 2026 recap with VOE summing to zero.
+`npm run lint` clean, `npm test` 253/253, `npm run build` clean. Documented in
+CLAUDE.md's Constants File section and Features 1, 10 and 13.
 
 ### OPEN-3 — FAAB bid recommender **[owner ask required]**
 
@@ -648,6 +676,7 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 
 | Item | Closed | How |
 |---|---|---|
+| OPEN-2 — roll `PICK_YEARS` after the rookie draft | 2026-09-07 | Removed the annual chore instead: the pick window is derived from `/state/nfl` + the drafts list (`utils/seasonWindow.js`, zero extra fetches). Killed 40 ghost 0-value picks and surfaced 2029 league-wide. Detail retained in §2 |
 | OPEN-7 — the keep-score had no opinion about age or about which pick is which | 2026-09-06 | Measured both (n=762 player-seasons; all 120 of this league's rookie picks), then shipped `PICK_ROUND_KEEP`, `pastPeakTilt`, the cash-out board, the cheaper-`alternative` line, and the untruncated package search. Detail retained in §1 |
 | OPEN-6 — push Layer 4 into Targets and the fair-package builder | 2026-09-06 | Layer 4 extracted as `buildPartnerFit` and shared; `suggestFairPackage` made two-phase; Targets ranked by `need × value × movability`; `suggestSellMove` partner pick made two-sided. Detail retained in §1 |
 | July 2026 repo-review backlog B1–B11 | 2026-07/08 | All eleven landed — mapping in `docs/repo-review-2026-07.md`'s status banner |

@@ -168,9 +168,20 @@ the value 30 days ago).
   round suffix ("1st"…"4th"), sort by value, return the middle one. This is
   the app-wide default pick price (League Activity, pick capital, ledger ≈
   values).
-- **Pick capital score** (`computePickCapitalScore`): year-weighted sum —
-  2026 picks ×3, 2027 ×2, 2028 ×1 (near picks are worth more because they
-  convert to players sooner **[convention]**, encoded as these weights).
+- **A pick that has already been USED has no market price at all.**
+  FantasyCalc retires a season's pick entries the moment that season's rookie
+  draft completes, so `findPickValue` correctly returns 0 for one. Two
+  fallbacks, best first, both in `pickCapital.js` and shared by League ›
+  Activity and the manager ledger: `buildDraftPickIndex` (the player actually
+  taken at that slot, at his value today) then `buildGenericRoundValues` (the
+  round's median across *every* season FantasyCalc lists — "a 2nd is a 2nd" —
+  displayed with `≈`). `—` means FantasyCalc lists no picks whatsoever.
+- **Pick capital score** (`computePickCapitalScore`): weighted sum by
+  **distance from the upcoming rookie draft** — nearest ×3, next ×2, third ×1
+  (near picks are worth more because they convert to players sooner
+  **[convention]**, encoded as these weights). It takes the live window as an
+  argument; keying these on literal years silently scores a newly surfaced
+  season at 0 the first time the window rolls.
 - Move-up packages (`suggestPickPackages`): 1–3 picks each strictly worth
   *less* than the target (equal = swap, not a move), totaling 80–145% of it;
   undershoot penalized 1.6× vs overshoot — sellers reject light offers,
@@ -278,7 +289,7 @@ Source of record: `CLAUDE.md` League Context + `src/constants.js`.
 | Trade deadline | **Week 13** (from league settings via API) |
 | Trade review | None — trades execute immediately |
 | Playoff teams | **From the Sleeper API**: `leagueInfo.settings.playoff_teams` (code fallback `?? 6`), playoffs start at `settings.playoff_week_start` (fallback `?? 15`) — `src/hooks/usePlayoffOdds.js:83-84`. Not statically determinable; never hardcode a count. |
-| Rookie draft | 4 rounds (`ROUNDS = 4`, `pickCapital.js`); pick years tracked: 2026/2027/2028 (`PICK_YEARS`) |
+| Rookie draft | 4 rounds (`ROUNDS = 4`, `pickCapital.js`); pick years tracked = the **live** three-season window from `utils/seasonWindow.js` (`pickYears` on LeagueContext) — the upcoming rookie draft plus the two after it, rolling itself the day a draft completes. `PICK_YEARS` is only the pre-load seed |
 | The user | Team **Nix Cage**, username `chnates`, roster ID **6**, owner ID `965787707299430400` — but identity is now **runtime state** via `useIdentity`/LeagueContext (`myRosterId`); the constants are original-owner reference only (see comment in `src/constants.js`) |
 
 **Roster/owner semantics:** Sleeper identifies teams by numeric `roster_id`
@@ -297,7 +308,9 @@ strings). Win/loss/points live in `roster.settings`.
 | Peak age windows | `PEAK_WINDOWS`, `getPeakStatus` | `src/utils/peakWindows.js` |
 | Fair trade / verdicts / ±5% band / counter | `analyzeTrade`, `getTradeVerdict`, `getCounterSuggestion`, `suggestFairPackage` | `src/utils/tradeAnalysis.js` |
 | Pick ownership (who owns which pick) | `resolvePickOwnership` — from `traded_picks` only | `src/utils/pickCapital.js` |
-| Pick price (round median) / pick capital score | `findPickValue` (median), `computePickCapitalScore` (3/2/1 year weights) | `src/utils/pickCapital.js` |
+| Pick price (round median) / pick capital score | `findPickValue` (median), `computePickCapitalScore` (3/2/1 weights **by distance from the upcoming draft**, never by literal year) | `src/utils/pickCapital.js` |
+| Which pick seasons exist at all | `resolvePickYears` — has this season's rookie draft completed? | `src/utils/seasonWindow.js` |
+| Price of a pick already SPENT | `buildDraftPickIndex` (the player it became), else `buildGenericRoundValues` (round median across listed seasons, shown ≈) | `src/utils/pickCapital.js` |
 | Pick slot tiers (Early 1–4 / Mid 5–7 / Late 8–10) + move-up/down packages | `slotTier`, `findSlotPickValue`, `makePickPricer`, `suggestPickPackages` | `src/utils/pickTrades.js` |
 | Rookie ADP (derived, not fetched) | `assignRookieAdp`, `buildRookieProspects` | `src/utils/rookieAdp.js` |
 | Playoff odds + Buyer/Seller deadline stance | Monte Carlo sim; `getDeadlineVerdict` (70%/35% cutoffs) | `src/utils/playoffOdds.js` (+ `src/hooks/usePlayoffOdds.js`) |

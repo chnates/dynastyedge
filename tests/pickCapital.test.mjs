@@ -11,7 +11,8 @@
 //    median-of-round logic as pick capital (findPickValue)" → median of the
 //    round's matching FantasyCalc entries; no matching entries → 0.
 //  - CLAUDE.md Feature 2: pick capital score weights "2026 picks worth 3×,
-//    2027 worth 2×, 2028 worth 1×".
+//    2027 worth 2×, 2028 worth 1×" — i.e. by DISTANCE from the upcoming draft,
+//    which is what survives the window rolling forward each September.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -23,12 +24,17 @@ import {
   buildDraftSlots,
   slotForRound,
   computePickCapitalScore,
+  buildDraftPickIndex,
+  buildGenericRoundValues,
 } from '../src/utils/pickCapital.js'
 
 const ROSTERS = [{ roster_id: 1 }, { roster_id: 2 }]
+// The live pick window is supplied by the caller (utils/seasonWindow.js derives
+// it from Sleeper); there is deliberately no hardcoded season default.
+const YEARS = ['2026', '2027', '2028']
 
 test('resolvePickOwnership: untraded picks stay with their original team (Feature 1 pick capital rules)', () => {
-  const result = resolvePickOwnership([], ROSTERS)
+  const result = resolvePickOwnership([], ROSTERS, YEARS)
   // 3 years × 4 rounds each, all owned by self.
   assert.equal(result[1].length, 12)
   assert.equal(result[2].length, 12)
@@ -41,7 +47,7 @@ test('resolvePickOwnership: untraded picks stay with their original team (Featur
 test('resolvePickOwnership: a traded pick belongs to owner_id and keeps its original owner (Feature 1)', () => {
   // Sleeper traded_picks record: roster 1's 2027 2nd now owned by roster 2.
   const traded = [{ season: '2027', round: 2, roster_id: 1, owner_id: 2 }]
-  const result = resolvePickOwnership(traded, ROSTERS)
+  const result = resolvePickOwnership(traded, ROSTERS, YEARS)
   assert.equal(result[1].length, 11)
   assert.equal(result[2].length, 13)
   const moved = result[2].find(p => p.season === '2027' && p.round === 2 && p.originalOwner === 1)
@@ -53,14 +59,14 @@ test('resolvePickOwnership: a traded pick belongs to owner_id and keeps its orig
 
 test('resolvePickOwnership: traded picks outside the covered years are ignored (Feature 1: show 2026/2027/2028)', () => {
   const traded = [{ season: '2031', round: 1, roster_id: 1, owner_id: 2 }]
-  const result = resolvePickOwnership(traded, ROSTERS)
+  const result = resolvePickOwnership(traded, ROSTERS, YEARS)
   assert.equal(result[1].length, 12)
   assert.equal(result[2].length, 12)
 })
 
 test('resolvePickOwnership: each inventory is sorted by season then round (Feature 1: picks grouped by year)', () => {
   const traded = [{ season: '2026', round: 4, roster_id: 2, owner_id: 1 }]
-  const result = resolvePickOwnership(traded, ROSTERS)
+  const result = resolvePickOwnership(traded, ROSTERS, YEARS)
   const keys = result[1].map(p => [p.season, p.round])
   const sorted = [...keys].sort((a, b) => (a[0] !== b[0] ? a[0].localeCompare(b[0]) : a[1] - b[1]))
   assert.deepEqual(keys, sorted)
@@ -152,12 +158,104 @@ test('slotForRound: linear keeps the same slot every round; snake reverses even 
   assert.equal(slotForRound(null, 1, 'linear', 10), null)
 })
 
-test('computePickCapitalScore: year weights 3×/2×/1× for 2026/2027/2028 (Feature 2 pick capital score)', () => {
+test('computePickCapitalScore: year weights 3×/2×/1× by distance from the upcoming draft (Feature 2)', () => {
   const picks = [
     { season: '2026', round: 1 }, // 4100 × 3
     { season: '2027', round: 1 }, // 3800 × 2
   ]
-  assert.equal(computePickCapitalScore(picks, PICK_ENTRIES), 4100 * 3 + 3800 * 2)
-  // Unweighted seasons contribute 0.
-  assert.equal(computePickCapitalScore([{ season: '2031', round: 1 }], PICK_ENTRIES), 0)
+  assert.equal(computePickCapitalScore(picks, PICK_ENTRIES, YEARS), 4100 * 3 + 3800 * 2)
+  // Seasons outside the window contribute 0.
+  assert.equal(computePickCapitalScore([{ season: '2031', round: 1 }], PICK_ENTRIES, YEARS), 0)
+})
+
+test('computePickCapitalScore: the weights follow the window, so a rolled year is never scored at 0', () => {
+  // The bug this pins: weights keyed by literal year ({'2026':3,'2027':2,'2028':1})
+  // silently score the newly surfaced third season at 0 the first time the
+  // window rolls past its draft. Here 2027 is now the nearest draft, so it
+  // must take the 3× weight it inherits — not 2027's old 2×.
+  const rolled = ['2027', '2028', '2029']
+  assert.equal(
+    computePickCapitalScore([{ season: '2027', round: 1 }], PICK_ENTRIES, rolled),
+    3800 * 3
+  )
+  // And the season that dropped out of the window scores nothing.
+  assert.equal(
+    computePickCapitalScore([{ season: '2026', round: 1 }], PICK_ENTRIES, rolled),
+    0
+  )
+})
+
+// ── Resolving a SPENT pick ───────────────────────────────────────────────────
+//
+// FantasyCalc retires a season's pick entries the moment its draft completes,
+// so a pick traded and then used inside the same season has no market price.
+// These two are the shared answer for that (CLAUDE.md Features 6 and 11): the
+// player it became, else the generic round median marked approximate. Both the
+// manager scouting ledger and League › Activity read them, so a traded pick
+// cannot read differently on the two screens that both show it.
+
+const IDX_ROSTERS = [
+  { roster_id: 6, owner_id: 'ownerA' },
+  { roster_id: 4, owner_id: 'ownerB' },
+]
+const IDX_PICKS = [
+  { player_id: 111, draft_slot: 1, round: 1, pick_no: 1 },
+  { player_id: '222', draft_slot: 2, round: 1, pick_no: 2 },
+]
+
+test('buildDraftPickIndex: a pick resolves to the player taken at its ORIGINAL owner\'s slot', () => {
+  const draft = { season: '2026', slot_to_roster_id: { 1: 6, 2: 4 } }
+  const idx = buildDraftPickIndex(draft, IDX_PICKS, IDX_ROSTERS)
+  assert.deepEqual(idx['2026-1-6'], { playerId: '111', overall: 1, slotLabel: '1.01' })
+  assert.deepEqual(idx['2026-1-4'], { playerId: '222', overall: 2, slotLabel: '1.02' })
+})
+
+test('buildDraftPickIndex: roster ids are STRINGS on both sides of the key (Rules #8)', () => {
+  // A Sleeper traded_pick's roster_id arrives as a NUMBER and reaches this
+  // index through a template literal. If the index keyed on a number the
+  // lookup would silently miss and every spent pick would fall back to a
+  // round median — a quiet downgrade, not a visible failure.
+  const idx = buildDraftPickIndex({ season: '2026', slot_to_roster_id: { 1: 6 } }, IDX_PICKS, IDX_ROSTERS)
+  const tradedPick = { season: '2026', round: 1, roster_id: 6 }   // number, as Sleeper sends it
+  assert.ok(idx[`${tradedPick.season}-${tradedPick.round}-${tradedPick.roster_id}`])
+})
+
+test('buildDraftPickIndex: falls back to draft_order, the live path for a LISTED draft', () => {
+  // `/league/{id}/drafts` never carries slot_to_roster_id — only
+  // `/draft/{draft_id}` does — so this fallback is not an edge case.
+  const draft = { season: '2026', draft_order: { ownerA: 1, ownerB: 2 } }
+  const idx = buildDraftPickIndex(draft, IDX_PICKS, IDX_ROSTERS)
+  assert.equal(idx['2026-1-6']?.playerId, '111')
+  assert.equal(idx['2026-1-4']?.playerId, '222')
+})
+
+test('buildDraftPickIndex: no order, no picks, or no draft → empty, never a wrong join', () => {
+  assert.deepEqual(buildDraftPickIndex({ season: '2026' }, IDX_PICKS, IDX_ROSTERS), {})
+  assert.deepEqual(buildDraftPickIndex({ season: '2026', slot_to_roster_id: { 1: 6 } }, [], IDX_ROSTERS), {})
+  assert.deepEqual(buildDraftPickIndex(null, IDX_PICKS, IDX_ROSTERS), {})
+  // An incomplete pick row is skipped rather than indexed under a bad key.
+  const partial = buildDraftPickIndex(
+    { season: '2026', slot_to_roster_id: { 1: 6 } },
+    [{ player_id: '111', round: 1 }],   // no draft_slot
+    IDX_ROSTERS
+  )
+  assert.deepEqual(partial, {})
+})
+
+test('buildGenericRoundValues: median per round across EVERY listed season ("a 2nd is a 2nd")', () => {
+  // Season-agnostic on purpose: the whole point is pricing a round whose own
+  // season FantasyCalc no longer lists.
+  const entries = [
+    { name: '2027 1st', value: 3000 },
+    { name: '2028 1st', value: 2200 },
+    { name: '2029 1st', value: 1900 },
+    { name: '2027 2nd', value: 1600 },
+  ]
+  const byRound = buildGenericRoundValues(entries)
+  assert.equal(byRound[1], 2200)   // median of 1900/2200/3000
+  assert.equal(byRound[2], 1600)
+  // A round nothing lists is 0, and the caller renders `—` rather than a fake price.
+  assert.equal(byRound[4], 0)
+  assert.equal(buildGenericRoundValues([])[1], 0)
+  assert.equal(buildGenericRoundValues(null)[1], 0)
 })

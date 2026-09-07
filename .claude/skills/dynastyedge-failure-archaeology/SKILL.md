@@ -6,7 +6,8 @@ description: >-
   this BEFORE: touching bottom sheets / useSheetDrag / useScrollLock / scroll
   containers or anything iOS-gesture related; touching index.html PWA metas,
   theme-color, or status-bar styling; touching pick valuation code
-  (managerAnalysis.js, pickTrades.js, findPickValue, makePickPricer); touching
+  (managerAnalysis.js, pickTrades.js, findPickValue, makePickPricer,
+  seasonWindow.js, or anything that names a pick SEASON); touching
   keep-score calibration (recommendations.js — PICK_ROUND_KEEP, pastPeakTilt,
   PROTECT_THRESHOLD) or reaching for dynastyTrajectory's age curves to feed any
   score; touching fairBand.js or any surface that predicts the Analyzer's
@@ -242,9 +243,12 @@ same.
 
 - **Caveat:** this commit is a shallow-clone graft point — its true diff is
   unavailable locally. Entry reconstructed from its commit message + the
-  current code in `src/utils/managerAnalysis.js` (verified 2026-07-05,
-  `buildPickIndex` ~line 86, `buildGenericRoundValues` ~line 129,
-  `pickAsset` ~line 161), which still carries the fix.
+  current code in `src/utils/managerAnalysis.js` (`buildPickIndex`,
+  `pickAsset`), which still carries the fix. **Both halves of the fix moved
+  to `src/utils/pickCapital.js` on 2026-09-07** — `buildDraftPickIndex` and
+  `buildGenericRoundValues` — because League › Activity needed the identical
+  ladder (see §3c). `managerAnalysis` now calls them; there is one
+  implementation, and the two screens that show the same trade cannot drift.
 - **Symptom:** every traded pick in the manager-scouting ledger showed 0,
   skewing all hindsight trade grades.
 - **Two compounding root causes:**
@@ -281,6 +285,57 @@ same.
   through `makePickPricer` / `findPickValue`-with-fallback. When adding any
   new pick-consuming feature, test the three calendar windows: before NFL
   draft, between NFL draft and league rookie draft, after league draft.
+
+### 3c. The third calendar window bit — a stale pick horizon + `—` on spent picks — `0efb102`/`eeeba25` (2026-09-07)
+
+§3b's ruling named three calendar windows to test. This is the third one —
+**after the league's rookie draft** — arriving for real, three days after this
+league's 2026 draft completed. It failed in two places at once, and the
+owner's report ("the trade analyzer still shows the 2026 draft picks") was the
+visible tip of it.
+
+- **Root cause, shared:** FantasyCalc **retires a season's pick entries the
+  moment that season's draft completes.** Verified live: three days after,
+  all 24 of its pick entries were 2027/2028/2029. This is the same mechanism
+  as §3b, one window later, and it is the fact to keep in your head — a pick
+  season's market price has a *lifetime*.
+- **Failure 1 — the horizon was a hand-maintained constant.** `PICK_YEARS`
+  had to be rolled every September. Until it was, the app generated **40
+  spent picks priced at 0** across ten rosters (cluttering the Analyzer's add
+  sheet, roster badges and TeamCard grids) and left **2029's 40 picks
+  invisible** — a season FantasyCalc was actively pricing.
+  **Fix:** `src/utils/seasonWindow.js` derives the window from `/state/nfl` +
+  the drafts list (already in the `useSleeper` payload, no extra request) by
+  asking whether this season's non-auction draft is `complete`. `PICK_YEARS`
+  is now a seed. **The chore was designed out rather than performed** — this
+  is the pattern to prefer for anything with an annual trigger.
+- **Failure 2 — League › Activity printed `—` on a pick spent in the same
+  season it was traded**, because it called `findPickValue` and gave up on a
+  miss. The dash was the smaller half: those picks contributed **0 to the
+  per-side totals**, which drive the green larger-haul flag, so the feed was
+  *grading the trade wrong*. Live: 1,620 vs 858, when the truth is 2,095 vs
+  2,798 and the other side is the bigger haul.
+  **Fix:** the §3a ladder, extracted and shared (above).
+- **Three traps the roll exposed, all now test-pinned:**
+  1. `computePickCapitalScore` weighted by **literal year**
+     (`{'2026':3,'2027':2,'2028':1}`), so the newly surfaced third season
+     would have scored **0** — silently deflating the pick-capital ranking
+     behind Trade Partner Finder and the League sort. Now keyed by distance
+     from the upcoming draft.
+  2. Pointing the Draft Tracker at the next season would have replaced a
+     completed recap with an empty "no draft yet" placeholder for ~10 months.
+     `selectTrackedDraft` prefers the upcoming draft, else the most recent
+     completed one.
+  3. Trade › Pick Trades must plan the **next** draft while the Tracker shows
+     the finished one — and must never borrow the finished draft's board to
+     price next year's slots.
+- **Ruling (extends §3b's):** **never key anything on a literal season.** A
+  pick season's market price expires; a season list that outlives its draft
+  invents worthless assets and hides real ones. And when a surface shows a
+  pick whose draft has passed, walk the whole ladder — what it became, then
+  the market price, then the round median with `≈` — before printing a dash.
+  A dash must mean "FantasyCalc lists no picks at all", never "this asset's
+  season is over".
 
 ---
 

@@ -1,7 +1,10 @@
 const ROUNDS = 4
-const YEARS = ['2026', '2027', '2028']
 
-export function resolvePickOwnership(tradedPicks, rosters, years = YEARS) {
+// `years` is the live pick window (see utils/seasonWindow.js) — never a
+// hardcoded season list. A default here would silently outlive its draft:
+// once a season's rookie draft completes, FantasyCalc retires that season's
+// pick entries, so every pick this function invents for it prices at 0.
+export function resolvePickOwnership(tradedPicks, rosters, years) {
   // Initialize: each team owns all their own picks for each year/round
   // Key: "season-round-originalRosterId" → currentOwnerId
   const ownership = {}
@@ -116,11 +119,81 @@ export function buildDraftSlots(draft, rosters) {
   return null
 }
 
-const PICK_YEAR_WEIGHTS = { '2026': 3, '2027': 2, '2028': 1 }
+// ── Resolving a spent pick ───────────────────────────────────────────────────
 
-export function computePickCapitalScore(picks, pickEntries) {
+// The moment a rookie draft completes, FantasyCalc RETIRES that season's pick
+// entries (verified live 2026-09-07, three days after this league's 2026 draft:
+// all 24 of its pick entries were 2027/2028/2029). So `findPickValue` returns 0
+// for a pick that has already been used, and every surface showing a completed
+// trade would price a real asset at nothing.
+//
+// There are two honest answers, in order of preference, and these two helpers
+// are the one implementation of each — shared by the manager scouting ledger
+// (utils/managerAnalysis.js) and League › Activity so the same traded pick can
+// never read differently on two screens.
+
+// 1. THE BEST ANSWER: what the pick actually became.
+// "season-round-originalRosterId" → the player drafted at that slot. Built
+// straight from the draft's pick list, so it needs no declared round count.
+// The slot → roster map comes from `buildDraftSlots` (slot_to_roster_id when
+// Sleeper has built the board, else draft_order joined through owner ids) —
+// which matters, because `/league/{id}/drafts` NEVER carries
+// slot_to_roster_id, so the fallback is the live path for a listed draft.
+//
+// Keys are stringified throughout: a Sleeper traded_pick's `roster_id` arrives
+// as a number and reaches this index through a template literal, so the roster
+// segment must be a string on both sides (Rules #8).
+export function buildDraftPickIndex(draft, picks, rosters) {
+  const idx = {}
+  if (!draft || !picks?.length) return idx
+
+  const byRoster = buildDraftSlots(draft, rosters)
+  if (!byRoster || !Object.keys(byRoster).length) return idx
+
+  const slotToRoster = {}
+  Object.entries(byRoster).forEach(([rid, slot]) => { slotToRoster[slot] = String(rid) })
+
+  picks.forEach(p => {
+    if (!p?.player_id || p.draft_slot == null || p.round == null) return
+    const originalRoster = slotToRoster[p.draft_slot]
+    if (originalRoster == null) return
+    idx[`${draft.season}-${p.round}-${originalRoster}`] = {
+      playerId: String(p.player_id),
+      overall: p.pick_no,
+      slotLabel: `${p.round}.${String(p.draft_slot).padStart(2, '0')}`,
+    }
+  })
+  return idx
+}
+
+// 2. THE FALLBACK: median value per round across every pick FantasyCalc
+// currently lists, season-agnostic. "A 2nd is a 2nd" is a far better estimate
+// than 0 for a pick whose draft has passed and whose player can't be resolved.
+// Surfaces mark it approximate (≈) rather than passing it off as a market price.
+export function buildGenericRoundValues(pickEntries) {
+  const byRound = {}
+  for (let round = 1; round < ROUND_SUFFIX.length; round++) {
+    const suffix = ROUND_SUFFIX[round]
+    const matches = (pickEntries ?? [])
+      .filter(e => e.name.includes(suffix))
+      .sort((a, b) => a.value - b.value)
+    byRound[round] = matches.length
+      ? matches[Math.floor(matches.length / 2)].value
+      : 0
+  }
+  return byRound
+}
+
+// Feature 2's pick-capital weighting: the nearest draft counts 3x, the next
+// 2x, the one after 1x. Keyed by DISTANCE from the upcoming draft, never by
+// literal year — a `{ '2026': 3, ... }` map silently weights the newly
+// surfaced third season at 0 the first time the window rolls forward.
+const PICK_YEAR_WEIGHTS = [3, 2, 1]
+
+export function computePickCapitalScore(picks, pickEntries, years) {
+  const window = years ?? []
   return picks.reduce((total, pick) => {
-    const weight = PICK_YEAR_WEIGHTS[pick.season] ?? 0
+    const weight = PICK_YEAR_WEIGHTS[window.indexOf(pick.season)] ?? 0
     return total + weight * findPickValue(pick, pickEntries)
   }, 0)
 }
