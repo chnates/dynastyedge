@@ -661,7 +661,10 @@ across future seasons.
 
 #### Pick capital rules
 
-- Show picks for 2026, 2027, 2028
+- Show the **live three-season pick window** — the upcoming rookie draft plus
+  the two after it, from `pickYears` on `LeagueContext` (see the Constants File
+  section). It rolls itself the day a rookie draft completes; never hardcode a
+  season list, and never take `PICK_YEARS` as the truth.
 - Fetch `/traded_picks` to find all picks that have moved
 - Any pick NOT in traded_picks is still owned by the original team
   (original team = the roster_id that matches the pick’s season/round)
@@ -1604,10 +1607,19 @@ draft is live — exactly the flip-back-from-the-Sleeper-app moment — gently
 otherwise) and polls every 30s while status is `drafting` and the tab is
 visible.
 
+**Which draft the Tracker shows** is resolved from live data by
+`selectTrackedDraft` (`utils/seasonWindow.js`): the **upcoming** rookie draft
+whenever Sleeper has one, otherwise the **most recent completed** one, so a
+finished draft's recap stays on screen through the months before next year's
+board exists rather than the tab collapsing to an empty placeholder. The
+Tracker reads its season off the draft it is actually rendering; the manual
+fallback below uses `pickYears[0]`.
+
 **Manual fallback:** until the league creates the rookie draft in Sleeper, the
 Tracker offers manual pick logging (slots provisionally assume roster-ID order
 — labelled as such) plus a "Check" button to re-poll for the draft. Manual log
-stored in `dynastyedge_draft_tracker_2026`.
+stored in `dynastyedge_draft_tracker_{season}`, keyed by season so one draft's
+log can't leak into the next.
 
 Draft-section storage keys live in `src/components/draft/boardStorage.js`:
 `dynastyedge_board_order` (My Board order) · `dynastyedge_prospect_notes`
@@ -1794,6 +1806,15 @@ Pure logic lives in `utils/pickTrades.js`.
 "Planning a pick swap? Open the Pick Trade Calculator →" — that deep-links
 here (a sibling Trade sub-tab), so the planner is reachable from the start of
 the trade workflow, not just its own tab.
+
+**It plans the NEXT draft, always.** The season it trades in is `pickYears[0]`
+— the upcoming rookie draft — not whichever draft `useSleeperDraft` has on
+screen, which after a completed draft is last season's (kept there for the
+Tracker's recap). It also **refuses to borrow a draft board from another
+season**: a board prices slots only for its own draft, so applying the finished
+one's order to next year's picks would stamp the wrong slots on them. Round
+medians are the honest price until Sleeper sets the new order, and the in-page
+note says so.
 
 **Slot-level pricing:** FantasyCalc lists exact-slot picks as "2026 Pick 1.09"
 (round.slot, zero-padded) once a draft season's order is known — the old
@@ -3165,7 +3186,8 @@ dynastyedge/
 │   │   ├── recommendations.js   ← THE assistant-GM brain: keep/givability scores (round-priced picks, past-peak age tilt), FA pickups, two-sided sell moves, the cash-out board
 │   │   ├── fairBand.js          ← THE definition of "fair" (±5%), shared by the Analyzer's verdict and every surface that PREDICTS it
 │   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation
-│   │   ├── pickCapital.js       ← pick ownership resolution logic
+│   │   ├── seasonWindow.js      ← THE "has the rookie draft happened yet?" resolver — the live pick window + which draft the Tracker shows (replaced the hand-rolled PICK_YEARS)
+│   │   ├── pickCapital.js       ← pick ownership resolution logic (year weights are relative to the window, never literal years)
 │   │   ├── rookieAdp.js         ← derived rookie-class ADP for the Draft section
 │   │   ├── rookieResearch.js    ← rookie opportunity model: depth × capital, market-vs-model divergence
 │   │   ├── positionalValue.js   ← scarcity / value over replacement — replacement levels LEARNED from the live league, DISPLAY ONLY
@@ -3200,7 +3222,8 @@ dynastyedge/
 │   ├── sleeperDraft.test.mjs        ← mocked-fetch: single-draft endpoint merged over the list (slot_to_roster_id), session cache, best-effort sub-fetch degradation
 │   ├── projections.test.mjs         ← Week 1 lineup engine: defense rankings joined via player DB + schedule, home/away fields, Week-1 empty-stats contract, red/yellow/green flags, best bench
 │   ├── playoffOdds.test.mjs         ← fixed-seed determinism, Σ odds = playoff teams, verdict thresholds
-│   ├── pickCapital.test.mjs         ← pick ownership resolution, round-median pick values, year weights
+│   ├── seasonWindow.test.mjs        ← the draft-completion boundary: pre_draft/drafting/paused keep a season current, `complete` rolls it, an auction never counts, a past season's draft never rolls it; the Tracker prefers the upcoming draft and falls back to the most recent completed one; no NFL state degrades to the seed
+│   ├── pickCapital.test.mjs         ← pick ownership resolution, round-median pick values, and year weights BY DISTANCE from the upcoming draft (a rolled year is never scored 0)
 │   ├── pickTrades.test.mjs          ← slot tiers (as coded), slot pricing fallback, package constraints
 │   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
 │   ├── appVersion.test.mjs          ← reload URL: ?v= before the hash (HashRouter), encoding, null build id
@@ -3226,18 +3249,18 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 136 / # pass 129 /
+honestly:** instead of "cannot find module" it prints `# tests 147 / # pass 140 /
 # fail 7`, which reads like a code regression. The files that fail are the ones
 transitively importing `react` (`tradeAnalysis.js` → `recommendations.js` →
 `useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
 `draftLive` loading their hooks) — the file fails to load, so its tests never
-run and the count silently drops from **242** to 136. `npm run build` in the
-same state fails with `sh: 1: vite: not found`. **If the test count isn't 242,
-run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-06
+run and the count silently drops from **253** to 147. `npm run build` in the
+same state fails with `sh: 1: vite: not found`. **If the test count isn't 253,
+run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-07
 by renaming `node_modules` aside; re-measure them whenever the suite grows —
-the pair had drifted three times before this, 178/130, 177/115 and 219/136.
-The broken-state signature has held at 136/129/7 across the last two
-re-measurements, so it is the passing count that moves.)
+the pair had drifted four times before this, 178/130, 177/115, 219/136 and
+242/136. The **7 failing files** have been the constant across every
+re-measurement; both counts move with the suite.)
 
 **Tests:** `npm test` runs the `tests/` suite — plain `.mjs` scripts on Node's
 built-in `node:test` runner with `node:assert/strict`, zero new dependencies
@@ -3494,11 +3517,47 @@ export const ROSTER_SLOTS = [ /* QB · RB×2 · WR×2 · TE · FLEX×3 · SFLX �
 (The four feed URLs are elided above for width — they are full
 `raw.githubusercontent.com/chnates/…` URLs in the real file.)
 
-**`PICK_YEARS` is a manual, season-scoped constant.** It drives pick capital
-everywhere, and `useSleeperDraft`'s `DRAFT_SEASON = PICK_YEARS[0]` points the
-Draft Tracker at the upcoming rookie draft. It must be rolled forward by hand
-once a rookie draft completes and its picks are spent — otherwise the app keeps
-showing a dead season and never surfaces the new third year.
+**`PICK_YEARS` is a SEED, not the source of truth.** The live three-season pick
+window is derived per load by **`utils/seasonWindow.js`** and reaches the app as
+**`pickYears` on `LeagueContext`**; every pick surface reads that, and the
+constant is only what renders in the moment before `/state/nfl` resolves.
+
+`resolvePickYears(nflState, drafts, seed)` asks one question — **has this
+season's rookie draft been held?** The window starts at the current NFL season
+until that season's non-auction draft reports `status: "complete"`, then at the
+next one, plus the two seasons after it. Both inputs are already in the
+`useSleeper` payload, so this costs **no extra request**. It degrades to the
+seed when NFL state hasn't landed (never an empty window — every pick surface
+is built from it).
+
+**Why it stopped being a hand-rolled constant (2026-09-07).** The moment a
+rookie draft completes, **FantasyCalc retires that season's pick entries** —
+verified live the day this shipped: three days after the 2026 draft, all 24 of
+its pick entries were 2027/2028/2029. So a stale window is not cosmetic. It
+generated **40 spent picks across the league, every one priced at 0**, which
+cluttered the Trade Analyzer's add sheet, roster pick badges and TeamCard grids;
+and it left the newly tradable **2029** picks — four per team, priced by
+FantasyCalc at 1,933 for a 1st — invisible to every surface in the app.
+Measured on the live league at the fix: 120 picks, **0 priced at 0**, against
+40 of 120 before.
+
+Two things the roll must not break, both pinned by tests:
+
+- **Year weights follow the WINDOW, not the calendar.** Feature 2's pick-capital
+  score weights the nearest draft 3× / next 2× / third 1×. Keyed by literal year
+  (`{ '2026': 3, … }`, as it was) the newly surfaced third season silently
+  scores **0** the first time the window rolls.
+- **The Draft Tracker keeps its recap.** `selectTrackedDraft` follows the
+  upcoming draft whenever Sleeper has one — its whole purpose on draft day —
+  and otherwise falls back to the **most recent completed** draft, so its recap
+  stays on screen through the ~10 months before the league creates next year's
+  board instead of collapsing to an empty "no draft yet" placeholder.
+  `useSleeperDraft` therefore exports `FALLBACK_DRAFT_SEASON` (a seed), not the
+  old `DRAFT_SEASON` constant, and the Tracker reads the season off the draft it
+  is actually showing. **Trade › Pick Trades reads `pickYears[0]` instead** — it
+  trades the *next* draft's picks — and refuses to borrow a draft board from a
+  different season, so last draft's slots can never be stamped onto next
+  draft's picks.
 
 -----
 

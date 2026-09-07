@@ -33,7 +33,10 @@ const DIVERGENCE_META = {
 }
 
 export default function TeamCard({ roster, rank, divergence, leagueAverages, winWindowTiers, sortMode = 'value', onTap }) {
-  const { myRosterId } = useLeagueContext()
+  const { myRosterId, pickYears } = useLeagueContext()
+  // The live three-season pick window (see utils/seasonWindow.js); the constant
+  // is only the seed used before Sleeper's NFL state resolves.
+  const years = pickYears ?? PICK_YEARS
   const teamName = getTeamName(roster.owner)
   const username = roster.owner?.username ?? ''
   const tier = winWindowTiers?.[roster.rosterId] ?? 'Middle'
@@ -43,7 +46,7 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
   const totalPicks = roster.picks.length
 
   const pickCountByYear = {}
-  PICK_YEARS.forEach(yr => {
+  years.forEach(yr => {
     pickCountByYear[yr] = roster.picks.filter(p => p.season === yr).length
   })
 
@@ -51,11 +54,11 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
   const pickGrid = {}
   ;[1, 2, 3, 4].forEach(r => {
     pickGrid[r] = {}
-    PICK_YEARS.forEach(yr => {
+    years.forEach(yr => {
       pickGrid[r][yr] = roster.picks.filter(p => p.round === r && p.season === yr).length
     })
   })
-  const activeRounds = [1, 2, 3, 4].filter(r => PICK_YEARS.some(yr => pickGrid[r][yr] > 0))
+  const activeRounds = [1, 2, 3, 4].filter(r => years.some(yr => pickGrid[r][yr] > 0))
 
   return (
     <button
@@ -124,7 +127,7 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
             {/* Year header row */}
             <div className="flex items-center">
               <div className="w-10 shrink-0" />
-              {PICK_YEARS.map(yr => (
+              {years.map(yr => (
                 <div key={yr} className="flex-1 text-center">
                   <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">'{yr.slice(2)}</span>
                 </div>
@@ -141,7 +144,7 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
                       {ROUND_LABELS[r]}
                     </span>
                   </div>
-                  {PICK_YEARS.map(yr => {
+                  {years.map(yr => {
                     const count = pickGrid[r][yr]
                     return (
                       <div key={yr} className="flex-1 text-center">
@@ -263,7 +266,7 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
           {/* Footer: pick counts + FAAB */}
           <div className="flex items-center justify-between">
             <div className="flex gap-2">
-              {PICK_YEARS.map(yr => (
+              {years.map(yr => (
                 <div key={yr} className="flex items-center gap-0.5">
                   <span className="font-mono text-xs font-medium text-text-secondary dark:text-text-secondary tabular-nums">
                     {pickCountByYear[yr]}

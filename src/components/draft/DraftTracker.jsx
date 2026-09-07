@@ -6,7 +6,7 @@ import {
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useRookieADP } from '../../hooks/useRookieADP'
 import { buildRookieProspects } from '../../utils/rookieAdp'
-import { useSleeperDraft, buildDraftOrder, DRAFT_SEASON } from '../../hooks/useSleeperDraft'
+import { useSleeperDraft, buildDraftOrder, FALLBACK_DRAFT_SEASON } from '../../hooks/useSleeperDraft'
 import { deriveDraftState, buildBestAvailable, buildMyCapital, buildRecap, VOE_NEUTRAL } from '../../utils/draftLive'
 import { getTeamName } from '../../hooks/useLeague'
 import { Sheet, Modal, Button, Card } from '../ui'
@@ -18,7 +18,9 @@ import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
 import { rankClass } from '../../utils/rankColors'
 
-const MANUAL_STORAGE_KEY = `dynastyedge_draft_tracker_${DRAFT_SEASON}`
+// Keyed by season: a manual log belongs to the draft it was kept for, and must
+// not leak into the next one once the window rolls forward.
+const manualStorageKey = season => `dynastyedge_draft_tracker_${season}`
 const POS_FILTERS = ['ALL', 'QB', 'RB', 'WR', 'TE']
 const FALLBACK_ROUNDS = 4
 const FALLBACK_TEAMS = 10
@@ -102,7 +104,7 @@ function StatusBar({ status, fetchedAt, refreshing, syncError, onRefresh }) {
   )
 }
 
-function DraftCapitalCard({ capital, taxiUsed, taxiSlots }) {
+function DraftCapitalCard({ capital, taxiUsed, taxiSlots, draftSeason }) {
   if (!capital.length && taxiSlots == null) return null
   return (
     <div className="mx-4 mt-3 px-3 py-2.5 rounded-none bg-bg-card border border-border-default">
@@ -117,7 +119,7 @@ function DraftCapitalCard({ capital, taxiUsed, taxiSlots }) {
         )}
       </div>
       {capital.length === 0 ? (
-        <p className="font-body text-xs text-text-tertiary">No {DRAFT_SEASON} picks owned.</p>
+        <p className="font-body text-xs text-text-tertiary">No {draftSeason} picks owned.</p>
       ) : (
         <div className="flex flex-wrap gap-1.5">
           {capital.map(c => (
@@ -358,6 +360,9 @@ function PickRow({ player, teamName, isMine, label, delta, isLast, onSelect }) {
 // ── Synced tracker (Sleeper draft exists) ─────────────────────────────────────
 
 function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects, myRosterId }) {
+  // The season of the draft actually on screen — the upcoming one while it
+  // exists, otherwise the most recent completed one (see selectTrackedDraft).
+  const draftSeason = String(sleeperDraft.data?.draft?.season ?? FALLBACK_DRAFT_SEASON)
   const { data, fetchedAt, refreshing, error: syncError, refresh } = sleeperDraft
   const { draft, picks, tradedPicks } = data
   const userMap = league?.userMap ?? {}
@@ -440,10 +445,10 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects, my
   const capital = useMemo(() => buildMyCapital({
     order,
     orderKnown,
-    leaguePicks: (league?.myRoster?.picks ?? []).filter(p => p.season === DRAFT_SEASON),
+    leaguePicks: (league?.myRoster?.picks ?? []).filter(p => p.season === draftSeason),
     picksMade,
     myRosterId,
-  }), [order, orderKnown, league, picksMade, myRosterId])
+  }), [order, orderKnown, league, picksMade, myRosterId, draftSeason])
 
   const taxiSlots = leagueInfo?.settings?.taxi_slots ?? null
   const taxiUsed = useMemo(
@@ -508,7 +513,7 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects, my
         )}
 
         {!isComplete && (
-          <DraftCapitalCard capital={capital} taxiUsed={taxiUsed} taxiSlots={taxiSlots} />
+          <DraftCapitalCard capital={capital} taxiUsed={taxiUsed} taxiSlots={taxiSlots} draftSeason={draftSeason} />
         )}
 
         {isOnClock && <BestAvailableCard rows={bestAvailable} onSelect={setSelected} />}
@@ -712,11 +717,11 @@ function parseManualSlot(slotStr) {
 
 // Provisional 40-pick order assuming slot = original owner's roster ID.
 // Only used before the real draft exists in Sleeper.
-function buildAssumedOrder(allRosters) {
+function buildAssumedOrder(allRosters, draftSeason) {
   const pickMap = {}
   allRosters.forEach(roster => {
     roster.picks
-      .filter(p => p.season === DRAFT_SEASON)
+      .filter(p => p.season === draftSeason)
       .forEach(p => {
         pickMap[`${p.round}-${p.originalOwner}`] = p.currentOwner
       })
@@ -826,9 +831,10 @@ function ResetConfirm({ onConfirm, onCancel }) {
   )
 }
 
-function ManualTracker({ league, values, prospects, syncError, onCheckAgain, checking, myRosterId }) {
+function ManualTracker({ league, values, prospects, syncError, onCheckAgain, checking, myRosterId, draftSeason }) {
+  const storageKey = manualStorageKey(draftSeason)
   const [drafted, setDrafted] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(MANUAL_STORAGE_KEY) ?? '[]') }
+    try { return JSON.parse(localStorage.getItem(storageKey) ?? '[]') }
     catch { return [] }
   })
   const [logModal, setLogModal]       = useState(null)
@@ -837,14 +843,14 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
   const [showReset, setShowReset]     = useState(false)
 
   useEffect(() => {
-    localStorage.setItem(MANUAL_STORAGE_KEY, JSON.stringify(drafted))
-  }, [drafted])
+    localStorage.setItem(storageKey, JSON.stringify(drafted))
+  }, [drafted, storageKey])
 
   const rookies = useMemo(
     () => [...prospects].sort((a, b) => (a.adp ?? 999) - (b.adp ?? 999)),
     [prospects]
   )
-  const draftOrder    = useMemo(() => buildAssumedOrder(league?.allRosters ?? []), [league])
+  const draftOrder    = useMemo(() => buildAssumedOrder(league?.allRosters ?? [], draftSeason), [league, draftSeason])
   const draftedSet    = useMemo(() => new Set(drafted.map(d => d.sleeperId)), [drafted])
   const undrafted     = useMemo(() => rookies.filter(p => !draftedSet.has(p.sleeperId)), [rookies, draftedSet])
   const draftedSorted = useMemo(() =>
@@ -875,7 +881,7 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
             <p className="font-body text-xs text-text-secondary flex-1">
               {syncError
                 ? 'Couldn’t reach Sleeper to check for the rookie draft.'
-                : `No ${DRAFT_SEASON} rookie draft in Sleeper yet — this tracker will sync automatically once your league creates it. Until then, log picks manually below (slots assume roster-ID order).`}
+                : `No ${draftSeason} rookie draft in Sleeper yet — this tracker will sync automatically once your league creates it. Until then, log picks manually below (slots assume roster-ID order).`}
             </p>
             <button
               onClick={onCheckAgain}
@@ -1036,7 +1042,7 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function DraftTracker() {
-  const { league, loading, error, retry, values, leagueInfo, myRosterId } = useLeagueContext()
+  const { league, loading, error, retry, values, leagueInfo, myRosterId, pickYears } = useLeagueContext()
   const { rookieMap, loading: rookieLoading, error: rookieError, retry: rookieRetry } = useRookieADP()
   const sleeperDraft = useSleeperDraft()
 
@@ -1074,6 +1080,7 @@ export default function DraftTracker() {
       onCheckAgain={sleeperDraft.refresh}
       checking={sleeperDraft.refreshing || sleeperDraft.loading}
       myRosterId={myRosterId}
+      draftSeason={pickYears?.[0] ?? FALLBACK_DRAFT_SEASON}
     />
   )
 }

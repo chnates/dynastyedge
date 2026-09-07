@@ -63,7 +63,7 @@ function ActionCard({ item, onDismiss, onAction }) {
   )
 }
 
-export default function RosterActionItems({ myRoster, nflState, allRosters }) {
+export default function RosterActionItems({ myRoster, nflState, allRosters, pickYears }) {
   // Trigger the /players/nfl fetch so meta is available (module-level cached)
   useSleeperRookies()
   const navigate = useNavigate()
@@ -142,9 +142,11 @@ export default function RosterActionItems({ myRoster, nflState, allRosters }) {
         })
     }
 
-    // 4. Missing future 1st round picks
-    const currentSeason = nflState?.season ?? '2026'
-    PICK_YEARS
+    // 4. Missing future 1st round picks. The window is live (see
+    // utils/seasonWindow.js); the constant only seeds it before NFL state lands.
+    const currentSeason = nflState?.season ?? ''
+    const years = pickYears ?? PICK_YEARS
+    years
       .filter(year => year > currentSeason)
       .forEach(year => {
         const has1st = myRoster.picks.some(p => p.season === year && p.round === 1)
@@ -161,7 +163,7 @@ export default function RosterActionItems({ myRoster, nflState, allRosters }) {
       })
 
     return result
-  }, [myRoster, nflState, allRosters, dismissals]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [myRoster, nflState, allRosters, pickYears, dismissals]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filter out dismissed items whose condition snapshot still matches
   const visible = items.filter(item => {

@@ -47,6 +47,13 @@ export const FANTASYCALC_PARAMS = {
   ppr: 0.5,
 }
 
+// SEED ONLY — not the source of truth. The live three-season pick window is
+// derived from Sleeper's /state/nfl plus the league's drafts list (both already
+// in the useSleeper payload) by utils/seasonWindow.js, and reaches the app as
+// `pickYears` on LeagueContext. It rolls itself the moment a rookie draft
+// reports `status: "complete"`, which is also the moment FantasyCalc retires
+// that season's pick entries. This array is only what renders before NFL state
+// resolves, so it never needs to be exactly right — just close.
 export const PICK_YEARS = ['2026', '2027', '2028']
 export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 

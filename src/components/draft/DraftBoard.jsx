@@ -339,7 +339,7 @@ function SortablePlayerRow({
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function DraftBoard() {
-  const { league, loading, error, retry, values, myRosterId } = useLeagueContext()
+  const { league, loading, error, retry, values, myRosterId, nflState } = useLeagueContext()
   const { rookieMap, loading: rookieLoading, error: rookieError, retry: rookieRetry } = useRookieADP()
 
   const [posFilter, setPosFilter]     = useState('ALL')
@@ -930,7 +930,7 @@ export default function DraftBoard() {
 
         {allProspects.length === 0 && !loading && !rookieLoading && (
           <p className="px-4 pt-6 text-center font-body text-xs text-text-tertiary">
-            No 2026 rookie prospects found. FantasyCalc's rookie endpoint will populate once the draft class is available.
+            No {nflState?.season ?? ''} rookie prospects found. FantasyCalc's rookie endpoint will populate once the draft class is available.
           </p>
         )}
       </div>

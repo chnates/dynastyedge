@@ -28,6 +28,9 @@ import FreeAgentDrawer from './FreeAgentDrawer'
 function OffseasonPlaceholder({ league }) {
   const myRoster = league?.myRoster
   const allRosters = league?.allRosters
+  // The live pick window (see utils/seasonWindow.js) — a spent season must not
+  // keep a zeroed column here after its rookie draft is held.
+  const pickYearWindow = league?.pickYears ?? PICK_YEARS
 
   const leagueAvgs = allRosters ? computeLeagueAverages(allRosters) : null
   const deltas = myRoster && leagueAvgs ? getPositionalDeltas(myRoster, leagueAvgs) : null
@@ -76,7 +79,7 @@ function OffseasonPlaceholder({ league }) {
               Rookie Draft Capital
             </p>
             <div className="flex gap-4">
-              {PICK_YEARS.map(yr => (
+              {pickYearWindow.map(yr => (
                 <div key={yr} className="flex items-baseline gap-1">
                   <span className="font-mono text-xl font-semibold text-accent tabular-nums">
                     {picksByYear[yr] ?? 0}

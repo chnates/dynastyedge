@@ -15,13 +15,15 @@
 //    session-cached fetch; refresh() refetches on demand.
 //  - Best-effort sub-fetches: a draft with no picks yet returns [], and a
 //    failing picks / traded_picks / single-draft call must not sink the load.
-//  - The rookie draft is selected by season (PICK_YEARS[0]) and never an
-//    auction.
+//  - The tracked draft is selected from LIVE data (utils/seasonWindow.js's
+//    selectTrackedDraft), never a hardcoded season, and never an auction.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { loadDraft, resetDraftCache, buildDraftOrder, DRAFT_SEASON } from '../src/hooks/useSleeperDraft.js'
+import { loadDraft, resetDraftCache, buildDraftOrder, FALLBACK_DRAFT_SEASON } from '../src/hooks/useSleeperDraft.js'
+
+const DRAFT_SEASON = FALLBACK_DRAFT_SEASON
 
 const SLOTS = { 1: 6, 2: 4 }
 let calls = []

@@ -1,7 +1,10 @@
 const ROUNDS = 4
-const YEARS = ['2026', '2027', '2028']
 
-export function resolvePickOwnership(tradedPicks, rosters, years = YEARS) {
+// `years` is the live pick window (see utils/seasonWindow.js) — never a
+// hardcoded season list. A default here would silently outlive its draft:
+// once a season's rookie draft completes, FantasyCalc retires that season's
+// pick entries, so every pick this function invents for it prices at 0.
+export function resolvePickOwnership(tradedPicks, rosters, years) {
   // Initialize: each team owns all their own picks for each year/round
   // Key: "season-round-originalRosterId" → currentOwnerId
   const ownership = {}
@@ -116,11 +119,16 @@ export function buildDraftSlots(draft, rosters) {
   return null
 }
 
-const PICK_YEAR_WEIGHTS = { '2026': 3, '2027': 2, '2028': 1 }
+// Feature 2's pick-capital weighting: the nearest draft counts 3x, the next
+// 2x, the one after 1x. Keyed by DISTANCE from the upcoming draft, never by
+// literal year — a `{ '2026': 3, ... }` map silently weights the newly
+// surfaced third season at 0 the first time the window rolls forward.
+const PICK_YEAR_WEIGHTS = [3, 2, 1]
 
-export function computePickCapitalScore(picks, pickEntries) {
+export function computePickCapitalScore(picks, pickEntries, years) {
+  const window = years ?? []
   return picks.reduce((total, pick) => {
-    const weight = PICK_YEAR_WEIGHTS[pick.season] ?? 0
+    const weight = PICK_YEAR_WEIGHTS[window.indexOf(pick.season)] ?? 0
     return total + weight * findPickValue(pick, pickEntries)
   }, 0)
 }

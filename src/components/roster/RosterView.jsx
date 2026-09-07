@@ -143,7 +143,7 @@ export default function RosterView() {
 
       {/* ── Action Items banner (own roster only) ── */}
       {!selectedRosterId && (
-        <RosterActionItems myRoster={league.myRoster} nflState={nflState} allRosters={league.allRosters} />
+        <RosterActionItems myRoster={league.myRoster} nflState={nflState} allRosters={league.allRosters} pickYears={league.pickYears} />
       )}
 
       {/* ── Roster Analysis (own roster only) ── */}

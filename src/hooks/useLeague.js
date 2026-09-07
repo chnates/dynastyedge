@@ -3,6 +3,7 @@ import { useSleeper } from './useSleeper'
 import { useFantasyCalc } from './useFantasyCalc'
 import { usePlayerDB } from './usePlayerDB'
 import { resolvePickOwnership, findExactSlotValue, buildDraftSlots, slotForRound, computePickCapitalScore } from '../utils/pickCapital'
+import { resolvePickYears } from '../utils/seasonWindow'
 import { PICK_YEARS } from '../constants'
 import { useIdentity } from './useIdentity'
 
@@ -20,18 +21,27 @@ export function useLeague() {
   const loading = sleeperLoading || fcLoading
   const error = sleeperError || fcError
 
+  // The live pick window. Derived from Sleeper alone, so it resolves without
+  // waiting on (or failing with) FantasyCalc — same discipline as signInRosters.
+  const pickYears = useMemo(
+    () => resolvePickYears(sleeperData?.nflState, sleeperData?.drafts, PICK_YEARS),
+    [sleeperData]
+  )
+
   const league = useMemo(() => {
     if (!sleeperData || !fcValues) return null
 
     const { leagueInfo, rosters, users, tradedPicks, drafts } = sleeperData
     const { playerMap, pickEntries } = fcValues
 
-    // The upcoming rookie draft (PICK_YEARS[0]). Its order — in practice always
+    // The upcoming rookie draft (pickYears[0]). Its order — in practice always
     // from draft_order, since the `/league/{id}/drafts` list endpoint never
     // returns slot_to_roster_id (only `/draft/{draft_id}` does) — lets us
     // resolve each of that season's picks to its exact slot (1.09) and price
-    // it at FantasyCalc's slot-level value instead of the round median.
-    const draftSeason = PICK_YEARS[0]
+    // it at FantasyCalc's slot-level value instead of the round median. Once
+    // that draft is held there is no match here, so its successor's picks
+    // correctly fall back to round medians until Sleeper sets its order.
+    const draftSeason = pickYears[0]
     const rookieDraft = (drafts ?? []).find(
       d => String(d.season) === draftSeason && d.type !== 'auction'
     ) ?? null
@@ -50,7 +60,7 @@ export function useLeague() {
     })
 
     // Resolve pick ownership
-    const picksByRoster = resolvePickOwnership(tradedPicks, rosters, PICK_YEARS)
+    const picksByRoster = resolvePickOwnership(tradedPicks, rosters, pickYears)
 
     const waiverBudget = leagueInfo?.settings?.waiver_budget ?? 100
 
@@ -121,7 +131,7 @@ export function useLeague() {
       })
       const playerValue = allPlayers.reduce((s, p) => s + p.value, 0)
       const pickValue = ownedPicks.reduce((s, pk) => s + pk.value, 0)
-      const pickCapitalScore = computePickCapitalScore(ownedPicks, pickEntries)
+      const pickCapitalScore = computePickCapitalScore(ownedPicks, pickEntries, pickYears)
 
       const startersWithAge = allPlayers.filter(p => p.isStarter && !p.isIR && !p.isTaxi && p.age != null && !p.unranked)
       const avgStarterAge = startersWithAge.length > 0
@@ -159,8 +169,8 @@ export function useLeague() {
       ? allRosters.find(r => r.rosterId === myRosterId) ?? null
       : null
 
-    return { allRosters, myRoster, userMap, leagueInfo }
-  }, [sleeperData, fcValues, playerDB, myRosterId])
+    return { allRosters, myRoster, userMap, leagueInfo, pickYears }
+  }, [sleeperData, fcValues, playerDB, myRosterId, pickYears])
 
   // A Sleeper-only roster list for sign-in. Identity selection must never
   // depend on FantasyCalc — a values-API outage shouldn't lock the user out of
@@ -222,7 +232,7 @@ export function useLeague() {
   // so memoize it on its actual inputs.
   return useMemo(() => ({
     league, nflState, matchups, isOffseason, leagueInfo, tradeDeadline,
-    myRosterId,
+    myRosterId, pickYears,
     loading, error, retry, sleeperFetchedAt, fcFetchedAt, values: fcValues,
     // Per-source refresher for the drawer's granular Refresh coordinator —
     // resolves true/false on completion so it can tick ✓/✗ per source.
@@ -232,7 +242,7 @@ export function useLeague() {
     signInRosters, sleeperLoading, sleeperError, sleeperRetry,
   }), [
     league, nflState, matchups, isOffseason, leagueInfo, tradeDeadline,
-    myRosterId, loading, error, retry, sleeperFetchedAt, fcFetchedAt, fcValues,
+    myRosterId, pickYears, loading, error, retry, sleeperFetchedAt, fcFetchedAt, fcValues,
     signInRosters, sleeperLoading, sleeperError, sleeperRetry, fcRetry,
   ])
 }
