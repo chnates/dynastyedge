@@ -13,17 +13,26 @@ import { POS_CHIP_ACTIVE, POS_TAG as POS_TAGS } from '../../utils/positionColors
 
 const POSITION_FILTERS = ['All', 'QB', 'RB', 'WR', 'TE']
 
-// Layer 4's appeal, in the app's status colors: green = they have a clear
-// reason to say yes, amber = they don't. Never brand red — that is reserved
-// for "you" accents.
+// The appeal read, in the app's status colors: green = a clear reason to say
+// yes, amber = there isn't one. Never brand red — that is reserved for "you"
+// accents. The same scale grades both seats, so one tone map serves both.
 const APPEAL_TONE = { Strong: 'success', Fair: 'neutral', Weak: 'warning' }
 
-// Deliberately terser than partnerFit's own `summary`, which is written for the
+// Deliberately terser than the fit's own `summary`, which is written for the
 // Analyzer panel and truncates to nothing on a 390px card.
 const APPEAL_LINE = {
   Strong: 'clear reason for them to say yes',
   Fair:   'something here, but not compelling',
   Weak:   'little reason for them to say yes',
+}
+
+// The same read from my seat. The board graded every suggestion for the other
+// manager and said nothing about my own roster, which is what made it read as
+// though the app were negotiating against its owner.
+const MY_APPEAL_LINE = {
+  Strong: 'clear gain for your roster',
+  Fair:   'helps you, but not decisive',
+  Weak:   'little here for your roster',
 }
 
 // Session-scoped so drilling into the Analyzer and coming back keeps the
@@ -203,8 +212,27 @@ function TargetCard({ target, fairPackage, packagePending, showNeedTag, onTap })
               worth to the team being asked to accept it. A Weak here is real —
               nothing spare interests them at this price — so it says so rather
               than being hidden. */}
-          {fairPackage.appeal && (
+          {fairPackage.myAppeal && (
             <div className="flex items-center gap-1.5 min-w-0 pt-0.5">
+              <Badge tone={APPEAL_TONE[fairPackage.myAppeal] ?? 'neutral'} soft>
+                {fairPackage.myAppeal} for you
+              </Badge>
+              {/* A Weak here is almost always the price, not the player: the
+                  search's band is [0.9x, 1.15x] while `fairBand` calls fair
+                  ±5%, so a suggestion routinely lands a few points over. Say
+                  which, because "you'd pay 7% over fair" is a counter you can
+                  make and "little here for your roster" is not. */}
+              <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary truncate min-w-0">
+                {fairPackage.myAppeal === 'Weak' && fairPackage.myConcern
+                  ? fairPackage.myConcern.replace(/\.$/, '').replace(/^You'd be /, "you'd be ")
+                  : fairPackage.myStartersDelta > 0
+                    ? `your starters gain ${fairPackage.myStartersDelta.toLocaleString()}`
+                    : MY_APPEAL_LINE[fairPackage.myAppeal]}
+              </span>
+            </div>
+          )}
+          {fairPackage.appeal && (
+            <div className="flex items-center gap-1.5 min-w-0">
               <Badge tone={APPEAL_TONE[fairPackage.appeal] ?? 'neutral'} soft>
                 {fairPackage.appeal} for them
               </Badge>

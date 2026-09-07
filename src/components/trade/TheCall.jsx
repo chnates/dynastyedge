@@ -91,21 +91,27 @@ export default function TheCall({ analysis, verdict, bothSides, counterSuggestio
   if (!analysis) return null
   const vs = verdict ? VERDICT_STYLES[verdict.verdict] : null
 
-  const { filledNeeds, hurtStrengths, partnerFit, myRosterSpace, theirRosterSpace } = analysis
+  const { filledNeeds, hurtStrengths, myFit, partnerFit, myRosterSpace, theirRosterSpace } = analysis
 
-  // FOR YOU — the Roster Fit chips, condensed to one readable line.
+  // FOR YOU — the graded my-side read, then the Roster Fit chips as its detail.
+  // The row used to carry only the chips, so FOR THEM was the one seat in the
+  // panel that got a verdict-shaped answer. Same appeal engine, same words,
+  // same tone map as FOR THEM below — the seats read alike by construction.
   const youBits = [
     ...filledNeeds.map(p => `Fills ${p}`),
     ...hurtStrengths.map(p => `Weakens ${p}`),
   ]
-  const youText = youBits.length ? youBits.join(' · ') : 'Neutral positional impact'
-  const youTone = hurtStrengths.length
-    ? 'text-warning'
-    : filledNeeds.length ? 'text-success' : 'text-text-secondary dark:text-text-secondary'
+  const youDetail = youBits.length ? youBits.join(' · ') : 'Neutral positional impact'
+  const youText = myFit ? `${myFit.appeal} for you — ${youDetail}` : youDetail
+  const youTone = myFit
+    ? (myFit.appeal === 'Strong' ? 'text-success' : myFit.appeal === 'Weak' ? 'text-danger' : 'text-warning')
+    : hurtStrengths.length
+      ? 'text-warning'
+      : filledNeeds.length ? 'text-success' : 'text-text-secondary dark:text-text-secondary'
 
   // FOR THEM — the appeal band plus its sharpest objection or selling point.
   const themText = partnerFit
-    ? `${partnerFit.appeal} appeal${partnerFit.concerns?.[0] ? ` — ${partnerFit.concerns[0].replace(/\.$/, '')}` : partnerFit.reasons?.[0] ? ` — ${partnerFit.reasons[0].replace(/\.$/, '')}` : ''}`
+    ? `${partnerFit.appeal} for them${partnerFit.concerns?.[0] ? ` — ${partnerFit.concerns[0].replace(/\.$/, '')}` : partnerFit.reasons?.[0] ? ` — ${partnerFit.reasons[0].replace(/\.$/, '')}` : ''}`
     : null
   const themTone = partnerFit?.appeal === 'Strong'
     ? 'text-success'

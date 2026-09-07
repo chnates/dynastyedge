@@ -816,16 +816,31 @@ The league-relative deficit/surplus (top-N-by-value vs league average, shared
 with Trade Partner Finder) is still the yardstick for what counts as a "need";
 the lineup sim adds the "…and does this specific player actually start?" gate.
 
-**"Giving Up" depth context** (`analyzeTrade`'s `giveContext`, rendered as its
-own block under Roster Fit): so "what am I actually surrendering?" is concrete,
+**Depth context BOTH ways** (`analyzeTrade`'s `giveContext` + `getContext`,
+rendered as two blocks under Roster Fit): so "what am I actually surrendering?"
+is concrete,
 for every position I'm dealing from the panel shows my roster's positional
 pecking order by dynasty value — a mini depth chart marking the piece(s)
 leaving (`OUT`), who currently starts (`ST`, from the same `buildValueLineup`
 sim), and each dealt player's standing (e.g. "Gunnar Helm — your TE3 of 4 ·
 depth"). Grouped by position (dealing two TEs shows one chart), taxi/IR excluded
-(they can't start), capped at 6 rows. Unranked players show `—`. This is
-descriptive context, not a verdict input — it never changes the score, it just
-makes the roster cost legible before you confirm.
+(they can't start), capped at 6 rows. Unranked players show `—`.
+
+**"Coming In" is the same chart for the players I'm ACQUIRING** (2026-09-07,
+owner ask). The panel used to draw the full pecking order for every piece
+leaving and a one-line landing spot for every piece arriving — the roster cost
+was concrete and the roster gain was a sentence. `buildDepthContext` now takes a
+`marker` (`out` | `in`) and is called twice; the arrival is highlighted `IN` in
+success green, the departure `OUT` in amber. **`getContext` reads the POST-trade
+roster on purpose** — the arrival's rank has to count the players actually left
+at the position, so trading a WR for a WR still reads true (pinned by test; the
+pre-trade reading ranks him behind a player who is no longer on the team).
+Picks carry no position and are excluded, exactly as they are from the landing
+spots.
+
+Both charts are descriptive context, not a verdict input — they never change the
+score, they just make the roster cost and the roster gain legible before you
+confirm.
 
 **Layer 3 — Win window fit**
 Are you acquiring the right type of asset for where Nix Cage is now?
@@ -950,6 +965,49 @@ information the delta alone doesn't carry. Live effect on the 20-target board:
 `Strong` 7 → 5, which is the bar for "a clear reason to say yes" returning to
 two independent facts (they profit on value **and** their lineup improves).
 
+**ONE engine, both seats (`buildSideFit`) — 2026-09-07, owner ask.** Layer 4's
+body is now the seat-agnostic `buildSideFit(incoming, outgoing, roster,
+allRosters, opts)`, and `buildPartnerFit` is a thin wrapper passing
+`seat: 'them'` — so the partner read is unchanged **by construction**, not by
+inspection (pinned: `buildPartnerFit(…) deepEqual buildSideFit(…, {seat:'them'})`).
+`analyzeTrade` calls the same function a second time from my seat →
+**`myFit`**, carrying the same `appeal` / `summary` / `reasons` / `concerns` /
+`startersDelta`, plus `lineupNote` (the lineup sentence as its own field — it is
+the one measure the verdict gate quotes).
+
+- **Why.** The Analyzer graded the partner and nothing graded me. Every
+  suggestion read "Fair for them" while my own side was scattered across chips,
+  and `myStartersDelta` — the exact mirror of the number the partner was
+  credited with — **printed only when it was bad enough to downgrade a
+  verdict.** The engine mentioned my lineup only as bad news.
+- **`myFit` is DISPLAY ONLY.** It never enters `baseTradeVerdict` or either
+  gate: my side is already scored by Layers 1–3 plus the `myStartersDelta` gate,
+  and a second my-side score would charge the ladder twice. **Verified
+  byte-identical verdicts, reasoning strings, selected packages, partner appeal
+  and totals across the live 20-target board** — 0 differences on every
+  pre-existing field; pinned synthetically across the whole ladder too.
+- **Copy is spelled out per seat (`SEAT_VOICE`), not stitched from pronouns.**
+  The partner's sentences must stay byte-identical (the verdict gate quotes them
+  and `buildTradePitch` is built from them).
+- **My seat scores on the odds stance, theirs on the tier.** Layer 3 moved to
+  live playoff odds; the fit engine's pick lean reads a tier. My seat is passed
+  the `buying`/`selling` Layer 3 actually scored on, so two adjacent blocks
+  can't print different answers to one question.
+- **"Strong for me" is real but unreachable on the Targets board, and that is a
+  finding, not a bug.** Live: my-side appeal came back **17 Weak · 3 Fair · 0
+  Strong** on the 20 suggested packages — because `suggestFairPackage` searches
+  `[0.9×, 1.15×]` while `buildFairBand` calls fair **±5%**, so every suggestion
+  is priced 6–11% in the partner's favour and my seat takes a −1 on value that
+  their seat takes as +1. Swept across price, **8 of the first 8 targets reach
+  `Strong for you` at 58–94% of the target's value**, and a user-built trade
+  winning 8% on value renders `Fair for you`. The scale discriminates; the board
+  overpays. So the Targets card prints the sharpest my-side concern — *"Weak for
+  you · you'd be giving up 7% more value than you get back"* — because that is a
+  counter you can make. The band mismatch is filed as the next question for this
+  engine, **not** fixed in passing (narrowing it moves package selection
+  everywhere and `APPEAL_BONUS` was tuned at the current band). See
+  `docs/analysis/trade-my-side-read-2026-09.md`.
+
 **Layer 4 is exported as `buildPartnerFit` and shared with the recommenders.**
 `suggestFairPackage` scores its candidate packages with this exact function, so
 the package the app suggests and the appeal the Analyzer shows for it are
@@ -1038,10 +1096,16 @@ being viable at 390px. So:
 - **THE CALL** (`components/trade/TheCall.jsx`) — verdict + reasoning, the fair
   band, the counter with its Apply button, and three tappable summary rows
   (`FOR YOU` · `FOR THEM` · `ROSTER`) that scroll to their act. Injury alerts
-  ride directly beneath it.
-- **YOUR SIDE** (`#act-yours`) — raw value (+ scarcity flag), roster fit +
-  landing spots (+ weekly lineup), Giving Up depth chart, roster space, win
-  window.
+  ride directly beneath it. `FOR YOU` and `FOR THEM` both read
+  *"{appeal} for you/them — …"* off the one fit engine, so the two seats are
+  phrased alike (before 2026-09-07 only `FOR THEM` carried a graded read).
+- **YOUR SIDE** (`#act-yours`) — **"Is it good for you?"** (`myFit`'s badge,
+  summary and reasons — the mirror of "Would they want it?"), raw value
+  (+ scarcity flag), roster fit + landing spots (+ weekly lineup), **Coming In**
+  then **Giving Up** depth charts, roster space, win window. The reasons list
+  restates facts the blocks below also carry, deliberately: a `Weak` above a
+  "+3,702 lineup gain" reads as a contradiction until you can see it is paying
+  for a 6% overpay.
 - **THEIR SIDE** (`#act-theirs`) — Layer 4's appeal read, landing spots, their
   depth chart, their roster space, their recent moves, their weekly lineup and
   trajectory (which previously sat oddly under *my* win window).
@@ -1252,10 +1316,16 @@ Counter or Decline.** The app proposed and then argued with itself.
       measured what the lexicographic rule was costing. The earlier ruling is
       superseded, not forgotten — if the trade-off is ever revisited, the
       original objection is the thing to answer.
-- Each target card carries the read its package was chosen for — a `Badge`
-  (`Strong` green / `Fair` neutral / `Weak` amber, never brand red) plus one
-  short line. The board no longer hands over an offer without saying what it is
-  worth to the team being asked to accept it.
+- Each target card carries **both** reads — `{appeal} for you` above
+  `{appeal} for them`, each a `Badge` (`Strong` green / `Fair` neutral / `Weak`
+  amber, never brand red) plus one short line. The board no longer hands over an
+  offer without saying what it is worth to the team being asked to accept it —
+  or to mine. `myAppeal` / `mySummary` / `myStartersDelta` / `myConcern` are
+  computed **once, for the winning package, after phase 2 has chosen it**, so
+  the measured ranking (`APPEAL_BONUS − keep-pain`) is untouched and the
+  untruncated search stays affordable. A `Weak for you` prints the concern
+  itself — *"you'd be giving up 7% more value than you get back"* — because that
+  is a counter you can make; see Layer 4's note on why 17 of 20 read that way.
 - **The five negotiating signals stay out of all of this.** The rule the app
   runs on is *roster facts may score; second opinions describe* (owner call,
   2026-09-06) — one rule for verdicts and rankings alike. Layer 4 and movability
@@ -3238,7 +3308,7 @@ dynastyedge/
 │   │   │   ├── TradeBuilder.jsx
 │   │   │   ├── TradeVerdict.jsx
 │   │   │   ├── PartnerSelect.jsx    ← THE opponent picker (fit-grouped) — Analyzer + Targets
-│   │   │   ├── TheCall.jsx         ← THE Analyzer hero: verdict + fair band + the three act summaries
+│   │   │   ├── TheCall.jsx         ← THE Analyzer hero: verdict + fair band + the three act summaries (FOR YOU / FOR THEM both graded)
 │   │   │   ├── PartnerContextStrip.jsx ← THE partner intelligence strip — Analyzer + Targets
 │   │   │   └── WhatsFair.jsx        ← Targets: league-wide board + per-team scouting mode
 │   │   ├── lineup/                  ← rendered as "My Team" sub-tabs (no own layout)
@@ -3318,7 +3388,7 @@ dynastyedge/
 │   │   ├── roundColors.js       ← pick round color classes (PickBadge, TeamCard)
 │   │   ├── tierColors.js        ← win-window tier colors (badge + banner chips)
 │   │   ├── rankColors.js        ← gold/silver/bronze medal colors for rank ordinals
-│   │   ├── tradeAnalysis.js     ← trade scoring, verdict logic
+│   │   ├── tradeAnalysis.js     ← trade scoring, verdict logic; buildSideFit is ONE fit engine called from BOTH seats (buildPartnerFit = the `them` wrapper, myFit = my seat, display-only)
 │   │   ├── edgeBriefing.js      ← The Edge: signals, briefing items, GM line
 │   │   ├── managerAnalysis.js   ← manager scouting: ledgers, tendencies, draft grades
 │   │   ├── rosterAnalysis.js    ← positional strength, win window tiers, Targets ranking (need × value × movability)
@@ -3352,7 +3422,7 @@ dynastyedge/
 │   ├── build-plan-2026-09.md        ← owner-approved four-phase build plan (Sept 2026) — per-phase kickoff prompts, gates, and the four measured NOT-to-build decisions
 │   ├── project-status-2026-08.md    ← dated status snapshot (superseded by newer dated files)
 │   ├── repo-review-2026-07.md       ← full read-only audit + ranked backlog (all items landed)
-│   ├── analysis/                    ← model calibration + research notes (incl. optimizer-data-sources-2026-09.md: the Optimizer data-source feasibility study; asset-aging-and-pick-value-2026-09.md: THE keep-score calibration — player aging + pick realization)
+│   ├── analysis/                    ← model calibration + research notes (incl. optimizer-data-sources-2026-09.md: the Optimizer data-source feasibility study; asset-aging-and-pick-value-2026-09.md: THE keep-score calibration — player aging + pick realization; trade-my-side-read-2026-09.md: the one-engine-both-seats change + why "Strong for me" cannot appear on the Targets board)
 │   └── design/                      ← Phase 3 "Primetime Blackout" brief + reference render
 ├── tests/                       ← plain-Node test suite (node:test + node:assert/strict, zero deps)
 │   ├── fixtures/
@@ -3367,7 +3437,7 @@ dynastyedge/
 │   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
 │   ├── appVersion.test.mjs          ← reload URL: ?v= before the hash (HashRouter), encoding, null build id
 │   ├── tradeTargets.test.mjs        ← Targets ranking: deficit gate + value floor league-wide, team-scoped mode keeps depth (never empty), fillsNeed flag, and the movability TILT (band under 2×, spare depth outranks an equal-value untouchable, nothing ever hidden)
-│   ├── tradeAnalysis.test.mjs       ← Layer 3's basis swap (odds score the window in season, tier is the offseason fallback byte-for-byte, a bubble team gets a real read, the printed stance is the one that scored it), the `alternative` (now always HIGHER-appeal — the pricier road the cost-aware search passed over), the phase-2 trade-off (a Strong package costing more than APPEAL_BONUS loses to a Fair one; the fair band and protect threshold still bind), Layer 4's fills/lineup-gain scored ONCE, the my-lineup verdict gate (downgrades an Accept, never upgrades, never fires on noise), verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge, Layer 4 (a benched acquisition reads Weak however valued; the gate downgrades an Accept but never lifts a Decline; landing spots both directions; the pitch speaks from their side), buildPartnerFit's extraction contract (standalone == via analyzeTrade), and the two-phase package builder (phase 2 rejects the piece they have no use for, never unlocks a protected asset, reports no appeal without a partner)
+│   ├── tradeAnalysis.test.mjs       ← Layer 3's basis swap (odds score the window in season, tier is the offseason fallback byte-for-byte, a bubble team gets a real read, the printed stance is the one that scored it), the `alternative` (now always HIGHER-appeal — the pricier road the cost-aware search passed over), the phase-2 trade-off (a Strong package costing more than APPEAL_BONUS loses to a Fair one; the fair band and protect threshold still bind), Layer 4's fills/lineup-gain scored ONCE, the my-lineup verdict gate (downgrades an Accept, never upgrades, never fires on noise), verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge, Layer 4 (a benched acquisition reads Weak however valued; the gate downgrades an Accept but never lifts a Decline; landing spots both directions; the pitch speaks from their side), buildPartnerFit's extraction contract (standalone == via analyzeTrade) and its wrapper contract (== buildSideFit from the `them` seat), the my-side read (myFit's facts equal Layer 2's own, it speaks in the second person, and it can NEVER move a verdict — swapped for its opposite or removed, the whole ladder is deepEqual), the two depth charts (marker in/out, getContext read off the POST-trade roster so a WR-for-WR chart stays true), the package's my-side read (present without a partner roster, null without a league, computed after the choice so it never reorders), and the two-phase package builder (phase 2 rejects the piece they have no use for, never unlocks a protected asset, reports no appeal without a partner)
 │   ├── tradeContext.test.mjs        ← the five negotiating signals (fair band, scarcity, roster space, weekly impact, partner activity) — and the contract that NONE of them may move the verdict
 │   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
 │   ├── lineupBuild.test.mjs         ← slot-fill order (singles → FLEX → SFLX), IR/taxi excluded, who-starts identity
@@ -3393,8 +3463,8 @@ honestly:** instead of "cannot find module" it prints `# tests 152 / # pass 145 
 transitively importing `react` (`tradeAnalysis.js` → `recommendations.js` →
 `useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
 `draftLive` loading their hooks) — the file fails to load, so its tests never
-run and the count silently drops from **269** to 152. `npm run build` in the
-same state fails with `sh: 1: vite: not found`. **If the test count isn't 269,
+run and the count silently drops from **275** to 152. `npm run build` in the
+same state fails with `sh: 1: vite: not found`. **If the test count isn't 275,
 run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-07
 by renaming `node_modules` aside; re-measure them whenever the suite grows —
 the pair had drifted four times before this, 178/130, 177/115, 219/136 and
@@ -3402,7 +3472,7 @@ the pair had drifted four times before this, 178/130, 177/115, 219/136 and
 re-measurement. Note the two counts do **not** always move together: the
 2026-09-07 trade-engine work added 6 tests to `tradeAnalysis.test.mjs`, which
 is already one of the 7 files that cannot load without `node_modules`, so the
-full count went 258 → 264 → 269 while the broken-state count stayed at **152**. Only
+full count went 258 → 264 → 269 → **275** while the broken-state count stayed at **152**. Only
 tests added to a file outside those 7 move the second number.)
 
 **Tests:** `npm test` runs the `tests/` suite — plain `.mjs` scripts on Node's

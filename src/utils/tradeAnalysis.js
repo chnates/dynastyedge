@@ -40,14 +40,18 @@ function pickLabel(pick) {
 }
 
 // The positional pecking order on a roster by dynasty value, grouped by the
-// positions being dealt from and marking each departing piece. Shared by both
-// directions of the trade: my "Giving Up" chart and the partner's chart for the
-// player I'm asking them to send. Taxi/IR excluded — they can't start.
-export function buildDepthContext(rosterPlayers, dealtPlayers, starterIds) {
-  const positions = [...new Set((dealtPlayers ?? []).map(p => p.position).filter(Boolean))]
+// positions in play, marking the piece(s) this trade moves. Shared by BOTH
+// directions of a trade and by both seats: my "Giving Up" chart (marker `out`,
+// read off the PRE-trade roster), my "Coming In" chart (marker `in`, read off
+// the POST-trade roster — the only reading that stays true when a WR goes out
+// and a WR comes back), and the partner's chart for the player I'm asking them
+// to send. Taxi/IR excluded — they can't start.
+export function buildDepthContext(rosterPlayers, markedPlayers, starterIds, opts = {}) {
+  const { marker = 'out' } = opts
+  const positions = [...new Set((markedPlayers ?? []).map(p => p.position).filter(Boolean))]
   return positions.map(pos => {
-    const dealtIds = new Set(
-      dealtPlayers.filter(p => p.position === pos).map(p => String(p.sleeperId))
+    const markedIds = new Set(
+      markedPlayers.filter(p => p.position === pos).map(p => String(p.sleeperId))
     )
     const peers = (rosterPlayers ?? [])
       .filter(q => q.position === pos && !q.isIR && !q.isTaxi)
@@ -57,17 +61,17 @@ export function buildDepthContext(rosterPlayers, dealtPlayers, starterIds) {
         value: q.value || 0,
         unranked: q.unranked,
         isStarter: starterIds.has(String(q.sleeperId)),
-        isDealt: dealtIds.has(String(q.sleeperId)),
+        isMarked: markedIds.has(String(q.sleeperId)),
       }))
       .sort((a, b) => b.value - a.value)
-    const dealt = peers
-      .filter(q => q.isDealt)
+    const marked = peers
+      .filter(q => q.isMarked)
       .map(q => ({
         name: q.name,
         posRank: peers.findIndex(x => x.sleeperId === q.sleeperId) + 1,
         isStarter: q.isStarter,
       }))
-    return { position: pos, count: peers.length, peers, dealt }
+    return { position: pos, count: peers.length, marker, peers, marked }
   })
 }
 
@@ -114,194 +118,274 @@ function pointsLineupTotal(players, projMap) {
   return selectOptimalStarters(items).total
 }
 
-// ── Layer 4: their side ─────────────────────────────────────────────────────
-// Layer 2 run on the PARTNER's roster: does this deal do anything for the team
-// being asked to accept it?
+// ── Seat voice ──────────────────────────────────────────────────────────────
+// The fit engine below is seat-agnostic, but its reasons are prose and prose
+// has a person. Every sentence is spelled out per seat rather than assembled
+// from pronoun fragments: the partner's copy has to stay byte-identical (the
+// verdict gate quotes it and the pitch is built from it), and stitching
+// "they"/"you" into shared templates is exactly how a sentence ends up
+// grammatical on one side and not the other.
+const SEAT_VOICE = {
+  them: {
+    valueAhead:   pct => `They come out ${pct}% ahead on raw dynasty value.`,
+    valueBehind:  pct => `They'd be giving up ${pct}% more value than they get back.`,
+    benchedStack: (names, positions) => `${names} wouldn't crack their lineup — they're already above league average at ${positions}.`,
+    marginalStack: positions => `They're already above league average at ${positions} — this is a marginal upgrade for them, not a hole filled.`,
+    lineupGain:   n => `Their best starting lineup gains ${n} in value.`,
+    lineupLoss:   n => `Their best starting lineup loses ${n} in value.`,
+    lineupFlat:   () => "Nothing you're sending changes their starting lineup.",
+    fills:        positions => `It covers their ${positions} deficit with a player who starts for them right away.`,
+    weakens:      positions => `Making it drops them below league average at ${positions}.`,
+    picksWanted:  plural => `They're rebuilding — the ${plural ? 'picks' : 'pick'} you're offering is what they're collecting.`,
+    picksOnly:    () => "They're contending and you're offering only picks — they want win-now help.",
+    summary: {
+      Strong: 'Their roster gives them a clear reason to say yes.',
+      Fair:   "There's something here for them, but it isn't compelling on its own.",
+      Weak:   'Their roster gives them little reason to take this.',
+    },
+  },
+  you: {
+    valueAhead:   pct => `You come out ${pct}% ahead on raw dynasty value.`,
+    valueBehind:  pct => `You'd be giving up ${pct}% more value than you get back.`,
+    benchedStack: (names, positions) => `${names} wouldn't crack your lineup — you're already above league average at ${positions}.`,
+    marginalStack: positions => `You're already above league average at ${positions} — this is a marginal upgrade, not a hole filled.`,
+    lineupGain:   n => `Your best starting lineup gains ${n} in value.`,
+    lineupLoss:   n => `Your best starting lineup loses ${n} in value.`,
+    lineupFlat:   () => "Nothing you're getting changes your starting lineup.",
+    fills:        positions => `It covers your ${positions} deficit with a player who starts for you right away.`,
+    weakens:      positions => `Making it drops you below league average at ${positions}.`,
+    picksWanted:  plural => `The ${plural ? 'picks' : 'pick'} coming back is the asset your window calls for.`,
+    picksOnly:    () => "You're buying and getting only picks — your window calls for win-now help.",
+    summary: {
+      Strong: 'Your roster gives you a clear reason to do this.',
+      Fair:   "There's something here for you, but it isn't compelling on its own.",
+      Weak:   'Your roster gives you little reason to take this.',
+    },
+  },
+}
+
+// ── The fit engine — ONE function, either seat ──────────────────────────────
+// "Does this deal do anything for the roster receiving `incomingAssets`?"
+// Layer 2's question, asked of whichever team you point it at: what the trade
+// does to that roster's positional standing against league average, and to its
+// optimal starting lineup.
 //
-// Exported because the RECOMMENDERS need it too. `suggestFairPackage` scores its
-// candidate packages with this exact function, so the package the app suggests
-// and the appeal the Analyzer will show it are computed by one piece of code and
-// cannot disagree — the "app proposes, then argues with itself" loop (OPEN-6).
-// It is extracted rather than reached by calling analyzeTrade because the
-// package search runs it hundreds of times per board: measured on the live
-// league, scoring the full candidate set through analyzeTrade takes 1.5s against
-// 78ms through this alone, and the rest of analyzeTrade (trajectory, scarcity,
-// weekly points, the draft nudge) answers questions a package search never asks.
+// It is called TWICE per analysis — once from the partner's seat (Layer 4,
+// `buildPartnerFit` below) and once from mine (`myFit`). Symmetry by
+// construction: the two seats are the same code, so they cannot drift, and the
+// panel can answer "is this strong for ME?" in the same words it has always
+// used for them. The Analyzer used to grade only the partner, which left every
+// suggestion reading "Fair for them" with nothing said about my own roster.
+//
+// It is explicitly NOT a prediction that anyone will accept. Per-manager
+// behavioral profiling was pre-registered, tested on this league's full
+// 4-season corpus (95 trades / 176 sides) and DISCONFIRMED — the own-manager
+// profile scored *below* the league baseline
+// (docs/analysis/trade-structure-stability-2026-08.md, standing ruling). So
+// this models the roster, never the human, and the copy says so.
+//
+// Exported because the RECOMMENDERS need it too. `suggestFairPackage` scores
+// its candidate packages with this exact function, so the package the app
+// suggests and the appeal the Analyzer will show it are computed by one piece
+// of code and cannot disagree — the "app proposes, then argues with itself"
+// loop (OPEN-6). It is extracted rather than reached by calling analyzeTrade
+// because the package search runs it hundreds of times per board: measured on
+// the live league, scoring the full candidate set through analyzeTrade takes
+// 1.5s against 78ms through this alone, and the rest of analyzeTrade
+// (trajectory, scarcity, weekly points, the draft nudge) answers questions a
+// package search never asks.
 //
 // leagueAverages / winWindowTiers are accepted so a caller in a loop computes
-// them once; both are derived from allRosters when omitted.
-export function buildPartnerFit(giveAssets, getAssets, opponentRoster, allRosters, opts = {}) {
-  if (!opponentRoster || !allRosters?.length) return null
+// them once; both are derived from allRosters when omitted, and injecting them
+// can never change the answer.
+export function buildSideFit(incomingAssets, outgoingAssets, roster, allRosters, opts = {}) {
+  if (!roster || !allRosters?.length) return null
 
-  const { leagueAverages: injectedAverages = null, winWindowTiers = null, partnerActivity = null } = opts
+  const {
+    leagueAverages: injectedAverages = null,
+    winWindowTiers = null,
+    partnerActivity = null,
+    seat = 'them',
+    // 'buy' | 'sell' | null — overrides the tier-derived lean. My seat passes
+    // the stance Layer 3 actually scored on (live playoff odds in season), so
+    // the two layers can't print different answers to one question.
+    stance = null,
+  } = opts
+
+  const voice = SEAT_VOICE[seat] ?? SEAT_VOICE.them
+  // Value winners are named in ABSOLUTE terms ('you' / 'them'), not relative to
+  // the seat — buildTradePitch reads `pf.valueWinner === 'them'` and means the
+  // other manager by it.
+  const sideLabel  = seat === 'you' ? 'you' : 'them'
+  const otherLabel = seat === 'you' ? 'them' : 'you'
+
   const leagueAverages = injectedAverages ?? computeLeagueAverages(allRosters)
 
-  const getPlayers  = getAssets.filter(a => a.type === 'player')
-  const givePlayers = giveAssets.filter(a => a.type === 'player')
-  const givePicks   = giveAssets.filter(a => a.type === 'pick')
+  const incomingPlayers = incomingAssets.filter(a => a.type === 'player')
+  const incomingPicks   = incomingAssets.filter(a => a.type === 'pick')
+  const outgoingPlayers = outgoingAssets.filter(a => a.type === 'player')
 
-  const giveTotal = giveAssets.reduce((s, a) => s + (a.value || 0), 0)
-  const getTotal  = getAssets.reduce((s, a)  => s + (a.value || 0), 0)
+  const incomingTotal = incomingAssets.reduce((s, a) => s + (a.value || 0), 0)
+  const outgoingTotal = outgoingAssets.reduce((s, a) => s + (a.value || 0), 0)
   // Measured on the larger side, so the read is symmetric with Layer 1's —
   // only the winner flips between the two seats.
-  const valuePct  = Math.round(Math.abs(getTotal - giveTotal) / Math.max(giveTotal, getTotal, 1) * 100)
+  const valuePct = Math.round(Math.abs(outgoingTotal - incomingTotal) / Math.max(incomingTotal, outgoingTotal, 1) * 100)
 
-  // Layer 2 run on the PARTNER's roster: does this deal do anything for the
-  // team being asked to accept it? Everything here is deterministic roster
-  // logic — what the trade does to their positional standing against league
-  // average and to their optimal starting lineup.
-  //
-  // It is explicitly NOT a prediction that they will accept. Per-manager
-  // behavioral profiling was pre-registered, tested on this league's full
-  // 4-season corpus (95 trades / 176 sides) and DISCONFIRMED — the own-manager
-  // profile scored *below* the league baseline
-  // (docs/analysis/trade-structure-stability-2026-08.md, standing ruling). So
-  // this models the roster, never the human, and the copy says so.
   const tiers = winWindowTiers ?? assignWinWindowTiers(allRosters)
-  const theirTier         = tiers[opponentRoster.rosterId] ?? 'Middle'
-  const theirDeltas       = getPositionalDeltas(opponentRoster, leagueAverages)
-  const theirBeforeLineup = buildValueLineup(opponentRoster.players)
+  const sideTier   = tiers[roster.rosterId] ?? 'Middle'
+  const sideDeltas = getPositionalDeltas(roster, leagueAverages)
+  const beforeLineup = buildValueLineup(roster.players)
 
-  const getIds = new Set(getPlayers.map(p => String(p.sleeperId)))
-  const theirAfterPlayers = [
-    ...opponentRoster.players.filter(p => !getIds.has(String(p.sleeperId))),
-    ...givePlayers.map(addAsPlayer),
+  const outgoingIds = new Set(outgoingPlayers.map(p => String(p.sleeperId)))
+  const afterPlayers = [
+    ...roster.players.filter(p => !outgoingIds.has(String(p.sleeperId))),
+    ...incomingPlayers.map(addAsPlayer),
   ]
-  const theirAfterLineup = buildValueLineup(theirAfterPlayers)
-  const theirAfterDeltas = getPositionalDeltas({ players: theirAfterPlayers }, leagueAverages)
+  const afterLineup = buildValueLineup(afterPlayers)
+  const afterDeltas = getPositionalDeltas({ players: afterPlayers }, leagueAverages)
 
-  // Where what they'd RECEIVE lands on their chart, and where what they'd SEND
-  // currently sits on it — the two halves of "what does this look like to you?"
-  const theirLandingSpots = buildLandingSpots(
-    givePlayers.map(addAsPlayer), theirAfterPlayers, theirAfterLineup
-  )
-  const theirGiveContext = buildDepthContext(
-    opponentRoster.players, getPlayers, theirBeforeLineup.starterIds
-  )
+  // Where what this side would RECEIVE lands on their chart, and where what
+  // they'd SEND currently sits on it — the two halves of "what does this look
+  // like from here?"
+  const landingSpots = buildLandingSpots(incomingPlayers.map(addAsPlayer), afterPlayers, afterLineup)
+  const giveContext  = buildDepthContext(roster.players, outgoingPlayers, beforeLineup.starterIds, { marker: 'out' })
 
   // The single honest measure of "does this help them": the change in the value
   // of their best startable lineup. A player who only stacks their bench moves
   // this by 0, however much he's worth.
-  const theirStartersDelta = Math.round(theirAfterLineup.startingValue - theirBeforeLineup.startingValue)
+  const startersDelta = Math.round(afterLineup.startingValue - beforeLineup.startingValue)
 
-  const theirFills  = []  // a deficit position an arriving player would actually start at
-  const theirStacks = []  // arriving at a position they're already above league average
-  theirLandingSpots.forEach(l => {
-    const d = theirDeltas[l.position] ?? 0
-    if (d < 0 && l.starts && !theirFills.includes(l.position)) theirFills.push(l.position)
-    if (d > 0 && !theirStacks.includes(l.position)) theirStacks.push(l.position)
+  const fills  = []  // a deficit position an arriving player would actually start at
+  const stacks = []  // arriving at a position they're already above league average
+  landingSpots.forEach(l => {
+    const d = sideDeltas[l.position] ?? 0
+    if (d < 0 && l.starts && !fills.includes(l.position)) fills.push(l.position)
+    if (d > 0 && !stacks.includes(l.position)) stacks.push(l.position)
   })
 
-  // Positions the trade actually costs them — the same test Layer 2 applies to
-  // me, so "they can't replace him" reads consistently in both directions.
-  const theirWeakens = []
-  getPlayers.forEach(p => {
+  // Positions the trade actually costs this side — the same test applied in
+  // both directions, so "they can't replace him" reads consistently either way.
+  const weakens = []
+  outgoingPlayers.forEach(p => {
     const pos = p.position
     if (!pos) return
-    if (theirAfterDeltas[pos] < 0 && theirAfterDeltas[pos] < theirDeltas[pos] && !theirWeakens.includes(pos))
-      theirWeakens.push(pos)
+    if (afterDeltas[pos] < 0 && afterDeltas[pos] < sideDeltas[pos] && !weakens.includes(pos))
+      weakens.push(pos)
   })
 
-  // Raw value from their seat. valuePct is measured on the larger side, so it's
+  // Raw value from this seat. valuePct is measured on the larger side, so it's
   // symmetric — only the winner flips.
-  const theirValueDiff   = giveTotal - getTotal
-  const theirValueWinner = valuePct <= 5 ? 'even' : theirValueDiff > 0 ? 'them' : 'you'
+  const valueDiff   = incomingTotal - outgoingTotal
+  const valueWinner = valuePct <= 5 ? 'even' : valueDiff > 0 ? sideLabel : otherLabel
 
-  // Reasons render in order; `partnerConcerns` is the negative subset, so the
-  // verdict gate can quote the most specific objection rather than whichever
-  // line happened to land first.
-  const partnerReasons  = []
-  const partnerConcerns = []
+  // Reasons render in order; `concerns` is the negative subset, so the verdict
+  // gate can quote the most specific objection rather than whichever line
+  // happened to land first.
+  const reasons  = []
+  const concerns = []
   let appealScore = 0
-  const against = txt => { partnerReasons.push(txt); partnerConcerns.push(txt) }
+  const against = txt => { reasons.push(txt); concerns.push(txt) }
 
-  if (theirValueWinner === 'them') {
+  if (valueWinner === sideLabel) {
     appealScore += 1
-    partnerReasons.push(`They come out ${valuePct}% ahead on raw dynasty value.`)
-  } else if (theirValueWinner === 'you') {
+    reasons.push(voice.valueAhead(valuePct))
+  } else if (valueWinner === otherLabel) {
     appealScore -= 1
-    against(`They'd be giving up ${valuePct}% more value than they get back.`)
+    against(voice.valueBehind(valuePct))
   }
 
-  // Arriving into a position they're already strong at. This scores against the
-  // deal ONLY when the player can't crack their lineup — that's a fact the value
-  // total hides entirely. When he does start, the upgrade is merely marginal,
-  // and `theirStartersDelta` already measures exactly how marginal; penalising
-  // it here too would charge the same fact twice and would put the weaker of
-  // the two sentences in front of the verdict gate.
-  const benchedForThem = theirLandingSpots.filter(l => theirStacks.includes(l.position) && !l.starts)
-  if (theirFills.length === 0 && benchedForThem.length > 0) {
+  // Arriving into a position this side is already strong at. This scores
+  // against the deal ONLY when the player can't crack the lineup — that's a
+  // fact the value total hides entirely. When he does start, the upgrade is
+  // merely marginal, and `startersDelta` already measures exactly how marginal;
+  // penalising it here too would charge the same fact twice and would put the
+  // weaker of the two sentences in front of the verdict gate.
+  const benched = landingSpots.filter(l => stacks.includes(l.position) && !l.starts)
+  if (fills.length === 0 && benched.length > 0) {
     appealScore -= 1
-    against(`${joinAnd(benchedForThem.map(b => b.name))} wouldn't crack their lineup — they're already above league average at ${joinAnd([...new Set(benchedForThem.map(b => b.position))])}.`)
-  } else if (theirFills.length === 0 && theirStacks.length > 0) {
-    partnerReasons.push(`They're already above league average at ${joinAnd(theirStacks)} — this is a marginal upgrade for them, not a hole filled.`)
+    against(voice.benchedStack(joinAnd(benched.map(b => b.name)), joinAnd([...new Set(benched.map(b => b.position))])))
+  } else if (fills.length === 0 && stacks.length > 0) {
+    reasons.push(voice.marginalStack(joinAnd(stacks)))
   }
 
-  if (theirStartersDelta > 0) {
+  // The lineup sentence is kept as its own field too: it is the one measure the
+  // verdict gate quotes, and a surface that wants only that fact shouldn't have
+  // to re-derive the wording from `startersDelta`.
+  let lineupNote = null
+  if (startersDelta > 0) {
     appealScore += 1
-    partnerReasons.push(`Their best starting lineup gains ${theirStartersDelta.toLocaleString()} in value.`)
-  } else if (theirStartersDelta < 0) {
+    lineupNote = voice.lineupGain(startersDelta.toLocaleString())
+    reasons.push(lineupNote)
+  } else if (startersDelta < 0) {
     appealScore -= 1
-    against(`Their best starting lineup loses ${Math.abs(theirStartersDelta).toLocaleString()} in value.`)
-  } else if (givePlayers.length > 0) {
-    partnerReasons.push("Nothing you're sending changes their starting lineup.")
+    lineupNote = voice.lineupLoss(Math.abs(startersDelta).toLocaleString())
+    against(lineupNote)
+  } else if (incomingPlayers.length > 0) {
+    lineupNote = voice.lineupFlat()
+    reasons.push(lineupNote)
   }
 
   // A filled deficit and a lineup gain are ONE fact, not two. A "fill" is
-  // defined as an arriving player who STARTS at a position they're below
-  // average in — which is precisely what raises `theirStartersDelta`. Scoring
-  // both charged a single event the 2 points that mean `Strong`, and it was
-  // the same double-count already removed on the negative side (the `stacks`
-  // branch above says so in as many words). So the point is awarded once, by
-  // the lineup delta, and the fill only adds its own point when the lineup
-  // delta did NOT already score it. The sentence still renders either way —
-  // naming WHERE the hole is, is information the delta alone doesn't carry.
-  if (theirFills.length > 0) {
-    if (theirStartersDelta <= 0) appealScore += 1
-    partnerReasons.push(`It covers their ${joinAnd(theirFills)} deficit with a player who starts for them right away.`)
+  // defined as an arriving player who STARTS at a position the side is below
+  // average in — which is precisely what raises `startersDelta`. Scoring both
+  // charged a single event the 2 points that mean `Strong`, and it was the same
+  // double-count already removed on the negative side (the `stacks` branch
+  // above says so in as many words). So the point is awarded once, by the
+  // lineup delta, and the fill only adds its own point when the lineup delta
+  // did NOT already score it. The sentence still renders either way — naming
+  // WHERE the hole is, is information the delta alone doesn't carry.
+  if (fills.length > 0) {
+    if (startersDelta <= 0) appealScore += 1
+    reasons.push(voice.fills(joinAnd(fills)))
   }
 
-  if (theirWeakens.length > 0) {
+  if (weakens.length > 0) {
     appealScore -= 1
-    against(`Making it drops them below league average at ${joinAnd(theirWeakens)}.`)
+    against(voice.weakens(joinAnd(weakens)))
   }
 
-  // Win-window lean on picks — the mirror of Layer 3's read, from their seat.
-  if (givePicks.length > 0) {
-    if (theirTier === 'Rebuilding') {
+  // Win-window lean on picks — Layer 3's read, from this seat.
+  const lean = stance ?? (sideTier === 'Rebuilding' ? 'sell' : sideTier === 'Contending' ? 'buy' : null)
+  if (incomingPicks.length > 0) {
+    if (lean === 'sell') {
       appealScore += 1
-      partnerReasons.push(`They're rebuilding — the ${givePicks.length > 1 ? 'picks' : 'pick'} you're offering is what they're collecting.`)
-    } else if (theirTier === 'Contending' && givePlayers.length === 0) {
+      reasons.push(voice.picksWanted(incomingPicks.length > 1))
+    } else if (lean === 'buy' && incomingPlayers.length === 0) {
       appealScore -= 1
-      against("They're contending and you're offering only picks — they want win-now help.")
+      against(voice.picksOnly())
     }
   }
 
   const appeal = appealScore >= 2 ? 'Strong' : appealScore >= 0 ? 'Fair' : 'Weak'
-  const APPEAL_SUMMARY = {
-    Strong: 'Their roster gives them a clear reason to say yes.',
-    Fair:   "There's something here for them, but it isn't compelling on its own.",
-    Weak:   'Their roster gives them little reason to take this.',
-  }
 
   return {
-    afterPlayers: theirAfterPlayers,
-    tier: theirTier,
-    deltas: theirDeltas,
-    valueWinner: theirValueWinner,
-    startersDelta: theirStartersDelta,
-    fills: theirFills,
-    stacks: theirStacks,
-    weakens: theirWeakens,
-    landingSpots: theirLandingSpots,
-    giveContext: theirGiveContext,
+    afterPlayers,
+    tier: sideTier,
+    deltas: sideDeltas,
+    valueWinner,
+    startersDelta,
+    lineupNote,
+    fills,
+    stacks,
+    weakens,
+    landingSpots,
+    giveContext,
     appeal,
     appealScore,
-    summary: APPEAL_SUMMARY[appeal],
-    reasons: partnerReasons,
-    concerns: partnerConcerns,
+    summary: voice.summary[appeal],
+    reasons,
+    concerns,
     activity: partnerActivity,
   }
+}
+
+// ── Layer 4: their side ─────────────────────────────────────────────────────
+// The fit engine pointed at the PARTNER: does this deal do anything for the
+// team being asked to accept it? A thin wrapper so the argument order still
+// reads in MY terms (what I give, what I get) at every existing call site —
+// what I give is what arrives for them.
+export function buildPartnerFit(giveAssets, getAssets, opponentRoster, allRosters, opts = {}) {
+  return buildSideFit(giveAssets, getAssets, opponentRoster, allRosters, { ...opts, seat: 'them' })
 }
 
 export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, allRosters, opts = {}) {
@@ -363,7 +447,7 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
   // positional pecking order by dynasty value, marking the piece(s) leaving and
   // who starts. Grouped by position so dealing two players at one spot shows one
   // depth chart. Taxi/IR excluded (they can't start), matching the lineup sim.
-  const giveContext = buildDepthContext(myRoster.players, givePlayers, beforeLineup.starterIds)
+  const giveContext = buildDepthContext(myRoster.players, givePlayers, beforeLineup.starterIds, { marker: 'out' })
 
   // A need is filled only by a player who (a) starts post-trade and (b) plays a
   // position where I'm below league average today.
@@ -589,6 +673,33 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
   // My side's mirror: where the players I'm ACQUIRING land on my own chart.
   const myLandingSpots = buildLandingSpots(getPlayers.map(addAsPlayer), afterPlayers, afterLineup)
 
+  // "What am I getting?" — the mirror of `giveContext`, and the same chart.
+  // Read off the POST-trade roster on purpose: the arriving player's rank has
+  // to count the players actually left at the position, so trading a WR for a
+  // WR still reads true. Picks carry no position and are excluded, exactly as
+  // they are from the landing spots.
+  const getContext = buildDepthContext(
+    afterPlayers, getPlayers.map(addAsPlayer), afterLineup.starterIds, { marker: 'in' }
+  )
+
+  // MY side, graded by the engine that grades theirs — one function, both
+  // seats, so the two can never drift and the panel can finally say what a
+  // trade is worth to ME in the same words it has always used for them.
+  //
+  // DISPLAY ONLY. It never enters the verdict ladder or either gate: my side is
+  // already scored by Layers 1–3 plus the `myStartersDelta` gate, and a second
+  // my-side score would charge the ladder twice for facts it already weighs.
+  // Verified byte-identical verdicts across the live target board — see
+  // docs/analysis/trade-my-side-read-2026-09.md §2.
+  const myFit = buildSideFit(getAssets, giveAssets, myRoster, allRosters, {
+    leagueAverages, winWindowTiers, seat: 'you',
+    // The lean Layer 3 actually scored on — live playoff odds in season, the
+    // win-window tier in the offseason. Without it the my-side pick lean would
+    // read off the tier while the layer directly above it read off the odds,
+    // and the panel would print two answers to one question.
+    stance: buying ? 'buy' : selling ? 'sell' : null,
+  })
+
   // ── The negotiating instruments (all descriptive — none moves the verdict) ──
   //
   // Owner call 2026-09-06: verdict provenance stays raw value / lineup-sim fit /
@@ -669,8 +780,8 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
     giveTotal, getTotal, valueDiff, valuePct, valueWinner,
     filledNeeds, hurtStrengths, fitScore,
     myStartersDelta, myLineupMaterial,
-    benchAcquisitions, starterDepartures, benchNote, starterLossNote, giveContext,
-    myLandingSpots, partnerFit,
+    benchAcquisitions, starterDepartures, benchNote, starterLossNote, giveContext, getContext,
+    myLandingSpots, partnerFit, myFit,
     fairBand, scarcity, myRosterSpace, theirRosterSpace, weeklyImpact,
     myTier, windowScore, windowNote, windowBasis, myDeltas,
     playoffPct, oddsStance, oddsNote, oddsTone,
@@ -821,7 +932,7 @@ export function buildTradePitch(analysis, opts = {}) {
 
   // 3. Why the piece I'm asking for is one they can spare (or honestly can't).
   pf.giveContext.forEach(g => {
-    g.dealt.forEach(d => {
+    g.marked.forEach(d => {
       const spare = !pf.weakens.includes(g.position)
       bullets.push(spare
         ? `${d.name} is your ${g.position}${d.posRank} of ${g.count} — you stay at or above league average at ${g.position} without him.`
@@ -1230,10 +1341,27 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
     const assets = best.idxs.map(i => available[i])
     const gapPct = Math.round(Math.abs(best.total - targetValue) / targetValue * 100)
     const fit = best.partnerFit ?? null
+    // The MY-side read for the package actually chosen. The board used to grade
+    // every suggestion "Fair for them" and say nothing at all about my own
+    // roster, which read as the app negotiating against its owner.
+    //
+    // It does NOT reorder anything: phase 2's ranking (APPEAL_BONUS − keep-pain)
+    // is untouched and still the measured one, and this is computed once, for
+    // the winner only — so the untruncated search stays affordable. No playoff
+    // odds reach this function, so the lean falls back to my win-window tier,
+    // the same fallback the Analyzer uses in the offseason.
+    const mine = allRosters?.length
+      ? buildSideFit([{ ...targetPlayer, type: 'player' }], assets, myRoster, allRosters, { seat: 'you' })
+      : null
     return {
       assets, totalValue: best.total, gapPct,
       over: best.total >= targetValue,
       rationale: packageRationale(assets, ctx),
+      // What this package is worth to MY roster — the counterpart to `appeal`.
+      myAppeal: mine?.appeal ?? null,
+      mySummary: mine?.summary ?? null,
+      myStartersDelta: mine?.startersDelta ?? null,
+      myConcern: mine?.concerns?.[0] ?? null,
       // The partner read this package was CHOSEN for, so a surface showing the
       // suggestion can show what it's worth to them instead of implying it's
       // agreeable. Null when there's no partner roster to read.

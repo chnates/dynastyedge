@@ -16,7 +16,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { analyzeTrade, getTradeVerdict, getCounterSuggestion, buildTradePitch, buildPartnerFit, suggestFairPackage, APPEAL_BONUS } from '../src/utils/tradeAnalysis.js'
+import { analyzeTrade, getTradeVerdict, getCounterSuggestion, buildTradePitch, buildPartnerFit, buildSideFit, suggestFairPackage, APPEAL_BONUS } from '../src/utils/tradeAnalysis.js'
 import { computeLeagueAverages, assignWinWindowTiers } from '../src/utils/rosterAnalysis.js'
 import { buildGivabilityContext, assetKeepScore, PROTECT_THRESHOLD } from '../src/utils/recommendations.js'
 
@@ -334,9 +334,11 @@ test('Layer 3: draft-grade nudge keys on HIT RATE, only when acquiring picks wit
   assert.equal(noPick.draftNote, null, 'no acquired pick → no draft nudge')
 })
 
-// giveContext — "what am I giving up": the positional pecking order on my roster
-// for every position I'm dealing from, marking the piece(s) leaving, ranked by
-// dynasty value, with who starts (buildValueLineup) and taxi/IR excluded.
+// giveContext / getContext — the same depth chart in both directions: the
+// positional pecking order on my roster for every position the trade touches,
+// marking the piece(s) moving, ranked by dynasty value, with who starts
+// (buildValueLineup) and taxi/IR excluded. `giveContext` reads the PRE-trade
+// roster (marker `out`), `getContext` the POST-trade one (marker `in`).
 test('giveContext: dealt player carries his positional rank + the roster pecking order', () => {
   // My roster: 3 TEs (value gaps so ranks are unambiguous) behind enough RB/WR
   // to fill every FLEX + Superflex, so only Best TE starts and Gunnar Helm (TE2)
@@ -377,13 +379,61 @@ test('giveContext: dealt player carries his positional rank + the roster pecking
   assert.equal(g.count, 3, 'IR TE excluded from the pecking order')
   // Ranked by value desc: Best TE, Gunnar Helm, Third TE.
   assert.deepEqual(g.peers.map(p => p.name), ['Best TE', 'Gunnar Helm', 'Third TE'])
-  assert.equal(g.dealt.length, 1)
-  assert.equal(g.dealt[0].name, 'Gunnar Helm')
-  assert.equal(g.dealt[0].posRank, 2, 'Helm is my TE2 by value')
+  assert.equal(g.marker, 'out', 'the give chart marks pieces leaving')
+  assert.equal(g.marked.length, 1)
+  assert.equal(g.marked[0].name, 'Gunnar Helm')
+  assert.equal(g.marked[0].posRank, 2, 'Helm is my TE2 by value')
   // Best TE is the lone TE starter; the dealt TE2 is bench depth.
   assert.equal(g.peers.find(p => p.name === 'Best TE').isStarter, true)
-  assert.equal(g.dealt[0].isStarter, false)
-  assert.equal(g.peers.find(p => p.isDealt).name, 'Gunnar Helm')
+  assert.equal(g.marked[0].isStarter, false)
+  assert.equal(g.peers.find(p => p.isMarked).name, 'Gunnar Helm')
+
+  // The mirror: the acquired WR gets the same chart, marked `in` and read off
+  // the POST-trade roster. Before this the roster COST was a full depth chart
+  // and the roster GAIN was one sentence.
+  assert.equal(a.getContext.length, 1, 'one position acquired into → one group')
+  const inc = a.getContext[0]
+  assert.equal(inc.position, 'WR')
+  assert.equal(inc.marker, 'in')
+  assert.equal(inc.count, 5, 'my 4 WRs plus the arrival')
+  assert.equal(inc.marked.length, 1)
+  assert.equal(inc.marked[0].name, 'Opp WR')
+  assert.equal(inc.marked[0].posRank, 5, 'he lands last on my WR chart at 3,000')
+  assert.equal(inc.peers.find(p => p.isMarked).name, 'Opp WR')
+})
+
+test('getContext reads the POST-trade roster, so a WR-for-WR chart stays true', () => {
+  // Trade my WR4 (3,600) for a 3,000 WR. Read off the pre-trade roster the
+  // arrival would rank 5th of 5 behind a player who is no longer on the team;
+  // post-trade he is 4th of 4, which is the chart the manager actually gets.
+  const myRoster = {
+    rosterId: 1,
+    players: [
+      { sleeperId: 'w1', name: 'WR1', position: 'WR', value: 4300, isIR: false, isTaxi: false },
+      { sleeperId: 'w2', name: 'WR2', position: 'WR', value: 4200, isIR: false, isTaxi: false },
+      { sleeperId: 'w3', name: 'WR3', position: 'WR', value: 4100, isIR: false, isTaxi: false },
+      { sleeperId: 'w4', name: 'WR4', position: 'WR', value: 3600, isIR: false, isTaxi: false },
+      { sleeperId: 'q1', name: 'My QB', position: 'QB', value: 4000, isIR: false, isTaxi: false },
+    ],
+    picks: [], totalValue: 20200, pickCapitalScore: 0, avgStarterAge: 26,
+  }
+  const opp = { rosterId: 2, players: [
+    { sleeperId: 'ow', name: 'Opp WR', position: 'WR', value: 3000, isIR: false, isTaxi: false },
+  ], picks: [], totalValue: 3000, pickCapitalScore: 0, avgStarterAge: 26 }
+  const allRosters = [myRoster, opp, { ...myRoster, rosterId: 3 }, { ...myRoster, rosterId: 4 }]
+
+  const a = analyzeTrade(
+    [{ type: 'player', sleeperId: 'w4', name: 'WR4', position: 'WR', value: 3600 }],
+    [{ type: 'player', sleeperId: 'ow', name: 'Opp WR', position: 'WR', value: 3000 }],
+    myRoster, opp, allRosters,
+  )
+  const inc = a.getContext[0]
+  assert.equal(inc.count, 4, 'the departing WR is already off the chart')
+  assert.equal(inc.marked[0].posRank, 4)
+  assert.ok(!inc.peers.some(p => p.name === 'WR4'), 'the piece leaving never appears on the arrival chart')
+  // And the give chart still reads the pre-trade roster, where he does.
+  assert.equal(a.giveContext[0].count, 4)
+  assert.equal(a.giveContext[0].marked[0].name, 'WR4')
 })
 
 test('giveContext: two players dealt from one position share a single grouped depth chart', () => {
@@ -406,8 +456,8 @@ test('giveContext: two players dealt from one position share a single grouped de
   ]
   const a = analyzeTrade(give, [{ type: 'pick', value: 3800 }], myRoster, opp, allRosters)
   assert.equal(a.giveContext.length, 1, 'both TEs collapse into one TE group')
-  assert.equal(a.giveContext[0].dealt.length, 2)
-  assert.deepEqual(a.giveContext[0].dealt.map(d => d.posRank).sort(), [2, 3])
+  assert.equal(a.giveContext[0].marked.length, 2)
+  assert.deepEqual(a.giveContext[0].marked.map(d => d.posRank).sort(), [2, 3])
 })
 
 // ── Layer 4: their side ─────────────────────────────────────────────────────
@@ -586,6 +636,70 @@ test('buildPartnerFit returns null without a partner roster (degradation contrac
   assert.equal(buildPartnerFit([], [], them, []), null)
 })
 
+// ── The two seats are ONE engine ────────────────────────────────────────────
+// buildPartnerFit is now a thin wrapper over the seat-agnostic buildSideFit, so
+// the partner read is unchanged by construction and the my-side read cannot
+// drift from it.
+
+test('buildPartnerFit is buildSideFit pointed at the partner (wrapper contract)', () => {
+  const { me, them, all } = makeStackedLeague()
+  const give = [asAsset(me.players.find(p => p.name === 'Love'))]
+  const get  = [asAsset(them.players.find(p => p.name === 'Flowers'))]
+  assert.deepEqual(
+    buildPartnerFit(give, get, them, all),
+    buildSideFit(give, get, them, all, { seat: 'them' }),
+  )
+})
+
+test('myFit is the same engine from MY seat — its facts equal Layer 2\'s own', () => {
+  const { me, them, all } = makeStackedLeague()
+  const give = [asAsset(me.players.find(p => p.name === 'Love'))]
+  const get  = [asAsset(them.players.find(p => p.name === 'Their WR1'))]
+  const a = analyzeTrade(give, get, me, them, all)
+
+  // The fill/hurt tests and the lineup delta are computed twice by two paths
+  // (Layer 2 inline, and the fit engine from my seat). They must agree, or the
+  // panel prints two answers to one question.
+  assert.deepEqual(a.myFit.fills, a.filledNeeds)
+  assert.deepEqual(a.myFit.weakens, a.hurtStrengths)
+  assert.equal(a.myFit.startersDelta, a.myStartersDelta)
+  assert.ok(['Strong', 'Fair', 'Weak'].includes(a.myFit.appeal))
+})
+
+test('myFit speaks in the second person (seat voice)', () => {
+  const { me, them, all } = makeStackedLeague()
+  const a = analyzeTrade(
+    [asAsset(me.players.find(p => p.name === 'Love'))],
+    [asAsset(them.players.find(p => p.name === 'Their WR1'))],
+    me, them, all,
+  )
+  assert.match(a.myFit.summary, /\byou\b|\byour\b/i)
+  assert.ok(a.myFit.lineupNote.startsWith('Your best starting lineup'), a.myFit.lineupNote)
+  // …and the partner's copy is untouched.
+  assert.match(a.partnerFit.summary, /\bthey\b|\btheir\b/i)
+  assert.ok(a.partnerFit.lineupNote.startsWith('Their best starting lineup'), a.partnerFit.lineupNote)
+})
+
+test('myFit is DISPLAY ONLY — it can never move a verdict', () => {
+  // My side is already scored by Layers 1-3 plus the myStartersDelta gate; a
+  // second my-side score would charge the ladder twice. Pinned across the whole
+  // ladder: swapping myFit for its opposite, or removing it, changes nothing.
+  const cases = [
+    { valueWinner: 'them', valuePct: 40 },                                        // hard Decline
+    { valueWinner: 'you', valuePct: 10 },                                          // clean Accept
+    { valueWinner: 'them', valuePct: 8, fitScore: 1, filledNeeds: ['WR'] },        // overpay-but-fills Accept
+    { valueWinner: 'you', valuePct: 10, windowScore: -1, windowNote: 'Conflicts' },// window Counter
+    { valueWinner: 'even', fitScore: -1, hurtStrengths: ['QB'] },                  // fit Decline
+  ]
+  const fit = appeal => ({ appeal, summary: 's', reasons: ['r'], concerns: ['c'], startersDelta: 0 })
+  cases.forEach(c => {
+    const base = getTradeVerdict(analysis({ ...c, myFit: fit('Fair') }))
+    assert.deepEqual(getTradeVerdict(analysis({ ...c, myFit: fit('Strong') })), base)
+    assert.deepEqual(getTradeVerdict(analysis({ ...c, myFit: fit('Weak') })), base)
+    assert.deepEqual(getTradeVerdict(analysis({ ...c, myFit: null })), base)
+  })
+})
+
 // The bad loop needs a roster with a REAL alternative in the band, otherwise
 // Weak is the honest ceiling and the builder is right to report it. Here my
 // cheapest single asset by keep-score is still a third quarterback (into a room
@@ -654,6 +768,29 @@ test('without a partner roster the builder degrades to phase 1 and reports no ap
   assert.ok(pkg, 'still suggests a package')
   assert.equal(pkg.appeal, null, 'no partner to read, so no read is invented')
   assert.equal(pkg.partnerSummary, null)
+  // My own side needs no partner roster, so the my-side read survives here —
+  // the board can still say what the package is worth to me.
+  assert.ok(['Strong', 'Fair', 'Weak'].includes(pkg.myAppeal))
+})
+
+test('the suggested package carries a MY-side read, and it never reorders the search', () => {
+  const { me, them, all } = makeSpareDepthLeague()
+  const flowers = them.players.find(p => p.name === 'Flowers')
+  const pkg = suggestFairPackage(flowers, me, all, them)
+  assert.ok(['Strong', 'Fair', 'Weak'].includes(pkg.myAppeal), 'graded from my seat too')
+  assert.equal(typeof pkg.mySummary, 'string')
+  assert.equal(typeof pkg.myStartersDelta, 'number')
+  // Phase 2 still selects on APPEAL_BONUS − keep-pain: the my-side read is
+  // computed once, for the winner, AFTER the choice is made. Same inputs, same
+  // package as the assertions above this block.
+  assert.deepEqual(
+    suggestFairPackage(flowers, me, all, them).assets.map(a => a.name),
+    pkg.assets.map(a => a.name),
+  )
+
+  // No league at all → no roster to read either side against.
+  const bare = suggestFairPackage(flowers, me, null, null)
+  assert.equal(bare.myAppeal, null, 'absence of a league is not evidence of a fit')
 })
 
 // ── The cheaper alternative package ─────────────────────────────────────────

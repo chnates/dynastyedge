@@ -5,7 +5,11 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-09-07 (trade-engine review: the package search now
+**Last reviewed:** 2026-09-07 (the my-side read: one fit engine, both seats —
+the Analyzer and the Targets board now grade what a trade is worth to *me* in
+the same words they always used for the partner, and acquired players get the
+same depth chart departing ones always had. Measuring it opened **OPEN-10**.
+Earlier the same day, trade-engine review: the package search now
 weighs my own cost against the partner's appeal, my starting lineup is measured
 and gates the verdict, and Layer 3 is scored on live playoff odds instead of the
 win-window tier. One 2026-09-06 owner ruling reversed — marked in place, not
@@ -654,6 +658,34 @@ re-runs it and prints a drift check; the script imports the shipped constants,
 so it fails loudly if the measured ordering stops matching them. **If round 1
 ever stops beating its price in a resolved class, re-derive rather than nudge.**
 Full method: `docs/analysis/asset-aging-and-pick-value-2026-09.md` §3.
+
+### OPEN-10 — The two "fair" windows disagree
+
+**Status:** deferred, and it is the reason 17 of 20 suggested packages read
+`Weak for you`. **Trigger:** an owner ask, or the next deliberate pass over
+`suggestFairPackage`'s tuning — it is not a bug to fix in passing.
+
+`suggestFairPackage` builds inside **`[0.9×, 1.15×]`** of the target, with
+undershoot penalised 1.6× (sellers don't take light offers). `buildFairBand` —
+THE definition of fair, shared with the Analyzer's verdict and every surface
+that predicts it — is **±5%**. So the search routinely proposes packages the
+Analyzer then scores as an overpay. Measured live 2026-09-07 on the 20-target
+board: every suggestion landed **6–11% in the partner's favour**, which is why
+16 of 20 come back `Counter` and why the new my-side read grades 17 of 20
+`Weak` (my seat takes −1 on value; theirs takes +1).
+
+**The grader is not the problem.** Swept across price, 8 of the first 8 targets
+reach `Strong for you` at 58–94% of the target's value, and a user-built trade
+winning 8% on value renders `Fair for you`. The board's *offers* are what sit
+outside the band.
+
+**Why it wasn't touched:** narrowing the search band moves package selection on
+every surface that consumes it, and `APPEAL_BONUS` (Weak −1 · Fair 0 · Strong
++0.4) was swept and set at the current band — changing one without re-measuring
+the other invalidates the sweep. Whoever picks this up should re-run the
+20-target board before and after and report the keep-pain / appeal / verdict
+deltas together, exactly as `docs/analysis/trade-engine-my-side-2026-09.md` §1
+did. Full context: `docs/analysis/trade-my-side-read-2026-09.md` §3–4.
 
 ### OPEN-9 — Rebuild the trajectory age curves longitudinally
 
