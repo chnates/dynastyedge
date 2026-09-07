@@ -24,6 +24,8 @@ import {
   buildDraftSlots,
   slotForRound,
   computePickCapitalScore,
+  buildDraftPickIndex,
+  buildGenericRoundValues,
 } from '../src/utils/pickCapital.js'
 
 const ROSTERS = [{ roster_id: 1 }, { roster_id: 2 }]
@@ -181,4 +183,79 @@ test('computePickCapitalScore: the weights follow the window, so a rolled year i
     computePickCapitalScore([{ season: '2026', round: 1 }], PICK_ENTRIES, rolled),
     0
   )
+})
+
+// ── Resolving a SPENT pick ───────────────────────────────────────────────────
+//
+// FantasyCalc retires a season's pick entries the moment its draft completes,
+// so a pick traded and then used inside the same season has no market price.
+// These two are the shared answer for that (CLAUDE.md Features 6 and 11): the
+// player it became, else the generic round median marked approximate. Both the
+// manager scouting ledger and League › Activity read them, so a traded pick
+// cannot read differently on the two screens that both show it.
+
+const IDX_ROSTERS = [
+  { roster_id: 6, owner_id: 'ownerA' },
+  { roster_id: 4, owner_id: 'ownerB' },
+]
+const IDX_PICKS = [
+  { player_id: 111, draft_slot: 1, round: 1, pick_no: 1 },
+  { player_id: '222', draft_slot: 2, round: 1, pick_no: 2 },
+]
+
+test('buildDraftPickIndex: a pick resolves to the player taken at its ORIGINAL owner\'s slot', () => {
+  const draft = { season: '2026', slot_to_roster_id: { 1: 6, 2: 4 } }
+  const idx = buildDraftPickIndex(draft, IDX_PICKS, IDX_ROSTERS)
+  assert.deepEqual(idx['2026-1-6'], { playerId: '111', overall: 1, slotLabel: '1.01' })
+  assert.deepEqual(idx['2026-1-4'], { playerId: '222', overall: 2, slotLabel: '1.02' })
+})
+
+test('buildDraftPickIndex: roster ids are STRINGS on both sides of the key (Rules #8)', () => {
+  // A Sleeper traded_pick's roster_id arrives as a NUMBER and reaches this
+  // index through a template literal. If the index keyed on a number the
+  // lookup would silently miss and every spent pick would fall back to a
+  // round median — a quiet downgrade, not a visible failure.
+  const idx = buildDraftPickIndex({ season: '2026', slot_to_roster_id: { 1: 6 } }, IDX_PICKS, IDX_ROSTERS)
+  const tradedPick = { season: '2026', round: 1, roster_id: 6 }   // number, as Sleeper sends it
+  assert.ok(idx[`${tradedPick.season}-${tradedPick.round}-${tradedPick.roster_id}`])
+})
+
+test('buildDraftPickIndex: falls back to draft_order, the live path for a LISTED draft', () => {
+  // `/league/{id}/drafts` never carries slot_to_roster_id — only
+  // `/draft/{draft_id}` does — so this fallback is not an edge case.
+  const draft = { season: '2026', draft_order: { ownerA: 1, ownerB: 2 } }
+  const idx = buildDraftPickIndex(draft, IDX_PICKS, IDX_ROSTERS)
+  assert.equal(idx['2026-1-6']?.playerId, '111')
+  assert.equal(idx['2026-1-4']?.playerId, '222')
+})
+
+test('buildDraftPickIndex: no order, no picks, or no draft → empty, never a wrong join', () => {
+  assert.deepEqual(buildDraftPickIndex({ season: '2026' }, IDX_PICKS, IDX_ROSTERS), {})
+  assert.deepEqual(buildDraftPickIndex({ season: '2026', slot_to_roster_id: { 1: 6 } }, [], IDX_ROSTERS), {})
+  assert.deepEqual(buildDraftPickIndex(null, IDX_PICKS, IDX_ROSTERS), {})
+  // An incomplete pick row is skipped rather than indexed under a bad key.
+  const partial = buildDraftPickIndex(
+    { season: '2026', slot_to_roster_id: { 1: 6 } },
+    [{ player_id: '111', round: 1 }],   // no draft_slot
+    IDX_ROSTERS
+  )
+  assert.deepEqual(partial, {})
+})
+
+test('buildGenericRoundValues: median per round across EVERY listed season ("a 2nd is a 2nd")', () => {
+  // Season-agnostic on purpose: the whole point is pricing a round whose own
+  // season FantasyCalc no longer lists.
+  const entries = [
+    { name: '2027 1st', value: 3000 },
+    { name: '2028 1st', value: 2200 },
+    { name: '2029 1st', value: 1900 },
+    { name: '2027 2nd', value: 1600 },
+  ]
+  const byRound = buildGenericRoundValues(entries)
+  assert.equal(byRound[1], 2200)   // median of 1900/2200/3000
+  assert.equal(byRound[2], 1600)
+  // A round nothing lists is 0, and the caller renders `—` rather than a fake price.
+  assert.equal(byRound[4], 0)
+  assert.equal(buildGenericRoundValues([])[1], 0)
+  assert.equal(buildGenericRoundValues(null)[1], 0)
 })

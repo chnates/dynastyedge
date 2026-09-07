@@ -4,7 +4,8 @@ import { useLeagueContext } from '../../context/LeagueContext'
 import { useTransactions } from '../../hooks/useTransactions'
 import { usePlayerDB } from '../../hooks/usePlayerDB'
 import { getTeamName } from '../../hooks/useLeague'
-import { findPickValue } from '../../utils/pickCapital'
+import { findPickValue, buildDraftPickIndex, buildGenericRoundValues } from '../../utils/pickCapital'
+import { useSleeperDraft } from '../../hooks/useSleeperDraft'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
@@ -52,24 +53,20 @@ function AssetLine({ sign, asset, onSelectPlayer }) {
       )}
       <span className="flex-1" />
       <span className="font-mono text-[11px] text-text-secondary dark:text-text-secondary tabular-nums shrink-0">
-        {asset.value != null ? asset.value.toLocaleString() : '—'}
+        {asset.value != null ? `${asset.approx ? '≈' : ''}${asset.value.toLocaleString()}` : '—'}
       </span>
     </div>
   )
 }
 
-function TradeCard({ tx, teamName, resolveAsset, pickValue, onSelectPlayer }) {
+function TradeCard({ tx, teamName, resolveAsset, resolvePick, onSelectPlayer }) {
   const sides = (tx.roster_ids ?? []).map(rosterId => {
     const players = Object.entries(tx.adds ?? {})
       .filter(([, rid]) => rid === rosterId)
       .map(([pid]) => resolveAsset(pid))
     const picks = (tx.draft_picks ?? [])
       .filter(pk => pk.owner_id === rosterId)
-      .map(pk => ({
-        label: `${pk.season} ${ROUND_SUFFIXES[pk.round] ?? `R${pk.round}`}${pk.roster_id !== rosterId ? ` (via ${teamName(pk.roster_id)})` : ''}`,
-        value: pickValue(pk),
-        player: null,
-      }))
+      .map(pk => resolvePick(pk, rosterId))
     const faab = (tx.waiver_budget ?? [])
       .filter(wb => wb.receiver === rosterId)
       .map(wb => ({ label: `$${wb.amount} FAAB`, value: null, player: null }))
@@ -131,6 +128,11 @@ export default function LeagueActivity() {
   const { league, values, loading: leagueLoading, error: leagueError, retry: leagueRetry, myRosterId } = useLeagueContext()
   const { transactions, loading: txLoading, error: txError, retry: txRetry } = useTransactions()
   const { playerDB } = usePlayerDB()
+  // Best-effort, session-cached and shared with the Draft section: after a
+  // rookie draft completes this is the draft it keeps on screen, which is
+  // exactly the pick list needed to say what a spent pick became. A failure
+  // just drops the feed back to the round-median tier — never an error here.
+  const sleeperDraft = useSleeperDraft()
   const [filter, setFilterState] = useState('all')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [selectedPlayer, setSelectedPlayer] = useState(null)
@@ -139,6 +141,25 @@ export default function LeagueActivity() {
     setFilterState(id)
     setVisibleCount(PAGE_SIZE)
   }
+
+  const pickEntries = useMemo(() => values?.pickEntries ?? [], [values])
+
+  const genericRoundValues = useMemo(
+    () => buildGenericRoundValues(pickEntries),
+    [pickEntries]
+  )
+
+  const pickIndex = useMemo(
+    () => buildDraftPickIndex(
+      sleeperDraft.data?.draft,
+      sleeperDraft.data?.picks,
+      league?.allRosters?.map(r => ({
+        roster_id: r.rosterId,
+        owner_id: r.owner?.user_id,
+      })) ?? []
+    ),
+    [sleeperDraft.data, league]
+  )
 
   const filtered = useMemo(() => {
     if (!transactions) return null
@@ -162,9 +183,43 @@ export default function LeagueActivity() {
     if (fc) return { label: fc.name, value: fc.value, player: fc }
     return { label: playerDB?.[pid]?.name ?? `Player #${pid}`, value: null, player: null }
   }
-  const pickValue = pk => {
-    const v = findPickValue({ season: pk.season, round: pk.round }, values?.pickEntries ?? [])
-    return v > 0 ? v : null
+  // A traded pick, priced the way the manager scouting ledger prices one — the
+  // two screens show the same trades and must never disagree about an asset.
+  //
+  // FantasyCalc retires a season's pick entries the moment its draft completes,
+  // so a pick spent in THIS season's feed has no market price at all. Three
+  // tiers, best first: the player actually drafted at that slot (tappable, at
+  // his value today), then the generic round median marked approximate, then
+  // `—`. Only the last is honest as a blank, and it is now reached only when
+  // FantasyCalc lists no picks whatsoever.
+  const resolvePick = (pk, rosterId) => {
+    const via = pk.roster_id !== rosterId ? ` (via ${teamName(pk.roster_id)})` : ''
+    const round = ROUND_SUFFIXES[pk.round] ?? `R${pk.round}`
+    const base = `${pk.season} ${round}`
+
+    const became = pickIndex[`${pk.season}-${pk.round}-${pk.roster_id}`]
+    if (became) {
+      // Once we know what the pick became, its exact slot says more than "(via
+      // X)" and costs a third of the width — which matters, because the label
+      // truncates at 390px and the player's name is the new information.
+      const asset = resolveAsset(became.playerId)
+      return {
+        label: `${pk.season} ${became.slotLabel ?? round} → ${asset.label}`,
+        value: asset.value,
+        player: asset.player,
+      }
+    }
+
+    const market = findPickValue({ season: pk.season, round: pk.round }, pickEntries)
+    if (market > 0) return { label: `${base}${via}`, value: market, player: null }
+
+    const generic = genericRoundValues[pk.round] ?? 0
+    return {
+      label: `${base}${via}`,
+      value: generic > 0 ? generic : null,
+      approx: generic > 0,
+      player: null,
+    }
   }
 
   const visible = filtered.slice(0, visibleCount)
@@ -228,7 +283,7 @@ export default function LeagueActivity() {
                   </span>
                 </div>
                 {tx.type === 'trade'
-                  ? <TradeCard tx={tx} teamName={teamName} resolveAsset={resolveAsset} pickValue={pickValue} onSelectPlayer={setSelectedPlayer} />
+                  ? <TradeCard tx={tx} teamName={teamName} resolveAsset={resolveAsset} resolvePick={resolvePick} onSelectPlayer={setSelectedPlayer} />
                   : <PickupCard tx={tx} teamName={teamName} resolveAsset={resolveAsset} onSelectPlayer={setSelectedPlayer} />}
               </div>
             )

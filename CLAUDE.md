@@ -1444,13 +1444,37 @@ and free-agent moves, newest first.
 - Trades show each side's full haul: players, picks (with original owner), FAAB
 - **Every asset shows its current FantasyCalc value** with a per-side total
   next to each "X gets" header; when two sides' totals differ by more than
-  5%, the larger haul renders green. Pick values use the same median-of-round
-  logic as pick capital (`findPickValue`). FAAB dollars display but don't
-  count toward totals. A header note says values are at today's prices, not
-  at trade time. Unranked players show `—`.
+  5%, the larger haul renders green. FAAB dollars display but don't count
+  toward totals. A header note says values are at today's prices, not at
+  trade time. Unranked players show `—`.
+- **A pick spent in the same season it was traded is priced in three tiers,
+  best first** — the same ladder the manager scouting ledger uses, from the
+  same two shared helpers in `utils/pickCapital.js`, so a trade can never read
+  differently on the two screens that both show it:
+  1. **What it became** (`buildDraftPickIndex`) — the player actually drafted
+     at that slot, at his value today, rendered `2026 1.10 → Jonah Coleman` and
+     **tappable** into his profile. The exact slot replaces the usual "(via X)"
+     here: it says more and costs a third of the width, and the label truncates
+     at 390px where the player's name is the new information.
+  2. **The market price** (`findPickValue`, median of round) for a pick whose
+     draft hasn't happened.
+  3. **The generic round median** (`buildGenericRoundValues`, across every
+     season FantasyCalc lists) marked with a **≈** — "a 2nd is a 2nd".
+  `—` is reached only when FantasyCalc lists no picks at all.
+  **Why this is not cosmetic:** FantasyCalc retires a season's pick entries the
+  moment its draft completes, so before this the current season's own trades
+  priced their spent picks at **0** — and the per-side totals, and therefore the
+  green larger-haul flag, were computed from those zeros. Verified live
+  2026-09-07 on this league's one 2026 trade: 1,620 vs 858 (wrong) became
+  2,095 vs 2,798 (the other side is the larger haul).
+  The draft's pick list comes from `useSleeperDraft` — session-cached and
+  shared with the Draft section, and after a completed draft it is holding
+  exactly that draft. Best-effort: a failure drops the feed to tier 2/3, never
+  an error.
 - **Player names are tappable** (dotted underline) and open the
   PlayerProfileDrawer — only for FantasyCalc-ranked players; unranked
-  fallback names are plain text.
+  fallback names are plain text. A pick resolved to its drafted player is
+  tappable on the same terms.
 - Transactions involving Nix Cage get an accent border + “You” chip.
 - Player names resolve via FantasyCalc playerMap, falling back to the player DB
   (so dropped players still show names)
@@ -3187,7 +3211,7 @@ dynastyedge/
 │   │   ├── fairBand.js          ← THE definition of "fair" (±5%), shared by the Analyzer's verdict and every surface that PREDICTS it
 │   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation
 │   │   ├── seasonWindow.js      ← THE "has the rookie draft happened yet?" resolver — the live pick window + which draft the Tracker shows (replaced the hand-rolled PICK_YEARS)
-│   │   ├── pickCapital.js       ← pick ownership resolution logic (year weights are relative to the window, never literal years)
+│   │   ├── pickCapital.js       ← pick ownership resolution logic (year weights are relative to the window, never literal years); also THE spent-pick answer shared by League › Activity and the manager ledger — buildDraftPickIndex (what it became) + buildGenericRoundValues ("a 2nd is a 2nd")
 │   │   ├── rookieAdp.js         ← derived rookie-class ADP for the Draft section
 │   │   ├── rookieResearch.js    ← rookie opportunity model: depth × capital, market-vs-model divergence
 │   │   ├── positionalValue.js   ← scarcity / value over replacement — replacement levels LEARNED from the live league, DISPLAY ONLY
@@ -3223,7 +3247,7 @@ dynastyedge/
 │   ├── projections.test.mjs         ← Week 1 lineup engine: defense rankings joined via player DB + schedule, home/away fields, Week-1 empty-stats contract, red/yellow/green flags, best bench
 │   ├── playoffOdds.test.mjs         ← fixed-seed determinism, Σ odds = playoff teams, verdict thresholds
 │   ├── seasonWindow.test.mjs        ← the draft-completion boundary: pre_draft/drafting/paused keep a season current, `complete` rolls it, an auction never counts, a past season's draft never rolls it; the Tracker prefers the upcoming draft and falls back to the most recent completed one; no NFL state degrades to the seed
-│   ├── pickCapital.test.mjs         ← pick ownership resolution, round-median pick values, and year weights BY DISTANCE from the upcoming draft (a rolled year is never scored 0)
+│   ├── pickCapital.test.mjs         ← pick ownership resolution, round-median pick values, year weights BY DISTANCE from the upcoming draft (a rolled year is never scored 0), and the spent-pick ladder (slot→player join incl. the string-roster-id trap and the draft_order fallback; season-agnostic round medians)
 │   ├── pickTrades.test.mjs          ← slot tiers (as coded), slot pricing fallback, package constraints
 │   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
 │   ├── appVersion.test.mjs          ← reload URL: ?v= before the hash (HashRouter), encoding, null build id
@@ -3249,13 +3273,13 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 147 / # pass 140 /
+honestly:** instead of "cannot find module" it prints `# tests 152 / # pass 145 /
 # fail 7`, which reads like a code regression. The files that fail are the ones
 transitively importing `react` (`tradeAnalysis.js` → `recommendations.js` →
 `useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
 `draftLive` loading their hooks) — the file fails to load, so its tests never
-run and the count silently drops from **253** to 147. `npm run build` in the
-same state fails with `sh: 1: vite: not found`. **If the test count isn't 253,
+run and the count silently drops from **258** to 152. `npm run build` in the
+same state fails with `sh: 1: vite: not found`. **If the test count isn't 258,
 run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-07
 by renaming `node_modules` aside; re-measure them whenever the suite grows —
 the pair had drifted four times before this, 178/130, 177/115, 219/136 and
