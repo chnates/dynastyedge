@@ -5,9 +5,11 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-09-07 (OPEN-2 closed — the pick window now derives
-itself from live data, so it never needs rolling by hand again. The active work
-queue remains `docs/build-plan-2026-09.md`).
+**Last reviewed:** 2026-09-07 (trade-engine review: the package search now
+weighs my own cost against the partner's appeal, my starting lineup is measured
+and gates the verdict, and Layer 3 is scored on live playoff odds instead of the
+win-window tier. One 2026-09-06 owner ruling reversed — marked in place, not
+deleted. The active work queue remains `docs/build-plan-2026-09.md`).
 
 **How to use it:**
 - Each item states its **trigger** — the condition that makes it ready. An item
@@ -493,6 +495,96 @@ findings wastes a session. Full detail in `docs/repo-review-2026-07.md`.
   so date-less trade pairs miss it (the net-value wash is arithmetic-invariant
   and unaffected).
 
+### 2026-09-07 — the trade engine's two sides rebalanced, and Layer 3 rebased
+
+Opened by an owner question: *"did we make it to where it cares too much about
+the other team and not enough about me?"* Yes, in three places, all measured
+against the live league and all fixed. Memo:
+`docs/analysis/trade-engine-my-side-2026-09.md`. PR: see the branch
+`claude/trade-analysis-engine-review-icz0ha`.
+
+**A false start worth keeping.** The first measurement compared each suggestion
+against the *cheapest fair package overall* and reported "18 of 20 overpay,
+11,293 excess value". That framing was wrong — the cheapest package is almost
+always `Weak`, and picking those is the failure the two-phase search exists to
+prevent (§4e-v of `dynastyedge-failure-archaeology`). Against the correct
+baseline — the cheapest package at an *acceptable* appeal tier — the old rule
+overpaid on **2 of 20**. The mechanism was real; the magnitude was not. Recorded
+because the wrong baseline made a small bug look like a large one.
+
+**Shipped:**
+
+1. **Phase 2 of `suggestFairPackage` is a trade-off, not an override.** It
+   ranked by partner appeal lexicographically, so inside the fair band my own
+   cost had no vote. Now `APPEAL_BONUS[appeal] − keep-pain`, asymmetric on
+   purpose: `Weak −1` (a near-prohibitive guard — an unanswered offer is a real
+   failure), `Fair 0`, `Strong +0.4` (a nudge, bought only when nearly free).
+   The weight is **mid-plateau from a sweep**, not chosen: w ≤ 0.20 → 17.79
+   keep-pain (5/20 changed) · 0.30–0.50 → 18.46 (2/20) · 1.00 → 19.84 (0/20,
+   the old rule). Effect: 2 of 20 suggestions changed, −1.38 keep-pain, raw
+   value sent unmoved (−13). Both changed targets had reached for an asset at
+   0.85 keep — just under `PROTECT_THRESHOLD` — when a Fair package at ~0.4 was
+   available. Narrow because **the fair band already bounded the damage**.
+2. **My own starting lineup is measured.** `analyzeTrade` computed the change in
+   the *partner's* best startable lineup and called it "the single honest
+   measure of does this help them", and never computed it for me — though both
+   lineups were already built. My side was graded by a position COUNT that was
+   **0 on 18 of 20** trades, and two Accepts sat on a lineup that got worse
+   while reading "this fills your WR need". `myStartersDelta` now **gates** the
+   verdict (a drop clearing `MY_LINEUP_MATERIAL_PCT` = 1% of my current lineup
+   downgrades a clean Accept to Counter). Proportional because live lineups span
+   27k–63k. **It gates rather than feeding `fitScore`**, whose negative branch is
+   a hard Decline — a rebuild trade *should* lower today's lineup.
+3. **Layer 4 scored one fact twice.** A `fill` is by definition an arriving
+   player who starts at a hole, which is exactly what raises `startersDelta`;
+   both scored +1, so one event earned the two points that mean `Strong`. This
+   is the identical double-count already removed from the `stacks` branch and
+   never checked on the positive side. Scored once now; both sentences still
+   render. Live: `Strong` 7 → 5.
+4. **Layer 3 is rebased on live playoff odds** (owner-approved after a separate
+   measurement). The win-window tier tracks **total assets at 0.952** but the
+   **starting lineup at only 0.721**; playoff odds track the starting lineup at
+   **0.988**, which is the question the layer asks. Two live mislabels fixed:
+   roster 5 (2nd-best lineup, 87.7% odds) read `Rebuilding`; Jake & Bake (9th
+   lineup, 8.3% odds) read `Middle`. The sharper bug: **`Middle` had no branch
+   at all** and top-3/bottom-3 makes it a fixed bucket of four teams every
+   season — so `windowScore` was **0 on 20 of 20** and the panel printed the
+   same placeholder every time. On odds: 15 aligned / 5 conflicting. Tier is
+   the offseason fallback, pinned byte-for-byte by test.
+
+**Honest limits, all recorded:**
+
+- **Verdicts did not move on the live board** for #4 (17 Counter · 1 Decline ·
+  2 Accept before and after). `windowScore` reaches the ladder only via the
+  clean-Accept gate and the winning-value-but-off-window branch. The gain is a
+  layer that says something true; it bites when odds fall.
+- **#2 flips no current verdict either** — the live drops are below the
+  materiality floor. What is closed is the *class* of bug.
+- Measured at **Week 1 with zero games played**, so the odds are a
+  roster-strength prior plus schedule. Established: they ask the right
+  question. Not established: that they are calibrated. **Re-run in November.**
+
+**Scope deliberately held.** `assignWinWindowTiers` still backs its eight other
+consumers; only Layer 3's *score* moved.
+
+**Owner ruling reversed this session:** the 2026-09-06 "appeal stays
+lexicographically first" call, above. Marked in place rather than deleted.
+
+**Left alone, with reasons (each is a bigger win than what shipped):**
+
+1. **`fitScore` is still a position count**, so it ties on most trades. The gate
+   covers the dangerous case; making fit magnitude-aware end to end would
+   redefine every verdict at once and is a separate job.
+2. **The deficit test is binary** (`delta < 0`) in the verdict and in
+   `getDeficitPositions`, which also feeds free agents, rookie fit, keep-scores
+   and the cash-out board. Note the Targets board *does* scale by magnitude —
+   an earlier claim that the whole app was binary was too broad.
+3. **`getDeadlineVerdict`'s thresholds are uncalibrated for this league.** 6 of
+   10 teams make these playoffs, so 60% is baseline and ≥70% Buyer sits only
+   modestly above it; five teams bunched 76–88% at Week 1. Making them relative
+   to `playoff_teams / numTeams` is a real option that would move three
+   surfaces at once. **[owner ask required]**
+
 ### 2026-09-06 — OPEN-6 closed: the recommendation surfaces are two-sided
 
 The Analyzer went two-sided in PR #36; the surfaces that *suggest* a trade did
@@ -634,11 +726,18 @@ verified against the live league.
 
 **Owner rulings this session:**
 
-- **Appeal stays lexicographically first in the package search.** Making it
-  trade off against my own cost was proposed and declined: knowing whether they
+- **Appeal stays lexicographically first in the package search.**
+  ⚠️ **SUPERSEDED 2026-09-07 — see the entry below.** Making it trade off
+  against my own cost was proposed and declined here: knowing whether they
   would accept is the information the search exists to produce, and a package
   needing a pick to bridge it is a different trade rather than a cheaper one.
   The `alternative` line adds that information beside the suggestion instead.
+  The owner reversed this the next day, after the review measured what the
+  lexicographic rule was costing (18 of 20 suggestions were not the cheapest
+  fair package; 2 of 20 were genuine overpays). The original objection is
+  preserved because it is the thing to answer if the trade-off is revisited —
+  and it *is* answered: the appeal read still renders on every card, and the
+  higher-appeal package the search passed over is now named explicitly.
 - **`CORE_DEPTH` stays rank-blind.** Making it rank-sensitive would protect the
   *older* RB1 hardest, which is backwards for the question that opened this.
   The age tilt addresses the same ordering from the correct direction.
@@ -676,6 +775,8 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 
 | Item | Closed | How |
 |---|---|---|
+| Trade engine over-weighted the partner (3 fixes) | 2026-09-07 | Phase 2 made a cost/appeal trade-off (weight set mid-plateau from a sweep); `myStartersDelta` added and gating the verdict; Layer 4's fill/lineup double-count removed. Detail retained in §1 |
+| Layer 3 scored on a tier that measured the wrong thing | 2026-09-07 | Live playoff odds now score the win window in season (0.988 vs the starting lineup, against the tier's 0.721); tier is the offseason fallback. Killed the dead `Middle` branch that left 40% of the league with no read. Detail retained in §1 |
 | OPEN-2 — roll `PICK_YEARS` after the rookie draft | 2026-09-07 | Removed the annual chore instead: the pick window is derived from `/state/nfl` + the drafts list (`utils/seasonWindow.js`, zero extra fetches). Killed 40 ghost 0-value picks and surfaced 2029 league-wide. Detail retained in §2 |
 | OPEN-7 — the keep-score had no opinion about age or about which pick is which | 2026-09-06 | Measured both (n=762 player-seasons; all 120 of this league's rookie picks), then shipped `PICK_ROUND_KEEP`, `pastPeakTilt`, the cash-out board, the cheaper-`alternative` line, and the untruncated package search. Detail retained in §1 |
 | OPEN-6 — push Layer 4 into Targets and the fair-package builder | 2026-09-06 | Layer 4 extracted as `buildPartnerFit` and shared; `suggestFairPackage` made two-phase; Targets ranked by `need × value × movability`; `suggestSellMove` partner pick made two-sided. Detail retained in §1 |

@@ -317,6 +317,14 @@ search exists to produce, and a Fair package needing a pick to bridge it is a
 different trade, not a cheaper one. Appeal stays lexicographically first; item 4
 adds information beside it instead of reordering it.
 
+> ⚠️ **SUPERSEDED 2026-09-07.** The owner reversed this the following day, after
+> `docs/analysis/trade-engine-my-side-2026-09.md` §1 measured what the
+> lexicographic rule cost. Phase 2 now ranks on `APPEAL_BONUS[appeal] −
+> keep-pain`. The objection above is answered rather than dismissed: the appeal
+> read still renders on every card, and the higher-appeal package the search
+> declined to pay for is named explicitly. This paragraph is left in place as
+> the historical record of the original decision.
+
 Also not adopted: making `CORE_DEPTH` rank-sensitive so an RB1 outranks an RB3.
 It would protect **Taylor** hardest, which is backwards for this roster's actual
 question. The age tilt addresses the same ordering from the correct direction.

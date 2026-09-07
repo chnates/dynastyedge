@@ -459,7 +459,7 @@ export default function TradeVerdict({
   }
 
   const {
-    giveTotal, getTotal, filledNeeds, hurtStrengths, windowScore, windowNote, myTier,
+    giveTotal, getTotal, filledNeeds, hurtStrengths, windowScore, windowNote, windowBasis, myTier,
     benchNote, starterLossNote, giveContext, myLandingSpots, partnerFit,
     playoffPct, oddsStance, oddsNote, oddsTone,
     partnerTrajectoryNote, partnerTrajectoryTone,
@@ -468,6 +468,9 @@ export default function TradeVerdict({
     scarcity, myRosterSpace, theirRosterSpace, weeklyImpact,
   } = analysis
   const ODDS_TONE_TEXT = { success: 'text-success', warning: 'text-warning', danger: 'text-danger' }
+  // Same three tones, as Badge props — the playoff stance badge that replaces
+  // the tier badge whenever odds are what scored this layer.
+  const ODDS_BADGE_TONE = { success: 'success', warning: 'warning', danger: 'danger' }
   const bothSides = giveCount > 0 && getCount > 0
 
   const injuredWarnings = liveIntelligence
@@ -623,11 +626,23 @@ export default function TradeVerdict({
 
           {/* Layer 3: Win window */}
           <div className="px-4 py-3">
-            <div className="flex items-center gap-2 mb-1.5">
+            {/* The badge names WHAT DECIDED this layer. In season that is the
+                live playoff stance (Buyer / On the bubble / Seller); in the
+                offseason there are no odds and the win-window tier stands in.
+                Showing the tier badge while odds drive the score would put two
+                different answers side by side with no way to tell which one
+                the verdict used. */}
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
               <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary">
                 Win Window
               </p>
-              <WinWindowBadge tier={myTier} />
+              {windowBasis === 'odds' && oddsStance ? (
+                <Badge tone={ODDS_BADGE_TONE[oddsTone] ?? 'neutral'} soft>
+                  {oddsStance}
+                </Badge>
+              ) : (
+                <WinWindowBadge tier={myTier} />
+              )}
             </div>
             <p className={`font-body text-xs leading-relaxed flex items-center gap-1.5 ${
               windowScore > 0 ? 'text-success'
@@ -639,12 +654,26 @@ export default function TradeVerdict({
               }`} />
               {windowNote}
             </p>
+            {/* The basis line. In season this is what the layer was scored ON,
+                so it reads as the reason rather than as a footnote, and it
+                still carries the win-window tier for context — the tier is what
+                the rest of the app (partner cards, keep-scores) reasons with. */}
             {playoffPct != null && (
               <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-relaxed mt-1.5">
-                Playoff odds: <span className="font-mono font-semibold tabular-nums text-text-primary dark:text-text-primary">{Math.round(playoffPct * 100)}%</span>
+                Scored on live playoff odds:{' '}
+                <span className="font-mono font-semibold tabular-nums text-text-primary dark:text-text-primary">{Math.round(playoffPct * 100)}%</span>
                 {' · '}
                 <span className={`font-semibold ${ODDS_TONE_TEXT[oddsTone] ?? 'text-text-secondary'}`}>{oddsStance}</span>
                 {oddsNote ? ` — ${oddsNote}` : ''}
+                {myTier ? <span className="text-text-tertiary dark:text-text-tertiary"> (roster tier: {myTier})</span> : null}
+              </p>
+            )}
+            {/* Deliberately does NOT say "offseason": odds are also null while the
+                simulation is still loading, and asserting the wrong reason is
+                worse than naming the basis and leaving it there. */}
+            {playoffPct == null && (
+              <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary leading-relaxed mt-1.5">
+                No live playoff odds — scored on your roster tier. Odds take over whenever the season is running.
               </p>
             )}
             {myTrajectoryNote && (

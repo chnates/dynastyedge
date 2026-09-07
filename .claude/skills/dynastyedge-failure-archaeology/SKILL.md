@@ -502,6 +502,81 @@ killed. Full method + numbers:
   runs inside render. Move the work first, then the loading state becomes
   possible.
 
+### 4e-vi. Appeal-first package selection — the ruling REVERSED (2026-09-07)
+
+- **Status:** the 2026-09-06 owner call recorded in §4e (and in
+  `docs/open-items.md`) — *"appeal stays lexicographically first in the package
+  search"* — was **reversed by the owner on 2026-09-07** after the cost was
+  measured. Do not restore the lexicographic rule; do not treat the earlier
+  ruling as current.
+- **What was wrong:** phase 2 ranked candidate packages by partner appeal
+  outright, with my own keep-pain only breaking ties. Inside the fair band my
+  side had no vote, so the search bought their enthusiasm at any price the band
+  allowed.
+- **What replaced it:** one scale, `APPEAL_BONUS[appeal] − keep-pain`, with
+  `APPEAL_BONUS = { Weak: −1, Fair: 0, Strong: +0.4 }`. Asymmetric on purpose —
+  a `Weak` package is a real failure (§4e-v), `Strong` over `Fair` is
+  negotiating comfort.
+- **The weight is mid-plateau, not chosen by feel.** Swept on the live board:
+  w ≤ 0.20 → 17.79 keep-pain (5/20 changed) · **0.30–0.50 → 18.46 (2/20)** ·
+  0.70 → 19.02 (1/20) · 1.00 → 19.84 (0/20, the old rule). Three flat plateaus;
+  0.40 is the middle of the selected one. If you retune, re-run the sweep and
+  stay off a step edge.
+- **The original objection is answered, not ignored** — knowing whether they
+  would accept is still produced and still rendered on every card, and the
+  higher-appeal package the search declined to pay for is now named explicitly
+  (`alternative`, whose direction flipped with this change: it used to name the
+  *cheaper* road, it now names the *pricier* one).
+- **Method lesson worth more than the fix.** The first measurement compared each
+  suggestion to the *cheapest fair package overall* and reported "18 of 20
+  overpay, 11,293 excess value". That baseline is wrong: the cheapest package is
+  almost always `Weak`, and choosing `Weak` is the failure the two-phase search
+  exists to prevent. Against the right baseline — cheapest at an *acceptable*
+  appeal tier — it was **2 of 20**. **Pick the baseline before quoting a
+  magnitude**; a wrong one made a small bug look like a large one.
+
+### 4e-vii. The win-window tier must not score Layer 3 (2026-09-07)
+
+- **Symptom:** the Trade Analyzer's Win Window layer printed *"Neutral — fits
+  your current win window"* on every trade this owner ever analyzed. Live:
+  `windowScore` was **0 on 20 of 20** suggested trades.
+- **Two root causes, and the second is the general one:**
+  1. `analyzeTrade` had branches for `Contending` and `Rebuilding` and **none
+     for `Middle`** — and top-3/bottom-3 makes `Middle` a **fixed-size bucket of
+     four teams every season**, 40% of the league. A bucket defined by rank
+     always has occupants; a branch that doesn't exist always scores 0.
+  2. The tier is a **ranking of accumulated assets** (50% total roster value
+     including bench and picks · 30% pick capital · 20% youth). Measured live it
+     tracks total assets at Spearman **0.952** and the actual **starting lineup
+     at 0.721**. "Am I buying or selling *this season*" is a question about the
+     lineup that plays.
+- **Fix:** live playoff odds (via `getDeadlineVerdict`) select the buyer/seller
+  branch in season — they track the starting lineup at **0.988**. The tier is
+  the offseason fallback only. `windowBasis` (`'odds'`|`'tier'`) is exposed so
+  the panel names what scored the layer. The asset-type tests were untouched.
+- **Two live mislabels this fixed:** roster 5 — 2nd-best starting lineup, 87.7%
+  odds — read `Rebuilding` (top-heavy, picks spent), so the app told the owner
+  to expect the most win-now team in the league to ask for picks. Jake & Bake —
+  9th-best lineup, 8.3% odds — read `Middle` because hoarding picks propped up
+  their score.
+- **Standing ruling:** the win-window tier is a measure of **what a team owns**,
+  not of whether it can win now. Never use it to answer a this-season question
+  when playoff odds are available. It remains correct for the eight consumers
+  that genuinely want accumulated-asset standing, and **changing the tier itself
+  was deliberately not done** — it would ripple through all of them.
+- **Not fixed, deliberately:** `getDeadlineVerdict`'s thresholds (≥70% Buyer,
+  <35% Seller) are uncalibrated for a league that seats **6 of 10** teams — 60%
+  is baseline, and five teams bunched 76–88% at Week 1. Making them relative to
+  `playoff_teams / numTeams` would move three surfaces and has not been
+  measured. **[owner ask required]**
+- **Caveat on the evidence:** measured at Week 1 with **zero games played**, so
+  the odds are a roster-strength prior plus schedule. What is established is
+  that the odds ask the right question — not that they are calibrated.
+  **Re-measure in November.**
+- **Fixture trap, now pinned:** the first test fixture used a **six-team**
+  league, where top-3/bottom-3 leaves **no `Middle` bucket at all** — the case
+  under test could not exist. Any fixture exercising `Middle` needs **7+ teams**.
+
 ---
 
 ## 5. Design-taste rulings (SETTLED)
@@ -570,7 +645,11 @@ killed. Full method + numbers:
 
 Written 2026-07-05 against local HEAD `6fb85f3` (2026-06-20). §4e was added
 2026-09-06 from the keep-score calibration work (branch
-`claude/trading-analyzer-review-acslwm`). Every hash
+`claude/trading-analyzer-review-acslwm`); §4e-vi and §4e-vii were added
+2026-09-07 from the trade-engine review (branch
+`claude/trade-analysis-engine-review-icz0ha`, memo
+`docs/analysis/trade-engine-my-side-2026-09.md`). §4e-vi **reverses** a ruling
+recorded in §4e a day earlier — read it before restoring anything from there. Every hash
 above was inspected via `git show <hash>` in that session; sandbox had no
 network access, so no live-API or on-device claims are made here.
 

@@ -830,11 +830,51 @@ makes the roster cost legible before you confirm.
 **Layer 3 — Win window fit**
 Are you acquiring the right type of asset for where Nix Cage is now?
 
-- Contending → favor proven players, not picks or unproven youth
-- Rebuilding → favor picks and young players, not aging veterans
-- When live playoff odds exist (in-season), Layer 3 adds a real
-  "Playoff odds: N% · Buyer/Seller — …" line (via `analyzeTrade`'s optional
-  `myPlayoffPct` + `getDeadlineVerdict`); offseason falls back to the tier read.
+- Buyer / Contending → favor proven players, not picks or unproven youth
+- Seller / Rebuilding → favor picks and young players, not aging veterans
+
+**Live playoff odds decide the lean in season; the win-window tier is the
+offseason fallback (2026-09-07).** `analyzeTrade` exposes `windowBasis`
+(`'odds'` | `'tier'`) so the panel can name what actually scored the layer.
+The asset-type tests above are unchanged — only what *selects* them moved.
+
+- **Why.** The tier is a RANKING of accumulated assets (50% total roster value
+  including bench and picks · 30% pick capital · 20% youth; top 3 Contending,
+  bottom 3 Rebuilding). Measured live 2026-09-07 it tracks total assets at
+  Spearman **0.952** but the actual **starting lineup at only 0.721**. Playoff
+  odds track the starting lineup at **0.988** — which is the question this
+  layer asks. Two live mislabels the swap fixes: roster 5 has the **2nd-best
+  starting lineup and 87.7% odds** yet reads `Rebuilding` (top-heavy, picks
+  spent — in fact the most win-now team in the league, and the old read told
+  you to expect them to ask for picks); Jake & Bake has the **9th-best lineup
+  and 8.3% odds** yet reads `Middle` because hoarding picks props up their tier.
+- **`Middle` was a dead branch and that was the sharper bug.** The tier has no
+  `Middle` case at all, and top-3/bottom-3 makes `Middle` a **fixed-size bucket
+  of four teams every season** — 40% of the league, this owner included. Live
+  effect on the 20-target board: `windowScore` was **0 on 20 of 20** trades and
+  the panel printed "Neutral — fits your current win window" every time; on
+  odds it reads **15 aligned / 5 conflicting**. "On the bubble" is a *measured*
+  state that can hold any number of teams, including none.
+- **The verdicts did not move on that board** (17 Counter · 1 Decline ·
+  2 Accept, before and after) — `windowScore` only reaches the ladder via the
+  clean-Accept gate and the "winning value but off-window" Counter branch. The
+  gain here is a layer that says something true instead of a placeholder; it
+  will change verdicts when odds fall and win-now buying turns into a mistake.
+- **`getDeadlineVerdict` stays the ONE definition of buyer/seller** (shared with
+  League › Playoffs, Trade Partner Finder and The Edge) and is now called
+  **once** per analysis, feeding both the score and the printed stance — so the
+  badge can never contradict the note. Its thresholds (≥70% Buyer, <35% Seller)
+  are unchanged; note that **6 of 10 teams make these playoffs, so 60% is
+  baseline** and the middle of the league compresses. Recalibrating them is a
+  separate, unmeasured change that would ripple to three other surfaces.
+- **Offseason / odds-not-yet-loaded** ⇒ `windowBasis: 'tier'` and the exact
+  pre-existing tier behavior, pinned by test. The fallback copy deliberately
+  does **not** say "offseason" — odds are also null while the simulation loads,
+  and asserting the wrong reason is worse than naming the basis.
+- **Scope.** Only Layer 3's *score* moved. `assignWinWindowTiers` still backs
+  the other eight consumers (League Overview, Managers, Movers, Playoffs,
+  Optimizer, rookie fit, keep-scores, The Edge) — changing the tier itself
+  would ripple through all of them and is NOT part of this change.
 - When you're acquiring the partner's players, Layer 3 also adds a **partner
   trajectory** line from the Dynasty Trajectory model (Feature 17, via
   `analyzeTrade`'s optional `opponentTrajectoryRead`): a declining team reads
@@ -898,6 +938,17 @@ lineup.** When he does start, the upgrade is merely marginal and
 would also put the weaker of the two sentences in front of the verdict gate
 (observed live: Jordan Love → Password Is Taco, where he starts at their SFLX
 and their lineup still *loses* 1,183).
+
+**The same rule now holds on the POSITIVE side (2026-09-07).** A `fill` is
+defined as an arriving player who *starts* at a position they're below average
+in — which is precisely what raises `startersDelta`. Scoring both charged one
+event the 2 points that mean `Strong`, the identical double-count already
+removed from the `stacks` branch above. The point is awarded once, by the
+lineup delta; the fill adds its own point only when the delta did not already
+score it. **Both sentences still render** — naming *where* the hole is, is
+information the delta alone doesn't carry. Live effect on the 20-target board:
+`Strong` 7 → 5, which is the bar for "a clear reason to say yes" returning to
+two independent facts (they profit on value **and** their lineup improves).
 
 **Layer 4 is exported as `buildPartnerFit` and shared with the recommenders.**
 `suggestFairPackage` scores its candidate packages with this exact function, so
@@ -1012,12 +1063,32 @@ header, sub-tabs and sticky summary (verified: the act lands 112px from the top)
 > genuinely need in Superflex.”*
 - The verdict only renders once **both** sides have at least one asset — until
   then a quiet "add assets to both sides" hint shows instead (totals still show)
-- **Layer 4 gates the verdict, and only ever downgrades.** A `Weak`-appeal deal
-  turns an otherwise-clean **Accept** into a **Counter**, quoting the specific
-  objection ("…but there's little in it for them. Their best starting lineup
-  loses 1,183 in value."). It never upgrades: a trade that's bad for me doesn't
-  become good because they'd love it — their enthusiasm is evidence *against*
-  it, not for it. Nothing below Accept is touched.
+- **TWO gates sit on the verdict, and both only ever downgrade an Accept.**
+  - **My lineup (`myStartersDelta`) — the mirror of Layer 4's measure, applied
+    to my own roster (2026-09-07).** Layer 2 grades fit by *counting* positions
+    filled against positions hurt, which ties whenever a trade swaps one
+    position for another — measured live, `fitScore` was **0 on 18 of 20**
+    suggested trades, and two Accepts sat on top of a starting lineup that got
+    *worse* while the reasoning read "this fills your WR need". Layer 4 had
+    computed exactly this number for the partner all along and called it "the
+    single honest measure of does this help them"; both lineups were already
+    built here, so my own side was one subtraction from having it. A drop
+    clearing **`MY_LINEUP_MATERIAL_PCT` (1%) of my current starting lineup**
+    turns a clean **Accept** into a **Counter** ("…your best starting lineup
+    drops N in value — the position count balances, the players don't").
+    - **Proportional, never absolute** — the live league's lineups span
+      27,000–63,000, so a fixed threshold would be noise on one roster and a
+      hair-trigger on another.
+    - **It gates; it does NOT feed `fitScore`.** `fitScore < 0` is a hard
+      *Decline* branch, and a rebuild trade that ships a starter for youth and
+      picks *should* lower today's lineup. Declining those would be a worse
+      error than the one being fixed.
+  - **Layer 4 (partner appeal).** A `Weak`-appeal deal turns an otherwise-clean
+    **Accept** into a **Counter**, quoting the specific objection ("…but there's
+    little in it for them. Their best starting lineup loses 1,183 in value.").
+  - Neither ever upgrades: a trade that's bad for me doesn't become good because
+    they'd love it — their enthusiasm is evidence *against* it, not for it.
+    Nothing below Accept is touched by either.
 - **Counter:** Name a specific player or pick (never vague) that would make the trade fair.
   Show what needs to move to which side to get within ~5% raw value.
   The suggestion is structured (`getCounterSuggestion` returns `{side, type, item, text}`)
@@ -1132,23 +1203,55 @@ Counter or Decline.** The app proposed and then argued with itself.
   - **Phase 2 reorders candidates; it never widens the pool.** The fair band and
     the protected-asset rule are unchanged, so the builder still never reaches
     for a core starter to make a deal palatable.
+  - **Phase 2 is a TRADE-OFF, not an override (2026-09-07 — supersedes the
+    2026-09-06 owner call recorded below, on the owner's explicit later ask).**
+    It used to be lexicographic: best appeal won outright and my own cost only
+    broke ties, so the search bought their enthusiasm at any price inside the
+    band. Candidates are now ranked on **`APPEAL_BONUS[appeal] − my keep-pain`**,
+    one scale, both roster facts.
+    - `APPEAL_BONUS` = **Weak −1 · Fair 0 · Strong +0.4**, deliberately
+      asymmetric. A `Weak` package is a real failure (the offer goes
+      unanswered — the whole reason phase 2 exists), so it is priced as a
+      near-prohibitive guard. `Strong` over `Fair` is negotiating comfort, so it
+      is a nudge: it is bought only when it is nearly free.
+    - **Set mid-plateau, not at a step edge.** Swept over the live 20-target
+      board, keep-pain paid across all 20 suggestions: w ≤ 0.20 → 17.79 (5/20
+      changed) · **0.30–0.50 → 18.46 (2/20)** · 0.70 → 19.02 (1/20) · 1.00 →
+      19.84 (0/20, i.e. the old rule). Three flat plateaus; 0.40 is the middle
+      of the selected one, so a small mis-estimate changes nothing.
+    - Upgrading Fair → Strong costs −0.63, 0.08, 0.23, 0.28, 0.73 and 0.85
+      keep-pain on the six live targets where both tiers exist — so 0.40 takes
+      the first four and refuses the last two.
+    - **Measured effect: 2 of 20 suggestions changed, −1.38 total keep-pain, and
+      raw value sent essentially unmoved (−13 across all 20).** Both changed
+      targets had been reaching for an asset just under `PROTECT_THRESHOLD`
+      (TreVeyon Henderson at 0.85 keep) when a Fair package at ~0.4 keep-pain
+      was available. The fix is narrow because the **fair band already bounds
+      the damage** — the old rule could only overpay within `[0.9×, 1.15×]`.
+    - These are **preference weights, not measured constants** — same status as
+      `AGE_TILT_BY_TIER`. They break near-ties; the fair band and the protect
+      threshold still bind first, and the search is still untruncated (§4e-v).
   - **A surviving `Weak` is real information, not a failure** — it means nothing
     you can spare interests them at this price. The card says so rather than
     hiding the row.
   - Without a partner roster it degrades to phase 1 and reports `appeal: null`;
     no read is invented.
-  - **`alternative` — the cheaper road not taken.** The card also names the
-    best package at a *lower* appeal that genuinely costs less
-    (`ALTERNATIVE_MIN_SAVING` of keep-pain; below that the two cost the same and
-    one merely reads worse, which is not an option). This answers the question
-    the board previously left implicit — "why is it spending that piece?" — on
-    the card itself: *"Est. cost: Chase Brown · Strong for them / Or cheaper:
-    Jordan Love — weak for them."* **It never reorders anything.** Making
-    appeal trade off against my own cost was proposed and **declined by the
-    owner** (2026-09-06): knowing whether they would accept is the information
-    the search exists to produce, and a package that needs a pick to bridge it
-    is a different trade rather than a cheaper one. So appeal stays
-    lexicographically first and this is additive information beside it.
+  - **`alternative` — the road not taken, and it now points the OTHER way
+    (2026-09-07).** While appeal won outright the suggestion was always the most
+    agreeable package, so the useful footnote was the *cheaper* one. Now that
+    the winner already weighs my cost, the card names the package they'd like
+    **more** that it declined to pay for: *"Est. cost: Rachaad White · Fair for
+    them / Costs more: Chase Brown — strong for them."* Shown only when the
+    extra cost is real (`ALTERNATIVE_MIN_SAVING` of keep-pain); below that the
+    two cost the same and one merely reads better, which is not a decision.
+    **It still never reorders anything** — it is information beside the pick.
+    - **Historical note.** Making appeal trade off against my own cost was
+      proposed and **declined by the owner on 2026-09-06** (reasoning: knowing
+      whether they would accept is the information the search exists to
+      produce). The owner **reversed that on 2026-09-07** after the review above
+      measured what the lexicographic rule was costing. The earlier ruling is
+      superseded, not forgotten — if the trade-off is ever revisited, the
+      original objection is the thing to answer.
 - Each target card carries the read its package was chosen for — a `Badge`
   (`Strong` green / `Fair` neutral / `Weak` amber, never brand red) plus one
   short line. The board no longer hands over an offer without saying what it is
@@ -1951,16 +2054,28 @@ loading / `ErrorState` + retry; mobile-first at 390px.
 **Odds consumers (wired via `getDeadlineVerdict` + `usePlayoffOdds`):**
 
 - **Trade Analyzer Layer 3** (`analyzeTrade` takes an optional `myPlayoffPct`):
-  the Win Window layer shows a real "Playoff odds: N% · Buyer/Seller — …" line
-  under the tier read.
+  the odds **SCORE** the Win Window layer in season — they are not a line
+  printed under a tier read any more (2026-09-07, see Feature 3 Layer 3 for the
+  measurement). `getDeadlineVerdict`'s stance selects the buyer/seller branch;
+  the win-window tier is the offseason fallback and rides along as context.
+  This is the only consumer where the odds affect a **score** rather than
+  display — everywhere else they describe.
 - **Trade Partner Finder:** each opponent card flags a likely **seller**
   (< 35% odds) or **buyer** (≥ 70% odds) from their live odds.
 - **The Edge:** a "Playoff odds: N% · stance" briefing item (Trophy icon) deep-
   links to League › Playoffs.
 
 All three read `usePlayoffOdds`'s `oddsByRoster` / `myOdds` and **degrade
-silently in the offseason** (no odds yet → the line/flag/item simply doesn't
-render, and Layer 3 falls back to the tier-only read).
+silently in the offseason** (no odds yet → the flag/item simply doesn't render,
+and Layer 3 falls back to the tier-only read).
+
+**Baseline caveat, unaddressed:** this league seats **6 of 10** teams in the
+playoffs, so 60% is the coin-flip baseline and the ≥70% Buyer threshold sits
+only modestly above it — measured at 2026 Week 1, five teams bunched between
+76% and 88%. The thresholds separate the top and bottom of the league cleanly
+and compress the middle. Recalibrating them relative to
+`playoff_teams / numTeams` is a real option but would move three surfaces at
+once and has not been measured; do not change them casually.
 
 -----
 
@@ -3252,7 +3367,7 @@ dynastyedge/
 │   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
 │   ├── appVersion.test.mjs          ← reload URL: ?v= before the hash (HashRouter), encoding, null build id
 │   ├── tradeTargets.test.mjs        ← Targets ranking: deficit gate + value floor league-wide, team-scoped mode keeps depth (never empty), fillsNeed flag, and the movability TILT (band under 2×, spare depth outranks an equal-value untouchable, nothing ever hidden)
-│   ├── tradeAnalysis.test.mjs       ← the cheaper `alternative` (always lower-appeal, never the suggestion — the ranking is untouched), verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge, Layer 4 (a benched acquisition reads Weak however valued; the gate downgrades an Accept but never lifts a Decline; landing spots both directions; the pitch speaks from their side), buildPartnerFit's extraction contract (standalone == via analyzeTrade), and the two-phase package builder (phase 2 rejects the piece they have no use for, never unlocks a protected asset, reports no appeal without a partner)
+│   ├── tradeAnalysis.test.mjs       ← Layer 3's basis swap (odds score the window in season, tier is the offseason fallback byte-for-byte, a bubble team gets a real read, the printed stance is the one that scored it), the `alternative` (now always HIGHER-appeal — the pricier road the cost-aware search passed over), the phase-2 trade-off (a Strong package costing more than APPEAL_BONUS loses to a Fair one; the fair band and protect threshold still bind), Layer 4's fills/lineup-gain scored ONCE, the my-lineup verdict gate (downgrades an Accept, never upgrades, never fires on noise), verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge, Layer 4 (a benched acquisition reads Weak however valued; the gate downgrades an Accept but never lifts a Decline; landing spots both directions; the pitch speaks from their side), buildPartnerFit's extraction contract (standalone == via analyzeTrade), and the two-phase package builder (phase 2 rejects the piece they have no use for, never unlocks a protected asset, reports no appeal without a partner)
 │   ├── tradeContext.test.mjs        ← the five negotiating signals (fair band, scarcity, roster space, weekly impact, partner activity) — and the contract that NONE of them may move the verdict
 │   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
 │   ├── lineupBuild.test.mjs         ← slot-fill order (singles → FLEX → SFLX), IR/taxi excluded, who-starts identity
@@ -3278,13 +3393,17 @@ honestly:** instead of "cannot find module" it prints `# tests 152 / # pass 145 
 transitively importing `react` (`tradeAnalysis.js` → `recommendations.js` →
 `useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
 `draftLive` loading their hooks) — the file fails to load, so its tests never
-run and the count silently drops from **258** to 152. `npm run build` in the
-same state fails with `sh: 1: vite: not found`. **If the test count isn't 258,
+run and the count silently drops from **269** to 152. `npm run build` in the
+same state fails with `sh: 1: vite: not found`. **If the test count isn't 269,
 run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-07
 by renaming `node_modules` aside; re-measure them whenever the suite grows —
 the pair had drifted four times before this, 178/130, 177/115, 219/136 and
 242/136. The **7 failing files** have been the constant across every
-re-measurement; both counts move with the suite.)
+re-measurement. Note the two counts do **not** always move together: the
+2026-09-07 trade-engine work added 6 tests to `tradeAnalysis.test.mjs`, which
+is already one of the 7 files that cannot load without `node_modules`, so the
+full count went 258 → 264 → 269 while the broken-state count stayed at **152**. Only
+tests added to a file outside those 7 move the second number.)
 
 **Tests:** `npm test` runs the `tests/` suite — plain `.mjs` scripts on Node's
 built-in `node:test` runner with `node:assert/strict`, zero new dependencies

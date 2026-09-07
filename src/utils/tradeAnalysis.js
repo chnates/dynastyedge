@@ -12,6 +12,12 @@ export { buildFairBand, FAIR_BAND_PCT } from './fairBand'
 // A scarcity read needs a side worth reading — two below-replacement sides
 // carry no signal. And the flag only speaks on a real disagreement: 10 points
 // of percentage gap, or the two scales naming different winners.
+// How far MY best starting lineup must move before the change is allowed to
+// break a roster-fit tie, as a fraction of that lineup's current value. This is
+// a materiality floor, not a measured constant — it exists so noise (a 40-point
+// move on a 45,000 lineup) can never flip a verdict.
+export const MY_LINEUP_MATERIAL_PCT = 0.01
+
 const SCARCITY_FLOOR = 500
 const SCARCITY_GAP = 10
 
@@ -241,8 +247,17 @@ export function buildPartnerFit(giveAssets, getAssets, opponentRoster, allRoster
     partnerReasons.push("Nothing you're sending changes their starting lineup.")
   }
 
+  // A filled deficit and a lineup gain are ONE fact, not two. A "fill" is
+  // defined as an arriving player who STARTS at a position they're below
+  // average in — which is precisely what raises `theirStartersDelta`. Scoring
+  // both charged a single event the 2 points that mean `Strong`, and it was
+  // the same double-count already removed on the negative side (the `stacks`
+  // branch above says so in as many words). So the point is awarded once, by
+  // the lineup delta, and the fill only adds its own point when the lineup
+  // delta did NOT already score it. The sentence still renders either way —
+  // naming WHERE the hole is, is information the delta alone doesn't carry.
   if (theirFills.length > 0) {
-    appealScore += 1
+    if (theirStartersDelta <= 0) appealScore += 1
     partnerReasons.push(`It covers their ${joinAnd(theirFills)} deficit with a player who starts for them right away.`)
   }
 
@@ -370,11 +385,32 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
       hurtStrengths.push(pos)
   })
 
+  // The mirror of Layer 4's `startersDelta` — the change in the value of MY
+  // best startable lineup. Layer 4 calls this "the single honest measure of
+  // does this help them" and computes it for the partner; both lineups were
+  // already built here, so my own side was one subtraction away from having
+  // the same measure and did not have it.
+  const myStartersDelta = Math.round(afterLineup.startingValue - beforeLineup.startingValue)
+  // Material relative to MY lineup, not an absolute number — a 150-point move
+  // means something different on a 27,000 lineup than on a 63,000 one (the
+  // live league spans exactly that range). Below this it is noise and must not
+  // move a verdict.
+  const myLineupMaterial = Math.abs(myStartersDelta) >= beforeLineup.startingValue * MY_LINEUP_MATERIAL_PCT
+
   let fitScore = 0
   if (filledNeeds.length > 0 && hurtStrengths.length === 0)      fitScore =  1
   else if (hurtStrengths.length > 0 && filledNeeds.length === 0) fitScore = -1
   else if (filledNeeds.length > hurtStrengths.length)            fitScore =  1
   else if (hurtStrengths.length > filledNeeds.length)            fitScore = -1
+
+  // NOTE: this deliberately does NOT feed `fitScore`. Position counts tie far
+  // more often than they resolve (measured live: `fitScore` was 0 on 18 of 20
+  // suggested trades, because giving a back and getting a receiver fills one
+  // position and hurts one whatever the sizes), so folding the delta in as a
+  // tiebreak is tempting — but `fitScore < 0` is a hard Decline branch below,
+  // and a rebuild trade that ships a starter for youth and picks SHOULD drop
+  // my current lineup. Declining those would be a worse error than the one
+  // being fixed. It gates the verdict instead — see `getTradeVerdict`.
 
   // Bench note: acquired players who won't crack the starting lineup are depth,
   // not the upgrade a position-tag read would imply.
@@ -396,54 +432,91 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
   }
 
   // Layer 3: Win window fit
+  //
+  // WHAT DECIDES "am I buying or selling?" — live playoff odds in season, the
+  // win-window tier only when there are no odds (offseason).
+  //
+  // The tier is a RANKING of accumulated assets: 50% total roster value (bench
+  // and picks included), 30% pick capital, 20% youth, top 3 Contending / bottom
+  // 3 Rebuilding. Measured on the live league it tracks total assets at
+  // Spearman 0.952 but the actual STARTING LINEUP at only 0.721 — it scores
+  // what you own, not the team you field. Playoff odds track the starting
+  // lineup at 0.988, which is the question this layer is asking.
+  //
+  // Two live mislabels the tier produced and the odds fix: roster 5 has the
+  // 2nd-best starting lineup and 87.7% odds but reads `Rebuilding` (top-heavy,
+  // no picks left — in fact the most win-now team in the league), and Jake &
+  // Bake has the 9th-best lineup and 8.3% odds but reads `Middle` because
+  // hoarding picks props up their tier score.
+  //
+  // The tier ALSO has no branch at all for `Middle`, so four teams by
+  // construction — 40% of the league every season, this owner included — got
+  // windowScore 0 and the placeholder note on every trade they ever analyzed.
+  // "On the bubble" is a measured state that can hold any number of teams,
+  // including none; `Middle` is a fixed-size bucket.
+  //
+  // The asset-type tests below are UNCHANGED — only what selects them moved.
+  // See docs/analysis/trade-engine-my-side-2026-09.md §4.
   const winWindowTiers = assignWinWindowTiers(allRosters)
   const myTier = winWindowTiers[myRoster.rosterId] ?? 'Middle'
 
-  let windowScore = 0
-  let windowNote  = 'Neutral — fits your current win window'
+  // `getDeadlineVerdict` is the ONE definition of buyer/seller in the app — the
+  // Playoffs page, Trade Partner Finder and The Edge all read it. Reusing it
+  // here means the Analyzer can never disagree with the odds page about what
+  // your own stance is.
+  const deadlineVerdict = myPlayoffPct != null ? getDeadlineVerdict(myPlayoffPct, myTier) : null
+  const oddsStanceLive = deadlineVerdict?.stance ?? null
+  const windowBasis = oddsStanceLive ? 'odds' : 'tier'
+  // Buyer/Seller come from odds when they exist; Contending/Rebuilding are the
+  // offseason stand-in. Anything else ("On the bubble", "Middle") takes no lean.
+  const buying  = oddsStanceLive ? oddsStanceLive === 'Buyer'  : myTier === 'Contending'
+  const selling = oddsStanceLive ? oddsStanceLive === 'Seller' : myTier === 'Rebuilding'
+  const oddsPctLabel = myPlayoffPct != null ? `${Math.round(myPlayoffPct * 100)}% playoff odds` : null
+  const basisLabel = windowBasis === 'odds' ? oddsPctLabel : `${myTier} window`
 
-  if (myTier === 'Contending') {
+  let windowScore = 0
+  let windowNote  = windowBasis === 'odds'
+    ? `You're on the bubble at ${oddsPctLabel} — no strong buy or sell lean, so this trade stands on value and lineup fit`
+    : 'Neutral — fits your current win window'
+
+  if (buying) {
     const gettingOnlyPicks  = getPicks.length > 0 && getPlayers.length === 0
     const givingProvenVets  = givePlayers.some(p => p.value > 5000 && (p.age ?? 99) <= 30)
 
     if (gettingOnlyPicks) {
       windowScore = -1
-      windowNote  = 'Getting only picks conflicts with your Contending window — proven players serve you better'
+      windowNote  = `Getting only picks conflicts with your ${basisLabel} — proven players serve you better`
     } else if (givingProvenVets) {
       windowScore = -1
-      windowNote  = 'Giving up proven starters conflicts with your Contending window'
+      windowNote  = `Giving up proven starters conflicts with your ${basisLabel}`
     } else {
       windowScore = 1
-      windowNote  = 'Proven players fit your Contending window'
+      windowNote  = `Proven players fit your ${basisLabel}`
     }
-  } else if (myTier === 'Rebuilding') {
+  } else if (selling) {
     const gettingExpVets       = getPlayers.some(p => p.value > 6000 && (p.age ?? 0) >= 28)
     const gettingYouthOrPicks  = getPlayers.some(p => (p.age ?? 99) < 25) || getPicks.length > 0
 
     if (gettingExpVets) {
       windowScore = -1
-      windowNote  = 'Acquiring expensive veterans conflicts with your Rebuilding window'
+      windowNote  = `Acquiring expensive veterans conflicts with your ${basisLabel}`
     } else if (gettingYouthOrPicks) {
       windowScore = 1
-      windowNote  = 'Youth and picks align with your Rebuilding window'
+      windowNote  = `Youth and picks align with your ${basisLabel}`
     } else {
-      windowNote  = 'Neutral for your Rebuilding window'
+      windowNote  = windowBasis === 'odds'
+        ? `Neutral for a season your ${oddsPctLabel} call a long shot`
+        : 'Neutral for your Rebuilding window'
     }
   }
 
-  // Playoff-odds context (real probability behind the win-window read). Only
-  // present in-season once the simulation has live odds; null otherwise.
-  let playoffPct = null
-  let oddsStance = null
-  let oddsNote   = null
-  let oddsTone   = null
-  if (myPlayoffPct != null) {
-    const dv = getDeadlineVerdict(myPlayoffPct, myTier)
-    playoffPct = myPlayoffPct
-    oddsStance = dv.stance
-    oddsNote   = dv.text
-    oddsTone   = dv.tone ?? null
-  }
+  // Playoff-odds context. This is the SAME verdict object that selected the
+  // window lean above — computed once, so the stance the panel prints and the
+  // stance the score used can never drift apart.
+  const playoffPct = myPlayoffPct ?? null
+  const oddsStance = deadlineVerdict?.stance ?? null
+  const oddsNote   = deadlineVerdict?.text ?? null
+  const oddsTone   = deadlineVerdict?.tone ?? null
 
   // Partner's multi-year value direction (Dynasty Trajectory). Most relevant
   // when you're acquiring their players: a declining team is motivated to sell
@@ -595,10 +668,11 @@ export function analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, al
   return {
     giveTotal, getTotal, valueDiff, valuePct, valueWinner,
     filledNeeds, hurtStrengths, fitScore,
+    myStartersDelta, myLineupMaterial,
     benchAcquisitions, starterDepartures, benchNote, starterLossNote, giveContext,
     myLandingSpots, partnerFit,
     fairBand, scarcity, myRosterSpace, theirRosterSpace, weeklyImpact,
-    myTier, windowScore, windowNote, myDeltas,
+    myTier, windowScore, windowNote, windowBasis, myDeltas,
     playoffPct, oddsStance, oddsNote, oddsTone,
     partnerTrajectoryNote, partnerTrajectoryTone,
     myTrajectoryNote, myTrajectoryTone,
@@ -673,8 +747,29 @@ function baseTradeVerdict(analysis) {
 // evidence in my favor, it's evidence against.
 export function getTradeVerdict(analysis) {
   const base = baseTradeVerdict(analysis)
+  if (!base || base.verdict !== 'Accept') return base
+
+  // MY gate runs first, and it is the mirror of the partner gate below: the
+  // same measure (the change in the value of a best startable lineup), applied
+  // to my own roster. Layer 2 grades fit by COUNTING positions filled against
+  // positions hurt, which ties whenever a trade swaps one position for another
+  // — so an Accept could sit on top of a starting lineup that got materially
+  // worse and say "this fills your WR need" without ever weighing what left.
+  //
+  // Like the partner gate it only ever DOWNGRADES an Accept, and only on a
+  // move that clears MY_LINEUP_MATERIAL_PCT of my own lineup. It does not fire
+  // on a deliberate sell-off: those lose raw value too, so they never reach
+  // the clean-Accept branch this gates.
+  if (analysis.myLineupMaterial && analysis.myStartersDelta < 0) {
+    return {
+      verdict: 'Counter',
+      reasoning: `${base.reasoning} But your best starting lineup drops ${Math.abs(analysis.myStartersDelta).toLocaleString()} in value — the position count balances, the players don't.`,
+      lineupGated: true,
+    }
+  }
+
   const pf = analysis?.partnerFit
-  if (!base || !pf || pf.appeal !== 'Weak' || base.verdict !== 'Accept') return base
+  if (!pf || pf.appeal !== 'Weak') return base
   const concern = pf.concerns?.[0] ?? pf.reasons[0]
   return {
     verdict: 'Counter',
@@ -922,6 +1017,50 @@ function packageRationale(assets, ctx) {
 // which is not an option — it is just a worse offer.
 const ALTERNATIVE_MIN_SAVING = 0.25
 
+// What a step of partner appeal is WORTH, denominated in my own keep-pain —
+// the same 0..1-per-asset scale `assetKeepScore` uses, so the two are directly
+// comparable and phase 2 is a trade-off rather than an override.
+//
+// The shape is deliberately asymmetric, because the two ends are not the same
+// kind of fact. A `Weak` package is a real failure — it means the offer goes
+// unanswered, which is the whole reason phase 2 exists (see the two-phase note
+// on suggestFairPackage). `Strong` over `Fair` is a nicety: both give them a
+// reason to engage, and the difference is negotiating comfort, not whether a
+// deal happens. So Weak is priced as an near-prohibitive penalty and Strong as
+// a small bonus:
+//
+//   · to pick Strong over Fair, the Strong package must cost me no more than
+//     APPEAL_BONUS.Strong extra keep-pain
+//   · a Weak package needs to save more than 1.0 keep-pain — roughly a whole
+//     untouchable-tier asset — before it is preferred to a Fair one
+//
+// These are PREFERENCE WEIGHTS, not measured constants — the same status as
+// AGE_TILT_BY_TIER in recommendations.js, and bounded for the same reason: they
+// break near-ties, they do not argue with the fair band or the protect
+// threshold, both of which still bind first.
+//
+// `Strong` is set MID-PLATEAU, not at a step edge. Swept over the live 20-target
+// board (keep-pain paid across all 20 suggestions, vs the old lexicographic
+// rule):
+//
+//   w:      0.00   0.10   0.20 | 0.30   0.40   0.50 | 0.70 | 1.00
+//   pain:  17.79  17.79  17.79 | 18.46  18.46  18.46 | 19.02| 19.84
+//   changed:  5/20 ................ 2/20 ................ 1/20 | 0/20 (= old rule)
+//
+// Three flat plateaus. 0.30 and 0.50 are its edges, so 0.40 is the robust pick
+// — a small mis-estimate in either direction changes nothing. The plateau it
+// selects is the one that buys `Strong` only when it is nearly free: measured
+// on the same board, upgrading Fair -> Strong costs -0.63, 0.08, 0.23, 0.28,
+// 0.73 and 0.85 keep-pain on the six targets where both tiers exist, so this
+// takes the first four and refuses the last two.
+//
+// The `Weak` penalty is a GUARD, not an active lever — on this board a Fair
+// package existed for all 20 targets, so it never bound. It is sized to stay
+// inert unless the only alternative to Weak costs more than a whole
+// untouchable-tier asset, which preserves the §4e-v finding that a Weak
+// suggestion is a real failure rather than a cheap win.
+export const APPEAL_BONUS = { Weak: -1, Fair: 0, Strong: 0.4 }
+
 // Suggest a fair package from MY roster to acquire targetPlayer.
 //
 // TWO-PHASE, and the second phase is the point. Phase 1 enumerates every
@@ -1051,22 +1190,34 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
         })
         if (!fit) return
         const rank = APPEAL_RANK[fit.appeal] ?? 0
-        scored.push({ ...c, appealRank: rank, partnerFit: fit })
-        // Best appeal wins; among equals, the package that costs me least. The
-        // shortlist is already sorted by pain, so a strict > keeps the first.
-        if (!best || rank > best.appealRank) best = { ...c, appealRank: rank, partnerFit: fit }
+        // Their appeal and my cost on ONE scale. Previously this was
+        // lexicographic — best appeal won outright and my cost only broke ties
+        // — which made the search buy their enthusiasm at any price inside the
+        // band. Measured on the live 20-target board, that picked a package
+        // other than the cheapest fair one on 18 of 20 targets, sending 11,293
+        // more dynasty value in total (median 654, max 1,403 per trade) and
+        // reaching for an asset just under the protect line on 10 of them.
+        const netScore = (APPEAL_BONUS[fit.appeal] ?? 0) - c.pain
+        scored.push({ ...c, appealRank: rank, netScore, partnerFit: fit })
+        // The shortlist is already sorted by pain ascending, so a strict >
+        // keeps the cheaper package when two score identically.
+        if (!best || netScore > best.netScore) best = { ...c, appealRank: rank, netScore, partnerFit: fit }
       })
-      // The cheaper road not taken. Appeal stays lexicographically first — that
-      // was an owner call, because knowing whether they would accept is the
-      // information the search exists to produce, and a package needing a pick
-      // to bridge it is a different trade rather than a cheaper one. So this
-      // does NOT reorder anything; it just names what the winner cost you and
-      // what giving less would cost in their eyes. Only surfaced when the
-      // saving is real (ALTERNATIVE_MIN_SAVING) — a near-identical package at a
-      // worse appeal is noise, not an option.
+      // The road not taken — and it now points the OTHER way. When appeal was
+      // lexicographically first, the suggestion was always the most agreeable
+      // package and the useful footnote was the cheaper one. Now that the
+      // winner already weighs my cost, the option worth naming is the package
+      // they'd like MORE that I chose not to pay for. The owner's standing call
+      // is preserved either way: knowing whether they would accept is the
+      // information this search exists to produce, so it is still on the card —
+      // it is just no longer what silently picks the offer.
+      //
+      // Only surfaced when the extra cost is real (ALTERNATIVE_MIN_SAVING) —
+      // below that the two packages cost the same and one merely reads better,
+      // which is not a decision.
       if (best) {
         alternative = scored
-          .filter(c => c.appealRank < best.appealRank && best.pain - c.pain >= ALTERNATIVE_MIN_SAVING)
+          .filter(c => c.appealRank > best.appealRank && c.pain - best.pain >= ALTERNATIVE_MIN_SAVING)
           .sort((a, b) => b.appealRank - a.appealRank || a.pain - b.pain)[0] ?? null
       }
       // Every scored candidate returned null (no partner roster shape to read) —
