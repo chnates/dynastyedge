@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, XCircle as XCircleSmall, Circle, AlertTriangle, LineChart, Target, Users, Copy, Check, ArrowRight, Layers, CalendarClock, Scale, History } from 'lucide-react'
+import { CheckCircle2, XCircle as XCircleSmall, Circle, AlertTriangle, LineChart, Target, User, Users, Copy, Check, ArrowRight, Layers, CalendarClock, Scale, History } from 'lucide-react'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import SectionHeader from '../shared/SectionHeader'
 import TheCall from './TheCall'
@@ -124,71 +124,85 @@ function PlayerNewsCard({ intel, onTap }) {
   )
 }
 
-// "What am I giving up?" — a compact positional depth chart per position I'm
-// dealing from, marking the piece(s) leaving so the roster cost is concrete:
-// where the dealt player ranks among my others, who starts, and who's next up.
-function GivingUpBlock({ giveContext }) {
-  if (!giveContext?.length) return null
+// The positional depth chart, in whichever direction the piece is moving:
+// "Giving Up" (marker `out`, my pre-trade roster) and "Coming In" (marker `in`,
+// my post-trade roster). One component, because the question is the same one
+// both ways — where does this player actually sit among the others at his
+// position, and who starts? The panel used to draw this only for the players
+// leaving, so the roster cost was concrete and the roster GAIN was a sentence.
+const MARKER_STYLE = {
+  out: { row: 'bg-warning/10', chip: 'text-warning', label: 'out' },
+  in:  { row: 'bg-success/10', chip: 'text-success', label: 'in' },
+}
+
+function DepthChartBlock({ context, title }) {
+  if (!context?.length) return null
 
   return (
     <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
       <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary mb-2">
-        Giving Up
+        {title}
       </p>
       <div className="flex flex-col gap-3">
-        {giveContext.map(g => (
-          <div key={g.position}>
-            {/* Headline: each dealt player + their standing at the position */}
-            <p className="font-body text-xs text-text-primary dark:text-text-primary mb-1.5 leading-snug">
-              {g.dealt.map((d, i) => (
-                <span key={d.name}>
-                  {i > 0 && <span className="text-text-tertiary">, </span>}
-                  <span className="font-semibold">{d.name}</span>
-                  {' — your '}
-                  <span className={`font-mono font-semibold ${POS_TEXT[g.position] ?? 'text-text-secondary'}`}>
-                    {g.position}{d.posRank}
+        {context.map(g => {
+          const mk = MARKER_STYLE[g.marker] ?? MARKER_STYLE.out
+          return (
+            <div key={g.position}>
+              {/* Headline: each moving player + their standing at the position */}
+              <p className="font-body text-xs text-text-primary dark:text-text-primary mb-1.5 leading-snug">
+                {g.marked.map((d, i) => (
+                  <span key={d.name}>
+                    {i > 0 && <span className="text-text-tertiary">, </span>}
+                    <span className="font-semibold">{d.name}</span>
+                    {' — your '}
+                    <span className={`font-mono font-semibold ${POS_TEXT[g.position] ?? 'text-text-secondary'}`}>
+                      {g.position}{d.posRank}
+                    </span>
+                    <span className="text-text-secondary dark:text-text-secondary">
+                      {' of '}{g.count}{' · '}
+                      {g.marker === 'in'
+                        ? (d.isStarter ? 'starts' : 'bench')
+                        : (d.isStarter ? 'starter' : 'depth')}
+                    </span>
                   </span>
-                  <span className="text-text-secondary dark:text-text-secondary"> of {g.count} · {d.isStarter ? 'starter' : 'depth'}</span>
-                </span>
-              ))}
-            </p>
-            {/* Positional pecking order by dynasty value — dealt row highlighted */}
-            <div className="flex flex-col gap-px">
-              {g.peers.slice(0, 6).map((q, i) => (
-                <div
-                  key={q.sleeperId}
-                  className={`flex items-center gap-2 px-1.5 py-1 rounded-none ${
-                    q.isDealt ? 'bg-warning/10' : ''
-                  }`}
-                >
-                  <span className="font-mono text-[10px] text-text-tertiary dark:text-text-tertiary w-3 shrink-0">
-                    {i + 1}
-                  </span>
-                  <span className={`font-body text-[11px] truncate flex-1 ${
-                    q.isDealt
-                      ? 'text-text-primary dark:text-text-primary font-semibold'
-                      : 'text-text-secondary dark:text-text-secondary'
-                  }`}>
-                    {q.name}
-                    {q.isStarter && (
-                      <span className="ml-1.5 font-mono text-[9px] uppercase tracking-wide text-text-tertiary dark:text-text-tertiary">
-                        ST
+                ))}
+              </p>
+              {/* Positional pecking order by dynasty value — moving row highlighted */}
+              <div className="flex flex-col gap-px">
+                {g.peers.slice(0, 6).map((q, i) => (
+                  <div
+                    key={q.sleeperId}
+                    className={`flex items-center gap-2 px-1.5 py-1 rounded-none ${q.isMarked ? mk.row : ''}`}
+                  >
+                    <span className="font-mono text-[10px] text-text-tertiary dark:text-text-tertiary w-3 shrink-0">
+                      {i + 1}
+                    </span>
+                    <span className={`font-body text-[11px] truncate flex-1 ${
+                      q.isMarked
+                        ? 'text-text-primary dark:text-text-primary font-semibold'
+                        : 'text-text-secondary dark:text-text-secondary'
+                    }`}>
+                      {q.name}
+                      {q.isStarter && (
+                        <span className="ml-1.5 font-mono text-[9px] uppercase tracking-wide text-text-tertiary dark:text-text-tertiary">
+                          ST
+                        </span>
+                      )}
+                    </span>
+                    {q.isMarked && (
+                      <span className={`font-mono text-[9px] uppercase tracking-wide shrink-0 ${mk.chip}`}>
+                        {mk.label}
                       </span>
                     )}
-                  </span>
-                  {q.isDealt && (
-                    <span className="font-mono text-[9px] uppercase tracking-wide text-warning shrink-0">
-                      out
+                    <span className="font-mono text-[11px] tabular-nums text-text-secondary dark:text-text-secondary shrink-0">
+                      {q.unranked ? '—' : q.value.toLocaleString()}
                     </span>
-                  )}
-                  <span className="font-mono text-[11px] tabular-nums text-text-secondary dark:text-text-secondary shrink-0">
-                    {q.unranked ? '—' : q.value.toLocaleString()}
-                  </span>
-                </div>
-              ))}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
@@ -220,6 +234,50 @@ const APPEAL_STYLE = {
   Weak:   { text: 'text-danger',  tone: 'danger',  dot: 'bg-danger' },
 }
 
+// The same graded read, from MY seat — the block that was missing. Every fact
+// in it is one the panel already had; what it didn't have was a headline saying
+// what the trade is worth to my roster, in the same words used for theirs. It
+// is deliberately compact: the acts below ARE the reasons, so this carries the
+// verdict-level read plus the one fact that had no home anywhere on screen —
+// what the deal does to my own starting lineup, which until now was printed
+// only when it was bad enough to downgrade a verdict.
+function YourSideBlock({ myFit }) {
+  if (!myFit) return null
+  const st = APPEAL_STYLE[myFit.appeal] ?? APPEAL_STYLE.Fair
+
+  return (
+    <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
+      <div className="flex items-center gap-2 mb-2">
+        <User size={12} strokeWidth={2} className="text-text-tertiary shrink-0" />
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary">
+          Is it good for you?
+        </p>
+        <Badge tone={st.tone} soft>{myFit.appeal}</Badge>
+      </div>
+
+      <p className={`font-body text-xs leading-relaxed flex items-center gap-1.5 ${st.text}`}>
+        <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${st.dot}`} />
+        {myFit.summary}
+      </p>
+
+      {/* The reasons carry the numbers in words, exactly as they do for the
+          partner. They restate facts the acts below also carry — deliberately:
+          a one-word grade with a lineup gain under it reads as a contradiction
+          until you can see that the grade is paying for a 7% overpay. This is
+          the executive summary for my seat, and it is what makes a Weak
+          legible instead of insulting. */}
+      <ul className="flex flex-col gap-1 mt-2">
+        {myFit.reasons.map(r => (
+          <li key={r} className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-snug flex items-start gap-1.5">
+            <Circle size={9} strokeWidth={2} className="shrink-0 mt-1" />
+            <span>{r}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 // Layer 4 — "would they even want this?", answered from their roster. Everything
 // here is deterministic: their post-trade lineup and their standing against
 // league average. It is deliberately NOT a prediction that they'll accept —
@@ -229,7 +287,7 @@ function TheirSideBlock({ partnerFit, partnerName }) {
   const st = APPEAL_STYLE[partnerFit.appeal] ?? APPEAL_STYLE.Fair
   const who = partnerName ?? 'They'
   const sent = partnerFit.giveContext.flatMap(g =>
-    g.dealt.map(d => ({ ...d, position: g.position, count: g.count })))
+    g.marked.map(d => ({ ...d, position: g.position, count: g.count })))
 
   return (
     <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
@@ -460,7 +518,7 @@ export default function TradeVerdict({
 
   const {
     giveTotal, getTotal, filledNeeds, hurtStrengths, windowScore, windowNote, windowBasis, myTier,
-    benchNote, starterLossNote, giveContext, myLandingSpots, partnerFit,
+    benchNote, starterLossNote, giveContext, getContext, myLandingSpots, partnerFit, myFit,
     playoffPct, oddsStance, oddsNote, oddsTone,
     partnerTrajectoryNote, partnerTrajectoryTone,
     myTrajectoryNote, myTrajectoryTone,
@@ -538,6 +596,9 @@ export default function TradeVerdict({
       <div id="act-yours" className="scroll-mt-28">
         <SectionHeader label="Your side" />
         <Card padding="none" className="mb-4">
+          {/* The graded my-side read — the mirror of "Would they want it?" */}
+          <YourSideBlock myFit={myFit} />
+
           {/* Layer 1: Raw value */}
           <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
             <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary mb-2">
@@ -619,8 +680,10 @@ export default function TradeVerdict({
             )}
           </div>
 
-          {/* Roster cost — where the dealt players stand at their position */}
-          <GivingUpBlock giveContext={giveContext} />
+          {/* The two depth charts: what arrives, then what leaves. The gain
+              used to be one sentence while the cost got the whole chart. */}
+          <DepthChartBlock context={getContext} title="Coming In" />
+          <DepthChartBlock context={giveContext} title="Giving Up" />
 
           <RosterSpaceBlock space={myRosterSpace} who="You" />
 
