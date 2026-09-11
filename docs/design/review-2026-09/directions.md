@@ -275,3 +275,26 @@ all five, which is what gives the size ramp a tail to ramp across.
   thing named first in `unasked.md`. Leading with "You're a buyer. Five things
   need you today." and demoting 87,397 to the caption would be consistent. Left
   alone deliberately: the big figure is what makes the hero read as a cover.
+
+### Matchday rev 2 — the hero swap (owner approved, 2026-09-11)
+
+The home hero now leads with the call, not the figure. Structure is a deliberate
+parallel to the verdict poster, so the two heroes are one system:
+
+| | Home | Verdict |
+|---|---|---|
+| Eyebrow | The read · week 1 · 74% to the playoffs | Justin Jefferson · WR · MIN |
+| **Poster** | **You're a buyer.** | **Counter** |
+| Sub | Five things need you today. Trade future picks for win-now help while the odds hold. | 432 short of fair. Ask them to add a 2027 2nd. |
+| Caption | 87,397 team value · −141 (−0.2%) · 4th of ten · window Middle · $1000 to spend | you give 7,409 · you get 6,977 · band ±5% |
+
+A sentence can't wear the numeral treatment (tabular figures, −.05em tracking,
+`wdth` 125 are set for digits), so words get their own poster size — `.n.words`
+at 47px, `text-wrap: balance`, capped at 12ch.
+
+**One consequence worth naming:** the number roll no longer has a marquee figure
+on the home screen. It is kept on the caption's 87,397 at 13px, so the moment
+survives quietly, and it still lands full-size on the Analysis screen. If the
+home screen feels flat without a big figure, the fix is to promote **74%** — a
+number you can act on — not to restore 87,397, which is the one this swap was
+made to demote.

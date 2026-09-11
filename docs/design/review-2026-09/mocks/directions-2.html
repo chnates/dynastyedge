@@ -404,13 +404,17 @@ table.al-t{ width:100%; border-collapse:collapse; font-family:var(--ft); }
   opacity:.72; }
 .md-post .n{ font:800 62px/.82 var(--fd); font-variation-settings:'wdth' 125,'opsz' 96;
   letter-spacing:-.05em; margin-top:12px; font-variant-numeric:tabular-nums; }
+.md-post .n.words{ font-size:47px; line-height:.94; letter-spacing:-.035em;
+  font-variant-numeric:normal; text-wrap:balance; max-width:12ch; }
 .md-post .sub{ font:600 14px/1.36 var(--fd); margin-top:13px; max-width:29ch;
   text-wrap:balance; }
 .md-post .sub .fig{ font-family:var(--fn); font-variant-numeric:tabular-nums; }
 .md-post .meta{ display:flex; flex-wrap:wrap; gap:0 16px; margin-top:15px;
   padding-top:12px; border-top:1px solid rgba(0,0,0,.28); }
-.md-post .meta span{ font:500 10px/1.5 var(--fn); letter-spacing:.06em;
+.md-post .meta span{ font:500 10px/1.6 var(--fn); letter-spacing:.06em;
   text-transform:uppercase; }
+.md-post .meta .fig{ font-size:13px; font-weight:600; letter-spacing:.02em;
+  font-variant-numeric:tabular-nums; }
 .md-post .meta b{ font-weight:600; }
 
 /* section band — position hue at full bleed, the app's own tokens at scale */
@@ -914,7 +918,7 @@ function MD(scr){
         <span class="d">Targets · 20</span></header>
       <section class="md-post" style="--pc:var(--warn);--d:0">
         <div class="k">Justin Jefferson · WR · MIN</div>
-        <div class="n" style="font-size:64px">Counter</div>
+        <div class="n words" style="font-size:64px">Counter</div>
         <div class="sub"><span class="fig" data-count="432">0</span> short of fair.
           Ask them to add a 2027 2nd.</div>
         <div class="meta"><span>you give <b>7,409</b></span>
@@ -951,11 +955,13 @@ function MD(scr){
       <header class="md-mh"><span class="m">${D.team}</span>
         <span class="d">Fri 11 Sep</span></header>
       <section class="md-post" style="--pc:var(--ink);--d:0">
-        <div class="k">Team value · 30 days ${D.delta} (${D.pct})</div>
-        <div class="n" data-count="${D.value}">0</div>
-        <div class="sub">You're a buyer. Five things need you today.</div>
-        <div class="meta"><span><b>${D.rank}</b> of ten · window <b>${D.window}</b> ·
-          <b>${D.odds}%</b> to the playoffs · <b>${D.faab}</b> left to spend</span></div>
+        <div class="k">The read · week 1 · ${D.odds}% to the playoffs</div>
+        <div class="n words">You're a buyer.</div>
+        <div class="sub">Five things need you today. Trade future picks for
+          win-now help while the odds hold.</div>
+        <div class="meta"><span><b class="fig" data-count="${D.value}">0</b> team value ·
+          ${D.delta} (${D.pct}) · <b>${D.rank}</b> of ten · window <b>${D.window}</b> ·
+          <b>${D.faab}</b> to spend</span></div>
       </section>
       <article class="md-e" style="--pc:var(--warn);--d:${stag(i++,60)}">
         <div class="k">Act today</div>
