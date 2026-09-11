@@ -239,7 +239,7 @@ export default function LineupOptimizer() {
   }
 
   return (
-    <div className="px-4 pb-4 hero-sweep">
+    <div className="px-4 pb-4">
       <LineupMovesCard
         week={currentWeek}
         currentTotal={analysis.currentTotal}

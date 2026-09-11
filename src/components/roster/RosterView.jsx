@@ -74,7 +74,7 @@ export default function RosterView() {
   }
 
   return (
-    <div className="px-4 pb-4 hero-sweep">
+    <div className="px-4 pb-4">
       {/* ── Back button (when drilling down from League / The Edge) ── */}
       {selectedRosterId && (
         <button
@@ -87,29 +87,29 @@ export default function RosterView() {
 
       {/* ── Header — red score-bug hero ── */}
       <div className={selectedRosterId ? 'mt-1' : 'mt-4'}>
-        <div className="bug-red flex items-center px-3 py-1.5">
+        <div className="ink-field-cap flex items-center px-3 py-1.5">
           <span className="font-display text-[12px] uppercase tracking-[0.1em] leading-none">
             Dynasty Roster
           </span>
         </div>
-        <div className="hero-card border-t-0 px-4 pt-3 pb-3">
+        <div className="ink-field px-4 pt-3 pb-3">
           <div className="flex items-center gap-2.5">
             <TeamAvatar owner={displayRoster.owner} size={36} />
-            <h1 className="font-display text-2xl uppercase tracking-wide text-white leading-tight min-w-0 truncate">
+            <h1 className="font-display text-2xl uppercase tracking-wide text-bg-primary leading-tight min-w-0 truncate">
               {teamName}
             </h1>
           </div>
           <div className="flex items-baseline gap-2 mt-1.5">
-            <span className="font-mono text-3xl font-medium tabular-nums text-white">
+            <span className="font-mono text-3xl font-medium tabular-nums text-bg-primary">
               {displayRoster.totalValue.toLocaleString()}
             </span>
-            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-white/60">
+            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-bg-primary/60">
               dynasty pts
             </span>
           </div>
           <div className="flex items-center gap-1 mt-1.5">
-            <span className="block w-1.5 h-1.5 rounded-full bg-white/80 shrink-0" />
-            <span className="font-body text-[10px] text-white/55">
+            <span className="block w-1.5 h-1.5 rounded-full bg-bg-primary/80 shrink-0" />
+            <span className="font-body text-[10px] text-bg-primary/60">
               = starting lineup · — = no market value yet
             </span>
           </div>

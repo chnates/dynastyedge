@@ -204,13 +204,13 @@ export default function PlayoffOdds() {
   if (status === 'preseason') {
     return (
       <div className="px-4 pb-6">
-        <div className="mt-4 bug-red flex items-center px-3 py-1.5">
+        <div className="mt-4 ink-field-cap flex items-center px-3 py-1.5">
           <span className="font-display text-[12px] uppercase tracking-[0.1em] leading-none">
             Playoff Odds
           </span>
         </div>
-        <div className="hero-card border-t-0 px-4 py-4">
-          <p className="font-body text-sm text-white/80 leading-relaxed">
+        <div className="ink-field px-4 py-4">
+          <p className="font-body text-sm text-bg-primary/80 leading-relaxed">
             Live odds switch on once the Week 1 schedule is posted. The app will then play the
             rest of the season out 10,000 times to estimate everyone's chances of making the
             {` ${playoffTeams}`}-team playoff.
@@ -245,39 +245,39 @@ export default function PlayoffOdds() {
   return (
     <div className="px-4 pb-6">
       {/* My team summary — red score-bug hero */}
-      <div className="mt-4 bug-red flex items-center px-3 py-1.5">
+      <div className="mt-4 ink-field-cap flex items-center px-3 py-1.5">
         <span className="font-display text-[12px] uppercase tracking-[0.1em] leading-none">
           Your Playoff Odds
         </span>
       </div>
-      <div className="hero-card border-t-0 px-4 py-4">
+      <div className="ink-field px-4 py-4">
         <div className="flex items-end gap-3">
-          <span className="font-mono text-5xl font-bold tabular-nums text-white leading-none">
+          <span className="font-mono text-5xl font-bold tabular-nums text-bg-primary leading-none">
             {myResult ? pct(myResult.playoffPct) : '—'}
           </span>
           {myResult && (
             <div className="pb-1 flex flex-col gap-1">
-              <span className="font-body text-xs text-white/85">
+              <span className="font-body text-xs text-bg-primary/80">
                 Proj. {myResult.projWins.toFixed(1)}–{myResult.projLosses.toFixed(1)}
               </span>
-              <span className="font-body text-xs text-white/85">
+              <span className="font-body text-xs text-bg-primary/80">
                 {ordinal(myResult.avgSeed)} seed projected
               </span>
             </div>
           )}
         </div>
-        <p className="font-body text-[11px] text-white/70 mt-1.5 leading-relaxed">
+        <p className="font-body text-[11px] text-bg-primary/70 mt-1.5 leading-relaxed">
           {seasonComplete
             ? 'The regular season is complete — these reflect the final standings.'
             : `Chance of finishing in the top ${playoffTeams}, from 10,000 simulated seasons.`}
         </p>
 
         {myResult && !seasonComplete && (
-          <div className="mt-3 rounded-none bg-white/15 border border-white/20 px-3 py-2.5">
-            <p className="font-body text-xs font-bold uppercase tracking-wider text-white">
+          <div className="mt-3 rounded-none bg-bg-primary/20 border border-bg-primary/25 px-3 py-2.5">
+            <p className="font-body text-xs font-bold uppercase tracking-wider text-bg-primary">
               {verdict.stance}
             </p>
-            <p className="font-body text-[11px] text-white/85 mt-0.5 leading-relaxed">
+            <p className="font-body text-[11px] text-bg-primary/80 mt-0.5 leading-relaxed">
               {verdict.text}
             </p>
           </div>

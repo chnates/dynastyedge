@@ -53,12 +53,6 @@ const BRIEFING_TONES = {
 // Win-window tier dot colors for the hero stat strip. The hero panel is dark
 // in BOTH themes, so these are the dark-theme tier identity literals — the
 // theme-tracking --tier-* tokens would go near-invisible in light mode.
-const TIER_DOT = {
-  Contending: 'bg-[#C9CDD1]',
-  Middle:     'bg-[#57C4E8]',
-  Rebuilding: 'bg-[#8F9BF2]',
-}
-
 const TX_ICONS = {
   trade:        { Icon: ArrowLeftRight, color: 'text-accent' },
   waiver:       { Icon: DollarSign,     color: 'text-warning' },
@@ -83,10 +77,14 @@ function TrendChip({ trend, value, onHero = false }) {
   if (trend == null || trend === 0) return null
   const pct = trendPct(trend, value)
   const color = onHero
-    ? `bg-white/15 ${trend > 0 ? 'text-emerald-200' : 'text-rose-200'}`
+    // On an ink field a status hue cannot work: the field inverts with the
+    // theme, so emerald-on-cream (dark) and emerald-on-ink (light) can't both
+    // clear AA. The sign already carries direction, so the chip is a tint of
+    // the field's own ink. Off the field, the status colours stand.
+    ? 'bg-bg-primary/15 text-bg-primary'
     : trend > 0 ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'
   return (
-    <span className={`rounded-full px-1.5 py-0.5 font-mono text-[11px] font-semibold tabular-nums ${color}`}>
+    <span className={`rounded-none px-1.5 py-0.5 font-mono text-[11px] font-semibold tabular-nums ${color}`}>
       {trend > 0 ? '+' : ''}{Math.round(trend)}
       {pct != null && pct !== 0 && (
         <span className="opacity-80"> ({pct > 0 ? '+' : ''}{pct}%)</span>
@@ -236,11 +234,11 @@ export default function EdgeView() {
   })
 
   return (
-    <div className="px-4 pb-6 hero-sweep">
+    <div className="px-4 pb-6">
 
       {/* ── Hero: the red score-bug franchise report ── */}
       <div {...rise('mt-4')}>
-        <div className="bug-red flex items-center justify-between gap-2 px-3 py-1.5">
+        <div className="ink-field-cap flex items-center justify-between gap-2 px-3 py-1.5">
           <span className="font-display text-[12px] uppercase tracking-[0.1em] leading-none truncate">
             {myTeamName} · Franchise Report
           </span>
@@ -248,11 +246,11 @@ export default function EdgeView() {
             {dateline}
           </span>
         </div>
-        <div className="hero-card border-t-0 px-4 pt-3 pb-3.5">
-          <p className="font-body text-sm text-white/75 leading-snug">
+        <div className="ink-field px-4 pt-3 pb-3.5">
+          <p className="font-body text-sm text-bg-primary/75 leading-snug">
             {greeting()}, {myTeamName}.
           </p>
-          <p className="font-body text-sm font-semibold text-white mt-0.5 leading-snug">
+          <p className="font-body text-sm font-semibold text-bg-primary mt-0.5 leading-snug">
             {gmLine}
           </p>
 
@@ -262,12 +260,12 @@ export default function EdgeView() {
           >
             <div>
               <div className="flex items-baseline gap-2">
-                <span className="font-mono text-4xl font-medium tabular-nums text-white leading-none">
+                <span className="font-mono text-4xl font-medium tabular-nums text-bg-primary leading-none">
                   {myRoster.totalValue.toLocaleString()}
                 </span>
                 <TrendChip trend={signals.teamTrend} value={signals.playerValue} onHero />
               </div>
-              <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-white/50 mt-2">
+              <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-bg-primary/60 mt-2">
                 Team value · 30-day trend
               </p>
             </div>
@@ -275,39 +273,44 @@ export default function EdgeView() {
           </button>
 
           {/* Score-bug stat strip: rank · record · window · FAAB */}
-          <div className="flex mt-3 pt-2.5 border-t border-white/15 divide-x divide-white/15">
+          <div className="flex mt-3 pt-2.5 border-t border-bg-primary/20 divide-x divide-bg-primary/20">
             <button
               onClick={() => navigate('/league')}
               className="text-left pr-3 active:opacity-70 transition-opacity"
             >
-              <p className={`font-mono text-base font-semibold tabular-nums leading-none ${signals.valueRank <= 3 ? 'text-amber-300' : 'text-white'}`}>
-                #{signals.valueRank}
+              <p className="font-mono text-base font-semibold tabular-nums leading-none text-bg-primary">
+                {/* Top 3 reverses a second time — the page ground with the
+                    page's ink on it. The gold/silver/bronze medal from
+                    rankColors.js cannot be used on a field that inverts with
+                    the theme (amber-300 disappears on the cream one). */}
+                {signals.valueRank <= 3
+                  ? <span className="bg-bg-primary text-text-primary px-1 py-0.5">#{signals.valueRank}</span>
+                  : <>#{signals.valueRank}</>}
               </p>
-              <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-white/45 mt-1">Rank</p>
+              <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-bg-primary/60 mt-1">Rank</p>
             </button>
             {myRoster.hasRecord && (
               <div className="px-3">
-                <p className="font-mono text-base font-semibold tabular-nums leading-none text-white">
+                <p className="font-mono text-base font-semibold tabular-nums leading-none text-bg-primary">
                   {myRoster.record.wins}–{myRoster.record.losses}{myRoster.record.ties ? `–${myRoster.record.ties}` : ''}
                 </p>
-                <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-white/45 mt-1">Record</p>
+                <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-bg-primary/60 mt-1">Record</p>
               </div>
             )}
             <button
               onClick={() => navigate('/league')}
               className="text-left px-3 active:opacity-70 transition-opacity"
             >
-              <p className="flex items-center gap-1.5 font-display text-[14px] uppercase tracking-wide leading-none text-white">
-                <span className={`w-1.5 h-1.5 rounded-full ${TIER_DOT[signals.myTier] ?? 'bg-cyan-400'}`} />
+              <p className="font-display text-[14px] uppercase tracking-[0.02em] leading-none text-bg-primary">
                 {signals.myTier}
               </p>
-              <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-white/45 mt-1">Window</p>
+              <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-bg-primary/60 mt-1">Window</p>
             </button>
             <div className="pl-3">
-              <p className="font-mono text-base font-semibold tabular-nums leading-none text-emerald-300">
+              <p className="font-mono text-base font-semibold tabular-nums leading-none text-bg-primary">
                 ${myRoster.faabRemaining}
               </p>
-              <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-white/45 mt-1">FAAB</p>
+              <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-bg-primary/60 mt-1">FAAB</p>
             </div>
           </div>
         </div>

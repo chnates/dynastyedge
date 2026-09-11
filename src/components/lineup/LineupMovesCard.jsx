@@ -94,7 +94,7 @@ export default function LineupMovesCard({
     <>
       {/* ── Hero: the one loud moment on this screen ── */}
       <div className="mt-4">
-        <div className="bug-red flex items-center justify-between gap-2 px-3 py-1.5">
+        <div className="ink-field-cap flex items-center justify-between gap-2 px-3 py-1.5">
           <span className="font-display text-[12px] uppercase tracking-[0.1em] leading-none truncate">
             Week {week} · Start / Sit
           </span>
@@ -103,23 +103,23 @@ export default function LineupMovesCard({
           </span>
         </div>
 
-        <div className="hero-card border-t-0 px-4 pt-3 pb-3.5">
+        <div className="ink-field px-4 pt-3 pb-3.5">
           {optimal ? (
             <div className="flex items-center gap-2.5">
               <CheckCircle2 size={26} strokeWidth={1.75} className="text-success shrink-0" />
               <div className="min-w-0">
-                <p className="font-body text-sm font-semibold text-white leading-snug">
+                <p className="font-body text-sm font-semibold text-bg-primary leading-snug">
                   Lineup is optimal — no changes needed.
                 </p>
-                <p className="font-body text-xs text-white/60 leading-snug mt-0.5">
+                <p className="font-body text-xs text-bg-primary/60 leading-snug mt-0.5">
                   Nothing on your bench outprojects a starter.
                 </p>
               </div>
               <span className="ml-auto text-right shrink-0">
-                <span className="block font-mono text-2xl font-medium tabular-nums text-white leading-none">
+                <span className="block font-mono text-2xl font-medium tabular-nums text-bg-primary leading-none">
                   {currentTotal.toFixed(1)}
                 </span>
-                <span className="block font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-white/50 mt-1.5">
+                <span className="block font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-bg-primary/60 mt-1.5">
                   Projected
                 </span>
               </span>
@@ -129,34 +129,34 @@ export default function LineupMovesCard({
               <div className="flex items-end justify-between gap-3">
                 <div className="min-w-0">
                   <span className="flex items-baseline gap-1.5">
-                    <span className="font-mono text-4xl font-medium tabular-nums text-white leading-none">
+                    <span className="font-mono text-4xl font-medium tabular-nums text-bg-primary leading-none">
                       {pointsLeft.toFixed(1)}
                     </span>
-                    <span className="font-body text-sm text-white/60">pts</span>
+                    <span className="font-body text-sm text-bg-primary/60">pts</span>
                   </span>
-                  <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-white/50 mt-2">
+                  <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-bg-primary/60 mt-2">
                     Sitting on your bench
                   </p>
                 </div>
                 <div className="text-right shrink-0">
-                  <span className="font-mono text-sm tabular-nums text-white/55 leading-none">
+                  <span className="font-mono text-sm tabular-nums text-bg-primary/60 leading-none">
                     {currentTotal.toFixed(1)}
                   </span>
-                  <span className="font-body text-white/35 mx-1">→</span>
-                  <span className="font-mono text-lg font-semibold tabular-nums text-white leading-none">
+                  <span className="font-body text-bg-primary/60 mx-1">→</span>
+                  <span className="font-mono text-lg font-semibold tabular-nums text-bg-primary leading-none">
                     {optimalTotal.toFixed(1)}
                   </span>
-                  <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-white/50 mt-2">
+                  <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-bg-primary/60 mt-2">
                     Now → Optimal
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 mt-3 pt-3 border-t border-white/10">
+              <div className="flex items-center gap-3 mt-3 pt-3 border-t border-bg-primary/20">
                 {mustFixCount > 0 && (
                   <span className="flex items-center gap-1.5">
                     <AlertTriangle size={13} strokeWidth={2.25} className="text-danger shrink-0" />
-                    <span className="font-body text-xs text-white/80">
+                    <span className="font-body text-xs text-bg-primary/80">
                       {mustFixCount} must fix
                     </span>
                   </span>
@@ -164,15 +164,15 @@ export default function LineupMovesCard({
                 {upgradeCount > 0 && (
                   <span className="flex items-center gap-1.5">
                     <ArrowUp size={13} strokeWidth={2.5} className="text-warning shrink-0" />
-                    <span className="font-body text-xs text-white/80">
+                    <span className="font-body text-xs text-bg-primary/80">
                       {upgradeCount} upgrade{upgradeCount > 1 ? 's' : ''}
                     </span>
                   </span>
                 )}
                 {coinFlipCount > 0 && (
                   <span className="flex items-center gap-1.5">
-                    <Scale size={13} strokeWidth={2.25} className="text-white/45 shrink-0" />
-                    <span className="font-body text-xs text-white/60">
+                    <Scale size={13} strokeWidth={2.25} className="text-bg-primary/60 shrink-0" />
+                    <span className="font-body text-xs text-bg-primary/60">
                       {coinFlipCount} coin flip{coinFlipCount > 1 ? 's' : ''}
                     </span>
                   </span>

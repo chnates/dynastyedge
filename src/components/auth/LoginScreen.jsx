@@ -11,13 +11,6 @@ import TeamAvatar from '../shared/TeamAvatar'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 
-// Edge-bar palette cycled across the team picker rows so the list reads
-// colorful, not monochrome. Identity tokens only (never status-as-id).
-const EDGE_BARS = [
-  'bg-accent', 'bg-pos-def', 'bg-pos-wr', 'bg-pos-rb',
-  'bg-pos-qb', 'bg-pos-te', 'bg-tier-middle', 'bg-tier-rebuild',
-]
-
 // Gated sign-in: resolve a Sleeper username to a roster in this league (the
 // real path we'll generalize later), with a tap-to-pick team list as the
 // fallback. "Login" is read-only identity resolution against a public Sleeper
@@ -81,16 +74,16 @@ export default function LoginScreen() {
       <div className="max-w-[460px] mx-auto px-4">
         {/* Branding — red score-bug hero */}
         <div className="mb-6">
-          <div className="bug-red flex items-center justify-center px-3 py-1.5">
+          <div className="ink-field-cap flex items-center justify-center px-3 py-1.5">
             <span className="font-display text-[12px] uppercase tracking-[0.14em] leading-none">
               Your dynasty command center
             </span>
           </div>
-          <div className="hero-card border-t-0 px-6 py-8 text-white text-center">
+          <div className="ink-field px-6 py-8 text-bg-primary text-center">
             <div className="flex justify-center">
               <DynastyEdgeLogo theme="dark" size={132} />
             </div>
-            <p className="font-body text-[13px] text-white/70 mt-4">
+            <p className="font-body text-[13px] text-bg-primary/70 mt-4">
               Sign in with your Sleeper username to load your team.
             </p>
           </div>
@@ -148,12 +141,11 @@ export default function LoginScreen() {
                 <button
                   key={roster.rosterId}
                   onClick={() => pick(roster)}
-                  className={`flex items-center gap-3 w-full pl-3 pr-4 py-3 text-left relative hover:bg-white/5 active:bg-white/10 transition-colors ${
+                  className={`flex items-center gap-3 w-full px-4 py-3 text-left hover:bg-bg-secondary active:bg-bg-secondary transition-colors ${
                     i > 0 ? 'border-t border-border-default' : ''
                   }`}
                 >
-                  <span className={`absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full ${EDGE_BARS[i % EDGE_BARS.length]}`} />
-                  <TeamAvatar owner={roster.owner} size={34} className="ring-2 ring-white/10" />
+                  <TeamAvatar owner={roster.owner} size={34} className="ring-1 ring-border-default" />
                   <span className="flex-1 min-w-0">
                     <span className="block font-body font-semibold text-[15px] text-text-primary truncate">
                       {getTeamName(roster.owner)}
