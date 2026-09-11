@@ -21,7 +21,7 @@ import {
 } from '../../utils/edgeBriefing'
 import { POS_TEXT } from '../../utils/positionColors'
 import { TIER_BADGE, TIER_TEXT } from '../../utils/tierColors'
-import { Button, Card, Badge } from '../ui'
+import { Button, Card, Badge, Mark } from '../ui'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import SectionHeader from '../shared/SectionHeader'
@@ -284,7 +284,7 @@ export default function EdgeView() {
                     rankColors.js cannot be used on a field that inverts with
                     the theme (amber-300 disappears on the cream one). */}
                 {signals.valueRank <= 3
-                  ? <span className="bg-bg-primary text-text-primary px-1 py-0.5">#{signals.valueRank}</span>
+                  ? <Mark tone="ground">#{signals.valueRank}</Mark>
                   : <>#{signals.valueRank}</>}
               </p>
               <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-bg-primary/60 mt-1">Rank</p>
@@ -325,7 +325,7 @@ export default function EdgeView() {
       <Card
         {...rise()}
         onClick={() => setAnalysisOpen(true)}
-        accent="bg-accent"
+        tone="bg-text-primary"
         padding="px-3 py-3"
         className="active:opacity-60"
       >
@@ -357,7 +357,7 @@ export default function EdgeView() {
                 <Card
                   key={item.id}
                   onClick={() => runAction(item.action)}
-                  accent={tone.bar}
+                  tone={tone.bar}
                   padding="px-3 py-3"
                   className="active:opacity-60"
                 >

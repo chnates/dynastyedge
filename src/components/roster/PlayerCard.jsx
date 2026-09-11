@@ -1,4 +1,5 @@
 import TrendArrow from '../shared/TrendArrow'
+import { Magnitude } from '../ui'
 import { POS_TEXT } from '../../utils/positionColors'
 
 export default function PlayerCard({ player, onClick }) {
@@ -30,8 +31,11 @@ export default function PlayerCard({ player, onClick }) {
           )}
         </span>
 
-        {/* Name */}
-        <span className="flex-1 font-body font-medium text-sm text-text-primary dark:text-text-primary truncate min-w-0">
+        {/* Name. NOT truncated: a player's name is the one field on this row
+            that must never elide (CLAUDE.md -> "Truncation is not a layout
+            strategy for a load-bearing value"), and the value column beside it
+            is now variable-width, so a long name wraps instead. */}
+        <span className="flex-1 font-body font-medium text-sm text-text-primary dark:text-text-primary min-w-0 text-balance">
           {name}
         </span>
 
@@ -40,9 +44,13 @@ export default function PlayerCard({ player, onClick }) {
           {team}
         </span>
 
-        {/* Dynasty value */}
-        <span className="font-mono text-sm font-medium text-text-primary dark:text-text-primary shrink-0 w-14 text-right tabular-nums">
-          {value > 0 ? value.toLocaleString() : '—'}
+        {/* Dynasty value — SIZE IS THE QUANTITY (finding B2). This row is where
+            the finding was measured: "Bo Nix (4,867) and Xavier Legette (365) —
+            a 13x spread — are visually indistinguishable". The column keeps a
+            minimum width and stays right-aligned so the figures still line up
+            down the list while their sizes differ. */}
+        <span className="shrink-0 min-w-[80px] text-right">
+          <Magnitude value={value > 0 ? value : null} />
         </span>
 
         {/* Trend arrow */}

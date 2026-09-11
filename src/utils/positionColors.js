@@ -38,13 +38,29 @@ export const POS_TAG = {
   DEF: 'text-pos-def bg-pos-def/15',
 }
 
-// Gradient fill for positional strength bars.
+// THE section band (Matchday): the position hue painted at full bleed with the
+// PAGE GROUND reversed out of it. This is the direction's one idea worth the
+// risk — the five hues promoted from 9px tags to solid fields — and the reason
+// light --pos-rb / --pos-te were deepened in index.css: paper type on the
+// shipped values read 3.87:1 and 3.83:1. Used by <PositionBand>; never
+// hand-rolled.
+export const POS_FIELD = {
+  QB: 'bg-pos-qb text-bg-primary',
+  RB: 'bg-pos-rb text-bg-primary',
+  WR: 'bg-pos-wr text-bg-primary',
+  TE: 'bg-pos-te text-bg-primary',
+  DEF: 'bg-pos-def text-bg-primary',
+}
+
+// Fill for positional strength bars. Flat, not a gradient — Matchday is flat
+// colour and hard edges, and the only two gradients the app ever had left with
+// Primetime Blackout's score-bugs.
 export const POS_BAR = {
-  QB: 'bg-gradient-to-r from-pos-qb/60 to-pos-qb',
-  RB: 'bg-gradient-to-r from-pos-rb/60 to-pos-rb',
-  WR: 'bg-gradient-to-r from-pos-wr/60 to-pos-wr',
-  TE: 'bg-gradient-to-r from-pos-te/60 to-pos-te',
-  DEF: 'bg-gradient-to-r from-pos-def/60 to-pos-def',
+  QB: 'bg-pos-qb',
+  RB: 'bg-pos-rb',
+  WR: 'bg-pos-wr',
+  TE: 'bg-pos-te',
+  DEF: 'bg-pos-def',
 }
 
 // Dimmed fill for below-average positional strength bars — keeps the position

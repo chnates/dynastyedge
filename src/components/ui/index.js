@@ -14,6 +14,12 @@
 export { default as Button } from './Button'
 export { default as IconButton } from './IconButton'
 export { default as Card } from './Card'
+// Matchday's three new primitives. Mark is what REPLACED Card's `accent` rail;
+// PositionBand is the full-bleed position field; Magnitude is the answer to
+// finding B2 (type size IS the quantity).
+export { default as Mark } from './Mark'
+export { default as PositionBand } from './PositionBand'
+export { default as Magnitude, magnitudeSize, MAGNITUDE_REFERENCE } from './Magnitude'
 export { default as Sheet, SheetHeader } from './Sheet'
 export { default as Modal } from './Modal'
 export { default as Chip } from './Chip'

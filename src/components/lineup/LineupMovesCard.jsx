@@ -40,7 +40,7 @@ function MoveSide({ icon, verb, entry, tone }) {
 // says a 2-point edge is right 61% of the time (utils/lineupConfidence.js).
 function MoveCard({ move: m }) {
   return (
-    <Card cut accent={m.mustFix ? 'bg-danger' : 'bg-warning'} padding="p-3">
+    <Card tone={m.mustFix ? 'bg-danger' : 'bg-warning'} padding="p-3">
       <div className="flex items-center justify-between gap-2 mb-2">
         <Badge tone={m.mustFix ? 'danger' : 'warning'} soft>
           {m.mustFix ? 'Must fix' : 'Upgrade'}

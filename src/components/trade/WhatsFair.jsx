@@ -70,7 +70,7 @@ function CashOutBlock({ board, onTap }) {
   return (
     <>
       <SectionHeader label="Cash out the age" accentBar="bg-warning" />
-      <Card accent="bg-warning" padding="p-3" className="flex flex-col gap-1.5">
+      <Card tone="bg-warning" padding="p-3" className="flex flex-col gap-1.5">
         <div className="flex items-center gap-2 min-w-0">
           <span className={`shrink-0 text-[9px] font-bold font-body px-1.5 py-0.5 rounded leading-none ${posTag}`}>
             {asset.position}

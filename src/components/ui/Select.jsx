@@ -23,21 +23,22 @@ const Select = forwardRef(function Select({ label, hint, className, children, ..
         <select
           ref={ref}
           className={cn(
-            'w-full rounded-none bg-bg-card border border-border-default',
-            'px-3 pr-8 py-2.5 font-body text-sm text-text-primary appearance-none',
-            'focus:border-accent transition-colors focus-ring',
+            // Ruled, not boxed — the same field voice as <Input>.
+            'w-full rounded-none bg-transparent border-0 border-b-2 border-border-default',
+            'px-0 pr-8 py-2.5 font-body text-sm text-text-primary appearance-none',
+            'focus:border-text-primary transition-colors focus-ring',
             className,
           )}
           {...rest}
         >
           {children}
         </select>
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary text-xs">
+        <span className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 text-text-tertiary text-xs">
           ▾
         </span>
       </div>
       {hint && (
-        <p className="font-body text-[10px] text-text-tertiary mt-1">{hint}</p>
+        <p className="aside font-body text-[10px] mt-1">{hint}</p>
       )}
     </div>
   )

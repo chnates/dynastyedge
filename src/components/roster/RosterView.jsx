@@ -11,8 +11,7 @@ import PickBadge from './PickBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import RosterAnalysisSheet from './RosterAnalysisSheet'
 import RosterActionItems from './RosterActionItems'
-import { Card } from '../ui'
-import { POS_BG, POS_TEXT } from '../../utils/positionColors'
+import { Card, PositionBand } from '../ui'
 import TeamAvatar from '../shared/TeamAvatar'
 
 const POSITION_ORDER = ['QB', 'RB', 'WR', 'TE', 'DEF']
@@ -124,7 +123,7 @@ export default function RosterView() {
           roster aging out?" is the obvious next question from the roster you're
           looking at, and nothing on the screen answered it). */}
       <Card
-        accent="bg-accent"
+        tone="bg-accent"
         padding="px-3 py-3"
         onClick={() => navigate(selectedRosterId ? `/league/trajectory/${selectedRosterId}` : '/my-team/trajectory')}
         className="mt-4 mb-1"
@@ -155,7 +154,7 @@ export default function RosterView() {
       {/* ── Roster Analysis (own roster only) ── */}
       {!selectedRosterId && (
         <Card
-          accent="bg-accent"
+          tone="bg-accent"
           padding="px-3 py-3"
           onClick={() => setAnalysisOpen(true)}
           className="mt-4 mb-1"
@@ -183,8 +182,16 @@ export default function RosterView() {
         if (!group?.length) return null
         return (
           <section key={pos}>
-            <SectionHeader label={pos} count={group.length} accentBar={POS_BG[pos]} accentText={POS_TEXT[pos]} />
-            <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+            {/* The full-bleed position field — Matchday's signature. Its total
+                is how you read WEIGHT ACROSS positions; the per-row type size
+                is how you read SHAPE WITHIN one. */}
+            <PositionBand
+              position={pos}
+              count={group.length}
+              total={group.reduce((a, p) => a + (p.value > 0 ? p.value : 0), 0)}
+              className="mt-5"
+            />
+            <div className="bg-bg-card dark:bg-bg-card border-x border-b border-border-default dark:border-border-default px-3">
               {group.map(player => (
                 <PlayerCard key={player.sleeperId} player={player} onClick={() => setSelectedPlayer(player)} />
               ))}
