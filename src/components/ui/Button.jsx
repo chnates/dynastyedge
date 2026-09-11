@@ -24,6 +24,10 @@ const VARIANTS = {
 }
 
 // Square corners — broadcast panels (Primetime Blackout).
+// `sm` and `md` render under the 44px touch minimum; `tap-target` (index.css)
+// grows the HIT area to 44px without moving the ink, so the density these
+// sizes exist for survives. `lg` already clears it and carries the class only
+// so every button shares one behaviour.
 const SIZES = {
   sm: 'text-xs px-3 py-1.5 rounded-none',
   md: 'text-sm px-4 py-2 rounded-none',
@@ -45,6 +49,7 @@ export default function Button({
   const classes = cn(
     'inline-flex items-center justify-center gap-2 font-body font-semibold whitespace-nowrap',
     'transition-opacity active:opacity-80 disabled:opacity-50 disabled:pointer-events-none',
+    'tap-target focus-ring',
     VARIANTS[variant] ?? VARIANTS.primary,
     SIZES[size] ?? SIZES.md,
     fullWidth && 'w-full',

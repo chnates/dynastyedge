@@ -82,30 +82,6 @@ overturned.
   against a +0.98 control (n=318). Sleeper had already raised their projections.
   See the plan's §9c.
 
-### DESIGN-2 — four ready-now bugs the design review surfaced
-
-**Trigger: fired.** These are independent of any visual direction, cost nothing
-to fix, and should land *before* the rebuild so the rebuild isn't carrying them.
-Evidence: `docs/design/review-2026-09/findings.md` §X1–X3, B3.
-
-1. **`--text-tertiary` fails WCAG AA in both themes** — dark `#54565C` on
-   `--bg-card #141417` = **2.5:1**; light `#8A9096` on `#FFFFFF` = **3.2:1**
-   (AA body needs 4.5:1). It is used **525 times** and carries real content:
-   the meta line on every player row, timestamps, trade-target reasons. Fix is
-   a token change in `src/index.css`, not 525 edits.
-2. **No `focus-visible` anywhere in the design system.** `Button`,
-   `IconButton`, `Card` (interactive), `Chip`, `Badge` define no focus ring;
-   `Input`/`Select` actively remove the outline
-   (`focus:outline-none focus:border-accent`).
-3. **Touch targets under 44px.** `IconButton` is 32/36px and is the close
-   control in every sheet header; `Button` `sm` (~30px) and `md` (~36px) are
-   also under. The app header's own buttons are correctly `w-11 h-11`, so the
-   rule is known and broken elsewhere.
-4. **The trade price truncates.** `WhatsFair.jsx:198` sets `truncate min-w-0`
-   on the `Est. cost:` value; live at 390px it elides on **5 of 11** target
-   cards — the most actionable field on the board. `LineupRow` has the same
-   class of bug on long player names ("TreVeyon He…").
-
 ### DESIGN-3 — the navigation rebuild
 
 **Trigger: fires with DESIGN-1** (they touch the same files; doing them apart
@@ -889,6 +865,7 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 
 | Item | Closed | How |
 |---|---|---|
+| DESIGN-2 — four ready-now accessibility/truncation bugs | 2026-09-11 | All four fixed in the primitives and tokens, not at 525 call sites: `--text-tertiary` re-derived to clear WCAG AA in both themes (dark 2.51→4.53:1, light 3.23→4.51:1); `.focus-ring` added as the one focus definition and `Input`/`Select`'s `focus:outline-none` removed; `.tap-target` guarantees a 44px hit area with no layout cost (`IconButton` `md` made a real 44px box) — deliberately NOT on `Chip`, where it would cause the bug it fixes; `Est. cost` and the lineup player name now wrap instead of eliding. Detail retained in §3 below |
 | Trade engine over-weighted the partner (3 fixes) | 2026-09-07 | Phase 2 made a cost/appeal trade-off (weight set mid-plateau from a sweep); `myStartersDelta` added and gating the verdict; Layer 4's fill/lineup double-count removed. Detail retained in §1 |
 | Layer 3 scored on a tier that measured the wrong thing | 2026-09-07 | Live playoff odds now score the win window in season (0.988 vs the starting lineup, against the tier's 0.721); tier is the offseason fallback. Killed the dead `Middle` branch that left 40% of the league with no read. Detail retained in §1 |
 | OPEN-2 — roll `PICK_YEARS` after the rookie draft | 2026-09-07 | Removed the annual chore instead: the pick window is derived from `/state/nfl` + the drafts list (`utils/seasonWindow.js`, zero extra fetches). Killed 40 ghost 0-value picks and surfaced 2029 league-wide. Detail retained in §2 |
@@ -899,3 +876,59 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 | Frontier Item 2 blocking question (are losing FAAB bids visible?) | 2026-08-08 | Verified yes; see `docs/analysis/faab-bid-corpus-2026-08.md`. Superseded by OPEN-3 |
 | ACTIVE-1 — season-readiness tests (draft day + Week 1) | 2026-08-08 | Three live contract breaks found and fixed (schedule endpoint, draft `slot_to_roster_id`, stats `pos`/`opp`); 35 new tests (72 → 107) + `scripts/dev/replay-live.mjs`. Detail retained in §1 |
 | ACTIVE-2 — Draft › Research: verify the first pipeline run | 2026-08-14 | Pipeline published 2026-08-14 11:12Z; feed shape, Market vs Model output, and the drawer's Rookies row all verified against live data. Detail retained in §1 |
+
+---
+
+### DESIGN-2 — the record (closed 2026-09-11)
+
+Kept per this file's own rule: closed items move, they are never deleted.
+The four bugs as originally recorded:
+
+**Trigger: fired.** These are independent of any visual direction, cost nothing
+to fix, and should land *before* the rebuild so the rebuild isn't carrying them.
+Evidence: `docs/design/review-2026-09/findings.md` §X1–X3, B3.
+
+1. **`--text-tertiary` fails WCAG AA in both themes** — dark `#54565C` on
+   `--bg-card #141417` = **2.5:1**; light `#8A9096` on `#FFFFFF` = **3.2:1**
+   (AA body needs 4.5:1). It is used **525 times** and carries real content:
+   the meta line on every player row, timestamps, trade-target reasons. Fix is
+   a token change in `src/index.css`, not 525 edits.
+2. **No `focus-visible` anywhere in the design system.** `Button`,
+   `IconButton`, `Card` (interactive), `Chip`, `Badge` define no focus ring;
+   `Input`/`Select` actively remove the outline
+   (`focus:outline-none focus:border-accent`).
+3. **Touch targets under 44px.** `IconButton` is 32/36px and is the close
+   control in every sheet header; `Button` `sm` (~30px) and `md` (~36px) are
+   also under. The app header's own buttons are correctly `w-11 h-11`, so the
+   rule is known and broken elsewhere.
+4. **The trade price truncates.** `WhatsFair.jsx:198` sets `truncate min-w-0`
+   on the `Est. cost:` value; live at 390px it elides on **5 of 11** target
+   cards — the most actionable field on the board. `LineupRow` has the same
+   class of bug on long player names ("TreVeyon He…").
+
+**How each was closed**, with the reasoning that is worth more than the fix:
+
+1. **Contrast.** The replacement values are measured against each theme's
+   *worst-case* ground, and that is a **different surface in each theme** —
+   dark's least-contrasting ground is the *lightest* one (`--bg-card`), light's
+   is the *darkest* (`--bg-secondary`). Checking only `--bg-card`, as the
+   finding did, passes light mode too easily. AA also puts a floor under the
+   bottom step of a three-step text ramp, so tertiary now sits closer to
+   secondary than before; that compression is the price of legibility and is
+   recorded in `index.css` so nobody "fixes" it back.
+2. **Focus.** One `.focus-ring` rule in `index.css`, `:focus-visible` not
+   `:focus`, carried by every interactive primitive. Verified rendering: the
+   global search sheet auto-focuses its input, and browsers always treat text
+   input focus as focus-visible, so the ring is visible in a plain capture.
+3. **Touch targets.** `.tap-target` grows the hit area via a centered
+   pseudo-element sized `max(100%, 44px)` — no layout cost, and it can never
+   shrink an already-large target. `IconButton` `md` became a *real* 44px box
+   instead (it is the sheet close control and headers have room); `sm` kept its
+   36px ink for the one place that doesn't. **`Chip` was deliberately excluded**
+   — chips sit ~8px apart in a scrolling filter row, so a 44px hit area on a
+   40px chip would let neighbours steal each other's taps.
+4. **Truncation.** Verified with a new `--text` flag on `screenshot-app.mjs`
+   that dumps rendered text: all **18** live target packages now read in full,
+   including three-player ones like `Gunnar Helm + Jordan Love + Jonathan
+   Taylor (~10,702)`. `innerText` alone can't prove this (CSS ellipsis doesn't
+   change it), so the lineup name fix was confirmed in pixels instead.

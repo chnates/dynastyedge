@@ -6,9 +6,13 @@ import { cn } from './cn'
 //
 //   <IconButton label="Close" onClick={onClose}><X size={18} /></IconButton>
 
+// `md` is the close control in every sheet and drawer header, where there is
+// room, so it is a REAL 44px box rather than a faked hit area. `sm` exists for
+// the one place there isn't room — the swap handle inline in a LineupRow — so
+// it keeps a 36px box and borrows `tap-target`'s 44px hit area instead.
 const SIZES = {
-  sm: 'w-8 h-8',
-  md: 'w-9 h-9',
+  sm: 'w-9 h-9',
+  md: 'w-11 h-11',
 }
 
 export default function IconButton({ label, size = 'md', className, children, ...rest }) {
@@ -19,6 +23,7 @@ export default function IconButton({ label, size = 'md', className, children, ..
         'flex-shrink-0 flex items-center justify-center rounded-lg',
         'text-text-secondary hover:text-text-primary',
         'hover:bg-black/5 dark:hover:bg-white/5 transition-colors',
+        'tap-target focus-ring',
         SIZES[size] ?? SIZES.md,
         className,
       )}

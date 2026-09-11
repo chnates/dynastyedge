@@ -117,6 +117,8 @@ const sessionSeeds = process.argv.reduce((acc, a, i) => {
 // forced it — you must arm a slot's swap handle BEFORE "Waiver options" exists
 // to click at all:
 //   --click "Swap Kansas City Chiefs" --click "Waiver options"
+const dumpText = process.argv.includes('--text')
+
 const clicks = process.argv.reduce((acc, a, i) => {
   if (a === '--click' && process.argv[i + 1]) acc.push(process.argv[i + 1])
   return acc
@@ -243,6 +245,20 @@ for (const click of clicks) {
 }
 
 await page.waitForTimeout(settle)
+
+// --text dumps the RENDERED text of the shot target instead of (well, as well
+// as) pixels. For "does this value render in full?" it is strictly stronger
+// evidence than a screenshot: a tall view has to be captured at a big
+// --height, which downscales to illegibility on read-back, and an ellipsis is
+// exactly the detail that disappears when it does. gotcha 4 in the
+// dynastyedge-visual-capture skill recommends this; nothing exposed it.
+if (dumpText) {
+  const target = shotTarget === page ? page.locator('main') : shotTarget
+  console.log('--- text ---')
+  console.log(await target.innerText())
+  console.log('--- end ---')
+}
+
 await shotTarget.screenshot({ path: out, ...(full && shotTarget === page ? { fullPage: true } : {}) })
 console.log('saved', out)
 await browser.close()

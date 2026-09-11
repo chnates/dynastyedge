@@ -2957,8 +2957,8 @@ Import everything from the one barrel: `import { Button, Card, Sheet } from '../
 
 |Primitive|What it is|
 |---------|----------|
-|`Button`|THE button. Variants `primary` (solid accent CTA) · `secondary` (bordered) · `tinted` (accent-tinted footer/link) · `ghost` (quiet) · `danger`; sizes `sm`/`md`/`lg`; `fullWidth`, `icon`/`iconRight`, polymorphic `as`/`href` (renders `<a>`).|
-|`IconButton`|THE icon-only control — the close/affordance button in every sheet/drawer header (`w-9 h-9 rounded-lg … hover:bg-black/5`). Always pass `label` (→ aria-label); sizes `sm`/`md`.|
+|`Button`|THE button. Variants `primary` (solid accent CTA) · `secondary` (bordered) · `tinted` (accent-tinted footer/link) · `ghost` (quiet) · `danger`; sizes `sm`/`md`/`lg`; `fullWidth`, `icon`/`iconRight`, polymorphic `as`/`href` (renders `<a>`). `sm`/`md` render under 44px, so every Button carries `tap-target`.|
+|`IconButton`|THE icon-only control — the close/affordance button in every sheet/drawer header. Always pass `label` (→ aria-label). **`md` is a real 44px box** (`w-11 h-11`) because it is the sheet close control and headers have the room; **`sm` stays 36px** (`w-9 h-9`) for the one place that doesn't — the swap handle inline in a `LineupRow` — and borrows `tap-target`'s 44px hit area instead.|
 |`Card`|THE surface container (`rounded-none bg-bg-card border border-border-default` — broadcast panels are square). Optional `accent` color class renders the left **edge bar**; `cut` clips the 10px bottom-left corner (the action-card angle); `padding` `none`/`sm`/`md` or a raw class; `interactive`/`onClick` makes it a button.|
 |`Sheet` + `SheetHeader`|THE bottom sheet. Owns the whole sheet contract (`useScrollLock`, `useSheetDrag` swipe-to-dismiss, `overscroll-contain`, safe-area bottom pad, Escape + overlay-tap close, drag handle); `zIndex` is a Tailwind z class so sheets stack. `SheetHeader` adds eyebrow/title/subtitle + the `IconButton` close. **Exception:** a *keyboard-aware* sheet driven by `window.visualViewport` (PlayerSearchSheet, TradeBuilder's add sheet) can't use `Sheet` (which is sized to the layout viewport) — those two are the sanctioned hand-rolled overlays.|
 |`Modal`|THE centered dialog — confirm prompts and small forms that sit mid-screen rather than docking to the bottom (draft "Reset?" confirms, the CSV-name dialog). Owns overlay, `useScrollLock`, Escape + overlay-tap close; `maxWidth`/`surface` props. The bottom-docked counterpart is `Sheet`.|
@@ -2974,6 +2974,47 @@ library is the single import surface (the files stay in `src/components/shared/`
 `SubTabBar`, `TrendArrow`, `WinWindowBadge`, `Sparkline`, `TeamAvatar`. Import
 these from `'../ui'` going forward. `NewsArticleSheet.jsx` is the canonical
 "migrated to the library" example (`Sheet` + `SheetHeader` + `Button`).
+
+### The accessibility floor (non-negotiable, enforced in the primitives)
+
+Three rules, fixed 2026-09-11 after the design review measured them as broken
+(`docs/design/review-2026-09/findings.md` §X1–X3). They live in the primitives
+and in `index.css`, never at the call site, so no screen can opt out.
+
+- **Contrast is a contract.** `--text-tertiary` carries real content — the meta
+  line on every player row, timestamps, the reason line under every trade
+  target, **525 uses** — so it must clear WCAG AA body text (4.5:1). It failed
+  in both themes (dark **2.51:1**, light **3.23:1**) and is now dark `#7C7E84`
+  (4.53:1) / light `#67696F` (4.51:1). The ratio on each token is measured
+  against that theme's **worst-case ground, which is a different surface in
+  each**: in dark the *lightest* ground (`--bg-card`) gives the least contrast,
+  in light the *darkest* (`--bg-secondary`) does. AA puts a floor under the
+  bottom of the ramp, so tertiary now necessarily sits closer to secondary —
+  that compression is the cost of legibility, not a regression to undo.
+  **Any change to a ground colour must re-check both tokens in both themes.**
+- **`.focus-ring` is the one focus definition** (`index.css`), carried by
+  `Button`, `IconButton`, `Chip`, interactive `Card`, `Input` and `Select`.
+  `:focus-visible`, not `:focus`, so a plain tap stays unmarked while keyboard
+  focus and text fields render the ring. `Input`/`Select` previously set
+  `focus:outline-none` and replaced the outline with a 1px border tint; that
+  `outline-none` is gone. Low practical cost on a touch-only PWA — a real gap
+  nonetheless, and it fires for a Bluetooth keyboard, iPadOS pointer or
+  VoiceOver.
+- **`.tap-target` guarantees a 44px hit area without moving the ink** — a
+  centered pseudo-element sized `max(100%, 44px)`, so it never shrinks a target
+  that is already larger and costs no layout. It is deliberately **NOT** on
+  `Chip`: filter chips sit ~8px apart in a scrolling row, so a 44px hit area on
+  a 40px chip would let neighbours steal each other's taps — the fix would cause
+  the bug. It also carries `touch-action: manipulation` (findings §X4).
+
+**Truncation is not a layout strategy for a load-bearing value.** Two fixed the
+same day: Trade › Targets set `truncate` on `Est. cost`, eliding the package —
+the most actionable field on the board — on 5 of 11 live cards, so a
+three-player price read as a two-player one; and `LineupRow` truncated the
+player name, rendering "TreVeyon He…" on the row whose entire job is telling you
+who to start. Both now wrap. `Est. cost` is laid out as a sentence rather than a
+flex row, because flex items don't wrap their own text and the trailing total
+has to follow the last name instead of floating beside the first line.
 
 ### Theme
 
@@ -3280,7 +3321,7 @@ dynastyedge/
 │   ├── snapshot-trade-values.mjs ← permanent trade-time value archiver (runs in Actions)
 │   ├── snapshot-rookie-intel.mjs ← daily nflverse → Sleeper rookie intel feed (runs in Actions)
 │   └── dev/
-│       ├── screenshot-app.mjs  ← headless-Chromium screenshotter for the running app (390px UI verification; --route, --player, --drawer, --seed-session, --click — see the dynastyedge-visual-capture skill)
+│       ├── screenshot-app.mjs  ← headless-Chromium screenshotter for the running app (390px UI verification; --route, --player, --drawer, --seed-session, --click, --text — see the dynastyedge-visual-capture skill). `--text` dumps the RENDERED text: for "does this value render in full?" it beats pixels, because a tall view must be captured at a big --height and downscales to illegibility on read-back — and an ellipsis is exactly what vanishes when it does.
 │       ├── replay-live.mjs     ← drives the running app against a SYNTHETIC draft / regular season, so the two once-a-year surfaces can be rehearsed on demand
 │       ├── faab-corpus.mjs     ← analysis-only: pulls the league's full FAAB bid corpus (see docs/analysis/faab-bid-corpus-2026-08.md); nothing imports it
 │       ├── rookie-signal-backtest.mjs ← analysis-only: grades the SHIPPED rookie model against 2021–2025 (imports src/utils/rookieResearch.js so it cannot drift)
