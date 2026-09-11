@@ -393,8 +393,8 @@ table.al-t{ width:100%; border-collapse:collapse; font-family:var(--ft); }
 
 .md-mh{ display:flex; align-items:baseline; gap:9px; padding:12px 16px 11px;
   border-bottom:2px solid var(--ink); position:sticky; top:0; background:var(--bg); z-index:4; }
-.md-mh .m{ font:800 16px/1 var(--fd); font-variation-settings:'wdth' 118;
-  letter-spacing:-.02em; text-transform:uppercase; }
+.md-mh .m{ font:800 16px/1 var(--fd); font-variation-settings:'wdth' 125,'opsz' 40;
+  letter-spacing:-.015em; text-transform:uppercase; }
 .md-mh .d{ margin-left:auto; font:500 9px/1 var(--fn); letter-spacing:.16em;
   text-transform:uppercase; color:var(--faint); }
 
@@ -402,10 +402,11 @@ table.al-t{ width:100%; border-collapse:collapse; font-family:var(--ft); }
 .md-post{ background:var(--pc); color:var(--on); padding:20px 16px 18px; }
 .md-post .k{ font:500 9px/1 var(--fn); letter-spacing:.2em; text-transform:uppercase;
   opacity:.72; }
-.md-post .n{ font:800 62px/.82 var(--fd); font-variation-settings:'wdth' 122;
-  letter-spacing:-.045em; margin-top:12px; font-variant-numeric:tabular-nums; }
-.md-post .sub{ font:600 13px/1.3 var(--fd); margin-top:12px; max-width:27ch;
+.md-post .n{ font:800 62px/.82 var(--fd); font-variation-settings:'wdth' 125,'opsz' 96;
+  letter-spacing:-.05em; margin-top:12px; font-variant-numeric:tabular-nums; }
+.md-post .sub{ font:600 14px/1.36 var(--fd); margin-top:13px; max-width:29ch;
   text-wrap:balance; }
+.md-post .sub .fig{ font-family:var(--fn); font-variant-numeric:tabular-nums; }
 .md-post .meta{ display:flex; flex-wrap:wrap; gap:0 16px; margin-top:15px;
   padding-top:12px; border-top:1px solid rgba(0,0,0,.28); }
 .md-post .meta span{ font:500 10px/1.5 var(--fn); letter-spacing:.06em;
@@ -417,24 +418,34 @@ table.al-t{ width:100%; border-collapse:collapse; font-family:var(--ft); }
   color:var(--on); padding:7px 16px 8px; margin-top:22px; }
 .md-band .t{ font:800 13px/1 var(--fd); font-variation-settings:'wdth' 116;
   letter-spacing:.01em; text-transform:uppercase; }
-.md-band .c{ margin-left:auto; font:500 9px/1 var(--fn); letter-spacing:.14em; }
+.md-band .c{ margin-left:auto; font:500 9px/1 var(--fn); letter-spacing:.14em;
+  font-variant-numeric:tabular-nums; }
+/* neutral band — used when a board mixes positions and the hue would lie */
+.md-band.mix{ background:var(--ink); color:var(--bg); }
 
 .md-w{ padding:0 16px; }
-.md-row{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 12px;
-  align-items:baseline; padding:11px 0; border-bottom:1px solid var(--line);
+.md-row{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:3px 12px;
+  align-items:baseline; padding:9px 0 10px; border-bottom:1px solid var(--line);
   cursor:pointer; }
-.md-row .nm{ font:700 19px/1.08 var(--fd); font-variation-settings:'wdth' 104;
-  letter-spacing:-.022em; text-wrap:balance; }
-.md-row .vv{ font:700 19px/1 var(--fn); font-variant-numeric:tabular-nums;
-  letter-spacing:-.03em; }
-.md-row .mt{ font:500 9.5px/1 var(--fn); letter-spacing:.1em; text-transform:uppercase;
+.md-row .nm{ font:700 18px/1.06 var(--fd); font-variation-settings:'wdth' 118,'opsz' 72;
+  letter-spacing:-.028em; text-wrap:balance; }
+/* size IS the magnitude — set per row from the value itself */
+.md-row .vv{ font:700 var(--fs,19px)/.92 var(--fn); font-variant-numeric:tabular-nums;
+  letter-spacing:-.035em; align-self:center; }
+.md-row .mt{ font:500 9px/1.35 var(--fn); letter-spacing:.09em; text-transform:uppercase;
   color:var(--faint); }
-.md-row .dd{ text-align:right; font:500 9.5px/1 var(--fn); }
+.md-row .dd{ text-align:right; font:500 9px/1.35 var(--fn); }
+.md-row .ct{ grid-column:1 / -1; font:500 9.5px/1.4 var(--fn); color:var(--dim);
+  margin-top:3px; }
+.md-row .ct b{ color:var(--faint); font-weight:500; }
+/* a swatch, for boards where the band can't carry the position */
+.md-row .sw{ display:inline-block; width:7px; height:7px; background:var(--pc);
+  margin-right:6px; vertical-align:baseline; }
 .md-row .dd.up{ color:var(--ok); } .md-row .dd.dn{ color:var(--bad); }
 
 .md-lead{ padding:20px 16px 2px; }
-.md-lead h1{ font:800 34px/.98 var(--fd); font-variation-settings:'wdth' 112;
-  letter-spacing:-.038em; margin:0; text-transform:uppercase; text-wrap:balance; }
+.md-lead h1{ font:800 34px/.98 var(--fd); font-variation-settings:'wdth' 125,'opsz' 72;
+  letter-spacing:-.042em; margin:0; text-transform:uppercase; text-wrap:balance; }
 .md-lead h1 span{ background:var(--ink); color:var(--bg); padding:0 5px; }
 .md-lead p{ font:400 15px/1.6 var(--ft); color:var(--dim); margin:14px 0 0; }
 .md-lead p b{ color:var(--ink); font-weight:600; }
@@ -443,8 +454,8 @@ table.al-t{ width:100%; border-collapse:collapse; font-family:var(--ft); }
 .md-e{ padding:15px 16px; border-bottom:1px solid var(--line); cursor:pointer; }
 .md-e .k{ font:500 9px/1 var(--fn); letter-spacing:.2em; text-transform:uppercase;
   color:var(--faint); }
-.md-e h3{ font:700 21px/1.08 var(--fd); font-variation-settings:'wdth' 108;
-  letter-spacing:-.028em; margin:8px 0 6px; text-wrap:balance; }
+.md-e h3{ font:700 21px/1.08 var(--fd); font-variation-settings:'wdth' 122,'opsz' 48;
+  letter-spacing:-.032em; margin:8px 0 6px; text-wrap:balance; }
 .md-e h3 span{ background:var(--pc); color:var(--on); padding:0 5px; }
 /* an editorial highlight is emphasis or a warning — never a position hue, or
    "down 12%" reads as success-green. */
@@ -474,8 +485,9 @@ table.al-t{ width:100%; border-collapse:collapse; font-family:var(--ft); }
   letter-spacing:-.035em; text-transform:uppercase; }
 .md-ixr .t small{ display:block; font:400 12px/1.4 var(--ft); color:var(--faint);
   margin-top:6px; letter-spacing:0; text-transform:none; }
-.md-ixr .sw{ width:13px; height:13px; background:var(--pc); flex:0 0 auto;
-  align-self:flex-start; margin-top:6px; }
+.md-ixr.sm .t{ font-size:19px; }
+.md-ixh{ font:500 9px/1 var(--fn); letter-spacing:.22em; text-transform:uppercase;
+  color:var(--faint); padding:22px 16px 8px; border-bottom:1px solid var(--line); }
 .md-ixr .h{ margin-left:auto; font:500 8.5px/1 var(--fn); letter-spacing:.14em;
   text-transform:uppercase; color:var(--faint); }
 .md-srch{ padding:15px 16px; border-bottom:2px solid var(--ink); display:flex;
@@ -602,6 +614,8 @@ const D = {
     {n:'Luther Burden',   p:'wr',t:'CHI',v:3689,w:60, d:'+212',c:'up',a:22},
     {n:'TreVeyon Henderson',p:'rb',t:'NE',v:3055,w:53,d:'−361',c:'dn',a:23},
     {n:'DJ Moore',        p:'wr',t:'BUF',v:2526,w:41, d:'−87', c:'dn',a:29},
+    {n:'Tua Tagovailoa',  p:'qb',t:'ATL',v:1451,w:30, d:'−63', c:'dn',a:28},
+    {n:'Kirk Cousins',    p:'qb',t:'LV', v:1282,w:26, d:'−41', c:'dn',a:38},
     {n:'Mark Andrews',    p:'te',t:'BAL',v:1720,w:25, d:'−204',c:'dn',a:31},
     {n:'Xavier Legette',  p:'wr',t:'CAR',v:365, w:6,  d:'−88', c:'dn',a:25},
   ],
@@ -616,6 +630,9 @@ const D = {
     {n:'Nico Collins',    p:'wr',t:'HOU',v:4499,o:'Aaronregers',      c:'Jordan James + Chase Brown',                  g:'−604',me:'Weak',them:'Strong'},
     {n:'A.J. Brown',      p:'wr',t:'NE', v:3796,o:'Ministry Of Touchdowns',c:'Jordan Love',                            g:'+38', me:'Fair',them:'Weak'},
     {n:'Tee Higgins',     p:'wr',t:'CIN',v:3236,o:'Ministry Of Touchdowns',c:'Jordan James + Rachaad White',           g:'−212',me:'Weak',them:'Fair'},
+    {n:'Bijan Robinson',  p:'rb',t:'ATL',v:8204,o:'Mr. Spike',        c:'Brock Bowers + Jordan Love',                  g:'−318',me:'Weak',them:'Fair'},
+    {n:'Trey McBride',    p:'te',t:'ARI',v:5106,o:'Crippled Gang',    c:'Chase Brown + 2027 2nd',                      g:'+141',me:'Fair',them:'Fair'},
+    {n:'Bhayshul Tuten',  p:'rb',t:'JAX',v:2890,o:'Jake & Bake',      c:'Rachaad White',                               g:'+96', me:'Fair',them:'Weak'},
   ],
   places:[
     ['Today','Your desk','5 items · 3 new league moves','al'],
@@ -628,6 +645,11 @@ const D = {
 };
 const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
 const fmt = n => n.toLocaleString('en-US');
+/* Magnitude, in a poster's own language: the figure's SIZE is the quantity.
+   Absolute across the app (not per group), so Bo Nix 4,867 and Xavier Legette
+   365 can never render identically — which is the finding this has to answer. */
+const VMAX = 9365;
+const vsize = v => (14 + 16 * Math.pow(Math.max(v,0)/VMAX, 0.7)).toFixed(1);
 /* Jittered stagger — linear 0/100/200 is itself a tell. */
 let seed = 7;
 const rnd = () => (seed = (seed*1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
@@ -871,18 +893,17 @@ function MD(scr){
       <div class="md-srch"><span>Find</span>
         <input placeholder="anyone, anywhere" aria-label="Find"></div>
       <div class="md-ix">
-        ${D.places.map(([t,s,sub,c])=>`
-          <div class="md-ixr" style="--pc:var(--${c});--d:${stag(i++,54)}">
-            <span class="sw"></span>
+        ${D.places.map(([t,s,sub])=>`
+          <div class="md-ixr" style="--d:${stag(i++,54)}">
             <span class="t">${t}<small>${esc(s)} — ${esc(sub)}</small></span>
           </div>`).join('')}
+        <div class="md-ixh">Consulted, not daily</div>
         ${[['Trajectory','Where your window peaks','squad'],
            ['Season Review','Points left on the bench','squad'],
            ['Managers','How every owner trades','trade'],
            ['Rookie Research','Opportunity vs market','draft']]
-          .map(([t,s,h])=>`<div class="md-ixr" style="--pc:var(--line2);--d:${stag(i++,54)}">
-            <span class="sw"></span>
-            <span class="t" style="font-size:19px">${t}<small>${s}</small></span>
+          .map(([t,s,h])=>`<div class="md-ixr sm" style="--d:${stag(i++,54)}">
+            <span class="t">${t}<small>${s}</small></span>
             <span class="h">${h}</span></div>`).join('')}
       </div>
     </div>${nav('Index')}</article>`; }
@@ -892,9 +913,10 @@ function MD(scr){
       <header class="md-mh"><span class="m">The Call</span>
         <span class="d">Targets · 20</span></header>
       <section class="md-post" style="--pc:var(--warn);--d:0">
-        <div class="k">Verdict · counter</div>
-        <div class="n" data-count="432">0</div>
-        <div class="sub">short of fair on Justin Jefferson. Ask for a 2027 2nd.</div>
+        <div class="k">Justin Jefferson · WR · MIN</div>
+        <div class="n" style="font-size:64px">Counter</div>
+        <div class="sub"><span class="fig" data-count="432">0</span> short of fair.
+          Ask them to add a 2027 2nd.</div>
         <div class="meta"><span>you give <b>7,409</b></span>
           <span>you get <b>6,977</b></span><span>band <b>±5%</b></span></div>
       </section>
@@ -904,16 +926,22 @@ function MD(scr){
           theirs gains <span class="num">1,240</span>. You'd be paying a premium
           to get slightly worse this season.</p>
       </div>
-      <div class="md-band" style="--pc:var(--wr);--d:${stag(b++,70)}">
-        <span class="t">Wide receiver · every target</span><span class="c">20</span></div>
-      <div class="md-w">
-        ${D.targets.map(t=>`<div class="md-row" style="--d:${stag(i++,30)}">
-          <span class="nm">${esc(t.n)}</span>
-          <span class="vv">${fmt(t.v)}</span>
-          <span class="mt">${t.t} · ${esc(t.o)}</span>
-          <span class="dd ${t.g.startsWith('+')?'up':'dn'}">${t.g} to fair</span>
-        </div>`).join('')}
-      </div>
+      ${['wr','rb','te'].map(pos=>{
+        const rows = D.targets.filter(t=>t.p===pos);
+        if(!rows.length) return '';
+        const tot = rows.reduce((a,t)=>a+t.v,0);
+        return `<div class="md-band" style="--pc:var(--${pos});--d:${stag(b++,66)}">
+          <span class="t">${({wr:'Wide receiver',rb:'Running back',te:'Tight end'})[pos]}</span>
+          <span class="c">${rows.length} · ${fmt(tot)}</span></div>
+        <div class="md-w">
+          ${rows.map(t=>`<div class="md-row" style="--d:${stag(i++,26)}">
+            <span class="nm">${esc(t.n)}</span>
+            <span class="vv" style="--fs:${vsize(t.v)}px">${fmt(t.v)}</span>
+            <span class="mt">${t.t} · ${esc(t.o)}</span>
+            <span class="dd ${t.g.startsWith('+')?'up':'dn'}">${t.g} to fair</span>
+            <span class="ct"><b>costs</b> ${esc(t.c)}</span>
+          </div>`).join('')}
+        </div>`; }).join('')}
     </div>${nav('Trade')}</article>`; }
 
   let i=0, b=0;
@@ -926,9 +954,8 @@ function MD(scr){
         <div class="k">Team value · 30 days ${D.delta} (${D.pct})</div>
         <div class="n" data-count="${D.value}">0</div>
         <div class="sub">You're a buyer. Five things need you today.</div>
-        <div class="meta"><span>rank <b>${D.rank}</b></span>
-          <span>window <b>${D.window}</b></span><span>odds <b>${D.odds}%</b></span>
-          <span>faab <b>${D.faab}</b></span></div>
+        <div class="meta"><span><b>${D.rank}</b> of ten · window <b>${D.window}</b> ·
+          <b>${D.odds}%</b> to the playoffs · <b>${D.faab}</b> left to spend</span></div>
       </section>
       <article class="md-e" style="--pc:var(--warn);--d:${stag(i++,60)}">
         <div class="k">Act today</div>
@@ -943,10 +970,11 @@ function MD(scr){
       ${byPos.map(([p,rows])=>`
         <div class="md-band" style="--pc:var(--${p});--d:${stag(b++,64)}">
           <span class="t">${({qb:'Quarterback',rb:'Running back',wr:'Wide receiver',te:'Tight end'})[p]}</span>
-          <span class="c">${rows.length}</span></div>
+          <span class="c">${rows.length} · ${fmt(rows.reduce((a,r)=>a+r.v,0))}</span></div>
         <div class="md-w">
-          ${rows.map(r=>`<div class="md-row" style="--d:${stag(i++,26)}">
-            <span class="nm">${esc(r.n)}</span><span class="vv">${fmt(r.v)}</span>
+          ${rows.map(r=>`<div class="md-row" style="--d:${stag(i++,24)}">
+            <span class="nm">${esc(r.n)}</span>
+            <span class="vv" style="--fs:${vsize(r.v)}px">${fmt(r.v)}</span>
             <span class="mt">${r.t} · age ${r.a}</span>
             <span class="dd ${r.c}">${r.d}</span></div>`).join('')}
         </div>`).join('')}
@@ -1007,9 +1035,10 @@ md:{k:'Direction 3', t:'Matchday', em:'',
       with genuine character that is nobody's default — with Newsreader for the
       prose passages.`],
   d:[['Signature','<b>The press run.</b> Colour bands wipe across the page, then the type drops in behind them with a slight vertical squash — ink hitting paper.'],
+     ['Magnitude','A poster encodes quantity in <b>type size</b>, not a bar. Each figure is sized from its own value on an absolute scale, and the band carries the group total — so you read the shape within a position and the weight across them.'],
      ['Also','Row reveal under a clip · nav marker · the number roll, at poster scale.'],
      ['Optimises for','Identity and pleasure. The only one of the three that will make you want to open it.'],
-     ['Costs','The riskiest. Poster type at 390px means fewer rows per screen than Almanac — it is the <i>second</i> densest here, not the first. One new font family.'],
+     ['Costs','<b>The least dense of the three</b>, now that the cost line is back: roughly 3–4 targets a screen against Almanac\'s 7. That is the real price of poster type, and it is the thing to weigh. One new font family.'],
      ['Breaks','Everything. This is a different product\'s visual language.'],
      ['Slop score','<b>0 of 12.</b> The one to watch is contrast on the colour bands — black on RB-teal and TE-orange passes; black on WR-sky needs the darker light-mode token, which is why the bands swap hue per theme.']]},
 };

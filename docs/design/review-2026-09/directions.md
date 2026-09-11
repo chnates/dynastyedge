@@ -222,3 +222,56 @@ Honest costs: two new font families, and serif body text on a sports app is a
 taste bet that will feel unusual for about a week. Blueprint is the low-risk
 pick if that bet feels wrong — zero new fonts, and its callout/spec-row
 vocabulary maps closely onto the components you already have.
+
+---
+
+## Matchday, revision 1 (owner picked it, 2026-09-11)
+
+Seven changes, in order of how much they cost:
+
+1. **The verdict poster led with the wrong thing.** It set `432` — the gap — at
+   64px with `COUNTER` as a tiny eyebrow. `432` is meaningless without its
+   label; the decision is what you need. **This is the same hierarchy inversion
+   I flagged on the shipped app's hero and then repeated.** Now `Counter` is the
+   poster and "432 short of fair — ask them to add a 2027 2nd" is the subtitle.
+2. **Matchday did not solve finding B2.** Every value rendered at 19px, so Bo
+   Nix (4,867) and Xavier Legette (365) looked identical — the exact problem the
+   whole review is about. Fixed in the direction's own language: **type size is
+   the magnitude.** Each figure is sized from its value on an absolute scale
+   (`14 + 16·(v/9365)^0.7`, ~16–30px), so similar values look similar and the
+   tail visibly shrinks. The **band carries the group total** ("5 · 16,219"), so
+   you read shape within a position and weight across them.
+3. **The targets board had dropped the cost.** Name, team, owner, value, gap —
+   but not what the trade actually costs you, which is the most actionable
+   field on the board and the one the live app truncates (finding B3). Restored
+   in full, untruncated.
+4. **The band rule only worked because this owner's deficit is WR.** A real
+   targets board is mixed. The board now groups by position with a band each,
+   and a `.mix` neutral-ink band exists for boards that can't be grouped.
+5. **The index used position hues as section colours** — a blue square meant
+   "Squad" there and "WR" everywhere else. That is finding A6 committed in a new
+   place. Position colour is load-bearing here, so the index now carries **no
+   swatches at all**; the poster type is the identity, which is truer to the
+   idiom anyway.
+6. **The hero had an orphaned stats row** — explicitly on the slop list I wrote
+   ("fold metrics into narrative"). Now one caption sentence: "4th of ten ·
+   window Middle · 74% to the playoffs · $1000 left to spend".
+7. **Bricolage was set at `wdth 104` with default optical size**, which landed
+   it on a neutral grotesk and defeated the point of choosing it. Pushed to
+   `wdth 125` with `opsz` set per role.
+
+Also: the mock said "five quarterbacks" and showed three. The roster now carries
+all five, which is what gives the size ramp a tail to ramp across.
+
+### Known costs, stated plainly
+
+- **It is the least dense of the three** — about 3–4 targets a screen against
+  Almanac's 7, now that the cost line is back. That is the real price of poster
+  type and it is the thing to weigh.
+- **Bricolage still reads fairly neutral** even pushed onto its axes. If it
+  doesn't earn its keep on device, the swap candidate is Big Shoulders Display.
+- **Open question, owner's call:** the home hero still leads with team value at
+  62px — the same inversion fixed on the verdict poster in change 1, and the
+  thing named first in `unasked.md`. Leading with "You're a buyer. Five things
+  need you today." and demoting 87,397 to the caption would be consistent. Left
+  alone deliberately: the big figure is what makes the hero read as a cover.
