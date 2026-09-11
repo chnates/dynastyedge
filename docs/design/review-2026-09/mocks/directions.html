@@ -1,0 +1,1111 @@
+<title>DynastyEdge Directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+/* ============================================================
+   DynastyEdge — three directions, one comparison harness.
+   Standalone mock. Nothing here imports from or touches the app.
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+:root{
+  --hz-bg:#0d0d10; --hz-panel:#17171c; --hz-line:#2a2a33;
+  --hz-t1:#f2f3f5; --hz-t2:#9aa0aa; --hz-t3:#6b7280;
+  --hz-accent:#22d3ee;
+}
+body{ margin:0; background:var(--hz-bg); color:var(--hz-t1);
+  font-family:Archivo,system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+
+/* ---------- harness chrome ---------- */
+.hz-wrap{ max-width:1180px; margin:0 auto; padding-block:20px; padding-left:16px; padding-right:16px; }
+.hz-title{ font-size:13px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--hz-t3); font-weight:700; margin:0 0 14px; font-family:'IBM Plex Mono',monospace; }
+.hz-title b{ color:var(--hz-t1); font-weight:700; }
+.hz-lede{ max-width:62ch; font-size:13.5px; line-height:1.62; color:var(--hz-t2);
+  margin:0 0 18px; }
+.hz-lede b{ color:var(--hz-t1); font-weight:600; }
+
+.hz-controls{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px; align-items:center; }
+.hz-seg{ display:flex; background:var(--hz-panel); border:1px solid var(--hz-line);
+  border-radius:10px; padding:3px; gap:2px; }
+.hz-seg button{ appearance:none; border:0; background:transparent; color:var(--hz-t2);
+  font:600 12px/1 Archivo,sans-serif; padding:9px 12px; border-radius:7px; cursor:pointer;
+  transition:background .18s ease, color .18s ease; min-height:34px; }
+.hz-seg button:hover{ color:var(--hz-t1); }
+.hz-seg button[aria-pressed="true"]{ background:var(--hz-accent); color:#06232a; }
+.hz-seg button:focus-visible{ outline:2px solid var(--hz-accent); outline-offset:2px; }
+.hz-replay{ appearance:none; border:1px solid var(--hz-accent); background:transparent;
+  color:var(--hz-accent); font:600 12px/1 Archivo,sans-serif; padding:11px 14px;
+  border-radius:9px; cursor:pointer; min-height:38px;
+  transition:background .18s ease, transform .12s ease; }
+.hz-replay:hover{ background:color-mix(in srgb, var(--hz-accent) 14%, transparent); }
+.hz-replay:active{ transform:scale(.97); }
+.hz-replay:focus-visible{ outline:2px solid var(--hz-accent); outline-offset:2px; }
+
+.hz-stage{ display:flex; gap:26px; align-items:flex-start; flex-wrap:wrap; }
+
+/* the device */
+.phone{ width:390px; max-width:100%; height:760px; flex:0 0 auto;
+  border-radius:34px; overflow:hidden; position:relative;
+  border:1px solid var(--hz-line);
+  box-shadow:0 30px 80px -20px rgba(0,0,0,.8), 0 0 0 8px #121216;
+  isolation:isolate; }
+@media (max-width:820px){
+  .hz-stage{ gap:18px; }
+  .phone{ width:100%; height:640px; border-radius:22px; box-shadow:0 16px 40px -14px rgba(0,0,0,.7), 0 0 0 5px #121216; }
+}
+
+.hz-notes{ flex:1 1 320px; min-width:280px; }
+.hz-notes h2{ font:800 19px/1.25 Archivo,sans-serif; margin:2px 0 4px; }
+.hz-notes .kicker{ font:600 10px/1 'IBM Plex Mono',monospace; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--hz-accent); margin-bottom:8px; }
+.hz-notes p{ font-size:13.5px; line-height:1.62; color:var(--hz-t2); margin:0 0 11px; }
+.hz-notes p b{ color:var(--hz-t1); font-weight:600; }
+.hz-notes dl{ margin:14px 0 0; border-top:1px solid var(--hz-line); padding-top:12px; }
+.hz-notes dt{ font:600 10px/1 'IBM Plex Mono',monospace; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--hz-t3); margin-top:11px; }
+.hz-notes dd{ margin:4px 0 0; font-size:13px; line-height:1.55; color:var(--hz-t2); }
+
+/* ---------- screen plumbing ---------- */
+.screen{ display:none; height:100%; overflow-y:auto; overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch; }
+.screen.on{ display:block; }
+.screen::-webkit-scrollbar{ width:0; }
+
+/* ============================================================
+   DIRECTION A — INSTRUMENT
+   Cool, layered, magnitude-encoded. Elevation instead of hairlines.
+   ============================================================ */
+.dir{ height:100%; position:relative; }
+
+[data-dir="a"]{
+  --font-d:Archivo, sans-serif; --font-b:Archivo, sans-serif; --font-n:'IBM Plex Mono', monospace;
+  --r:14px;
+}
+[data-dir="a"][data-theme="dark"]{
+  --bg:#0b0f14; --s1:#141a21; --s2:#1b232c; --s3:#222c37;
+  --line:rgba(255,255,255,.07);
+  --t1:#e9eef4; --t2:#9fb0c0; --t3:#7e8d9c;
+  --sig:#22d3ee; --sig-dim:rgba(34,211,238,.16);
+  --ok:#2fd07e; --warn:#f5a524; --bad:#ff6b6b; --gold:#e8b33a;
+  --shadow:0 1px 2px rgba(0,0,0,.5), 0 8px 24px -8px rgba(0,0,0,.6);
+  --shadow-lo:0 1px 2px rgba(0,0,0,.5);
+  --glow:radial-gradient(120% 70% at 50% -10%, rgba(34,211,238,.10), transparent 70%);
+}
+[data-dir="a"][data-theme="light"]{
+  --bg:#eef1f5; --s1:#ffffff; --s2:#f6f8fb; --s3:#e9eef4;
+  --line:rgba(16,32,48,.09);
+  --t1:#101820; --t2:#4a5b6b; --t3:#5d6e7e;
+  --sig:#0782a0; --sig-dim:rgba(7,130,160,.12);
+  --ok:#12885a; --warn:#a86a05; --bad:#c73b42; --gold:#9a6f10;
+  --shadow:0 1px 2px rgba(16,32,48,.07), 0 10px 26px -12px rgba(16,32,48,.22);
+  --shadow-lo:0 1px 2px rgba(16,32,48,.08);
+  --glow:radial-gradient(120% 70% at 50% -10%, rgba(7,130,160,.07), transparent 70%);
+}
+/* position hues — identical semantics in every direction */
+[data-dir]{ --qb:#f2758f; --rb:#3ad0a4; --wr:#57a9f2; --te:#f0964e; --def:#9aa3ee; }
+[data-theme="light"][data-dir]{ --qb:#c4335a; --rb:#0f8a66; --wr:#1f6fc0; --te:#c05f1a; --def:#5a64c8; }
+
+.a-root{ background:var(--bg); color:var(--t1); font-family:var(--font-b); height:100%;
+  position:relative; }
+.a-root::before{ content:''; position:absolute; inset:0; background:var(--glow);
+  pointer-events:none; }
+.a-scroll{ position:relative; height:100%; overflow-y:auto; overscroll-behavior:contain;
+  padding:0 0 96px; }
+.a-scroll::-webkit-scrollbar{ width:0; }
+
+.a-top{ position:sticky; top:0; z-index:6; display:flex; align-items:center; gap:10px;
+  padding:12px 16px 10px; background:color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); }
+.a-top h1{ font:700 17px/1 var(--font-d); margin:0; letter-spacing:-.01em; }
+.a-top .sp{ flex:1; }
+.a-ico{ width:36px; height:36px; display:grid; place-items:center; border-radius:10px;
+  background:var(--s2); color:var(--t2); border:1px solid var(--line); font-size:14px;
+  cursor:pointer; transition:background .16s ease, color .16s ease, transform .1s ease; }
+.a-ico:active{ transform:scale(.94); }
+
+.a-pad{ padding:0 16px; }
+.a-card{ background:var(--s1); border-radius:var(--r); box-shadow:var(--shadow);
+  border:1px solid var(--line); }
+
+/* hero */
+.a-hero{ margin:4px 16px 16px; padding:18px 18px 16px; border-radius:20px;
+  background:linear-gradient(168deg, var(--s2), var(--s1) 62%);
+  box-shadow:var(--shadow); border:1px solid var(--line); position:relative; overflow:hidden; }
+.a-hero::after{ content:''; position:absolute; inset:0;
+  background:linear-gradient(110deg, transparent 35%, var(--sig-dim) 140%); pointer-events:none; }
+.a-eye{ font:600 9.5px/1 var(--font-n); letter-spacing:.2em; text-transform:uppercase;
+  color:var(--t3); }
+.a-heroval{ display:flex; align-items:flex-end; gap:10px; margin-top:10px; }
+.a-big{ font:600 46px/.86 var(--font-n); letter-spacing:-.035em; color:var(--t1);
+  font-variant-numeric:tabular-nums; }
+.a-delta{ font:600 11px/1 var(--font-n); padding:4px 7px; border-radius:6px;
+  background:color-mix(in srgb, var(--bad) 15%, transparent); color:var(--bad); margin-bottom:5px; }
+.a-strip{ display:grid; grid-template-columns:repeat(4,1fr); gap:1px; margin-top:16px;
+  background:var(--line); border-radius:10px; overflow:hidden; }
+.a-strip div{ background:var(--s1); padding:9px 8px; }
+.a-strip .k{ font:600 8.5px/1 var(--font-n); letter-spacing:.16em; text-transform:uppercase;
+  color:var(--t3); }
+.a-strip .v{ font:600 14px/1.1 var(--font-n); margin-top:5px; color:var(--t1);
+  font-variant-numeric:tabular-nums; }
+
+/* section label — a quiet rule, not a bug */
+.a-sec{ display:flex; align-items:center; gap:9px; margin:20px 16px 9px; }
+.a-sec span{ font:600 9.5px/1 var(--font-n); letter-spacing:.2em; text-transform:uppercase;
+  color:var(--t3); }
+.a-sec i{ flex:1; height:1px; background:var(--line); }
+.a-sec b{ font:600 9.5px/1 var(--font-n); color:var(--t3); }
+
+/* THE SIGNATURE — magnitude row */
+.a-row{ display:grid; grid-template-columns:1fr auto; gap:3px 12px; align-items:baseline;
+  padding:11px 14px 12px; border-radius:12px; background:var(--s1);
+  box-shadow:var(--shadow-lo); border:1px solid var(--line); margin-bottom:7px;
+  transition:transform .12s cubic-bezier(.2,.8,.3,1), box-shadow .18s ease; cursor:pointer; }
+.a-row:active{ transform:scale(.985); box-shadow:none; }
+.a-nm{ font:600 15px/1.15 var(--font-b); letter-spacing:-.012em; }
+.a-vl{ font:600 16px/1 var(--font-n); font-variant-numeric:tabular-nums; letter-spacing:-.02em; }
+.a-mt{ font:500 10.5px/1 var(--font-n); letter-spacing:.06em; color:var(--t3);
+  text-transform:uppercase; }
+.a-tr{ font:600 10.5px/1 var(--font-n); text-align:right; }
+.a-tr.up{ color:var(--ok); } .a-tr.dn{ color:var(--bad); }
+/* the track: magnitude within position, colored BY position */
+.a-track{ grid-column:1 / -1; height:3px; border-radius:2px; background:var(--s3);
+  overflow:hidden; margin-top:8px; }
+.a-track i{ display:block; height:100%; border-radius:2px; width:0;
+  background:var(--pc, var(--sig)); }
+.pos-qb{ --pc:var(--qb); } .pos-rb{ --pc:var(--rb); }
+.pos-wr{ --pc:var(--wr); } .pos-te{ --pc:var(--te); }
+.a-tag{ font:600 9px/1 var(--font-n); letter-spacing:.1em; padding:3px 5px; border-radius:4px;
+  background:color-mix(in srgb, var(--pc) 16%, transparent); color:var(--pc); }
+
+/* alert */
+.a-alert{ display:flex; gap:11px; padding:13px 14px; border-radius:12px; margin:0 16px 8px;
+  background:color-mix(in srgb, var(--warn) 9%, var(--s1)); border:1px solid color-mix(in srgb, var(--warn) 26%, transparent);
+  box-shadow:var(--shadow-lo); }
+.a-alert .dot{ width:7px; height:7px; border-radius:50%; background:var(--warn); margin-top:5px; flex:0 0 auto; }
+.a-alert h4{ font:600 13.5px/1.4 var(--font-b); margin:0 0 3px; }
+.a-alert p{ font:400 12px/1.5 var(--font-b); margin:0; color:var(--t2); }
+.a-btn{ margin-top:10px; appearance:none; border:0; border-radius:9px; cursor:pointer;
+  background:var(--sig); color:#04222a; font:600 12px/1 var(--font-b); padding:10px 13px;
+  min-height:40px; transition:transform .11s ease, filter .16s ease; }
+[data-theme="light"] .a-btn{ color:#fff; }
+.a-btn:active{ transform:scale(.97); }
+
+/* briefing */
+.a-brief{ display:flex; gap:12px; align-items:flex-start; padding:13px 14px; margin:0 16px 8px;
+  border-radius:12px; background:var(--s1); box-shadow:var(--shadow-lo);
+  border:1px solid var(--line); border-left:3px solid var(--bc, var(--sig)); cursor:pointer;
+  transition:transform .12s cubic-bezier(.2,.8,.3,1); }
+.a-brief:active{ transform:scale(.985); }
+.a-brief .med{ width:34px; height:34px; border-radius:10px; flex:0 0 auto; display:grid;
+  place-items:center; font-size:15px;
+  background:color-mix(in srgb, var(--bc, var(--sig)) 15%, transparent); }
+.a-brief h4{ font:600 13.5px/1.35 var(--font-b); margin:0 0 3px; }
+.a-brief p{ font:400 12px/1.5 var(--font-b); margin:0; color:var(--t2); }
+.a-brief .go{ color:var(--t3); font-size:15px; align-self:center; }
+
+/* odds bar */
+.a-odds{ padding:12px 14px; border-radius:12px; background:var(--s1); margin:0 16px 7px;
+  box-shadow:var(--shadow-lo); border:1px solid var(--line); }
+.a-oddshead{ display:flex; align-items:baseline; gap:8px; }
+.a-oddshead .r{ font:600 12px/1 var(--font-n); color:var(--t3); width:18px; }
+.a-oddshead .n{ font:600 13.5px/1 var(--font-b); flex:1; }
+.a-oddshead .p{ font:600 15px/1 var(--font-n); font-variant-numeric:tabular-nums; }
+.a-bar{ height:5px; border-radius:3px; background:var(--s3); margin-top:9px; overflow:hidden; }
+.a-bar i{ display:block; height:100%; width:0; border-radius:3px; }
+
+/* bottom tab bar — floats, iOS-26 style */
+.a-tabs{ position:absolute; left:12px; right:12px; bottom:12px; z-index:9;
+  display:grid; grid-template-columns:repeat(5,1fr); gap:2px; padding:6px;
+  border-radius:20px; background:color-mix(in srgb, var(--s1) 78%, transparent);
+  backdrop-filter:blur(22px) saturate(1.5); -webkit-backdrop-filter:blur(22px) saturate(1.5);
+  border:1px solid var(--line); box-shadow:0 10px 34px -8px rgba(0,0,0,.55); }
+.a-tab{ appearance:none; border:0; background:transparent; cursor:pointer; border-radius:15px;
+  padding:8px 2px 7px; display:grid; gap:4px; justify-items:center; color:var(--t3);
+  transition:color .18s ease, background .18s ease; min-height:46px; }
+.a-tab .gl{ font-size:16px; line-height:1; }
+.a-tab .lb{ font:600 8.5px/1 var(--font-n); letter-spacing:.1em; text-transform:uppercase; }
+.a-tab[aria-current="page"]{ color:var(--sig); background:var(--sig-dim); }
+
+/* ============================================================
+   DIRECTION B — DISPATCH
+   Editorial. The app writes to you. Type is the interface.
+   ============================================================ */
+[data-dir="b"]{
+  --font-d:Fraunces, Georgia, serif; --font-b:Archivo, sans-serif; --font-n:'IBM Plex Mono', monospace;
+}
+[data-dir="b"][data-theme="dark"]{
+  --bg:#16141a; --s1:#1e1b23; --s2:#262230; --line:rgba(242,237,228,.12);
+  --t1:#f4efe6; --t2:#c2b8a8; --t3:#9d9386;
+  --sig:#d7b45a; --rule:rgba(215,180,90,.5);
+  --ok:#59c98d; --warn:#e8a83c; --bad:#f4736f;
+}
+[data-dir="b"][data-theme="light"]{
+  --bg:#fbfaf7; --s1:#ffffff; --s2:#f3f0ea; --line:rgba(30,24,18,.14);
+  --t1:#17130f; --t2:#4e463c; --t3:#5f574b;
+  --sig:#8a6a12; --rule:rgba(138,106,18,.45);
+  --ok:#17794f; --warn:#8a5e07; --bad:#b93a38;
+}
+.b-root{ background:var(--bg); color:var(--t1); height:100%; font-family:var(--font-b); }
+.b-scroll{ height:100%; overflow-y:auto; overscroll-behavior:contain; padding:0 0 90px; }
+.b-scroll::-webkit-scrollbar{ width:0; }
+.b-pad{ padding:0 22px; }
+
+.b-masthead{ padding:16px 22px 12px; display:flex; align-items:baseline; gap:10px;
+  border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5;
+  background:color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); }
+.b-masthead .m{ font:900 19px/1 var(--font-d); letter-spacing:-.02em; font-variation-settings:'SOFT' 0,'WONK' 1; }
+.b-masthead .d{ font:500 9.5px/1 var(--font-n); letter-spacing:.16em; text-transform:uppercase;
+  color:var(--t3); margin-left:auto; }
+
+.b-lede{ padding:26px 22px 4px; }
+.b-kick{ font:500 9.5px/1 var(--font-n); letter-spacing:.22em; text-transform:uppercase;
+  color:var(--sig); margin-bottom:14px; }
+.b-head{ font:400 30px/1.14 var(--font-d); letter-spacing:-.02em; margin:0;
+  font-variation-settings:'SOFT' 0,'WONK' 1,'opsz' 60; }
+.b-head em{ font-style:normal; font-weight:900; }
+.b-sub{ font:400 14.5px/1.62 var(--font-b); color:var(--t2); margin:14px 0 0; }
+.b-sub b{ color:var(--t1); font-weight:600; }
+
+.b-rule{ height:1px; background:var(--rule); margin:22px 22px; transform-origin:left center; }
+
+/* the inline data figure — a number set as display type inside prose */
+.b-fig{ display:flex; align-items:baseline; gap:12px; margin:20px 0 2px; }
+.b-fig .n{ font:900 52px/.84 var(--font-d); letter-spacing:-.035em;
+  font-variant-numeric:tabular-nums; font-variation-settings:'opsz' 144; }
+.b-fig .l{ font:400 12.5px/1.45 var(--font-b); color:var(--t2); max-width:150px; }
+.b-fig .l b{ color:var(--t1); font-weight:600; display:block; font-size:13px; }
+
+.b-item{ padding:18px 0; border-bottom:1px solid var(--line); cursor:pointer;
+  transition:opacity .2s ease; }
+.b-item:active{ opacity:.62; }
+.b-item .tag{ font:500 9px/1 var(--font-n); letter-spacing:.18em; text-transform:uppercase;
+  color:var(--sig); }
+.b-item h3{ font:400 19px/1.28 var(--font-d); margin:8px 0 6px; letter-spacing:-.015em;
+  font-variation-settings:'SOFT' 0,'WONK' 1; }
+.b-item h3 em{ font-style:normal; font-weight:900; }
+.b-item p{ font:400 13.5px/1.62 var(--font-b); color:var(--t2); margin:0; }
+.b-item p .num{ font-family:var(--font-n); font-weight:600; color:var(--t1);
+  font-variant-numeric:tabular-nums; }
+.b-item .more{ font:600 11.5px/1 var(--font-b); color:var(--sig); margin-top:10px;
+  display:inline-block; border-bottom:1px solid transparent; padding-bottom:2px;
+  transition:border-color .2s ease; }
+.b-item:hover .more{ border-color:var(--sig); }
+
+/* a ranked table set as an index, not as cards */
+.b-index{ margin-top:4px; }
+.b-ix{ display:grid; grid-template-columns:20px 1fr auto; gap:12px; align-items:baseline;
+  padding:11px 0; border-bottom:1px solid var(--line); cursor:pointer; }
+.b-ix .r{ font:500 11px/1 var(--font-n); color:var(--t3); font-variant-numeric:tabular-nums; }
+.b-ix .n{ font:400 15.5px/1.2 var(--font-d); letter-spacing:-.01em; }
+.b-ix .n small{ display:block; font:400 11px/1.4 var(--font-b); color:var(--t3); margin-top:3px; }
+.b-ix .v{ font:600 15px/1 var(--font-n); font-variant-numeric:tabular-nums; text-align:right; }
+.b-ix .v small{ display:block; font-size:10px; margin-top:4px; font-weight:500; }
+.b-ix .v small.up{ color:var(--ok); } .b-ix .v small.dn{ color:var(--bad); }
+
+/* the jump affordance — B's entire navigation */
+.b-jump{ position:absolute; left:22px; right:22px; bottom:18px; z-index:9;
+  display:flex; align-items:center; gap:10px; padding:14px 16px; border-radius:999px;
+  background:var(--s1); border:1px solid var(--line); cursor:pointer;
+  box-shadow:0 12px 36px -10px rgba(0,0,0,.5); min-height:50px;
+  transition:transform .14s cubic-bezier(.2,.8,.3,1); }
+.b-jump:active{ transform:scale(.975); }
+.b-jump .ic{ font-size:15px; color:var(--t3); }
+.b-jump .tx{ font:400 13.5px/1 var(--font-b); color:var(--t3); flex:1; }
+.b-jump .kb{ font:500 9.5px/1 var(--font-n); letter-spacing:.1em; color:var(--t3);
+  border:1px solid var(--line); padding:5px 7px; border-radius:5px; }
+
+/* ============================================================
+   DIRECTION C — CONTROL
+   Spatial. Sections are places. Glass over an atmospheric field.
+   ============================================================ */
+[data-dir="c"]{
+  --font-d:'Space Grotesk', sans-serif; --font-b:Archivo, sans-serif; --font-n:'IBM Plex Mono', monospace;
+}
+[data-dir="c"][data-theme="dark"]{
+  --bg:#0a0d12;
+  --field:radial-gradient(130% 80% at 12% -6%, #16394a 0%, transparent 58%),
+          radial-gradient(120% 78% at 96% 8%, #3a1f4e 0%, transparent 55%),
+          linear-gradient(178deg, #0e141c 0%, #0a0d12 72%);
+  --glass:rgba(255,255,255,.055); --glass-hi:rgba(255,255,255,.11);
+  --line:rgba(255,255,255,.12);
+  --t1:#f3f6fa; --t2:#aebccb; --t3:#8b9bab;
+  --sig:#63e6d2; --ok:#46dd94; --warn:#ffc25c; --bad:#ff7a7a;
+}
+[data-dir="c"][data-theme="light"]{
+  --bg:#eaeef4;
+  --field:radial-gradient(130% 80% at 12% -6%, #cfe4ee 0%, transparent 58%),
+          radial-gradient(120% 78% at 96% 8%, #e2d5f0 0%, transparent 55%),
+          linear-gradient(178deg, #f4f7fb 0%, #e6ebf2 72%);
+  --glass:rgba(255,255,255,.62); --glass-hi:rgba(255,255,255,.86);
+  --line:rgba(16,30,48,.10);
+  --t1:#0d1620; --t2:#44576a; --t3:#546879;
+  --sig:#0c8f7c; --ok:#12885a; --warn:#9a6505; --bad:#c53d3d;
+}
+.c-root{ height:100%; background:var(--bg); color:var(--t1); font-family:var(--font-b);
+  position:relative; }
+.c-field{ position:absolute; inset:0; background:var(--field); }
+.c-scroll{ position:relative; height:100%; overflow-y:auto; overscroll-behavior:contain;
+  padding:0 0 104px; }
+.c-scroll::-webkit-scrollbar{ width:0; }
+
+.c-top{ position:sticky; top:0; z-index:6; padding:14px 18px 10px;
+  display:flex; align-items:center; gap:10px; }
+.c-top .place{ font:700 11px/1 var(--font-n); letter-spacing:.2em; text-transform:uppercase;
+  color:var(--t3); }
+.c-top .sp{ flex:1; }
+.c-orb{ width:34px; height:34px; border-radius:50%; background:var(--glass);
+  border:1px solid var(--line); display:grid; place-items:center; font-size:14px;
+  backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); cursor:pointer;
+  transition:transform .12s ease; }
+.c-orb:active{ transform:scale(.92); }
+
+.c-pad{ padding:0 18px; }
+.c-glass{ background:var(--glass); border:1px solid var(--line); border-radius:22px;
+  backdrop-filter:blur(20px) saturate(1.4); -webkit-backdrop-filter:blur(20px) saturate(1.4); }
+
+.c-hero{ margin:6px 18px 14px; padding:22px 20px; border-radius:26px;
+  background:var(--glass-hi); border:1px solid var(--line);
+  backdrop-filter:blur(26px) saturate(1.6); -webkit-backdrop-filter:blur(26px) saturate(1.6);
+  box-shadow:0 18px 50px -18px rgba(0,0,0,.45); }
+[data-theme="dark"] .c-hero{ background:var(--glass); }
+.c-hero .gr{ font:500 12.5px/1.4 var(--font-b); color:var(--t2); }
+.c-hero .bg{ font:700 44px/.9 var(--font-d); letter-spacing:-.04em; margin-top:12px;
+  font-variant-numeric:tabular-nums; }
+.c-hero .un{ font:500 10px/1 var(--font-n); letter-spacing:.18em; text-transform:uppercase;
+  color:var(--t3); margin-top:10px; }
+.c-chips{ display:flex; gap:7px; margin-top:16px; flex-wrap:wrap; }
+.c-chip{ font:600 10.5px/1 var(--font-n); letter-spacing:.06em; padding:7px 10px;
+  border-radius:999px; background:var(--glass); border:1px solid var(--line); color:var(--t2); }
+.c-chip b{ color:var(--t1); }
+
+.c-lab{ font:700 10px/1 var(--font-n); letter-spacing:.2em; text-transform:uppercase;
+  color:var(--t3); margin:20px 18px 9px; }
+
+.c-card{ margin:0 18px 9px; padding:15px 16px; border-radius:20px;
+  background:var(--glass); border:1px solid var(--line);
+  backdrop-filter:blur(18px) saturate(1.35); -webkit-backdrop-filter:blur(18px) saturate(1.35);
+  cursor:pointer; transition:transform .16s cubic-bezier(.2,.8,.3,1), background .2s ease; }
+.c-card:active{ transform:scale(.975); background:var(--glass-hi); }
+.c-card h4{ font:600 14.5px/1.3 var(--font-b); margin:0 0 4px; }
+.c-card p{ font:400 12.5px/1.5 var(--font-b); margin:0; color:var(--t2); }
+.c-card .hd{ display:flex; align-items:center; gap:10px; }
+.c-card .av{ width:32px; height:32px; border-radius:11px; flex:0 0 auto; display:grid;
+  place-items:center; font:700 11px/1 var(--font-n);
+  background:color-mix(in srgb, var(--pc, var(--sig)) 24%, transparent); color:var(--pc, var(--sig)); }
+.c-card .vl{ margin-left:auto; font:700 17px/1 var(--font-d); font-variant-numeric:tabular-nums;
+  letter-spacing:-.02em; }
+
+/* floating glass tab bar, minimizes on scroll */
+.c-nav{ position:absolute; left:50%; transform:translateX(-50%); bottom:16px; z-index:10;
+  display:flex; gap:3px; padding:6px; border-radius:999px;
+  background:var(--glass-hi); border:1px solid var(--line);
+  backdrop-filter:blur(26px) saturate(1.7); -webkit-backdrop-filter:blur(26px) saturate(1.7);
+  box-shadow:0 14px 40px -10px rgba(0,0,0,.5);
+  transition:transform .34s cubic-bezier(.2,.9,.25,1), opacity .28s ease; }
+[data-theme="dark"] .c-nav{ background:rgba(20,26,34,.7); }
+.c-nav.min{ transform:translateX(-50%) translateY(4px) scale(.86); opacity:.62; }
+.c-nb{ appearance:none; border:0; background:transparent; cursor:pointer; border-radius:999px;
+  width:52px; height:46px; display:grid; gap:3px; place-items:center; color:var(--t3);
+  transition:color .2s ease, background .24s ease; }
+.c-nb .gl{ font-size:16px; line-height:1; }
+.c-nb .lb{ font:600 8px/1 var(--font-n); letter-spacing:.08em; text-transform:uppercase; }
+.c-nb[aria-current="page"]{ color:var(--sig);
+  background:color-mix(in srgb, var(--sig) 16%, transparent); }
+
+/* ============================================================
+   NAV SCREENS (third comparison screen per direction)
+   ============================================================ */
+.nav-sheet{ position:absolute; inset:0; display:flex; flex-direction:column;
+  justify-content:flex-end; }
+.nav-scrim{ position:absolute; inset:0; background:rgba(0,0,0,.5);
+  backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px); }
+
+/* A: "more" sheet above the tab bar */
+.a-sheet{ position:relative; background:var(--s1); border-radius:22px 22px 0 0;
+  border-top:1px solid var(--line); padding:10px 0 96px; max-height:82%; overflow-y:auto;
+  box-shadow:0 -18px 50px -14px rgba(0,0,0,.6); }
+.a-grab{ width:36px; height:4px; border-radius:2px; background:var(--t3); opacity:.45;
+  margin:6px auto 14px; }
+.a-navgrid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:0 14px; }
+.a-nav-i{ padding:13px 13px; border-radius:13px; background:var(--s2); border:1px solid var(--line);
+  cursor:pointer; transition:transform .12s ease, background .18s ease; }
+.a-nav-i:active{ transform:scale(.97); }
+.a-nav-i .g{ font-size:16px; }
+.a-nav-i .t{ font:600 13px/1.2 var(--font-b); margin-top:8px; }
+.a-nav-i .s{ font:400 10.5px/1.35 var(--font-b); color:var(--t3); margin-top:3px; }
+.a-nav-h{ font:600 9.5px/1 var(--font-n); letter-spacing:.2em; text-transform:uppercase;
+  color:var(--t3); padding:16px 16px 9px; }
+
+/* B: the jump palette */
+.b-pal{ position:relative; background:var(--s1); border-radius:20px 20px 0 0; padding:0 0 22px;
+  max-height:86%; overflow-y:auto; border-top:1px solid var(--line); }
+.b-palin{ position:sticky; top:0; background:var(--s1); padding:16px 20px 12px;
+  border-bottom:1px solid var(--line); }
+.b-palin .f{ display:flex; align-items:center; gap:10px; }
+.b-palin input{ flex:1; background:transparent; border:0; outline:0; color:var(--t1);
+  font:400 16px/1 var(--font-b); }
+.b-palin input::placeholder{ color:var(--t3); }
+.b-grp{ font:500 9px/1 var(--font-n); letter-spacing:.2em; text-transform:uppercase;
+  color:var(--t3); padding:16px 20px 7px; }
+.b-pi{ display:flex; align-items:center; gap:12px; padding:11px 20px; cursor:pointer;
+  transition:background .16s ease; }
+.b-pi:hover{ background:var(--s2); }
+.b-pi .ic{ width:26px; text-align:center; font-size:14px; color:var(--t3); }
+.b-pi .t{ font:400 15px/1.2 var(--font-d); flex:1; }
+.b-pi .h{ font:400 11px/1 var(--font-b); color:var(--t3); }
+
+/* C: spatial section switcher */
+.c-switch{ position:absolute; inset:0; padding:64px 18px 110px; display:flex;
+  flex-direction:column; gap:10px; overflow-y:auto; }
+.c-place{ padding:17px 18px; border-radius:22px; border:1px solid var(--line);
+  background:var(--glass); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+  cursor:pointer; transition:transform .16s cubic-bezier(.2,.8,.3,1); }
+.c-place:active{ transform:scale(.975); }
+.c-place .r{ display:flex; align-items:center; gap:12px; }
+.c-place .d{ width:11px; height:11px; border-radius:50%; background:var(--pc); flex:0 0 auto;
+  box-shadow:0 0 14px 1px color-mix(in srgb, var(--pc) 65%, transparent); }
+.c-place .t{ font:700 16px/1 var(--font-d); letter-spacing:-.015em; }
+.c-place .c{ margin-left:auto; font:600 10px/1 var(--font-n); color:var(--t3); }
+.c-place .sub{ font:400 12px/1.5 var(--font-b); color:var(--t2); margin-top:7px; }
+
+/* ============================================================
+   MOTION — the four choreographed moments per direction.
+   Every one of them is disabled under prefers-reduced-motion.
+   ============================================================ */
+
+/* A1 (SIGNATURE): "the readout" — rows stagger in, tracks wipe, numbers roll */
+.play .a-row, .play .a-brief, .play .a-alert, .play .a-odds{
+  animation:a-in .46s cubic-bezier(.16,.9,.3,1) both;
+  animation-delay:calc(var(--i,0) * 52ms + 120ms); }
+@keyframes a-in{ from{ opacity:0; transform:translateY(14px) scale(.985); } to{ opacity:1; transform:none; } }
+.play .a-track i, .play .a-bar i{
+  animation:a-wipe .72s cubic-bezier(.18,.85,.25,1) both;
+  animation-delay:calc(var(--i,0) * 52ms + 300ms); }
+@keyframes a-wipe{ from{ width:0; } to{ width:var(--w,50%); } }
+.play .a-hero{ animation:a-hero .58s cubic-bezier(.16,.9,.3,1) both; }
+@keyframes a-hero{ from{ opacity:0; transform:translateY(-10px); } to{ opacity:1; transform:none; } }
+
+/* B1 (SIGNATURE): "the brief sets" — rules draw, lines rise, figure lands last */
+.play .b-rule{ animation:b-rule .7s cubic-bezier(.2,.85,.25,1) both; animation-delay:calc(var(--i,0)*90ms + 80ms); }
+@keyframes b-rule{ from{ transform:scaleX(0); } to{ transform:scaleX(1); } }
+.play .b-kick, .play .b-head, .play .b-sub, .play .b-item, .play .b-ix{
+  animation:b-rise .62s cubic-bezier(.2,.85,.25,1) both;
+  animation-delay:calc(var(--i,0) * 62ms + 60ms); }
+@keyframes b-rise{ from{ opacity:0; transform:translateY(12px); } to{ opacity:1; transform:none; } }
+.play .b-fig .n{ animation:b-land .78s cubic-bezier(.16,.94,.24,1) both; animation-delay:520ms; }
+@keyframes b-land{ from{ opacity:0; transform:translateY(20px) scale(.86); } to{ opacity:1; transform:none; } }
+
+/* C1 (SIGNATURE): "arrival" — the field blooms, glass cards lift in sequence */
+.play .c-field{ animation:c-bloom 1.1s cubic-bezier(.2,.8,.3,1) both; }
+@keyframes c-bloom{ from{ opacity:0; transform:scale(1.14); filter:saturate(.3); }
+                    to{ opacity:1; transform:none; filter:none; } }
+.play .c-hero, .play .c-card, .play .c-place{
+  animation:c-lift .6s cubic-bezier(.16,.9,.28,1) both;
+  animation-delay:calc(var(--i,0) * 62ms + 150ms); }
+@keyframes c-lift{ from{ opacity:0; transform:translateY(22px) scale(.95); filter:blur(6px); }
+                   to{ opacity:1; transform:none; filter:none; } }
+.play .c-nav{ animation:c-navin .62s cubic-bezier(.16,.94,.26,1) both; animation-delay:420ms; }
+@keyframes c-navin{ from{ opacity:0; transform:translateX(-50%) translateY(26px); }
+                    to{ opacity:1; transform:translateX(-50%); } }
+
+/* shared: delta chip rises when a value changes (A + C) */
+.flash{ animation:flash .9s ease-out both; }
+@keyframes flash{ 0%{ opacity:0; transform:translateY(6px); } 22%{ opacity:1; transform:none; }
+                  76%{ opacity:1; } 100%{ opacity:0; transform:translateY(-7px); } }
+
+@media (prefers-reduced-motion: reduce){
+  .play *, .play *::before, .play *::after{
+    animation:none !important; transition-duration:.01ms !important; }
+  .a-track i, .a-bar i{ width:var(--w,50%) !important; }
+  .b-rule{ transform:none !important; }
+  .c-nav{ transform:translateX(-50%) !important; }
+}
+
+/* Floating navigation needs a scrim, or scrolling content collides with it.
+   The bar is glass on purpose; the fade is what keeps it legible. */
+.a-root::after, .c-root::after, .b-root::after{
+  content:''; position:absolute; left:0; right:0; bottom:0; height:118px; z-index:8;
+  pointer-events:none;
+  background:linear-gradient(to top, var(--bg) 26%, color-mix(in srgb, var(--bg) 55%, transparent) 62%, transparent); }
+.a-tabs{ background:color-mix(in srgb, var(--s1) 92%, transparent); }
+[data-theme="light"] .a-tabs{ background:color-mix(in srgb, var(--s1) 94%, transparent); }
+.c-nav{ background:color-mix(in srgb, var(--bg) 62%, var(--glass-hi)); }
+[data-theme="dark"] .c-nav{ background:rgba(18,24,32,.86); }
+.b-jump{ background:color-mix(in srgb, var(--s1) 96%, transparent); }
+
+/* icon glyph slots */
+.a-tab .gl, .c-nb .gl, .a-brief .med, .c-card .av, .b-pi .ic, .a-nav-i .g,
+.a-ico, .c-orb, .b-jump .ic, .b-palin .f > span:first-child{
+  display:flex; align-items:center; justify-content:center; }
+.a-ico, .c-orb{ appearance:none; }
+
+/* focus states — present everywhere, unlike the app under review */
+.phone button:focus-visible, .phone [tabindex]:focus-visible, .phone input:focus-visible{
+  outline:2px solid var(--sig); outline-offset:2px; border-radius:8px; }
+</style>
+
+<div class="hz-wrap">
+  <p class="hz-title">DynastyEdge · <b>three directions</b> · 390px · dark + light · working motion</p>
+  <p class="hz-lede">Three different opinions about what this app is — each with its own
+    navigation, palette, type and <b>working motion</b>. Motion plays on every switch; hit
+    <b>Replay</b> to watch a signature moment again. Content is real: values and reads are
+    lifted from the live app on 11 Sep 2026.</p>
+
+  <div class="hz-controls">
+    <div class="hz-seg" role="group" aria-label="Direction">
+      <button data-set="dir" data-val="a" aria-pressed="true">A · Instrument</button>
+      <button data-set="dir" data-val="b" aria-pressed="false">B · Dispatch</button>
+      <button data-set="dir" data-val="c" aria-pressed="false">C · Control</button>
+    </div>
+    <div class="hz-seg" role="group" aria-label="Screen">
+      <button data-set="scr" data-val="home" aria-pressed="true">Home</button>
+      <button data-set="scr" data-val="deep" aria-pressed="false">Analysis</button>
+      <button data-set="scr" data-val="nav" aria-pressed="false">Navigation</button>
+    </div>
+    <div class="hz-seg" role="group" aria-label="Theme">
+      <button data-set="theme" data-val="dark" aria-pressed="true">Dark</button>
+      <button data-set="theme" data-val="light" aria-pressed="false">Light</button>
+    </div>
+    <button class="hz-replay" id="replay">↻ Replay motion</button>
+  </div>
+
+  <div class="hz-stage">
+    <div class="phone" id="phone" data-dir="a" data-theme="dark" data-scr="home"></div>
+    <div class="hz-notes" id="notes"></div>
+  </div>
+</div>
+
+<script>
+/* ------------------------------------------------------------------
+   Content is real: values, names and reads are lifted from live
+   screenshots of the running app (Nix Cage, roster 6, 2026-09-11).
+   ------------------------------------------------------------------ */
+const D = {
+  team:'Nix Cage', value:'87,397', delta:'−141', deltaPct:'−0.2%',
+  rank:'#4', window:'Middle', faab:'$1000', odds:74, stance:'Buyer',
+  roster:[
+    {n:'Brock Bowers', p:'te', t:'LV',  v:6952, pct:100, tr:'−410', d:'dn'},
+    {n:'CeeDee Lamb',  p:'wr', t:'DAL', v:6129, pct:88,  tr:'−118', d:'dn'},
+    {n:'Jonathan Taylor',p:'rb',t:'IND',v:5748, pct:100, tr:'+96',  d:'up'},
+    {n:'Bo Nix',       p:'qb', t:'DEN', v:4867, pct:100, tr:'+450', d:'up'},
+    {n:'Chase Brown',  p:'rb', t:'CIN', v:4670, pct:81,  tr:'+446', d:'up'},
+    {n:'Luther Burden',p:'wr', t:'CHI', v:3689, pct:60,  tr:'+212', d:'up'},
+    {n:'Jordan Love',  p:'qb', t:'GB',  v:3758, pct:77,  tr:'−361', d:'dn'},
+    {n:'Mark Andrews', p:'te', t:'BAL', v:1720, pct:25,  tr:'−204', d:'dn'},
+    {n:'Xavier Legette',p:'wr',t:'CAR', v:365,  pct:6,   tr:'−88',  d:'dn'},
+  ],
+  league:[
+    {r:1,n:'Ministry Of Touchdowns',p:99,s:'2nd seed'},
+    {r:2,n:'Aaronregers',p:87,s:'4th seed'},
+    {r:3,n:'Mahomes Depot',p:83,s:'4th seed'},
+    {r:4,n:'Mr. Spike',p:82,s:'4th seed'},
+    {r:5,n:'The Many Talons Of Jalen',p:75,s:'5th seed'},
+    {r:6,n:'Nix Cage',p:74,s:'5th seed',me:1},
+    {r:7,n:"Password Is Taco",p:62,s:'6th seed'},
+    {r:8,n:"De'Vont Stop Believin'",p:20,s:'8th seed'},
+  ],
+};
+const oddsColor = p => p>=70?'var(--ok)':p>=40?'var(--warn)':'var(--bad)';
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
+/* One stroke-icon set, drawn inline. The app already ships lucide, so these
+   are deliberately lucide-shaped — a mock that leans on colour emoji reads as
+   assembled rather than designed, and emoji cannot take the theme's colour. */
+const P = {
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  edge:'<path d="M12 3 21 12 12 21 3 12z"/>',
+  user:'<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.6 3.1-5.5 7-5.5s7 1.9 7 5.5"/>',
+  trade:'<path d="M4 8h13l-3-3M20 16H7l3 3"/>',
+  trophy:'<path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3"/><path d="M12 14v3M9 20h6"/>',
+  more:'<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>',
+  alert:'<path d="M12 4 2.5 20h19z"/><path d="M12 10v4M12 17h.01"/>',
+  up:'<path d="M3 16.5 9.5 10l4 4L21 6.5"/><path d="M15 6.5h6v6"/>',
+  down:'<path d="M3 7.5 9.5 14l4-4L21 17.5"/><path d="M15 17.5h6v-6"/>',
+  chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  scan:'<path d="M4 8V5a1 1 0 0 1 1-1h3M20 8V5a1 1 0 0 0-1-1h-3M4 16v3a1 1 0 0 0 1 1h3M20 16v3a1 1 0 0 1-1 1h-3"/><circle cx="12" cy="12" r="3"/>',
+  compass:'<circle cx="12" cy="12" r="8.5"/><path d="m15 9-2 5-4 2 2-5z"/>',
+  repeat:'<path d="M17 2l3 3-3 3"/><path d="M4 12V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3"/><path d="M20 12v3a4 4 0 0 1-4 4H4"/>',
+  news:'<path d="M4 5h13v14H4z"/><path d="M17 9h3v8a2 2 0 0 1-3 1.7"/><path d="M7 9h7M7 13h7M7 16h4"/>',
+  board:'<path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/>',
+  timer:'<circle cx="12" cy="13" r="7.5"/><path d="M12 9.5V13l2.5 1.5M9.5 2.5h5"/>',
+  bench:'<path d="M3 10h18M6 10v8M18 10v8M4 6h16v4H4z"/>',
+};
+const ic = (n, s = 17) =>
+  `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor"
+     stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
+     aria-hidden="true" focusable="false">${P[n] || ''}</svg>`;
+
+/* ---------------- DIRECTION A ---------------- */
+function A(scr){
+  if(scr==='nav') return `
+  <div class="a-root dir"><div class="nav-sheet">
+    <div class="nav-scrim"></div>
+    <div class="a-sheet">
+      <div class="a-grab"></div>
+      <div class="a-nav-h">Everything else</div>
+      <div class="a-navgrid">
+        ${[['bench','Season Review','Points left on your bench'],
+           ['chart','Trajectory','Where your window peaks'],
+           ['compass','Managers','How each owner trades'],
+           ['repeat','Pick Trades','Move up, move down'],
+           ['scan','Rookie Research','Opportunity vs market'],
+           ['news','News','The full league feed'],
+           ['board','Draft Board','Your rookie rankings'],
+           ['timer','Draft Tracker','Live on draft day']]
+          .map(([g,t,s],i)=>`<div class="a-nav-i" style="--i:${i}">
+            <div class="g">${ic(g,18)}</div><div class="t">${t}</div><div class="s">${s}</div></div>`).join('')}
+      </div>
+    </div>
+    <nav class="a-tabs">
+      ${[['edge','Edge'],['user','Team'],['trade','Trade'],['trophy','League'],['more','More']]
+        .map(([g,l])=>`<button class="a-tab" ${l==='More'?'aria-current="page"':''}>
+          <span class="gl">${ic(g)}</span><span class="lb">${l}</span></button>`).join('')}
+    </nav>
+  </div></div>`;
+
+  if(scr==='deep'){
+    let i=0;
+    return `<div class="a-root dir"><div class="a-scroll">
+      <div class="a-top"><h1>Trade · Targets</h1><span class="sp"></span>
+        <button class="a-ico" aria-label="Search">${ic('search',16)}</button></div>
+      <div class="a-hero">
+        <div class="a-eye">The call · Justin Jefferson</div>
+        <div class="a-heroval"><div class="a-big" data-count="6977">0</div>
+          <div class="a-delta" style="background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)">COUNTER</div></div>
+        <div style="font:400 12.5px/1.55 var(--font-b);color:var(--t2);margin-top:12px">
+          You'd give <b style="color:var(--t1)">6% more value than you get back</b>. Their lineup
+          gains 1,240 — yours loses 812.</div>
+        <div class="a-strip">
+          <div><div class="k">You give</div><div class="v">7,409</div></div>
+          <div><div class="k">You get</div><div class="v">6,977</div></div>
+          <div><div class="k">Fair</div><div class="v">±5%</div></div>
+          <div><div class="k">Gap</div><div class="v" style="color:var(--warn)">432</div></div>
+        </div>
+      </div>
+      <div class="a-sec"><span>Where it sits</span><i></i></div>
+      <div class="a-pad">
+        <div class="a-card" style="padding:14px">
+          <div style="display:flex;justify-content:space-between;font:600 9.5px/1 var(--font-n);letter-spacing:.14em;text-transform:uppercase;color:var(--t3)">
+            <span>Light</span><span>Fair</span><span>Heavy</span></div>
+          <div style="position:relative;height:30px;margin-top:10px">
+            <div style="position:absolute;inset:auto 0 13px;height:4px;border-radius:2px;background:var(--s3)"></div>
+            <div style="position:absolute;left:38%;width:24%;bottom:13px;height:4px;border-radius:2px;background:color-mix(in srgb,var(--ok) 55%,transparent)"></div>
+            <div style="position:absolute;left:70%;bottom:7px;width:2px;height:16px;background:var(--warn)"></div>
+            <div style="position:absolute;left:70%;bottom:0;transform:translateX(-50%);font:600 9px/1 var(--font-n);color:var(--warn);white-space:nowrap">YOU</div>
+          </div>
+        </div>
+      </div>
+      <div class="a-sec"><span>What it costs you</span><i></i><b>3 assets</b></div>
+      <div class="a-pad">
+        ${D.roster.slice(2,5).map(p=>`
+        <div class="a-row pos-${p.p}" style="--i:${i++}">
+          <div class="a-nm">${esc(p.n)}</div>
+          <div class="a-vl" data-count="${p.v}">0</div>
+          <div class="a-mt"><span class="a-tag">${p.p.toUpperCase()}</span> · ${p.t}</div>
+          <div class="a-tr ${p.d}">${p.tr}</div>
+          <div class="a-track"><i style="--w:${p.pct}%"></i></div>
+        </div>`).join('')}
+      </div>
+      <div class="a-sec"><span>Other targets</span><i></i></div>
+      <div class="a-pad">
+        ${[['Malik Nabers','wr','NYG',6290,90],['Puka Nacua','wr','LAR',8381,100],['Drake London','wr','ATL',5215,74]]
+          .map(([n,p,t,v,w])=>`
+        <div class="a-row pos-${p}" style="--i:${i++}">
+          <div class="a-nm">${n}</div><div class="a-vl" data-count="${v}">0</div>
+          <div class="a-mt"><span class="a-tag">${p.toUpperCase()}</span> · ${t}</div>
+          <div class="a-tr up">fair</div>
+          <div class="a-track"><i style="--w:${w}%"></i></div>
+        </div>`).join('')}
+      </div>
+    </div>
+    <nav class="a-tabs">
+      ${[['edge','Edge'],['user','Team'],['trade','Trade'],['trophy','League'],['more','More']]
+        .map(([g,l])=>`<button class="a-tab" ${l==='Trade'?'aria-current="page"':''}>
+        <span class="gl">${ic(g)}</span><span class="lb">${l}</span></button>`).join('')}
+    </nav></div>`;
+  }
+
+  let i=0;
+  return `<div class="a-root dir"><div class="a-scroll">
+    <div class="a-top"><h1>The Edge</h1><span class="sp"></span><button class="a-ico" aria-label="Search">${ic('search',16)}</button></div>
+    <div class="a-hero">
+      <div class="a-eye">${D.team} · Friday, Sep 11</div>
+      <div class="a-heroval">
+        <div class="a-big" data-count="87397">0</div>
+        <div class="a-delta">${D.delta} <span style="opacity:.75">${D.deltaPct}</span></div>
+      </div>
+      <div class="a-eye" style="margin-top:9px">Team value · 30-day</div>
+      <div class="a-strip">
+        <div><div class="k">Rank</div><div class="v">${D.rank}</div></div>
+        <div><div class="k">Window</div><div class="v" style="font-size:12px">${D.window}</div></div>
+        <div><div class="k">Odds</div><div class="v" style="color:var(--ok)">${D.odds}%</div></div>
+        <div><div class="k">FAAB</div><div class="v">${D.faab}</div></div>
+      </div>
+    </div>
+    <div class="a-sec"><span>On your desk</span><i></i><b>5</b></div>
+    <div class="a-alert" style="--i:${i++}">
+      <div class="dot"></div>
+      <div><h4>5 QBs rostered — one is dead weight</h4>
+        <p>Flip Kirk Cousins to Jake &amp; Bake for Stefon Diggs. Fills your WR hole.</p>
+        <button class="a-btn">Build this trade →</button></div>
+    </div>
+    ${[['trophy','You\'re a buyer','74% to make the playoffs. Trade future picks for win-now help.','var(--ok)'],
+       ['down','Buy low: Carnell Tate','Down 508 (−12%) in 30 days and fills your WR gap.','var(--sig)'],
+       ['up','Sell high: Bo Nix','Up +450 (+10%) at a position of surplus.','var(--warn)']]
+      .map(([g,h,p,c])=>`
+      <div class="a-brief" style="--bc:${c};--i:${i++}">
+        <div class="med">${ic(g,17)}</div>
+        <div style="flex:1"><h4>${h}</h4><p>${p}</p></div>
+        <div class="go">›</div>
+      </div>`).join('')}
+    <div class="a-sec"><span>Your roster, by value</span><i></i><b>26</b></div>
+    <div class="a-pad">
+      ${D.roster.slice(0,6).map(p=>`
+      <div class="a-row pos-${p.p}" style="--i:${i++}">
+        <div class="a-nm">${esc(p.n)}</div>
+        <div class="a-vl" data-count="${p.v}">0</div>
+        <div class="a-mt"><span class="a-tag">${p.p.toUpperCase()}</span> · ${p.t}</div>
+        <div class="a-tr ${p.d}">${p.tr}</div>
+        <div class="a-track"><i style="--w:${p.pct}%"></i></div>
+      </div>`).join('')}
+    </div>
+  </div>
+  <nav class="a-tabs">
+    ${[['edge','Edge'],['user','Team'],['trade','Trade'],['trophy','League'],['more','More']]
+      .map(([g,l])=>`<button class="a-tab" ${l==='Edge'?'aria-current="page"':''}>
+      <span class="gl">${ic(g)}</span><span class="lb">${l}</span></button>`).join('')}
+  </nav></div>`;
+}
+
+/* ---------------- DIRECTION B ---------------- */
+function B(scr){
+  if(scr==='nav') return `
+  <div class="b-root dir"><div class="nav-sheet">
+    <div class="nav-scrim"></div>
+    <div class="b-pal">
+      <div class="b-palin"><div class="f"><span style="color:var(--t3);display:flex">${ic('search',17)}</span>
+        <input placeholder="Go anywhere, find anyone…" aria-label="Jump to"></div></div>
+      <div class="b-grp">Your week</div>
+      ${[['edge','The Brief','home'],['trade','Build a trade','trade'],['user','Your roster','team'],['trophy','The league','league']]
+        .map(([i,t,h],k)=>`<div class="b-pi" style="--i:${k}"><span class="ic">${ic(i,16)}</span>
+          <span class="t">${t}</span><span class="h">${h}</span></div>`).join('')}
+      <div class="b-grp">Everything</div>
+      ${[['chart','Dynasty Trajectory','my team'],['bench','Season Review','my team'],
+         ['compass','Manager Scouting','trade'],['repeat','Pick Trades','trade'],
+         ['scan','Rookie Research','draft'],['news','News','feed']]
+        .map(([i,t,h],k)=>`<div class="b-pi" style="--i:${k+4}"><span class="ic">${ic(i,16)}</span>
+          <span class="t">${t}</span><span class="h">${h}</span></div>`).join('')}
+    </div>
+  </div></div>`;
+
+  if(scr==='deep') return `
+  <div class="b-root dir"><div class="b-scroll">
+    <div class="b-masthead"><span class="m">The Call</span><span class="d">Targets · 20</span></div>
+    <div class="b-lede">
+      <div class="b-kick" style="--i:0">Counter — don't accept</div>
+      <h1 class="b-head" style="--i:1">Jefferson costs you <em>6% too much</em>,
+        and the wrong 6%.</h1>
+      <p class="b-sub" style="--i:2">The package works on paper. It doesn't work on your
+        field: <b>your starting lineup loses 812</b> while theirs gains 1,240. You're paying a
+        premium to get slightly worse this season.</p>
+      <div class="b-fig">
+        <div class="n">432</div>
+        <div class="l"><b>short of fair</b>light by 432 on a 6,977 asset — ask them to add a 2027 2nd</div>
+      </div>
+    </div>
+    <div class="b-rule" style="--i:0"></div>
+    <div class="b-pad">
+      <div class="b-item" style="--i:3"><div class="tag">What leaves</div>
+        <h3>Jonathan Taylor, <em>your RB1</em></h3>
+        <p>Worth <span class="num">5,748</span> and 1.7 years past the RB peak window.
+          Roughly <span class="num">3,257</span> of that value is exposed to decline over the
+          next three seasons — which is the real argument for moving him.</p>
+        <span class="more">See the depth chart →</span></div>
+      <div class="b-item" style="--i:4"><div class="tag">Why they'd say yes</div>
+        <h3>It fills their <em>only</em> hole</h3>
+        <p>Ministry Of Touchdowns start Taylor at RB2 immediately. Their lineup gains
+          <span class="num">1,240</span>. Appeal reads <b>fair</b>, not strong — there's room
+          to ask.</p>
+        <span class="more">Read their roster →</span></div>
+    </div>
+    <div class="b-rule" style="--i:1"></div>
+    <div class="b-pad">
+      <div class="b-kick" style="--i:5">Cheaper ways to the same need</div>
+      <div class="b-index">
+        ${[['Malik Nabers','NYG · fills WR · 4.6 yrs younger',6290,'+228','up'],
+           ['Drake London','ATL · fills WR · 2.5 yrs younger',5215,'−272','dn'],
+           ['Jeremiyah Love','Jake & Bake · 6.4 yrs younger',6369,'+303','up']]
+          .map(([n,s,v,d,c],k)=>`
+        <div class="b-ix" style="--i:${k+6}"><span class="r">0${k+1}</span>
+          <span class="n">${esc(n)}<small>${esc(s)}</small></span>
+          <span class="v">${v.toLocaleString()}<small class="${c}">${d} to fair</small></span></div>`).join('')}
+      </div>
+    </div>
+  </div>
+  <div class="b-jump"><span class="ic">${ic('search',16)}</span><span class="tx">Go anywhere</span>
+    <span class="kb">JUMP</span></div></div>`;
+
+  return `
+  <div class="b-root dir"><div class="b-scroll">
+    <div class="b-masthead"><span class="m">The Brief</span><span class="d">Fri · Sep 11</span></div>
+    <div class="b-lede">
+      <div class="b-kick" style="--i:0">Good afternoon, ${D.team}</div>
+      <h1 class="b-head" style="--i:1">You're a buyer. <em>Five things</em> need you today.</h1>
+      <p class="b-sub" style="--i:2">Your roster is worth <b>87,397</b>, fourth in the league
+        and flat on the month. The model puts you at <b>74%</b> to make the playoffs — which
+        is the number that should change how you trade this week.</p>
+      <div class="b-fig">
+        <div class="n">74<span style="font-size:26px">%</span></div>
+        <div class="l"><b>playoff odds</b>10,000 simulated seasons · 5th seed projected</div>
+      </div>
+    </div>
+    <div class="b-rule" style="--i:0"></div>
+    <div class="b-pad">
+      <div class="b-item" style="--i:3"><div class="tag">Act today</div>
+        <h3>You're carrying <em>five quarterbacks</em></h3>
+        <p>One of them is dead weight. Kirk Cousins (<span class="num">1,282</span>) goes to
+          Jake &amp; Bake for Stefon Diggs and fills the WR hole you've had since August.</p>
+        <span class="more">Build this trade →</span></div>
+      <div class="b-item" style="--i:4"><div class="tag">Buy low</div>
+        <h3>Carnell Tate is down <em>12%</em></h3>
+        <p>Off <span class="num">508</span> in thirty days at a position you're below league
+          average in. His owner is rebuilding and has moved two veterans this month.</p>
+        <span class="more">See the package →</span></div>
+      <div class="b-item" style="--i:5"><div class="tag">Sell high</div>
+        <h3>Bo Nix is up <em>10%</em></h3>
+        <p>Up <span class="num">450</span> at a position of surplus. You start two QBs and
+          roster five. The market is paying for him right now.</p>
+        <span class="more">Shop him →</span></div>
+    </div>
+    <div class="b-rule" style="--i:1"></div>
+    <div class="b-pad">
+      <div class="b-kick" style="--i:6">Moving on your roster</div>
+      <div class="b-index">
+        ${D.roster.slice(0,5).map((p,k)=>`
+        <div class="b-ix" style="--i:${k+7}"><span class="r">0${k+1}</span>
+          <span class="n">${esc(p.n)}<small>${p.p.toUpperCase()} · ${p.t}</small></span>
+          <span class="v">${p.v.toLocaleString()}<small class="${p.d}">${p.tr}</small></span></div>`).join('')}
+      </div>
+    </div>
+  </div>
+  <div class="b-jump"><span class="ic">${ic('search',16)}</span><span class="tx">Go anywhere</span>
+    <span class="kb">JUMP</span></div></div>`;
+}
+
+/* ---------------- DIRECTION C ---------------- */
+function C(scr){
+  const nav = cur => `<nav class="c-nav" id="cnav">
+    ${[['edge','Edge'],['user','Team'],['trade','Trade'],['trophy','League'],['search','Find']]
+      .map(([g,l])=>`<button class="c-nb" ${l===cur?'aria-current="page"':''}>
+      <span class="gl">${ic(g,17)}</span><span class="lb">${l}</span></button>`).join('')}</nav>`;
+
+  if(scr==='nav') return `
+  <div class="c-root dir"><div class="c-field"></div>
+    <div class="c-top"><span class="place">Where to</span></div>
+    <div class="c-switch">
+      ${[['Edge','#63e6d2','Your desk','5 items · 3 new moves'],
+         ['My Team','#57a9f2','Roster · Lineup · Trajectory','26 players · window peaks 2027'],
+         ['Trade','#46dd94','Partners · Analyzer · Targets','20 targets · deadline in 12 wks'],
+         ['League','#ffc25c','Overview · Activity · Playoffs','74% odds · 4th by value'],
+         ['Draft','#f2758f','Board · Research · Tracker','2026 complete · recap ready'],
+         ['News','#9aa3ee','The league feed','12 new since Tuesday']]
+        .map(([t,c,s,sub],k)=>`
+        <div class="c-place" style="--pc:${c};--i:${k}">
+          <div class="r"><span class="d"></span><span class="t">${t}</span>
+            <span class="c">${k===0?'HOME':''}</span></div>
+          <div class="sub">${s} — <span style="color:var(--t3)">${sub}</span></div>
+        </div>`).join('')}
+    </div>
+    ${nav('Find')}</div>`;
+
+  if(scr==='deep'){
+    let i=0;
+    return `<div class="c-root dir"><div class="c-field"></div>
+    <div class="c-scroll" data-minnav>
+      <div class="c-top"><span class="place">Trade · Targets</span><span class="sp"></span>
+        <button class="c-orb" aria-label="Search">${ic('search',15)}</button></div>
+      <div class="c-hero">
+        <div class="gr">Justin Jefferson · Ministry Of Touchdowns</div>
+        <div class="bg" data-count="6977">0</div>
+        <div class="un">dynasty value · WR2 overall</div>
+        <div class="c-chips">
+          <span class="c-chip" style="color:var(--warn)">COUNTER</span>
+          <span class="c-chip">you give <b>7,409</b></span>
+          <span class="c-chip">gap <b>432</b></span>
+        </div>
+        <p style="font:400 13px/1.6 var(--font-b);color:var(--t2);margin:16px 0 0">
+          Their lineup gains <b style="color:var(--t1)">1,240</b>. Yours loses
+          <b style="color:var(--t1)">812</b>. The position count balances — the players don't.</p>
+      </div>
+      <div class="c-lab">What it costs you</div>
+      ${D.roster.slice(2,5).map(p=>`
+      <div class="c-card" style="--pc:var(--${p.p});--i:${i++}">
+        <div class="hd"><span class="av">${p.p.toUpperCase()}</span>
+          <div><h4>${esc(p.n)}</h4><p>${p.t} · ${p.tr} in 30 days</p></div>
+          <span class="vl" data-count="${p.v}">0</span></div>
+      </div>`).join('')}
+      <div class="c-lab">Cheaper routes</div>
+      ${[['Malik Nabers','wr','NYG',6290],['Drake London','wr','ATL',5215]].map(([n,p,t,v])=>`
+      <div class="c-card" style="--pc:var(--${p});--i:${i++}">
+        <div class="hd"><span class="av">${p.toUpperCase()}</span>
+          <div><h4>${n}</h4><p>${t} · fills your WR need</p></div>
+          <span class="vl" data-count="${v}">0</span></div>
+      </div>`).join('')}
+    </div>${nav('Trade')}</div>`;
+  }
+
+  let i=0;
+  return `<div class="c-root dir"><div class="c-field"></div>
+  <div class="c-scroll" data-minnav>
+    <div class="c-top"><span class="place">The Edge</span><span class="sp"></span>
+      <button class="c-orb" aria-label="Search">${ic('search',15)}</button></div>
+    <div class="c-hero">
+      <div class="gr">Good afternoon, ${D.team} — <b style="color:var(--t1)">5 items on your desk</b></div>
+      <div class="bg" data-count="87397">0</div>
+      <div class="un">team value · ${D.delta} (${D.deltaPct}) · 30 days</div>
+      <div class="c-chips">
+        <span class="c-chip">rank <b>${D.rank}</b></span>
+        <span class="c-chip">window <b>${D.window}</b></span>
+        <span class="c-chip" style="color:var(--ok)">odds <b>${D.odds}%</b></span>
+        <span class="c-chip">faab <b>${D.faab}</b></span>
+      </div>
+    </div>
+    <div class="c-lab">Act today</div>
+    <div class="c-card" style="--pc:var(--warn);--i:${i++}">
+      <div class="hd"><span class="av">${ic('alert',16)}</span>
+        <div><h4>5 QBs rostered</h4><p>Flip Kirk Cousins for Stefon Diggs — fills your WR hole.</p></div>
+      </div>
+    </div>
+    <div class="c-lab">The read</div>
+    ${[['trophy','You\'re a buyer','74% to make the playoffs','ok'],
+       ['down','Buy low: Carnell Tate','Down 508 (−12%) · fills WR','sig'],
+       ['up','Sell high: Bo Nix','Up 450 (+10%) · QB surplus','warn']]
+      .map(([g,h,p,c])=>`
+      <div class="c-card" style="--pc:var(--${c});--i:${i++}">
+        <div class="hd"><span class="av">${ic(g,16)}</span><div><h4>${h}</h4><p>${p}</p></div>
+        <span style="color:var(--t3)">›</span></div></div>`).join('')}
+    <div class="c-lab">Your roster</div>
+    ${D.roster.slice(0,4).map(p=>`
+    <div class="c-card" style="--pc:var(--${p.p});--i:${i++}">
+      <div class="hd"><span class="av">${p.p.toUpperCase()}</span>
+        <div><h4>${esc(p.n)}</h4><p>${p.t} · ${p.tr} in 30 days</p></div>
+        <span class="vl" data-count="${p.v}">0</span></div></div>`).join('')}
+  </div>${nav('Edge')}</div>`;
+}
+
+/* ---------------- notes ---------------- */
+const NOTES = {
+a:{k:'Direction A',t:'Instrument',
+  p:[`<b>The opinion:</b> this is a precision instrument for reading a market, so every
+      quantity should show its <b>magnitude</b>, not just its number. The one pattern the app
+      already gets right — Playoff Odds' filled bars — becomes the system.`,
+     `Hairlines are replaced by <b>elevation</b>: layered surfaces, real shadow, 14px radius.
+      The ground gains a hue (#0b0f14, blue-black) so black stops reading as "no decision made".
+      Anton is dropped; Archivo's upper weights carry display, IBM Plex Mono carries every
+      number. <b>Zero new font families.</b>`,
+     `Navigation becomes a <b>floating 5-tab bar</b> — Edge · Team · Trade · League · More —
+      with the 8 low-frequency destinations behind More. Sub-tabs survive only where a section
+      genuinely has peers.`],
+  d:[['Signature motion','<b>The readout.</b> Values roll from zero and magnitude tracks wipe in, staggered 52ms per row — the instrument powering on. Because the track is colored by <i>position</i>, the wipe teaches the position palette at the same time.'],
+     ['Other moments','Press depress (scale .985 + shadow drop) · sheet blur ramp · delta chip that rises and fades on a value change.'],
+     ['Optimizes for','Scanning 26 rows and knowing instantly which three matter.'],
+     ['Costs','The track needs a per-position distribution — cheap (it is a max over a list you already hold), but it is new derived state on every row.'],
+     ['Breaks','Every `Card` gets a radius and a shadow; `rounded-none` leaves the system. The silver/red ration is gone.']]},
+b:{k:'Direction B',t:'Dispatch',
+  p:[`<b>The opinion:</b> you are one person with one team, and the app already knows what you
+      should do. So it should <b>write to you</b>, not lay out a dashboard and make you infer.
+      Prose leads; data appears inline, set as display type.`,
+     `A real departure from broadcast graphics: a variable serif (Fraunces) at editorial scale,
+      warm ink ground, old-gold rules. Cards mostly disappear — the page is a <b>column of
+      text</b> with hairline rules and an indexed table where ranking actually matters.`,
+     `Navigation is the most radical part: <b>there is no nav</b>. One "Go anywhere" bar opens a
+      jump palette that reaches all 21 destinations by name. The brief is the app.`],
+  d:[['Signature motion','<b>The brief sets.</b> Rules draw left→right, lines rise in sequence, and the lead figure lands <i>last</i> at 520ms — the page composing itself like type being set.'],
+     ['Other moments','Palette spring-rise · link underline draws on press · section expand.'],
+     ['Optimizes for','The weekly "what changed and what do I do" read. Fastest direction to an actual decision.'],
+     ['Costs','Density. A roster of 26 does not want to be prose — B needs a second, tabular register for those screens, and the mock shows it (the index). One new font family.'],
+     ['Breaks','Most of the component library. `Card`, `Chip`, `Badge`, `SectionHeader` all lose their job.']]},
+c:{k:'Direction C',t:'Control',
+  p:[`<b>The opinion:</b> sections are <b>places</b>. The app should feel spatial, and you should
+      know where you are by how it <i>looks</i>, not by reading a header label.`,
+     `Each section owns a hue in an atmospheric field behind translucent glass. Generous 20–26px
+      radii, blur, depth. This is the iOS 26 idiom (floating glass bar, minimize-on-scroll)
+      rendered in the app's own palette rather than borrowed wholesale.`,
+     `Navigation is a <b>floating glass tab bar</b> that shrinks as you scroll, plus a spatial
+      switcher that shows all six places at once with live context on each.`],
+  d:[['Signature motion','<b>Arrival.</b> The field blooms from a desaturated 1.14× scale while glass cards lift and de-blur in sequence — you land somewhere rather than loading a page. Paired with shared-element expansion from row to profile sheet.'],
+     ['Other moments','Nav minimizes on scroll · card press scale · tab switch cross-fades the field hue.'],
+     ['Optimizes for','Orientation and delight. Answers "what is in this app" better than any label could.'],
+     ['Costs','<b>Real risk.</b> `backdrop-filter` on many stacked layers is the most expensive thing on this list for an iPhone PWA — it must be budgeted and measured, not assumed. Light mode glass over a pale field is the hardest contrast problem of the three.'],
+     ['Breaks','The flat-background rule, the no-gradient rule, and the square-card rule simultaneously.']]},
+};
+
+/* ---------------- harness ---------------- */
+const phone = document.getElementById('phone');
+const notes = document.getElementById('notes');
+const state = { dir:'a', scr:'home', theme:'dark' };
+const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+function countUp(el){
+  const target = +el.dataset.count;
+  if (REDUCED.matches){ el.textContent = target.toLocaleString(); return; }
+  const dur = 900, t0 = performance.now();
+  function step(t){
+    const k = Math.min(1,(t-t0)/dur);
+    const e = 1 - Math.pow(1-k, 3);            // easeOutCubic
+    el.textContent = Math.round(target*e).toLocaleString();
+    if (k<1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function render(play){
+  const fn = state.dir==='a'?A : state.dir==='b'?B : C;
+  phone.dataset.dir = state.dir;
+  phone.dataset.theme = state.theme;
+  phone.innerHTML = `<div class="screen on">${fn(state.scr)}</div>`;
+  phone.classList.remove('play');
+  void phone.offsetWidth;                       // force reflow so replay re-triggers
+  if (play !== false) phone.classList.add('play');
+
+  // odds bars (direction A, home) get their measured widths
+  phone.querySelectorAll('.a-bar i').forEach(el=>{
+    el.style.background = oddsColor(+el.dataset.p||0); });
+
+  const delay = REDUCED.matches ? 0 : 340;
+  phone.querySelectorAll('[data-count]').forEach(el=>{
+    el.textContent = '0';
+    setTimeout(()=>countUp(el), delay);
+  });
+
+  // C: nav minimizes on scroll
+  const sc = phone.querySelector('[data-minnav]');
+  if (sc){
+    const nv = phone.querySelector('#cnav');
+    sc.addEventListener('scroll', ()=>{ nv.classList.toggle('min', sc.scrollTop>40); },
+      {passive:true});
+  }
+
+  const n = NOTES[state.dir];
+  notes.innerHTML = `<div class="kicker">${n.k}</div><h2>${n.t}</h2>
+    ${n.p.map(x=>`<p>${x}</p>`).join('')}
+    <dl>${n.d.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`;
+}
+
+document.querySelectorAll('[data-set]').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    const {set, val} = b.dataset;
+    state[set] = val;
+    document.querySelectorAll(`[data-set="${set}"]`).forEach(o=>
+      o.setAttribute('aria-pressed', String(o.dataset.val===val)));
+    render(true);
+  });
+});
+document.getElementById('replay').addEventListener('click', ()=>render(true));
+render(true);
+</script>
