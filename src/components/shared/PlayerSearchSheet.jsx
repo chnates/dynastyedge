@@ -41,6 +41,7 @@ const DESTINATIONS = [
   { label: 'Market Movers', section: 'League', to: '/league/movers' },
   { label: 'Playoff Odds', section: 'League', to: '/league/playoffs' },
   { label: 'Draft Board', section: 'Draft', to: '/draft/board' },
+  { label: 'Rookie Research', section: 'Draft', to: '/draft/research' },
   { label: 'Draft Tracker', section: 'Draft', to: '/draft/tracker' },
   { label: 'News', section: 'News', to: '/news' },
 ]
