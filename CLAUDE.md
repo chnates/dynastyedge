@@ -1716,6 +1716,10 @@ every completed week.
   My Roster, the Optimizer, and Trajectory — not stacked inside the Optimizer's
   scroll. It renders as a standalone padded page with its own header.
   (`/lineup/season-review` redirects here.)
+- **Reached from the Optimizer** (a footer link on Squad › Lineup), which is
+  where the question gets asked: you have just been told what *this* week's
+  lineup is costing you, and this is the season-long version of that number.
+  Before 2026-09-11 it had no content-level inbound link at all.
 
 -----
 
@@ -1796,7 +1800,11 @@ number means and closes with the honest caveat that it grades at *today's*
 prices, pointing at Trade › Managers, which regrades the same picks in
 hindsight every season.
 
-**Rookie Research** is the third Draft sub-tab — see Feature 19.
+**Rookie Research** is the third Draft view — see Feature 19. The Board links
+to it directly (a footer link): the Board ranks the class by dynasty *value*,
+which prices consensus, and Research answers the question that ordering cannot
+— which of them will actually play. Before 2026-09-11 Research had no inbound
+link anywhere and was also missing from global search.
 
 **Refresh model:** Board and Tracker share one session-cached fetch
 (`useSleeperDraft` module cache). A manual Refresh button refetches on demand;
@@ -1834,6 +1842,10 @@ card on me: how am I actually doing, and what should I work on?
 > **Location:** lives under **Trade › Managers** (`/trade/managers`) — it's
 > trade intel, so it sits with the trade tools. `/league/managers` redirects
 > here. The component files remain in `src/components/league/`.
+> **Reached from Trade › Partners** (a footer link), which is where it belongs:
+> the partner cards answer "who do I call?" from their *roster*, and the next
+> question is how that owner has actually traded before. Before 2026-09-11 it
+> had no content-level inbound link at all.
 
 **League history walking (`useLeagueHistory`):** every Sleeper league carries
 `previous_league_id` — the same league's prior season. The hook walks the
@@ -2236,10 +2248,15 @@ and offseason alike. **Zero new data sources** — pure logic over caches
 `LeagueContext` already holds.
 
 **Location:** a **Squad view** (My Roster · Lineup · Season Review ·
-**Trajectory**, `/my-team/trajectory`), and **roster-agnostic** — the team
-drill-down (`RosterView` for `:rosterId`) carries a "Dynasty Trajectory →" card
-that opens `/league/trajectory/:rosterId`, so you can scout an opponent's window
-("this contender's value slams shut after 2026 — they'll sell").
+**Trajectory**, `/my-team/trajectory`), and **roster-agnostic** — `RosterView`
+carries a "Dynasty Trajectory →" card **on both seats**: my own roster opens
+`/my-team/trajectory`, a drill-down (`:rosterId`) opens
+`/league/trajectory/:rosterId`, so you can scout an opponent's window ("this
+contender's value slams shut after 2026 — they'll sell"). The card used to be
+gated on the drill-down, which left **my own** trajectory with no inbound link
+anywhere in the app (fixed 2026-09-11, DESIGN-3) — "is this roster aging out?"
+is the obvious next question from the roster you are looking at, and nothing on
+the screen answered it.
 
 **Consumers (all via `getTrajectoryRead`, zero extra fetch):**
 - **Trade Partner Finder:** each opponent card carries a one-line trajectory

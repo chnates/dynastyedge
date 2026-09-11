@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Upload, Save, ChevronUp, ChevronDown,
   FileText, GripVertical, RotateCcw, Trash2, Search, RefreshCw,
@@ -339,6 +340,7 @@ function SortablePlayerRow({
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function DraftBoard() {
+  const navigate = useNavigate()
   const { league, loading, error, retry, values, myRosterId, nflState } = useLeagueContext()
   const { rookieMap, loading: rookieLoading, error: rookieError, retry: rookieRetry } = useRookieADP()
 
@@ -933,6 +935,22 @@ export default function DraftBoard() {
             No {nflState?.season ?? ''} rookie prospects found. FantasyCalc's rookie endpoint will populate once the draft class is available.
           </p>
         )}
+
+        {/* Rookie Research had ZERO content-level inbound links and was also
+            missing from global search (findings.md A1). This board ranks the
+            class by dynasty VALUE, which prices consensus; Research answers the
+            question that ordering can't — which of them will actually play. */}
+        <div className="px-4">
+          <Button
+            variant="tinted"
+            size="lg"
+            fullWidth
+            onClick={() => navigate('/draft/research')}
+            className="mt-4 py-2.5 text-xs active:opacity-70"
+          >
+            Value prices consensus. Who gets the job? Open Rookie Research →
+          </Button>
+        </div>
       </div>
 
       {/* ── CSV name prompt ── */}

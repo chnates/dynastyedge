@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { LayoutList, Search } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useFantasyCalc } from '../../hooks/useFantasyCalc'
@@ -113,6 +114,7 @@ function OffseasonPlaceholder({ league }) {
 }
 
 export default function LineupOptimizer() {
+  const navigate = useNavigate()
   const { league, loading: leagueLoading, error: leagueError, retry: leagueRetry } = useLeagueContext()
   const { values: fcValues, loading: fcLoading } = useFantasyCalc()
   const lineupData = useLineupData()
@@ -330,6 +332,20 @@ export default function LineupOptimizer() {
           it allowed the previous week, and no week has been played yet.
         </p>
       )}
+
+      {/* Season Review had ZERO content-level inbound links (findings.md A1).
+          This screen is where the question it answers gets asked: you have just
+          been told what this week's lineup is costing you, and "how often does
+          that happen?" is the season-long version of the same number. */}
+      <Button
+        variant="tinted"
+        size="lg"
+        fullWidth
+        onClick={() => navigate('/my-team/season-review')}
+        className="mt-4 py-2.5 text-xs active:opacity-70"
+      >
+        How often does this cost you? See Season Review →
+      </Button>
 
       {profilePlayer && (
         <PlayerProfileDrawer player={profilePlayer} onClose={() => setProfilePlayer(null)} />

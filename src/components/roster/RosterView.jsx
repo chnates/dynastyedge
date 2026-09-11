@@ -116,30 +116,36 @@ export default function RosterView() {
         </div>
       </div>
 
-      {/* ── Dynasty trajectory (scouting another team — not otherwise reachable) ── */}
-      {selectedRosterId && (
-        <Card
-          accent="bg-accent"
-          padding="px-3 py-3"
-          onClick={() => navigate(`/league/trajectory/${selectedRosterId}`)}
-          className="mt-4 mb-1"
-        >
-          <div className="flex items-center gap-2.5">
-            <span className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-accent/15">
-              <TrendingUp size={15} strokeWidth={2} className="text-accent" />
-            </span>
-            <div className="flex-1 text-left">
-              <p className="font-body text-sm font-semibold text-text-primary leading-tight">
-                Dynasty Trajectory
-              </p>
-              <p className="font-body text-[10px] text-text-tertiary mt-0.5">
-                Where this team's value is headed · when their window closes
-              </p>
-            </div>
-            <ChevronRight size={16} strokeWidth={1.75} className="text-text-tertiary flex-shrink-0" />
+      {/* ── Dynasty trajectory ──
+          Rendered for BOTH seats. It used to be gated on `selectedRosterId`, so
+          the card existed only when scouting somebody else and my OWN
+          trajectory — the app's one forward-looking view — had zero
+          content-level inbound links anywhere (findings.md A1/A7: "is this
+          roster aging out?" is the obvious next question from the roster you're
+          looking at, and nothing on the screen answered it). */}
+      <Card
+        accent="bg-accent"
+        padding="px-3 py-3"
+        onClick={() => navigate(selectedRosterId ? `/league/trajectory/${selectedRosterId}` : '/my-team/trajectory')}
+        className="mt-4 mb-1"
+      >
+        <div className="flex items-center gap-2.5">
+          <span className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-accent/15">
+            <TrendingUp size={15} strokeWidth={2} className="text-accent" />
+          </span>
+          <div className="flex-1 text-left">
+            <p className="font-body text-sm font-semibold text-text-primary leading-tight">
+              Dynasty Trajectory
+            </p>
+            <p className="font-body text-[10px] text-text-tertiary mt-0.5">
+              {selectedRosterId
+                ? "Where this team's value is headed · when their window closes"
+                : 'Where your value is headed · when your window peaks'}
+            </p>
           </div>
-        </Card>
-      )}
+          <ChevronRight size={16} strokeWidth={1.75} className="text-text-tertiary flex-shrink-0" />
+        </div>
+      </Card>
 
       {/* ── Action Items banner (own roster only) ── */}
       {!selectedRosterId && (

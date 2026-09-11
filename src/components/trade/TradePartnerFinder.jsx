@@ -335,6 +335,21 @@ export default function TradePartnerFinder() {
       >
         Planning a pick swap? Open the Pick Trade Calculator →
       </Button>
+
+      {/* Manager Scouting had ZERO content-level inbound links (findings.md A1)
+          — it walks every season of league history and nothing pointed at it.
+          This screen is where it belongs: the cards above answer "who do I
+          call?" from their ROSTER, and the obvious next question is how that
+          owner has actually traded before. */}
+      <Button
+        variant="tinted"
+        size="lg"
+        fullWidth
+        onClick={() => navigate('/trade/managers')}
+        className="mt-2 py-2.5 text-xs active:opacity-70"
+      >
+        How has each owner traded before? Open Manager Scouting →
+      </Button>
     </div>
   )
 }
