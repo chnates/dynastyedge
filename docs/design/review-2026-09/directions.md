@@ -276,7 +276,21 @@ all five, which is what gives the size ramp a tail to ramp across.
   need you today." and demoting 87,397 to the caption would be consistent. Left
   alone deliberately: the big figure is what makes the hero read as a cover.
 
-### Matchday rev 2 — the hero swap (owner approved, 2026-09-11)
+### Matchday rev 2 — the hero swap, **built then REVERTED** (2026-09-11)
+
+> **Outcome: reverted on the owner's call — he preferred the original look.**
+> The home hero keeps team value as its marquee figure. This section stays as
+> the record of what was tried and why, so nobody re-proposes it without
+> answering the objection: it was not rejected on reasoning, it was rejected on
+> looks, and looks is the owner's call to make.
+>
+> What shipped instead (rev 3): the home hero is back to
+> `Team value · 30 days −141 (−0.2%)` → **87,397** → *"You're a buyer. Five
+> things need you today."* → the stat caption. The **verdict** poster keeps its
+> rev-1 fix — it still leads with `Counter`, because that one was a hierarchy
+> bug, not a taste call.
+
+The swap that was built and reverted:
 
 The home hero now leads with the call, not the figure. Structure is a deliberate
 parallel to the verdict poster, so the two heroes are one system:

@@ -2806,7 +2806,8 @@ the route changed.
 > render) executed in the brief's six steps: token pass, primitive pass, red
 > score-bug heroes, per-section sweeps, red/silver logo re-cut, docs. The
 > **Design System section below is the live post-refresh truth** and matches
-> the brief. Both drawer watch-items were handled in the primitive pass
+> the brief — but its *direction* was superseded 2026-09-11 (see the status
+> block on that section; the refresh shipped, the look was rejected on review). Both drawer watch-items were handled in the primitive pass
 > (Anton parents, 2px rails). The refactor is done — this section stays as
 > the historical spec/record.
 
@@ -2920,6 +2921,24 @@ Scouting did) — note any route-only moves explicitly.
 -----
 
 ## Design System
+
+> **Status: SHIPPED AND IN FORCE, but superseded in direction (2026-09-11).**
+> Everything below is the **live truth of what the app renders today** and is
+> what you must match when touching UI before the rebuild lands. But the
+> owner has approved a replacement direction — **"Matchday"** — and the
+> Phase 3 "Primetime Blackout" law below is no longer the target state.
+>
+> **Why:** a UX/IA review (`docs/design/review-2026-09/`) found the current
+> look lands on **two of the three aesthetics that read as AI-generated** —
+> near-black with one scarce accent, and hairline rules with zero radius — and
+> that the shipped system fails **8 of 12** researched AI-slop markers, the
+> worst being the thin coloured accent rail that `Card`'s `accent` prop makes a
+> first-class primitive. The brief specified the generic outcome, which is why
+> compliance could never fix it. Scoring: `review-2026-09/slop-checklist.md`.
+>
+> **Do not** start restyling from this note. The rebuild is sequenced in
+> `review-2026-09/directions.md`; `docs/open-items.md` → **DESIGN-1** carries
+> the trigger. Until it lands, this section is still the law.
 
 ### Design System Component Library
 
@@ -3423,7 +3442,8 @@ dynastyedge/
 │   ├── project-status-2026-08.md    ← dated status snapshot (superseded by newer dated files)
 │   ├── repo-review-2026-07.md       ← full read-only audit + ranked backlog (all items landed)
 │   ├── analysis/                    ← model calibration + research notes (incl. optimizer-data-sources-2026-09.md: the Optimizer data-source feasibility study; asset-aging-and-pick-value-2026-09.md: THE keep-score calibration — player aging + pick realization; trade-my-side-read-2026-09.md: the one-engine-both-seats change + why "Strong for me" cannot appear on the Targets board)
-│   └── design/                      ← Phase 3 "Primetime Blackout" brief + reference render
+│   ├── design/                      ← Phase 3 "Primetime Blackout" brief + reference render (SUPERSEDED — see below)
+│   └── design/review-2026-09/       ← THE UX/IA + visual review that superseded Phase 3: findings.md (audit) · inventory.md (all 21 destinations) · slop-checklist.md (researched AI-slop markers + how the shipped app scores) · directions.md (six mocked directions + the Matchday decision) · unasked.md · mocks/ (standalone, never imported by the app)
 ├── tests/                       ← plain-Node test suite (node:test + node:assert/strict, zero deps)
 │   ├── fixtures/
 │   │   └── draft-2025.json          ← this league's REAL 2025 rookie draft (board, 40 picks, 24 traded picks) — replayed by truncation to synthesize every mid-draft state

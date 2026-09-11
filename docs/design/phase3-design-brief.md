@@ -1,6 +1,16 @@
 # Phase 3 Design Brief — "Primetime Blackout"
 
-> **Status: ACTIVE — owner-approved 2026-07-19.** This is the brief for the
+> **Status: SUPERSEDED 2026-09-11 — historical record, not a brief to build
+> against.** The refresh it specifies shipped in full on 2026-07-20 and is what
+> the app renders today; the owner then rejected the *look* on review. The
+> replacement direction is **"Matchday"** — see
+> `docs/design/review-2026-09/directions.md`. Read this file to understand why
+> the current app looks the way it does, never to justify keeping it that way.
+> The review's finding is that this brief's design law **specifies** an
+> outcome that reads as AI-generated (`review-2026-09/slop-checklist.md`), so
+> "it complies with the brief" is not a defence.
+>
+> **Status (historical): ACTIVE — owner-approved 2026-07-19.** This is the brief for the
 > Phase 3 visual refresh (CLAUDE.md → Navigation Refactor → Phase 3). Per the
 > vendored `frontend-design` skill, this brief's words win over the skill's
 > generic guidance. The authoritative visual reference is

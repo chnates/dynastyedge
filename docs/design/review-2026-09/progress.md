@@ -34,7 +34,11 @@ or `src/components/ui`.
 - [x] Part C — three directions, built + captured with working motion
 - [x] Recommendation + "what you didn't ask about"
 - [x] Round 2 — AI-slop research, checklist, three new directions
-- [ ] **Owner decision — stopped here as instructed.**
+- [x] **Owner decision: Matchday** (2026-09-11), after two mock rounds
+- [x] Matchday rev 1 (seven fixes) · rev 2 (hero swap, reverted) · rev 3 (final)
+- [x] Repo documentation updated — CLAUDE.md, the Phase 3 brief, `open-items.md`,
+      the `design-review` skill, and the PR template's stale test count
+- [ ] **PR open — owner merges. Build happens in a fresh session.**
 
 ## Log
 - Env verified; read CLAUDE.md, visual-capture, failure-archaeology

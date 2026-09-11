@@ -5,7 +5,11 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-09-07 (the my-side read: one fit engine, both seats —
+**Last reviewed:** 2026-09-11 (UX/IA + visual review — `docs/design/review-2026-09/`.
+The owner approved a replacement visual direction ("Matchday") and the Phase 3
+"Primetime Blackout" law is superseded; the audit also turned up four
+independent, ready-now bugs. New: **DESIGN-1**, **DESIGN-2**, **DESIGN-3**.
+Previously 2026-09-07: the my-side read: one fit engine, both seats —
 the Analyzer and the Targets board now grade what a trade is worth to *me* in
 the same words they always used for the partner, and acquired players get the
 same depth chart departing ones always had. Measuring it opened **OPEN-10**.
@@ -77,6 +81,50 @@ overturned.
   players whose position-mate was ruled Out beat their projection by +1.13
   against a +0.98 control (n=318). Sleeper had already raised their projections.
   See the plan's §9c.
+
+### DESIGN-2 — four ready-now bugs the design review surfaced
+
+**Trigger: fired.** These are independent of any visual direction, cost nothing
+to fix, and should land *before* the rebuild so the rebuild isn't carrying them.
+Evidence: `docs/design/review-2026-09/findings.md` §X1–X3, B3.
+
+1. **`--text-tertiary` fails WCAG AA in both themes** — dark `#54565C` on
+   `--bg-card #141417` = **2.5:1**; light `#8A9096` on `#FFFFFF` = **3.2:1**
+   (AA body needs 4.5:1). It is used **525 times** and carries real content:
+   the meta line on every player row, timestamps, trade-target reasons. Fix is
+   a token change in `src/index.css`, not 525 edits.
+2. **No `focus-visible` anywhere in the design system.** `Button`,
+   `IconButton`, `Card` (interactive), `Chip`, `Badge` define no focus ring;
+   `Input`/`Select` actively remove the outline
+   (`focus:outline-none focus:border-accent`).
+3. **Touch targets under 44px.** `IconButton` is 32/36px and is the close
+   control in every sheet header; `Button` `sm` (~30px) and `md` (~36px) are
+   also under. The app header's own buttons are correctly `w-11 h-11`, so the
+   rule is known and broken elsewhere.
+4. **The trade price truncates.** `WhatsFair.jsx:198` sets `truncate min-w-0`
+   on the `Est. cost:` value; live at 390px it elides on **5 of 11** target
+   cards — the most actionable field on the board. `LineupRow` has the same
+   class of bug on long player names ("TreVeyon He…").
+
+### DESIGN-3 — the navigation rebuild
+
+**Trigger: fires with DESIGN-1** (they touch the same files; doing them apart
+means migrating twice). Measured in `review-2026-09/inventory.md`:
+
+- **Four destinations have zero content-level inbound links** — Season Review,
+  my own Trajectory, Manager Scouting, Rookie Research. Rookie Research is also
+  **missing from `PlayerSearchSheet.jsx`'s `DESTINATIONS`**, so it is the one
+  view that cannot be found by searching its own name. That one is a two-line
+  fix and can ship immediately.
+- **All 17 sub-tabs are byte-identical duplicates of the drawer's children** —
+  two navigation systems over one payload.
+- **Section colours reuse the status tokens**: `SideDrawer.jsx:74,85` assign
+  Trade `text-success` and League `text-warning`, the same tokens used for
+  actual status in the same file. Violates CLAUDE.md's own exclusivity rule.
+- **"Pick Trades" is clipped off its own sub-tab row** at 390px.
+- The **"no bottom tab bar" rule is re-litigable** — the owner reopened it for
+  this review. NN/g measures hidden navigation at a 20%+ discoverability drop
+  and 15% slower mobile tasks; the four weekly sections fit a 2–5 tab bar.
 
 ### NEWS-1 — re-measure news coverage after a week of accumulation
 
@@ -394,6 +442,40 @@ curl -s 'https://api.sleeper.app/v1/league/1313933520715907072/drafts' | grep -c
 ---
 
 ## 2. Deferred — waiting on a trigger
+
+### DESIGN-1 — build the "Matchday" visual direction **[owner-approved 2026-09-11]**
+
+**Trigger: fired — the owner selected the direction and asked for the build to
+start in a fresh session.** Not started here: the review was scoped as
+diagnosis + mocks only, and the app was deliberately left untouched.
+
+**What was decided.** Six directions were mocked across two rounds. Round one
+(Instrument / Dispatch / Control) was rejected — scored against a researched
+AI-slop marker list, two of the three failed **10 and 11 of 12**. Round two
+(Almanac / Blueprint / Matchday) was built to that checklist and all three
+score 0. **The owner chose Matchday.**
+
+Matchday in one line: *a publication about a competition* — poster type
+(Bricolage Grotesque on its width/optical axes), flat colour with hard edges,
+zero radius, no shadows, no icon set, text navigation, and **the five position
+hues promoted from 9px tags to full-bleed section bands**. Magnitude is encoded
+as **type size**, not a bar, with the band carrying the group total.
+
+**Where the spec lives:** `docs/design/review-2026-09/directions.md` (the
+direction, its two revisions, and the build sequence) ·
+`slop-checklist.md` (the rules any new UI must pass) · `mocks/directions-2.html`
+(the working mock — standalone, never imported by the app).
+
+**Known costs, already measured and accepted:** it is the least dense of the
+three (~3–4 targets per screen against Almanac's 7); it needs one new font
+family; and Bricolage may not earn its keep on device, in which case the swap
+candidate recorded is Big Shoulders Display.
+
+**Settled during review, do not re-litigate:** the home hero keeps team value
+as its marquee figure. Leading with the instruction instead was built, reviewed
+and **reverted on the owner's call (2026-09-11)** — he preferred the look. The
+argument for the swap is still recorded in `unasked.md` §1 if it is ever
+revisited.
 
 ### OPEN-1 — Normalize FAAB stats to percent-of-budget
 
