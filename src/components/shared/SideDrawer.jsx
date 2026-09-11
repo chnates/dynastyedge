@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { NavLink } from 'react-router-dom'
 import {
-  Zap, Users, ArrowLeftRight, Trophy, FileText, Newspaper,
   RefreshCw, Sun, Moon, LogOut, Check, X, Loader2, ArrowDownToLine,
 } from 'lucide-react'
 import DynastyEdgeLogo from './DynastyEdgeLogo'
@@ -50,58 +48,6 @@ function formatFeedAge(iso) {
   if (hours < 48) return `${hours}h`
   return `${Math.floor(hours / 24)}d`
 }
-
-// The drawer is the app's complete map: an always-expanded hierarchical tree
-// (docs-sidebar pattern). Each section has an identity color — icons always
-// wear it; the active child gets the tinted background + edge bar. Parent rows
-// are both the group anchor and a destination (→ the section's default view);
-// children sit indented on a color-tinted guide rail. Leaf sections (The Edge,
-// News) are plain single rows with no children/rail.
-const NAV_TREE = [
-  { to: '/edge', label: 'The Edge', Icon: Zap, text: 'text-accent', activeBg: 'bg-accent/10', bar: 'bg-accent' },
-  {
-    to: '/my-team', label: 'My Team', Icon: Users,
-    text: 'text-pos-wr', activeBg: 'bg-pos-wr/10', bar: 'bg-pos-wr', rail: 'bg-pos-wr/25',
-    children: [
-      { to: '/my-team', label: 'My Roster', end: true },
-      { to: '/my-team/lineup', label: 'Lineup' },
-      { to: '/my-team/season-review', label: 'Season Review' },
-      { to: '/my-team/trajectory', label: 'Trajectory' },
-    ],
-  },
-  {
-    to: '/trade', label: 'Trade', Icon: ArrowLeftRight,
-    text: 'text-success', activeBg: 'bg-success/10', bar: 'bg-success', rail: 'bg-success/25',
-    children: [
-      { to: '/trade', label: 'Partners', end: true },
-      { to: '/trade/analyze', label: 'Analyzer' },
-      { to: '/trade/whats-fair', label: 'Targets' },
-      { to: '/trade/managers', label: 'Managers' },
-      { to: '/trade/pick-trades', label: 'Pick Trades' },
-    ],
-  },
-  {
-    to: '/league', label: 'League', Icon: Trophy,
-    text: 'text-warning', activeBg: 'bg-warning/10', bar: 'bg-warning', rail: 'bg-warning/25',
-    children: [
-      { to: '/league', label: 'Overview', end: true },
-      { to: '/league/free-agents', label: 'Free Agents' },
-      { to: '/league/activity', label: 'Activity' },
-      { to: '/league/movers', label: 'Movers' },
-      { to: '/league/playoffs', label: 'Playoffs' },
-    ],
-  },
-  {
-    to: '/draft', label: 'Draft', Icon: FileText,
-    text: 'text-pos-qb', activeBg: 'bg-pos-qb/10', bar: 'bg-pos-qb', rail: 'bg-pos-qb/25',
-    children: [
-      { to: '/draft/board', label: 'Board' },
-      { to: '/draft/research', label: 'Research' },
-      { to: '/draft/tracker', label: 'Tracker' },
-    ],
-  },
-  { to: '/news', label: 'News', Icon: Newspaper, text: 'text-pos-def', activeBg: 'bg-pos-def/10', bar: 'bg-pos-def' },
-]
 
 export default function SideDrawer({
   isOpen,
@@ -286,78 +232,13 @@ export default function SideDrawer({
           )}
         </div>
 
-        {/* Nav items — the complete app map */}
-        <nav className="px-3 flex-1 overflow-y-auto min-h-0" style={{ overscrollBehavior: 'contain' }}>
-          {NAV_TREE.map(({ to, label, Icon, text, activeBg, bar, rail, children }) =>
-            children ? (
-              <div key={to} className="mb-2">
-                {/* Parent: group anchor + destination (→ section default) */}
-                <NavLink
-                  to={to}
-                  onClick={onClose}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors duration-150"
-                >
-                  <Icon size={20} strokeWidth={1.75} className={text} />
-                  <span className="font-display text-[14px] uppercase tracking-[0.08em]">{label}</span>
-                </NavLink>
-
-                {/* Children — indented on a section-colored guide rail */}
-                <div className="relative ml-[26px] mt-0.5">
-                  <span className={`absolute left-0 top-1 bottom-1 w-[2px] ${rail}`} aria-hidden="true" />
-                  {children.map(child => (
-                    <NavLink
-                      key={child.to + child.label}
-                      to={child.to}
-                      end={child.end}
-                      onClick={onClose}
-                      className={({ isActive }) =>
-                        `relative block pl-4 pr-3 py-2 rounded-r-lg font-body text-[13.5px] transition-colors duration-150 ` +
-                        (isActive
-                          ? `${text} ${activeBg} font-semibold`
-                          : 'text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5')
-                      }
-                    >
-                      {({ isActive }) => (
-                        <>
-                          {isActive && (
-                            <span className={`absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full ${bar}`} />
-                          )}
-                          {child.label}
-                        </>
-                      )}
-                    </NavLink>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              /* Leaf section — plain single row */
-              <NavLink
-                key={to}
-                to={to}
-                onClick={onClose}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2.5 rounded-lg mb-2 relative transition-colors duration-150 ` +
-                  (isActive
-                    ? `${text} ${activeBg}`
-                    : 'text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5')
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    {isActive && (
-                      <span className={`absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full ${bar}`} />
-                    )}
-                    <Icon size={20} strokeWidth={1.75} className={text} />
-                    <span className="font-display text-[14px] uppercase tracking-[0.08em]">{label}</span>
-                  </>
-                )}
-              </NavLink>
-            )
-          )}
-        </nav>
-
-        {/* Utility controls */}
-        <div className="px-3 pt-2 pb-4 shrink-0">
+        {/* The drawer carries NO destinations. Navigation is the bottom tab
+            bar and the Index (findings.md A2/A3); what's left here is the app's
+            utility surface — refresh, per-source data status, the running build,
+            theme and identity. Deleting the nav tree also deleted A6: it was
+            assigning Trade `text-success` and League `text-warning`, the same
+            status tokens the rows below use for real success/error state. */}
+        <div className="px-3 pt-1 pb-4 flex-1 overflow-y-auto min-h-0" style={{ overscrollBehavior: 'contain' }}>
           <div className="h-px bg-border-default mx-2 mb-3" />
 
           {/* Only rendered when the running bundle is behind the server's —

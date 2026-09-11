@@ -600,8 +600,9 @@ across future seasons.
 
 #### League-wide view
 
-- **My Roster** lives in the **My Team** section sub-tabs (My Roster · Lineup ·
-  Season Review · Trajectory). The all-10-teams list lives in **League ›
+- **My Roster** lives in the **Squad** tab's contents rail (My Roster · Lineup ·
+  Season Review · Trajectory — Squad is the navigation label for the My Team
+  section; the route is `/my-team`). The all-10-teams list lives in **League ›
   Overview** — see Feature 5 — which fused in the old "All Teams" view.
 - **Free Agents** now lives under **League** (League › Free Agents): search +
   position filter + **Upgrades Only** and **Hide Rookies** toggles (both default
@@ -1344,7 +1345,7 @@ sessionStorage, but there is no multi-trade history — that lives in Sleeper.
 does it cost me if I don't?"** Not a status board: a start/sit engine that
 solves the whole lineup, names the moves, and lets you build the result.
 
-*The Optimizer is the **Lineup** sub-tab under **My Team** (`/my-team/lineup`),
+*The Optimizer is the **Lineup** view under **Squad** (`/my-team/lineup`),
 a sibling of My Roster, Season Review (Feature 9), and Trajectory. The
 standalone Lineup section is gone — `/lineup` redirects here.*
 
@@ -1696,7 +1697,7 @@ Star any player from the Player Profile drawer (star icon in the header).
 
 -----
 
-### Feature 9 — Lineup Efficiency (My Team › Season Review)
+### Feature 9 — Lineup Efficiency (Squad › Season Review)
 
 "How many points did I leave on the bench?" — actual vs optimal lineup for
 every completed week.
@@ -1711,7 +1712,7 @@ every completed week.
   matchup-weeks cache (`src/hooks/matchupWeeks.js`, shared with Playoff Odds —
   one fetch per week per session across both). If every week fails to load,
   the page shows an error + retry instead of "no data"
-- **Its own sub-tab** under **My Team** (`/my-team/season-review`), a sibling of
+- **Its own view** under **Squad** (`/my-team/season-review`), a sibling of
   My Roster, the Optimizer, and Trajectory — not stacked inside the Optimizer's
   scroll. It renders as a standalone padded page with its own header.
   (`/lineup/season-review` redirects here.)
@@ -2224,7 +2225,7 @@ happens to list it. The single global accelerant for a feature-dense app.
 
 -----
 
-### Feature 17 — Dynasty Trajectory (My Team › Trajectory)
+### Feature 17 — Dynasty Trajectory (Squad › Trajectory)
 
 **Purpose:** the app's one forward-looking lens. Everything else is a snapshot
 of *now* (current values, current odds, *historical* trade grades); a dynasty
@@ -2234,7 +2235,7 @@ a value curve over the next few seasons and answers the core dynasty question:
 and offseason alike. **Zero new data sources** — pure logic over caches
 `LeagueContext` already holds.
 
-**Location:** a **My Team sub-tab** (My Roster · Lineup · Season Review ·
+**Location:** a **Squad view** (My Roster · Lineup · Season Review ·
 **Trajectory**, `/my-team/trajectory`), and **roster-agnostic** — the team
 drill-down (`RosterView` for `:rosterId`) carries a "Dynasty Trajectory →" card
 that opens `/league/trajectory/:rosterId`, so you can scout an opponent's window
@@ -2689,40 +2690,94 @@ regular season (deadline week comes from league settings — Week 13):
 renders `LoginScreen` instead of the router — no route is reachable, and the
 drawer's footer carries the "Switch team" / "Sign out" affordance.
 
-**There is NO bottom tab bar.** Navigation is a side drawer (hamburger menu, top-left),
-opened by tap or by swiping right from the left screen edge. This is a deliberate
-design decision — do not add a bottom nav. (Re-evaluated in the usability review:
-the drawer stays; the wins were in fixing the information architecture *within*
-this paradigm, not replacing it.)
+**Navigation is a BOTTOM TAB BAR** (`components/shared/TabBar.jsx`) — four
+weekly sections plus the Index. The old rule in this section said "There is NO
+bottom tab bar … do not add a bottom nav"; the owner reopened it for the
+September 2026 design review and it is **dead** (DESIGN-3, 2026-09-11). What
+replaced it and why:
 
-The drawer is an **always-expanded hierarchical map** (docs-sidebar pattern, see
-`SideDrawer.jsx`'s `NAV_TREE`): every destination is visible and one tap away.
-Parent rows are both the group anchor and a destination (tap → the section's
-default view), rendered with the section's identity-color icon + label;
-children sit indented beneath on a thin section-colored guide rail, muted until
-active (active child = section color + tinted background + edge bar). Leaf
-sections (The Edge, News) are plain single rows with no children/rail.
+- The drawer was the app's **only map**, and it hid all 21 destinations behind a
+  top-left tap on a one-handed 390px phone. NN/g measures hidden navigation at a
+  **20%+ discoverability drop**, used in **57% of cases against 86%**, and
+  **15% slower** on mobile. Four weekly sections fit the 2–5 visible tabs
+  Apple's HIG and the iOS 26 tab bar assume.
+- Both taps also went through a **full-screen overlay that hid the screen you
+  were reading** — the thing that felt like "context-wiping". A bar doesn't.
 
-Side drawer sections:
+**Navigation is TEXT.** No icon set anywhere in the bar or the Index — a
+thin-line icon set is a named AI-slop marker and Matchday's house rules make
+navigation typographic. The bar is the **inverse of the page** in both themes
+(`bg-text-primary` / `text-bg-primary`, which swap with the theme by
+construction) — the mock's masthead-strip treatment. Inactive tabs sit at 55%
+opacity; the active one is full opacity with a 2px marker in the bar's own ink.
+Red is NOT spent here — it stays rationed to the hero cap, "you" accents and
+the contents rail's active item.
 
-|#  |Section |Sub-views                                                |
-|---|--------|---------------------------------------------------------|
-|1  |The Edge|Daily briefing home screen (default route — leaf)        |
-|2  |My Team |My Roster · Lineup · Season Review · Trajectory          |
-|3  |Trade   |Partners · Analyzer · Targets · Managers · Pick Trades (+ deadline banner)|
-|4  |League  |Overview · Free Agents · Activity · Movers · Playoffs    |
-|5  |Draft   |Board · Research · Tracker                               |
-|6  |News    |League-wide aggregated news feed (browsable — leaf)      |
+**Two sections lost their top-level rank, not their reachability.** Draft is
+three seasonal views and News is a browse that already surfaces its best items
+on The Edge; a third of top-level navigation was being spent on things you
+don't open in a normal week. Both keep every route and every existing entry
+point, and both are on the Index — which is also the tab that reads as current
+while you are in one.
 
-Sections with multiple views use a sub-tab bar pinned under the app header —
-the shared `SubTabBar` component (`src/components/shared/SubTabBar.jsx`), never
-a hand-rolled row. It's an adaptive horizontal strip: tabs are `flex-1
-min-w-max`, so the row fills the width when the tabs fit and scrolls
-horizontally when they don't (long labels never wrap to a second line). The
-active tab scrolls into view on navigation, and a right-edge fade appears only
-while the row overflows.
-The drawer also holds a **per-source data-status block**, manual Refresh, and
-the theme toggle.
+|#  |Tab   |Route    |Feature name|Views                                       |
+|---|------|---------|-----------|---------------------------------------------|
+|1  |Today |`/edge`  |The Edge   |Daily briefing home screen (default route)   |
+|2  |Squad |`/my-team`|My Team   |My Roster · Lineup · Season Review · Trajectory|
+|3  |Trade |`/trade` |Trade      |Partners · Analyzer · Targets · Managers · Pick Trades (+ deadline banner)|
+|4  |League|`/league`|League     |Overview · Free Agents · Activity · Movers · Playoffs|
+|5  |Index |`/index` |—          |The complete map — every section, plus the four consulted views|
+
+**The nav labels and the feature names are deliberately different.** "The Edge"
+and "My Team" are what the *features* are called throughout this document and
+in the product; **Today** and **Squad** are what *navigation* calls them, in
+Matchday's voice. Routes are unchanged (`/edge`, `/my-team`), so no deep-link,
+briefing item or redirect is affected. The app header names the section using
+the nav label, read from the same map, so the header and the bar can never
+disagree.
+
+**The Index (`/index`)** is the fifth tab and a real destination, not an
+overlay: a Find row that opens the same `PlayerSearchSheet` the header icon
+does, then every section with its views listed, then a **"Consulted, not
+daily"** group holding Season Review, Dynasty Trajectory, Manager Scouting and
+Rookie Research. Those four had **zero content-level inbound links** before
+this — you reached them only by already knowing they existed. They are listed
+here *as well as* in their own section's contents rail, and each now also has a
+content-level link from the screen that raises the question it answers.
+
+**Within a section, views are a contents rail** — `SectionContents`
+(`src/components/shared/SectionContents.jsx`), never a hand-rolled row. It
+replaced `SubTabBar`, and the two differences are the point:
+
+1. **It is no longer a duplicate.** All 17 of the old bar's entries were
+   byte-identical label→route pairs with the drawer's children — two navigation
+   systems over one payload. The drawer now carries no destinations at all, so
+   this is the only place a section's views are listed on a content screen.
+2. **It WRAPS instead of scrolling.** The old bar was `overflow-x-auto` with a
+   right fade, which put "Pick Trades" — a real destination — off-screen at
+   390px until you scrolled a nav bar sideways. A wrapping, left-aligned line
+   cannot hide an entry. Items are not `flex-1`, which is what made the old row
+   wrap *badly* before it was converted to clipping. Each item is a real 44px
+   touch target; `.tap-target` is deliberately not used, because on a row that
+   wraps its oversized hit area would let vertically adjacent items steal each
+   other's taps — the same reason `index.css` keeps it off `Chip`.
+
+**Every navigable destination lives in ONE place: `src/navigation.js`.** The
+tab bar, the contents rails, the Index and global search all read from it, so a
+destination can only be added or moved once. It used to exist three times — the
+drawer's `NAV_TREE`, four per-section `SUB_TABS` arrays, and
+`PlayerSearchSheet`'s `DESTINATIONS` — which is how Rookie Research ended up as
+the one view in the app that could not be found by searching for its own name.
+
+**The side drawer survives with ZERO destinations.** The hamburger (top-left)
+now opens the app's **utility surface**: manual Refresh, the per-source
+data-status block, the running build, the theme toggle and Switch team / Sign
+out. Deleting its nav tree also deleted a standing rule violation — it had been
+assigning Trade `text-success` and League `text-warning`, the same status
+tokens used for real success/error state in the same file, so a green TRADE
+above an amber LEAGUE read as "good / caution" before it read as navigation.
+**Status colours and navigation identity are separate and exclusive**; nothing
+in navigation may wear a status token.
 
 **Data status — five rows** (Rosters · Values · News · History · Rookies), each showing
 the app-side "last refreshed" age of that source. The three Actions-published
@@ -2764,7 +2819,7 @@ The app header shows the active section name.
 `/my-team/trajectory`). The market / everyone-else views live under `/league`
 (`/league` = Overview, `/league/free-agents`, `/league/activity`,
 `/league/movers`, `/league/playoffs`). Team **scouting drill-downs** are
-standalone routes (no sub-tab bar; header reads "League"):
+standalone routes (no contents rail; header reads "League"):
 `/league/teams/:rosterId` (any roster) and `/league/trajectory/:rosterId` (any
 team's trajectory). Trade adds `/trade/pick-trades`; Draft is just
 `/draft/board` + `/draft/research` + `/draft/tracker`. Every moved/renamed path keeps a redirect
@@ -2772,12 +2827,20 @@ team's trajectory). Trade adds `/trade/pick-trades`; Draft is just
 keep working: `/roster*` → `/my-team*` (or `/league*` for the team list /
 drill-downs / free agents), `/lineup*` → `/my-team/*`, `/draft/trades` →
 `/trade/pick-trades`, `/league/managers` → `/trade/managers`.
+**The navigation rebuild (DESIGN-3) moved NO path** — it added `/index` and
+renamed labels only — so it needed no redirect of its own. That is deliberate:
+`edgeBriefing.js` deep-links by path (`action.to`), so a missed redirect
+silently breaks the home screen, and the cheapest way not to miss one is not to
+move anything.
 
 **Global search** lives in the fixed app header (search icon, top-right, on
 every screen) — opens `PlayerSearchSheet`, a bottom sheet that searches the
 cached FantasyCalc dataset by name (opening the matched player's
 `PlayerProfileDrawer`) *and* matches section/feature names, surfacing a
-"Jump to" group that deep-links to any view. See Feature 16.
+"Jump to" group that deep-links to any view. Its destination list is read from
+`src/navigation.js`, not hand-maintained, and its rows carry **no section
+colour dot** — a section swatch would collide with the position hues, which are
+load-bearing everywhere else. See Feature 16.
 
 **Manager Scouting moved from League to Trade** (it's trade intel — "who do I
 call?"). The old `/league/managers` path redirects to `/trade/managers` so saved
@@ -2789,6 +2852,18 @@ the route changed.
 
 ## Navigation Refactor (Planned — phased, not yet built)
 
+> **SUPERSEDED IN PART, 2026-09-11 (DESIGN-3 — the navigation rebuild).**
+> Phase 2's central decision — *"the drawer stays; rebuild it as an
+> always-expanded hierarchical map"* — was reopened by the owner for the
+> September 2026 design review and **reversed**. The drawer's `NAV_TREE` is
+> gone, primary navigation is a bottom tab bar, and the sub-tab layer it
+> duplicated is a contents rail. What survives, and it is the load-bearing
+> half: the **information architecture** this refactor established (My Team =
+> my squad · Trade = only things that help build a trade · League = everyone
+> else), every route it created, and every redirect it added. Only the
+> *mechanism* changed. The live design is the **Navigation** section above;
+> this section stays as the historical spec/record.
+>
 > **Status:** Phase 1 complete. **Done:** step 1 — Overview + All Teams fused
 > (`AllTeamsView` + its Roster tab gone; `/roster/teams` → `/league`; the
 > `/roster/teams/:rosterId` drill-down stays). step 2 — "My Team" stood up as a
@@ -2895,7 +2970,8 @@ the visual pass — surface these when doing the refresh):
 - **Sub-tab bar crowding at 390px — RESOLVED (UX audit).** The hand-rolled
   `flex-1` sub-tab rows wrapped long two-word labels ("Season Review", "Free
   Agents", "Pick Trades") onto a second line, making one cell taller than its
-  neighbors. Replaced by the shared `SubTabBar` (`components/shared/`): an
+  neighbors. Replaced by the shared `SubTabBar` (`components/shared/`; itself
+  since replaced by `SectionContents` — see Navigation): an
   adaptive `flex-1 min-w-max` strip that fills the width when tabs fit and
   scrolls horizontally when they don't, never wraps, scrolls the active tab
   into view, and shows a right-edge fade only while overflowing. All four
@@ -2971,7 +3047,7 @@ Import everything from the one barrel: `import { Button, Card, Sheet } from '../
 **Adopted shared primitives** are re-exported from the same barrel so the
 library is the single import surface (the files stay in `src/components/shared/`):
 `ErrorState`, `Spinner` (LoadingSpinner), `SectionHeader` + `BRAND_TICK`,
-`SubTabBar`, `TrendArrow`, `WinWindowBadge`, `Sparkline`, `TeamAvatar`. Import
+`SectionContents`, `TrendArrow`, `WinWindowBadge`, `Sparkline`, `TeamAvatar`. Import
 these from `'../ui'` going forward. `NewsArticleSheet.jsx` is the canonical
 "migrated to the library" example (`Sheet` + `SheetHeader` + `Button`).
 
@@ -3236,17 +3312,30 @@ The angle language rolls through the app:
 - Footer/link buttons ("All market movers →", "Full activity feed →",
   manager ledger buttons, the Movers row Trade button) are accent-tinted
   (`border-accent/25 bg-accent/5`), not gray-bordered.
-- **The active sub-tab underline is brand red** (`SubTabBar`, Anton tabs) —
-  the third and last of red's sanctioned surfaces.
+- **The active contents-rail item is underlined in brand red**
+  (`SectionContents`, Anton labels) — the third and last of red's sanctioned
+  surfaces, inherited from the sub-tab bar it replaced. The bottom tab bar
+  deliberately does **not** spend red: it is already the inverse of the page,
+  and its active marker is ink in the bar's own text colour.
 
-### Section identity colors (side drawer)
+### Section identity colors — GONE (2026-09-11, DESIGN-3)
 
-Each nav section has an identity hue (defined inline in `SideDrawer.jsx`'s
-`NAV_TREE`): The Edge accent silver · My Team sky · Trade green · League gold ·
-Draft pink · News violet. Icons always wear the section color; the active child
-gets the matching tinted background and edge bar, and children hang off a
-section-colored guide rail. These are navigation identity only — they carry no
-status meaning.
+**Navigation carries no colour at all.** The side drawer used to give each
+section an identity hue defined inline in its `NAV_TREE` — and two of the six
+were **status tokens**: Trade `text-success`, League `text-warning`, the same
+values used for real success/error state in the same file. A green TRADE above
+an amber LEAGUE read as "good / caution" before it read as navigation, in
+direct breach of this document's own exclusivity rule ("a TE label must never
+read as danger").
+
+The fix was structural, not a re-hue: navigation is now **text**, in the
+Matchday idiom — the tab bar, the contents rails and the Index carry no icons,
+no swatches and no section hues. The Index deliberately carries no swatch
+either: a section colour there would collide with the five position hues, which
+are load-bearing on every other screen.
+
+**Status colours (success / warning / danger) and the position hues keep their
+exclusive meanings, and navigation may never borrow either.**
 
 ### Logo — the Crown Crest
 
@@ -3353,7 +3442,7 @@ dynastyedge/
 │   │   ├── edge/
 │   │   │   └── EdgeView.jsx         ← The Edge: daily briefing home screen
 │   │   ├── roster/
-│   │   │   ├── RosterLayout.jsx     ← "My Team" sub-tabs: My Roster / Lineup / Season Review / Trajectory (renders ../lineup views)
+│   │   │   ├── RosterLayout.jsx     ← Squad (My Team) contents rail: My Roster / Lineup / Season Review / Trajectory (renders ../lineup views)
 │   │   │   ├── RosterView.jsx       ← own roster + drill-down for any team
 │   │   │   ├── FreeAgentsView.jsx   ← now routed under League (file stays here)
 │   │   │   ├── RosterActionItems.jsx
@@ -3371,11 +3460,11 @@ dynastyedge/
 │   │   │   ├── TheCall.jsx         ← THE Analyzer hero: verdict + fair band + the three act summaries (FOR YOU / FOR THEM both graded)
 │   │   │   ├── PartnerContextStrip.jsx ← THE partner intelligence strip — Analyzer + Targets
 │   │   │   └── WhatsFair.jsx        ← Targets: league-wide board + per-team scouting mode
-│   │   ├── lineup/                  ← rendered as "My Team" sub-tabs (no own layout)
-│   │   │   ├── LineupOptimizer.jsx  ← My Team › Lineup: the swap sandbox + orchestration
+│   │   ├── lineup/                  ← rendered as Squad (My Team) views (no own layout)
+│   │   │   ├── LineupOptimizer.jsx  ← Squad › Lineup: the swap sandbox + orchestration
 │   │   │   ├── LineupMovesCard.jsx  ← the start/sit hero + move list ("what do I change?")
 │   │   │   ├── LineupRow.jsx        ← THE lineup row — starters AND bench, so a player reads the same either side of the line
-│   │   │   ├── LineupEfficiency.jsx ← My Team › Season Review: actual vs optimal points
+│   │   │   ├── LineupEfficiency.jsx ← Squad › Season Review: actual vs optimal points
 │   │   │   └── FreeAgentDrawer.jsx  ← per-slot waiver options (an explicit action)
 │   │   ├── league/
 │   │   │   ├── LeagueLayout.jsx     ← sub-tabs: Overview / Free Agents / Activity / Movers / Playoffs
@@ -3398,7 +3487,9 @@ dynastyedge/
 │   │   │   └── boardStorage.js      ← shared draft-section localStorage keys
 │   │   └── shared/
 │   │       ├── SideDrawer.jsx       ← the app's only navigation
-│   │       ├── SubTabBar.jsx        ← THE section sub-nav (adaptive scroll strip) — never duplicate it
+│   │       ├── TabBar.jsx           ← THE primary navigation (bottom tab bar, text-only) — reads src/navigation.js
+│   │       ├── SectionContents.jsx  ← THE within-section nav (wrapping contents rail) — never duplicate it
+│   │       ├── IndexView.jsx        ← THE complete map (the 5th tab): every section + the four consulted views
 │   │       ├── ErrorState.jsx       ← THE error component — never duplicate it
 │   │       ├── SectionHeader.jsx    ← THE section header — never duplicate it
 │   │       ├── PlayerProfileDrawer.jsx
@@ -3474,6 +3565,7 @@ dynastyedge/
 │   │   └── projections.js       ← lineup optimization, matchup quality
 │   ├── context/
 │   │   └── LeagueContext.jsx
+│   ├── navigation.js            ← THE navigation map — one tree read by TabBar, SectionContents, IndexView and global search
 │   ├── constants.js             ← league ID, API base URLs, feed URLs, PICK_YEARS, ROSTER_SLOTS
 │   ├── App.jsx
 │   └── main.jsx
@@ -3883,7 +3975,18 @@ Two things the roll must not break, both pinned by tests:
    `<main>` extends to the physical bottom edge (`bottom: 0`) and carries the
    home-indicator clearance as `padding-bottom` *inside* the scroll container —
    never shorten `<main>` with a bottom offset; that clips content at a dead
-   bar above the home indicator. There is no bottom nav — do not add one.
+   bar above the home indicator. **The bottom tab bar does not relax this rule —
+   it sharpens it.** `<main>` keeps `bottom: 0` and reserves the bar's height in
+   its own `paddingBottom`
+   (`calc(TAB_BAR_HEIGHT + env(safe-area-inset-bottom))`); the bar is a separate
+   fixed element at `bottom: 0` carrying the inset as *its* bottom padding. A
+   bottom bar is precisely the change that tempts you to write `bottom: 4rem` on
+   `<main>`, and that re-creates the dead black bar already fixed twice
+   (`86903a7`, `e8cd044`) — `overflow:hidden` on a root element clips fixed
+   descendants above the bottom inset on iOS. Headless Chromium cannot show that
+   failure; only a real iPhone can, so get it right by construction. (The old
+   "there is no bottom nav — do not add one" clause is dead: the owner reopened
+   it for the September 2026 design review — see Navigation.)
 1. **Standalone web app (Add to Home Screen):** `index.html` declares
    `apple-mobile-web-app-capable` + `manifest.webmanifest` (display
    standalone, icons 192/512) so iOS draws the app edge-to-edge instead of
@@ -3942,10 +4045,14 @@ Two things the roll must not break, both pinned by tests:
    `dynastyedge_trade_draft`, and `dynastyedge_targets_team` — are wiped by
    `useIdentity` on any identity change; league-wide caches are not. Add a
    new key to that wipe list if it is tied to *which team you are*.
-1. **Shared components:** `ErrorState`, `SectionHeader`, and `SubTabBar` live in
-   `src/components/shared/` — import them, never redefine them locally. Section
-   sub-navigation is always `SubTabBar` (pass it a `tabs` array); never
-   hand-roll a sub-tab row.
+1. **Shared components:** `ErrorState`, `SectionHeader`, and `SectionContents`
+   live in `src/components/shared/` — import them, never redefine them locally.
+   Within-section navigation is always `SectionContents` (pass it a section key;
+   it reads that section's views from `src/navigation.js`); never hand-roll a
+   section nav row. Primary navigation is `TabBar`, which reads the same map.
+   **Never add a destination to a component — add it to `src/navigation.js`**,
+   the one place the tab bar, the contents rails, the Index and global search
+   all read.
 1. **Design System library:** All new UI comes from `src/components/ui`
    (`Button`, `IconButton`, `Card`, `Sheet`/`SheetHeader`, `Chip`, `Badge`,
    `Input`/`SearchInput`, `Select`, `cn`, plus the re-exported shared
@@ -3999,7 +4106,7 @@ Do not implement them until explicitly asked.
 - League transaction feed with FAAB bids → League › Activity
 - Market movers / buy-low / sell-high → League › Movers
 - Watchlist (star players, surfaced in Trade Partners) → `useWatchlist`
-- Lineup efficiency season review → My Team › Season Review
+- Lineup efficiency season review → Squad › Season Review
 - Playoff odds / rest-of-season simulator (engine + page) → League › Playoffs
   (Feature 14); strength-of-schedule outlook is subsumed by it. Odds feed
   Trade Analyzer Layer 3, Trade Partner Finder (buyer/seller flags), and The

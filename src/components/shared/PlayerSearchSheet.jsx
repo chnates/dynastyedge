@@ -5,46 +5,23 @@ import { useScrollLock } from '../../hooks/useScrollLock'
 import { useSheetDrag } from '../../hooks/useSheetDrag'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { POS_TEXT } from '../../utils/positionColors'
+import { SEARCH_DESTINATIONS } from '../../navigation'
 import PlayerProfileDrawer from './PlayerProfileDrawer'
 import { SearchInput, IconButton, TrendArrow } from '../ui'
 
 const MAX_RESULTS = 40
 const MAX_DESTINATIONS = 8
 
-// Every navigable section/feature, by recognizable name (no verb/keyword
-// synonym map yet — names only). Matched against label + section so typing a
-// section word ("league") surfaces its views too. The dot wears the section's
-// identity color, same hues as the side drawer.
-const SECTION_DOT = {
-  'The Edge': 'bg-accent',
-  'My Team': 'bg-pos-wr',
-  Trade: 'bg-success',
-  League: 'bg-warning',
-  Draft: 'bg-pos-qb',
-  News: 'bg-pos-def',
-}
-
-const DESTINATIONS = [
-  { label: 'The Edge', section: 'The Edge', to: '/edge' },
-  { label: 'My Roster', section: 'My Team', to: '/my-team' },
-  { label: 'Lineup Optimizer', section: 'My Team', to: '/my-team/lineup' },
-  { label: 'Season Review', section: 'My Team', to: '/my-team/season-review' },
-  { label: 'Dynasty Trajectory', section: 'My Team', to: '/my-team/trajectory' },
-  { label: 'Trade Partners', section: 'Trade', to: '/trade' },
-  { label: 'Trade Analyzer', section: 'Trade', to: '/trade/analyze' },
-  { label: 'Trade Targets', section: 'Trade', to: '/trade/whats-fair' },
-  { label: 'Manager Scouting', section: 'Trade', to: '/trade/managers' },
-  { label: 'Pick Trade Calculator', section: 'Trade', to: '/trade/pick-trades' },
-  { label: 'League Overview', section: 'League', to: '/league' },
-  { label: 'Free Agents', section: 'League', to: '/league/free-agents' },
-  { label: 'League Activity', section: 'League', to: '/league/activity' },
-  { label: 'Market Movers', section: 'League', to: '/league/movers' },
-  { label: 'Playoff Odds', section: 'League', to: '/league/playoffs' },
-  { label: 'Draft Board', section: 'Draft', to: '/draft/board' },
-  { label: 'Rookie Research', section: 'Draft', to: '/draft/research' },
-  { label: 'Draft Tracker', section: 'Draft', to: '/draft/tracker' },
-  { label: 'News', section: 'News', to: '/news' },
-]
+// Section/feature jump-to results. The list comes from `src/navigation.js` —
+// the one navigation map — so a destination added there is searchable without a
+// second edit. It used to be a hand-maintained third copy of the same payload,
+// which is how Rookie Research ended up as the one view that could not be found
+// by searching for its own name (findings.md A1).
+//
+// No colour swatches: a section dot would collide with the position hues, which
+// are load-bearing everywhere else in the app (directions.md rev-1 change 5,
+// the same mistake as findings.md A6). The section name carries it instead.
+const DESTINATIONS = SEARCH_DESTINATIONS
 
 const normalize = s =>
   (s ?? '')
@@ -55,7 +32,9 @@ const normalize = s =>
 
 const DESTINATION_INDEX = DESTINATIONS.map(d => ({
   ...d,
-  haystack: normalize(`${d.label} ${d.section}`),
+  // `aka` keeps the pre-Matchday names matchable — typing "my team" or "the
+  // edge" still finds Squad and Today.
+  haystack: normalize(`${d.label} ${d.section} ${d.aka ?? ''}`),
 }))
 
 // Global player search — reachable from the app header on every screen.
@@ -205,7 +184,6 @@ export default function PlayerSearchSheet({ onClose }) {
                     onClick={() => goTo(d.to)}
                     className="w-full py-2.5 border-b border-border-default last:border-0 text-left active:opacity-60 transition-opacity flex items-center gap-2.5"
                   >
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${SECTION_DOT[d.section] ?? 'bg-text-tertiary'}`} />
                     <span className="flex-1 font-body font-medium text-sm text-text-primary truncate min-w-0">
                       {d.label}
                     </span>
