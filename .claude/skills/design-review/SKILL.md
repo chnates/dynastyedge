@@ -5,6 +5,17 @@ description: Review a diff/PR for DynastyEdge Design System compliance — ensur
 
 # Design System review
 
+> **Scope note (2026-09-11):** this skill enforces the **component-library**
+> rule — route UI through `src/components/ui` rather than hand-rolling it —
+> and that rule is unaffected by the pending visual rebuild. What it does
+> **not** adjudicate is the *visual direction*: Phase 3 "Primetime Blackout"
+> was superseded on review (`docs/design/review-2026-09/`), so a diff that
+> deliberately drops zero-radius, the silver/red ration, or the `accent` edge
+> rail is not a violation — it is the rebuild. Flag library bypasses; do not
+> flag a direction change. During the rebuild, the primitives themselves are
+> the thing being edited, so run this on *consumers*, not on
+> `src/components/ui` itself.
+
 Audit a diff for **Design System compliance**. The rule (CLAUDE.md → Design
 System Component Library): **route ALL new UI through `src/components/ui`** —
 never hand-roll a button, card, bottom sheet, filter chip, badge, or input

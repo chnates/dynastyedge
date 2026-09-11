@@ -1,0 +1,1102 @@
+<title>DynastyEdge Directions II</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Newsreader:ital,opsz,wght@0,6..72,300..800;1,6..72,300..700&family=Archivo:ital,wdth,wght@0,62..125,300..800;1,62..125,400..700&family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..125,300..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+/* ==========================================================================
+   DynastyEdge — round two. Built against the researched AI-slop checklist
+   (docs/design/review-2026-09/slop-checklist.md). House rules, all three:
+     radius 0 · no shadows · no icon rails · text navigation · two faces
+     minimum · asymmetric grids · jittered stagger · clip/wipe entrances
+     · two hues, secondary 60°+ away · styled ::selection · semantic tags
+   ========================================================================== */
+
+*,*::before,*::after{ box-sizing:border-box; }
+
+/* harness — neutral, hue-tinted grays, no cards */
+:root{
+  --hz-bg:#121114; --hz-ink:#f0ede8; --hz-dim:#9b958c; --hz-faint:#6a655e;
+  --hz-line:#2b2830; --hz-mark:#c4515c;
+}
+body{ margin:0; background:var(--hz-bg); color:var(--hz-ink);
+  font-family:Archivo,system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+::selection{ background:rgba(196,81,92,.3); color:var(--hz-ink); }
+
+.hz{ max-width:1220px; margin:0 auto; padding-left:16px; padding-right:16px;
+  padding-block:22px 40px; }
+.hz-head{ display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;
+  border-bottom:1px solid var(--hz-line); padding-bottom:12px; margin-bottom:14px; }
+.hz-head h1{ font:400 25px/1 'Instrument Serif',Georgia,serif; margin:0;
+  letter-spacing:.01em; }
+.hz-head .n{ font:500 10px/1 'IBM Plex Mono',monospace; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--hz-faint); }
+.hz-lede{ max-width:64ch; font-size:13.5px; line-height:1.66; color:var(--hz-dim);
+  margin:0 0 18px; }
+.hz-lede b{ color:var(--hz-ink); font-weight:600; }
+.hz-lede i{ color:var(--hz-ink); }
+
+.hz-ctl{ display:flex; flex-wrap:wrap; gap:7px; align-items:center; margin-bottom:20px; }
+.hz-seg{ display:flex; border:1px solid var(--hz-line); }
+.hz-seg button{ appearance:none; border:0; border-right:1px solid var(--hz-line);
+  background:transparent; color:var(--hz-dim); cursor:pointer; min-height:36px;
+  font:600 10px/1 'IBM Plex Mono',monospace; letter-spacing:.14em;
+  text-transform:uppercase; padding:11px 13px;
+  transition:background .2s cubic-bezier(.16,1,.3,1), color .2s cubic-bezier(.16,1,.3,1); }
+.hz-seg button:last-child{ border-right:0; }
+.hz-seg button:hover{ color:var(--hz-ink); }
+.hz-seg button[aria-pressed="true"]{ background:var(--hz-ink); color:var(--hz-bg); }
+.hz-seg button:focus-visible{ outline:2px solid var(--hz-mark); outline-offset:2px; }
+.hz-replay{ appearance:none; border:1px solid var(--hz-mark); background:transparent;
+  color:var(--hz-mark); cursor:pointer; min-height:38px; padding:11px 14px;
+  font:600 10px/1 'IBM Plex Mono',monospace; letter-spacing:.14em; text-transform:uppercase;
+  transition:background .2s cubic-bezier(.16,1,.3,1); }
+.hz-replay:hover{ background:rgba(196,81,92,.12); }
+.hz-replay:focus-visible{ outline:2px solid var(--hz-mark); outline-offset:2px; }
+
+.hz-stage{ display:grid; grid-template-columns:390px minmax(0,1fr); gap:32px;
+  align-items:start; }
+@media (max-width:880px){ .hz-stage{ grid-template-columns:1fr; gap:20px; } }
+
+.phone{ width:390px; max-width:100%; height:770px; position:relative; overflow:hidden;
+  border:1px solid var(--hz-line); isolation:isolate; }
+@media (max-width:880px){ .phone{ width:100%; height:620px; } }
+
+/* notes — asymmetric: narrow label rail + wide prose */
+.hz-notes h2{ font:400 34px/1.05 'Instrument Serif',Georgia,serif; margin:0 0 3px;
+  text-wrap:balance; }
+.hz-notes h2 em{ font-style:italic; }
+.hz-notes .k{ font:500 10px/1 'IBM Plex Mono',monospace; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--hz-mark); margin-bottom:9px; }
+.hz-notes p{ font-size:14px; line-height:1.68; color:var(--hz-dim); margin:12px 0 0;
+  max-width:62ch; }
+.hz-notes p b{ color:var(--hz-ink); font-weight:600; }
+.hz-notes p i{ color:var(--hz-ink); }
+.hz-notes dl{ margin:20px 0 0; }
+.hz-notes .rw{ display:grid; grid-template-columns:104px minmax(0,1fr); gap:16px;
+  padding:11px 0; border-top:1px solid var(--hz-line); align-items:baseline; }
+.hz-notes dt{ font:500 9.5px/1.4 'IBM Plex Mono',monospace; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--hz-faint); }
+.hz-notes dd{ margin:0; font-size:13px; line-height:1.6; color:var(--hz-dim); }
+.hz-notes dd b{ color:var(--hz-ink); font-weight:600; }
+.hz-score{ margin-top:18px; border-top:1px solid var(--hz-line); padding-top:12px;
+  font:500 11px/1.7 'IBM Plex Mono',monospace; color:var(--hz-faint); }
+.hz-score b{ color:#6fbf8f; }
+
+/* ==========================================================================
+   Shared screen plumbing
+   ========================================================================== */
+.dir{ height:100%; position:relative; overflow:hidden; }
+.sc{ height:100%; overflow-y:auto; overscroll-behavior:contain; }
+.sc::-webkit-scrollbar{ width:0; }
+[data-dir]{ --qb:#f2758f; --rb:#3ad0a4; --wr:#57a9f2; --te:#f0964e; --def:#9aa3ee; }
+[data-theme="light"][data-dir]{ --qb:#c4335a; --rb:#0f8a66; --wr:#1f6fc0;
+  --te:#c05f1a; --def:#5a64c8; }
+.phone :focus-visible{ outline:2px solid currentColor; outline-offset:2px; }
+
+/* ==========================================================================
+   1 · ALMANAC — the dynasty record book.
+   Two serifs, ink + oxblood + slate-teal, marginalia rail, hairline tables.
+   ========================================================================== */
+[data-dir="al"]{
+  --fd:'Instrument Serif',Georgia,serif;
+  --ft:Newsreader,Georgia,serif;
+  --fn:'IBM Plex Mono',monospace;
+}
+[data-dir="al"][data-theme="dark"]{
+  --bg:#141311; --bg2:#1b1a17; --rule:#332f28; --rule2:#514a3e;
+  --ink:#ece6da; --dim:#a89f90; --faint:#7d7566;
+  --mark:#c4515c;            /* oxblood, legible on ink */
+  --alt:#5f9a94;             /* slate teal — 168° from the oxblood */
+  --ok:#6fbf8f; --warn:#d9a441; --bad:#dd6a68;
+}
+[data-dir="al"][data-theme="light"]{
+  --bg:#eae7e0; --bg2:#f3f1ec; --rule:#c9c3b7; --rule2:#8b8374;
+  --ink:#1a1815; --dim:#575145; --faint:#6d6656;
+  --mark:#8c2f39; --alt:#2f6660;
+  --ok:#1d7a4c; --warn:#8a5e07; --bad:#a83430;
+}
+.al{ background:var(--bg); color:var(--ink); height:100%; font-family:var(--ft); }
+.al ::selection{ background:color-mix(in srgb,var(--mark) 28%,transparent); }
+.al .sc{ padding-bottom:74px; }
+
+/* running head — a real one: title, folio, rule */
+.al-rh{ display:flex; align-items:baseline; gap:10px; padding:13px 18px 7px;
+  border-bottom:1px solid var(--rule2); position:sticky; top:0; background:var(--bg); z-index:4; }
+.al-rh .t{ font:500 9.5px/1 var(--fn); letter-spacing:.22em; text-transform:uppercase; }
+.al-rh .f{ margin-left:auto; font:500 9.5px/1 var(--fn); letter-spacing:.14em;
+  color:var(--faint); }
+
+/* asymmetric grid: marginalia rail + column. Not a centered stack. */
+.al-g{ display:grid; grid-template-columns:34px minmax(0,1fr); gap:0 12px;
+  padding:0 18px; }
+.al-marg{ font:500 9px/1.5 var(--fn); letter-spacing:.1em; text-transform:uppercase;
+  color:var(--faint); text-align:right; padding-top:6px; }
+.al-marg em{ font-style:normal; color:var(--mark); display:block; }
+
+.al-lede{ padding:20px 0 4px; }
+.al-lede h1{ font:400 33px/1.08 var(--fd); margin:0; text-wrap:balance;
+  letter-spacing:.004em; }
+.al-lede h1 em{ font-style:italic; color:var(--mark); }
+.al-lede p{ font:300 15px/1.62 var(--ft); color:var(--dim); margin:13px 0 0; }
+.al-lede p b{ color:var(--ink); font-weight:600; }
+
+/* the figure, with a marginal gloss — stats folded into narrative, not a row */
+.al-fig{ display:grid; grid-template-columns:auto minmax(0,1fr); gap:0 14px;
+  align-items:baseline; margin:22px 0 6px; padding-top:14px;
+  border-top:1px solid var(--rule2); }
+.al-fig .n{ font:400 58px/.82 var(--fd); letter-spacing:-.012em;
+  font-variant-numeric:tabular-nums; }
+.al-fig .n sup{ font-size:21px; vertical-align:super; color:var(--mark);
+  letter-spacing:0; }
+.al-fig .g{ font:300 12.5px/1.5 var(--ft); color:var(--dim); }
+.al-fig .g b{ display:block; font:500 9.5px/1 var(--fn); letter-spacing:.16em;
+  text-transform:uppercase; color:var(--faint); margin-bottom:6px; }
+
+/* entries: hanging numerals in the margin, rule between. No boxes. */
+.al-e{ padding:15px 0; border-top:1px solid var(--rule); cursor:pointer; }
+.al-e:first-of-type{ border-top:1px solid var(--rule2); }
+.al-e h3{ font:400 20px/1.24 var(--fd); margin:0 0 5px; text-wrap:balance; }
+.al-e h3 em{ font-style:italic; }
+.al-e p{ font:300 13.5px/1.6 var(--ft); color:var(--dim); margin:0; }
+.al-e p .fig{ font-family:var(--fn); font-weight:500; font-size:12px;
+  color:var(--ink); font-variant-numeric:tabular-nums; }
+.al-e .cta{ display:inline-block; margin-top:9px; font:500 10px/1 var(--fn);
+  letter-spacing:.14em; text-transform:uppercase; color:var(--mark);
+  border-bottom:1px solid currentColor; padding-bottom:3px; }
+
+/* THE DENSITY ANSWER — a real table. 400 years of solving 26 rows. */
+.al-tw{ padding:0 18px; }
+.al-cap{ display:flex; align-items:baseline; gap:8px; margin:26px 0 0;
+  padding-bottom:6px; }
+.al-cap .t{ font:500 9.5px/1 var(--fn); letter-spacing:.2em; text-transform:uppercase; }
+.al-cap .s{ font:300 italic 13px/1 var(--ft); color:var(--faint); }
+.al-cap .c{ margin-left:auto; font:500 9.5px/1 var(--fn); color:var(--faint); }
+table.al-t{ width:100%; border-collapse:collapse; font-family:var(--ft); }
+.al-t thead th{ font:500 8.5px/1 var(--fn); letter-spacing:.16em; text-transform:uppercase;
+  color:var(--faint); text-align:left; padding:7px 0; font-weight:500;
+  border-top:1px solid var(--rule2); border-bottom:1px solid var(--rule2); }
+.al-t thead th.r{ text-align:right; }
+.al-t thead th:nth-child(1){ width:26px; }
+.al-t thead th:nth-child(3){ width:56px; }
+.al-t thead th:nth-child(4){ width:48px; padding-left:6px; }
+.al-t tbody td{ padding:8px 0; border-bottom:1px solid var(--rule);
+  font-size:14.5px; font-weight:300; vertical-align:baseline; }
+.al-t tbody tr:hover td{ background:var(--bg2); }
+.al-t td.p{ font:500 8.5px/1 var(--fn); letter-spacing:.08em; width:26px;
+  color:var(--pc); }
+.al-t td.nm{ font-weight:400; }
+.al-t td.nm small{ font:300 italic 11.5px/1 var(--ft); color:var(--faint);
+  margin-left:5px; }
+.al-t td.v{ text-align:right; font-family:var(--fn); font-weight:500; font-size:13px;
+  font-variant-numeric:tabular-nums; width:56px; }
+.al-t td.d{ text-align:right; font-family:var(--fn); font-weight:500; font-size:10.5px;
+  font-variant-numeric:tabular-nums; width:46px; }
+.al-t td.d.up{ color:var(--ok); } .al-t td.d.dn{ color:var(--bad); }
+.al-t .me td{ box-shadow:inset 2px 0 0 var(--mark); }
+
+/* verdict, set as a statement rather than a chip */
+.al-v{ padding:20px 18px 4px; }
+.al-v .lbl{ font:500 9.5px/1 var(--fn); letter-spacing:.24em; text-transform:uppercase;
+  color:var(--mark); }
+.al-v h1{ font:400 32px/1.1 var(--fd); margin:11px 0 0; text-wrap:balance; }
+.al-v h1 em{ font-style:italic; }
+.al-v p{ font:300 14px/1.62 var(--ft); color:var(--dim); margin:12px 0 0; }
+.al-v p b{ color:var(--ink); font-weight:600; }
+
+/* a printed scale, not a progress bar */
+.al-sc2{ margin:20px 18px 0; padding-top:13px; border-top:1px solid var(--rule2); }
+.al-sc2 .hd{ display:flex; justify-content:space-between; font:500 8.5px/1 var(--fn);
+  letter-spacing:.16em; text-transform:uppercase; color:var(--faint); }
+.al-rulebar{ position:relative; height:30px; margin-top:11px; }
+.al-rulebar .base{ position:absolute; left:0; right:0; top:11px; height:1px;
+  background:var(--rule2); }
+.al-rulebar .tick{ position:absolute; top:6px; width:1px; height:6px; background:var(--rule2); }
+.al-rulebar .band{ position:absolute; top:9px; height:5px; background:var(--alt); }
+.al-rulebar .you{ position:absolute; top:2px; width:1px; height:19px; background:var(--mark); }
+.al-rulebar .you::after{ content:'YOU'; position:absolute; top:20px; left:-11px;
+  font:500 8px/1 var(--fn); letter-spacing:.1em; color:var(--mark); }
+
+/* bottom navigation — TEXT. No icons anywhere. */
+.al-nav{ position:absolute; left:0; right:0; bottom:0; z-index:6; display:grid;
+  grid-template-columns:repeat(5,1fr); background:var(--bg);
+  border-top:1px solid var(--rule2); }
+.al-nav a{ appearance:none; border:0; border-right:1px solid var(--rule);
+  background:transparent; cursor:pointer; padding:16px 2px 17px; text-align:center;
+  font:500 9px/1 var(--fn); letter-spacing:.14em; text-transform:uppercase;
+  color:var(--faint); text-decoration:none;
+  transition:color .2s cubic-bezier(.16,1,.3,1); }
+.al-nav a:last-child{ border-right:0; }
+.al-nav a[aria-current]{ color:var(--ink); box-shadow:inset 0 2px 0 var(--mark); }
+
+/* index screen */
+.al-ix{ padding:0 18px 74px; }
+.al-ixg{ font:500 9px/1 var(--fn); letter-spacing:.22em; text-transform:uppercase;
+  color:var(--faint); padding:22px 0 4px; }
+.al-ixr{ display:grid; grid-template-columns:22px minmax(0,1fr) auto; gap:12px;
+  align-items:baseline; padding:11px 0; border-top:1px solid var(--rule); cursor:pointer; }
+.al-ixr .n{ font:500 9.5px/1 var(--fn); color:var(--faint); font-variant-numeric:tabular-nums; }
+.al-ixr .t{ font:400 19px/1.16 var(--fd); }
+.al-ixr .t small{ display:block; font:300 italic 12px/1.4 var(--ft); color:var(--faint);
+  margin-top:3px; }
+.al-ixr .h{ font:500 8.5px/1 var(--fn); letter-spacing:.12em; text-transform:uppercase;
+  color:var(--faint); }
+.al-srch{ display:flex; align-items:baseline; gap:10px; padding:15px 18px;
+  border-bottom:1px solid var(--rule2); }
+.al-srch span{ font:500 9px/1 var(--fn); letter-spacing:.18em; text-transform:uppercase;
+  color:var(--mark); }
+.al-srch input{ flex:1; background:transparent; border:0; outline:0; color:var(--ink);
+  font:300 17px/1.2 var(--ft); }
+.al-srch input::placeholder{ color:var(--faint); }
+
+/* ==========================================================================
+   2 · BLUEPRINT — a draughtsman's instrument panel.
+   Archivo across its width axis + mono annotation. Prussian ground, chalk
+   line work, burnt-amber callouts. Magnitude drawn as dimension lines.
+   ========================================================================== */
+[data-dir="bp"]{ --fd:Archivo,sans-serif; --fn:'IBM Plex Mono',monospace; }
+[data-dir="bp"][data-theme="dark"]{
+  --bg:#0f1d28; --bg2:#152733; --grid:rgba(214,222,228,.055);
+  --line:#2e4655; --line2:#4a6879;
+  --ink:#dde6ec; --dim:#9db2c0; --faint:#7e97a8;
+  --mark:#e8e2d4;            /* chalk — the drawing's own colour */
+  --alt:#d98b3a;             /* burnt amber callout, 190° from the ground */
+  --ok:#57c98d; --warn:#e0a83f; --bad:#ef7d72;
+}
+[data-dir="bp"][data-theme="light"]{
+  --bg:#dbe3e9; --bg2:#eef2f5; --grid:rgba(22,35,46,.07);
+  --line:#a9bac6; --line2:#5c7381;
+  --ink:#14222d; --dim:#3f5666; --faint:#5c7381;
+  --mark:#14222d; --alt:#a2571a;
+  --ok:#14784d; --warn:#8a5a08; --bad:#b03b33;
+}
+.bp{ background:var(--bg); color:var(--ink); height:100%; font-family:var(--fd);
+  position:relative; }
+.bp ::selection{ background:color-mix(in srgb,var(--alt) 32%,transparent); }
+.bp::before{ content:''; position:absolute; inset:0; pointer-events:none;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:26px 26px; }
+.bp .sc{ position:relative; padding-bottom:70px; }
+
+/* title block, as on a real drawing */
+.bp-tb{ display:grid; grid-template-columns:1fr auto; border-bottom:1px solid var(--line2);
+  position:sticky; top:0; background:var(--bg); z-index:4; }
+.bp-tb .l{ padding:11px 16px 10px; border-right:1px solid var(--line); }
+.bp-tb .r{ padding:11px 16px 10px; text-align:right; }
+.bp-tb .k{ font:500 8px/1 var(--fn); letter-spacing:.2em; text-transform:uppercase;
+  color:var(--faint); }
+.bp-tb .v{ font:600 13px/1.2 var(--fd); margin-top:5px;
+  font-variation-settings:'wdth' 88; letter-spacing:.02em; }
+
+.bp-w{ padding:0 16px; }
+.bp-lab{ font:500 8.5px/1 var(--fn); letter-spacing:.22em; text-transform:uppercase;
+  color:var(--faint); display:flex; align-items:center; gap:8px; margin:24px 0 10px; }
+.bp-lab::after{ content:''; flex:1; height:1px; background:var(--line); }
+
+/* the readout, dimensioned */
+.bp-ro{ padding:20px 16px 14px; border-bottom:1px solid var(--line2); }
+.bp-ro .n{ font:800 54px/.86 var(--fd); font-variation-settings:'wdth' 112;
+  letter-spacing:-.035em; font-variant-numeric:tabular-nums; }
+.bp-ro .u{ font:500 8.5px/1 var(--fn); letter-spacing:.2em; text-transform:uppercase;
+  color:var(--faint); margin-top:11px; }
+.bp-dimline{ position:relative; height:19px; margin-top:15px; }
+.bp-dimline .ln{ position:absolute; left:0; right:0; top:9px; height:1px; background:var(--line2); }
+.bp-dimline .cap{ position:absolute; top:4px; width:1px; height:11px; background:var(--line2); }
+.bp-dimline .fill{ position:absolute; top:7px; left:0; height:5px; background:var(--alt); width:0; }
+.bp-dimline .an{ position:absolute; top:-3px; right:0; font:500 8.5px/1 var(--fn);
+  color:var(--alt); background:var(--bg); padding-left:5px; }
+
+/* spec rows: label / dimension / value, on a strict grid */
+.bp-sr{ display:grid; grid-template-columns:30px minmax(0,1fr) 62px; gap:11px;
+  align-items:center; padding:10px 0; border-bottom:1px solid var(--line); cursor:pointer;
+  transition:background .18s cubic-bezier(.16,1,.3,1); }
+.bp-sr:hover{ background:var(--bg2); }
+.bp-sr .p{ font:600 8.5px/1 var(--fn); letter-spacing:.06em; color:var(--pc);
+  border:1px solid currentColor; padding:4px 0; text-align:center; }
+.bp-sr .nm{ font:600 14px/1.2 var(--fd); font-variation-settings:'wdth' 94;
+  letter-spacing:-.005em; }
+.bp-sr .nm small{ display:block; font:500 9px/1.5 var(--fn); letter-spacing:.06em;
+  color:var(--faint); margin-top:5px; text-transform:uppercase; }
+.bp-sr .vv{ text-align:right; font:600 15px/1 var(--fn); font-variant-numeric:tabular-nums; }
+.bp-sr .vv small{ display:block; font-size:9.5px; font-weight:500; margin-top:5px; }
+.bp-sr .vv small.up{ color:var(--ok); } .bp-sr .vv small.dn{ color:var(--bad); }
+.bp-mag{ grid-column:2 / -1; position:relative; height:9px; margin-top:-2px; }
+.bp-mag .t0{ position:absolute; top:4px; left:0; right:0; height:1px; background:var(--line); }
+/* end caps, as on a dimension line */
+.bp-mag::before, .bp-mag::after{ content:''; position:absolute; top:1px; width:1px;
+  height:7px; background:var(--line); }
+.bp-mag::before{ left:0; } .bp-mag::after{ right:0; }
+.bp-mag i{ position:absolute; top:4px; left:0; height:1px; width:0; background:var(--pc); }
+/* the measured terminator — this is what says "dimension", not "meter" */
+.bp-mag i::after{ content:''; position:absolute; right:0; top:-3px; width:1px; height:7px;
+  background:var(--pc); }
+
+/* callout with a leader line — an annotation, not a card */
+.bp-co{ position:relative; margin:16px 0 4px; padding:12px 14px 13px;
+  border:1px solid var(--alt); }
+.bp-co::before{ content:''; position:absolute; left:-9px; top:15px; width:9px; height:1px;
+  background:var(--alt); }
+.bp-co .k{ font:500 8px/1 var(--fn); letter-spacing:.2em; text-transform:uppercase;
+  color:var(--alt); }
+.bp-co h4{ font:700 15px/1.25 var(--fd); margin:8px 0 4px;
+  font-variation-settings:'wdth' 100; text-wrap:balance; }
+.bp-co p{ font:400 12.5px/1.55 var(--fd); color:var(--dim); margin:0; }
+.bp-co .go{ display:inline-block; margin-top:10px; font:600 9px/1 var(--fn);
+  letter-spacing:.16em; text-transform:uppercase; color:var(--alt);
+  border:1px solid var(--alt); padding:9px 11px; min-height:32px; }
+
+.bp-nav{ position:absolute; left:0; right:0; bottom:0; z-index:6;
+  display:grid; grid-template-columns:repeat(5,1fr); background:var(--bg);
+  border-top:1px solid var(--line2); }
+.bp-nav a{ border-right:1px solid var(--line); padding:15px 2px 16px; text-align:center;
+  font:600 8.5px/1 var(--fn); letter-spacing:.14em; text-transform:uppercase;
+  color:var(--faint); text-decoration:none; cursor:pointer;
+  transition:color .2s cubic-bezier(.16,1,.3,1); }
+.bp-nav a:last-child{ border-right:0; }
+.bp-nav a[aria-current]{ color:var(--ink); background:var(--bg2);
+  box-shadow:inset 0 2px 0 var(--alt); }
+
+/* schedule/index screen */
+.bp-ix{ padding:0 16px 70px; }
+.bp-ixr{ display:grid; grid-template-columns:28px minmax(0,1fr) auto; gap:11px;
+  align-items:center; padding:12px 0; border-bottom:1px solid var(--line); cursor:pointer; }
+.bp-ixr .n{ font:500 9px/1 var(--fn); color:var(--faint); }
+.bp-ixr .t{ font:700 15px/1.15 var(--fd); font-variation-settings:'wdth' 96; }
+.bp-ixr .t small{ display:block; font:400 11px/1.4 var(--fd); color:var(--faint);
+  margin-top:4px; font-variation-settings:'wdth' 100; }
+.bp-ixr .h{ font:500 8px/1 var(--fn); letter-spacing:.14em; text-transform:uppercase;
+  color:var(--alt); border:1px solid var(--alt); padding:5px 6px; }
+
+/* ==========================================================================
+   3 · MATCHDAY — a publication about a competition.
+   Bricolage Grotesque at poster scale. The five position hues become
+   full-bleed bands instead of 9px tags. Flat colour only — no gradients.
+   ========================================================================== */
+[data-dir="md"]{ --fd:'Bricolage Grotesque',sans-serif; --fn:'IBM Plex Mono',monospace;
+  --ft:Newsreader,Georgia,serif; }
+[data-dir="md"][data-theme="dark"]{
+  --bg:#0e0e0d; --bg2:#171716; --line:#302f2c; --line2:#514f49;
+  --ink:#f6f4ee; --dim:#a8a49a; --faint:#77736a;
+  --mark:#f6f4ee; --on:#0e0e0d;
+  --ok:#5cc98c; --warn:#e3aa42; --bad:#ee7a72;
+}
+[data-dir="md"][data-theme="light"]{
+  --bg:#f4f2ec; --bg2:#e8e5dc; --line:#cdc9bd; --line2:#8b8778;
+  --ink:#111110; --dim:#4c4941; --faint:#6b6759;
+  --mark:#111110; --on:#f4f2ec;
+  --ok:#157a4c; --warn:#8a6208; --bad:#ab3831;
+}
+.md{ background:var(--bg); color:var(--ink); height:100%; font-family:var(--fd); }
+.md ::selection{ background:var(--ink); color:var(--bg); }
+.md .sc{ padding-bottom:64px; }
+
+.md-mh{ display:flex; align-items:baseline; gap:9px; padding:12px 16px 11px;
+  border-bottom:2px solid var(--ink); position:sticky; top:0; background:var(--bg); z-index:4; }
+.md-mh .m{ font:800 16px/1 var(--fd); font-variation-settings:'wdth' 125,'opsz' 40;
+  letter-spacing:-.015em; text-transform:uppercase; }
+.md-mh .d{ margin-left:auto; font:500 9px/1 var(--fn); letter-spacing:.16em;
+  text-transform:uppercase; color:var(--faint); }
+
+/* the poster block — flat colour field, type reversed out. No gradient. */
+.md-post{ background:var(--pc); color:var(--on); padding:20px 16px 18px; }
+.md-post .k{ font:500 9px/1 var(--fn); letter-spacing:.2em; text-transform:uppercase;
+  opacity:.72; }
+.md-post .n{ font:800 62px/.82 var(--fd); font-variation-settings:'wdth' 125,'opsz' 96;
+  letter-spacing:-.05em; margin-top:12px; font-variant-numeric:tabular-nums; }
+.md-post .n.words{ font-size:47px; line-height:.94; letter-spacing:-.035em;
+  font-variant-numeric:normal; text-wrap:balance; max-width:12ch; }
+.md-post .sub{ font:600 14px/1.36 var(--fd); margin-top:13px; max-width:29ch;
+  text-wrap:balance; }
+.md-post .sub .fig{ font-family:var(--fn); font-variant-numeric:tabular-nums; }
+.md-post .meta{ display:flex; flex-wrap:wrap; gap:0 16px; margin-top:15px;
+  padding-top:12px; border-top:1px solid rgba(0,0,0,.28); }
+.md-post .meta span{ font:500 10px/1.6 var(--fn); letter-spacing:.06em;
+  text-transform:uppercase; }
+.md-post .meta .fig{ font-size:13px; font-weight:600; letter-spacing:.02em;
+  font-variant-numeric:tabular-nums; }
+.md-post .meta b{ font-weight:600; }
+
+/* section band — position hue at full bleed, the app's own tokens at scale */
+.md-band{ display:flex; align-items:baseline; gap:9px; background:var(--pc);
+  color:var(--on); padding:7px 16px 8px; margin-top:22px; }
+.md-band .t{ font:800 13px/1 var(--fd); font-variation-settings:'wdth' 116;
+  letter-spacing:.01em; text-transform:uppercase; }
+.md-band .c{ margin-left:auto; font:500 9px/1 var(--fn); letter-spacing:.14em;
+  font-variant-numeric:tabular-nums; }
+/* neutral band — used when a board mixes positions and the hue would lie */
+.md-band.mix{ background:var(--ink); color:var(--bg); }
+
+.md-w{ padding:0 16px; }
+.md-row{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:3px 12px;
+  align-items:baseline; padding:9px 0 10px; border-bottom:1px solid var(--line);
+  cursor:pointer; }
+.md-row .nm{ font:700 18px/1.06 var(--fd); font-variation-settings:'wdth' 118,'opsz' 72;
+  letter-spacing:-.028em; text-wrap:balance; }
+/* size IS the magnitude — set per row from the value itself */
+.md-row .vv{ font:700 var(--fs,19px)/.92 var(--fn); font-variant-numeric:tabular-nums;
+  letter-spacing:-.035em; align-self:center; }
+.md-row .mt{ font:500 9px/1.35 var(--fn); letter-spacing:.09em; text-transform:uppercase;
+  color:var(--faint); }
+.md-row .dd{ text-align:right; font:500 9px/1.35 var(--fn); }
+.md-row .ct{ grid-column:1 / -1; font:500 9.5px/1.4 var(--fn); color:var(--dim);
+  margin-top:3px; }
+.md-row .ct b{ color:var(--faint); font-weight:500; }
+/* a swatch, for boards where the band can't carry the position */
+.md-row .sw{ display:inline-block; width:7px; height:7px; background:var(--pc);
+  margin-right:6px; vertical-align:baseline; }
+.md-row .dd.up{ color:var(--ok); } .md-row .dd.dn{ color:var(--bad); }
+
+.md-lead{ padding:20px 16px 2px; }
+.md-lead h1{ font:800 34px/.98 var(--fd); font-variation-settings:'wdth' 125,'opsz' 72;
+  letter-spacing:-.042em; margin:0; text-transform:uppercase; text-wrap:balance; }
+.md-lead h1 span{ background:var(--ink); color:var(--bg); padding:0 5px; }
+.md-lead p{ font:400 15px/1.6 var(--ft); color:var(--dim); margin:14px 0 0; }
+.md-lead p b{ color:var(--ink); font-weight:600; }
+.md-lead .num{ font-family:var(--fn); font-weight:600; font-size:13px; color:var(--ink); }
+
+.md-e{ padding:15px 16px; border-bottom:1px solid var(--line); cursor:pointer; }
+.md-e .k{ font:500 9px/1 var(--fn); letter-spacing:.2em; text-transform:uppercase;
+  color:var(--faint); }
+.md-e h3{ font:700 21px/1.08 var(--fd); font-variation-settings:'wdth' 122,'opsz' 48;
+  letter-spacing:-.032em; margin:8px 0 6px; text-wrap:balance; }
+.md-e h3 span{ background:var(--pc); color:var(--on); padding:0 5px; }
+/* an editorial highlight is emphasis or a warning — never a position hue, or
+   "down 12%" reads as success-green. */
+.md-e[style*="--ink"] h3 span{ background:var(--ink); color:var(--bg); }
+.md-e p{ font:400 13.5px/1.55 var(--ft); color:var(--dim); margin:0; }
+.md-e .cta{ display:inline-block; margin-top:10px; font:600 9.5px/1 var(--fn);
+  letter-spacing:.14em; text-transform:uppercase; background:var(--ink); color:var(--bg);
+  padding:10px 12px; min-height:34px; }
+
+.md-nav{ position:absolute; left:0; right:0; bottom:0; z-index:6; display:flex;
+  background:var(--ink); color:var(--bg); }
+.md-nav a{ flex:1; padding:15px 2px 16px; text-align:center; text-decoration:none;
+  color:inherit; opacity:.55; cursor:pointer;
+  font:700 9px/1 var(--fd); font-variation-settings:'wdth' 112; letter-spacing:.1em;
+  text-transform:uppercase; transition:opacity .2s cubic-bezier(.16,1,.3,1); }
+.md-nav a[aria-current]{ opacity:1; }
+.md-nav a[aria-current]::after{ content:''; display:block; height:2px; margin:6px 8px -2px;
+  background:var(--bg); }
+
+/* index — the whole screen, in poster type */
+.md-ix{ padding:0 0 64px; }
+.md-ixr{ display:flex; align-items:baseline; gap:10px; padding:15px 16px;
+  border-bottom:1px solid var(--line); cursor:pointer;
+  transition:background .2s cubic-bezier(.16,1,.3,1); }
+.md-ixr:hover{ background:var(--bg2); }
+.md-ixr .t{ font:800 27px/.96 var(--fd); font-variation-settings:'wdth' 110;
+  letter-spacing:-.035em; text-transform:uppercase; }
+.md-ixr .t small{ display:block; font:400 12px/1.4 var(--ft); color:var(--faint);
+  margin-top:6px; letter-spacing:0; text-transform:none; }
+.md-ixr.sm .t{ font-size:19px; }
+.md-ixh{ font:500 9px/1 var(--fn); letter-spacing:.22em; text-transform:uppercase;
+  color:var(--faint); padding:22px 16px 8px; border-bottom:1px solid var(--line); }
+.md-ixr .h{ margin-left:auto; font:500 8.5px/1 var(--fn); letter-spacing:.14em;
+  text-transform:uppercase; color:var(--faint); }
+.md-srch{ padding:15px 16px; border-bottom:2px solid var(--ink); display:flex;
+  align-items:baseline; gap:10px; }
+.md-srch span{ font:500 9px/1 var(--fn); letter-spacing:.18em; text-transform:uppercase;
+  color:var(--faint); }
+.md-srch input{ flex:1; background:transparent; border:0; outline:0; color:var(--ink);
+  font:700 20px/1 var(--fd); font-variation-settings:'wdth' 106; letter-spacing:-.02em;
+  text-transform:uppercase; }
+.md-srch input::placeholder{ color:var(--faint); }
+
+/* ==========================================================================
+   MOTION — one signature per direction, three supporting moments.
+   Custom easing, JITTERED stagger, clip/wipe entrances. Never fade-up.
+   ========================================================================== */
+:root{ --ez:cubic-bezier(.16,1,.3,1); }
+
+/* 1 · ALMANAC — "the forme locks up": rules draw, then rows reveal under a
+   clip, then the figure's numerals settle. Type being set, not content fading. */
+.play .al-rh, .play .al-fig, .play .al-t thead th, .play .al-cap{
+  animation:rule-draw .56s var(--ez) both; animation-delay:calc(var(--d,0)*1ms); }
+@keyframes rule-draw{ from{ clip-path:inset(0 100% 0 0); } to{ clip-path:inset(0 0 0 0); } }
+.play .al-e, .play .al-t tbody tr, .play .al-ixr{
+  animation:row-set .5s var(--ez) both; animation-delay:calc(var(--d,0)*1ms); }
+@keyframes row-set{ from{ clip-path:inset(0 0 100% 0); opacity:.15; }
+                    to{ clip-path:inset(0 0 0 0); opacity:1; } }
+.play .al-lede h1{ animation:rule-draw .8s var(--ez) both; animation-delay:60ms; }
+
+/* 2 · BLUEPRINT — "the plot": the pen draws. Grid fades up, rules extend,
+   dimension fills run out to their measurement, figures tick up. */
+.play .bp::before{ animation:grid-in .9s var(--ez) both; }
+@keyframes grid-in{ from{ opacity:0; } to{ opacity:1; } }
+.play .bp-lab::after, .play .bp-dimline .ln, .play .bp-mag .t0{
+  animation:extend .6s var(--ez) both; animation-delay:calc(var(--d,0)*1ms); }
+@keyframes extend{ from{ transform:scaleX(0); transform-origin:left; }
+                   to{ transform:scaleX(1); } }
+.play .bp-dimline .fill, .play .bp-mag i{
+  animation:dim-run .82s var(--ez) both; animation-delay:calc(var(--d,0)*1ms + 220ms); }
+@keyframes dim-run{ from{ width:0; } to{ width:var(--w,50%); } }
+.play .bp-sr, .play .bp-co, .play .bp-ixr, .play .bp-ro{
+  animation:plot-in .46s var(--ez) both; animation-delay:calc(var(--d,0)*1ms); }
+@keyframes plot-in{ from{ opacity:0; clip-path:inset(0 0 0 100%); }
+                    to{ opacity:1; clip-path:inset(0 0 0 0); } }
+
+/* 3 · MATCHDAY — "the press run": flat colour bands wipe across the page,
+   then type drops in behind them. Ink hitting paper. */
+.play .md-post, .play .md-band, .play .md-nav{
+  animation:band-wipe .62s var(--ez) both; animation-delay:calc(var(--d,0)*1ms); }
+@keyframes band-wipe{ from{ clip-path:inset(0 100% 0 0); } to{ clip-path:inset(0 0 0 0); } }
+.play .md-post .n, .play .md-lead h1, .play .md-e h3{
+  animation:ink-drop .58s var(--ez) both; animation-delay:calc(var(--d,0)*1ms + 180ms); }
+@keyframes ink-drop{ from{ opacity:0; transform:translateY(-9px) scaleY(1.08);
+                           transform-origin:top; }
+                     to{ opacity:1; transform:none; } }
+.play .md-row, .play .md-e, .play .md-ixr{
+  animation:row-in .44s var(--ez) both; animation-delay:calc(var(--d,0)*1ms); }
+@keyframes row-in{ from{ opacity:0; clip-path:inset(0 0 100% 0); }
+                   to{ opacity:1; clip-path:inset(0 0 0 0); } }
+
+/* supporting moments, all three: tactile press, row mark, and the number roll
+   the owner asked to keep. */
+.al-e:active, .al-ixr:active, .bp-sr:active, .bp-ixr:active,
+.md-row:active, .md-e:active, .md-ixr:active{ opacity:.6; }
+.al-t tbody tr, .bp-sr, .md-row{ transition:background .18s var(--ez); }
+
+@media (prefers-reduced-motion: reduce){
+  .play *, .play *::before, .play *::after{
+    animation:none !important; transition-duration:.01ms !important; }
+  .bp-dimline .fill, .bp-mag i{ width:var(--w,50%) !important; }
+  .bp-lab::after, .bp-dimline .ln, .bp-mag .t0{ transform:none !important; }
+}
+</style>
+
+<div class="hz">
+  <header class="hz-head">
+    <h1>Directions <em>II</em></h1>
+    <span class="n">DynastyEdge · 390px · round two</span>
+  </header>
+  <p class="hz-lede">Round one's A and C failed the AI-slop checklist on
+    <b>10 and 11 of 12 markers</b> — rounded cards with shadows, lucide icons,
+    thin left accent rails, fade-up entrances, a blue-purple gradient field.
+    All three below are built against that researched list: <b>zero radius, no
+    shadows, no icons anywhere, text navigation, two faces each, asymmetric
+    grids, jittered stagger, clip-and-wipe entrances.</b> Each one answers the
+    density question round-one B couldn't — look at <i>Analysis</i>.</p>
+
+  <div class="hz-ctl">
+    <div class="hz-seg" role="group" aria-label="Direction">
+      <button data-set="dir" data-val="al" aria-pressed="true">1 · Almanac</button>
+      <button data-set="dir" data-val="bp" aria-pressed="false">2 · Blueprint</button>
+      <button data-set="dir" data-val="md" aria-pressed="false">3 · Matchday</button>
+    </div>
+    <div class="hz-seg" role="group" aria-label="Screen">
+      <button data-set="scr" data-val="home" aria-pressed="true">Home</button>
+      <button data-set="scr" data-val="deep" aria-pressed="false">Analysis</button>
+      <button data-set="scr" data-val="nav" aria-pressed="false">Navigation</button>
+    </div>
+    <div class="hz-seg" role="group" aria-label="Theme">
+      <button data-set="theme" data-val="dark" aria-pressed="true">Dark</button>
+      <button data-set="theme" data-val="light" aria-pressed="false">Light</button>
+    </div>
+    <button class="hz-replay" id="replay">Replay motion</button>
+  </div>
+
+  <div class="hz-stage">
+    <main class="phone" id="phone" data-dir="al" data-theme="dark"></main>
+    <aside class="hz-notes" id="notes"></aside>
+  </div>
+</div>
+
+<script>
+/* Real data, lifted from the running app on 11 Sep 2026 (Nix Cage, roster 6). */
+const D = {
+  team:'Nix Cage', value:87397, delta:'−141', pct:'−0.2%',
+  rank:'4th', window:'Middle', faab:'$1000', odds:74,
+  roster:[
+    {n:'Brock Bowers',    p:'te',t:'LV', v:6952,w:100,d:'−410',c:'dn',a:23},
+    {n:'CeeDee Lamb',     p:'wr',t:'DAL',v:6129,w:88, d:'−118',c:'dn',a:27},
+    {n:'Jonathan Taylor', p:'rb',t:'IND',v:5748,w:100,d:'+96', c:'up',a:27},
+    {n:'Bo Nix',          p:'qb',t:'DEN',v:4867,w:100,d:'+450',c:'up',a:26},
+    {n:'Chase Brown',     p:'rb',t:'CIN',v:4670,w:81, d:'+446',c:'up',a:26},
+    {n:'Jaxson Dart',     p:'qb',t:'NYG',v:4861,w:99, d:'+12', c:'up',a:23},
+    {n:'Jordan Love',     p:'qb',t:'GB', v:3758,w:77, d:'−361',c:'dn',a:27},
+    {n:'Luther Burden',   p:'wr',t:'CHI',v:3689,w:60, d:'+212',c:'up',a:22},
+    {n:'TreVeyon Henderson',p:'rb',t:'NE',v:3055,w:53,d:'−361',c:'dn',a:23},
+    {n:'DJ Moore',        p:'wr',t:'BUF',v:2526,w:41, d:'−87', c:'dn',a:29},
+    {n:'Tua Tagovailoa',  p:'qb',t:'ATL',v:1451,w:30, d:'−63', c:'dn',a:28},
+    {n:'Kirk Cousins',    p:'qb',t:'LV', v:1282,w:26, d:'−41', c:'dn',a:38},
+    {n:'Mark Andrews',    p:'te',t:'BAL',v:1720,w:25, d:'−204',c:'dn',a:31},
+    {n:'Xavier Legette',  p:'wr',t:'CAR',v:365, w:6,  d:'−88', c:'dn',a:25},
+  ],
+  targets:[
+    {n:"Ja'Marr Chase",   p:'wr',t:'CIN',v:9365,o:'Aaronregers',      c:'Jordan James + Jordan Love + Jonathan Taylor',g:'−574',me:'Weak',them:'Fair'},
+    {n:'Jaxon Smith-Njigba',p:'wr',t:'SEA',v:8751,o:'Mahomes Depot',  c:'Kirk Cousins + Jordan Love + Jaxson Dart',    g:'−1,150',me:'Weak',them:'Fair'},
+    {n:'Puka Nacua',      p:'wr',t:'LAR',v:8381,o:'Mahomes Depot',    c:'Jordan James + Jordan Love + Jaxson Dart',    g:'−671',me:'Weak',them:'Fair'},
+    {n:'Amon-Ra St. Brown',p:'wr',t:'DET',v:7580,o:'Password Is Taco',c:'Kirk Cousins + Rachaad White + Jonathan Taylor',g:'−891',me:'Weak',them:'Fair'},
+    {n:'Justin Jefferson',p:'wr',t:'MIN',v:6977,o:'Ministry Of Touchdowns',c:'2027 2nd + Jonathan Taylor',            g:'−432',me:'Weak',them:'Fair'},
+    {n:'Malik Nabers',    p:'wr',t:'NYG',v:6290,o:'Ministry Of Touchdowns',c:'2029 3rd + Jonathan Taylor',            g:'−452',me:'Weak',them:'Fair'},
+    {n:'Drake London',    p:'wr',t:'ATL',v:5215,o:'Ministry Of Touchdowns',c:'Jonathan Taylor',                        g:'+533',me:'Fair',them:'Strong'},
+    {n:'Nico Collins',    p:'wr',t:'HOU',v:4499,o:'Aaronregers',      c:'Jordan James + Chase Brown',                  g:'−604',me:'Weak',them:'Strong'},
+    {n:'A.J. Brown',      p:'wr',t:'NE', v:3796,o:'Ministry Of Touchdowns',c:'Jordan Love',                            g:'+38', me:'Fair',them:'Weak'},
+    {n:'Tee Higgins',     p:'wr',t:'CIN',v:3236,o:'Ministry Of Touchdowns',c:'Jordan James + Rachaad White',           g:'−212',me:'Weak',them:'Fair'},
+    {n:'Bijan Robinson',  p:'rb',t:'ATL',v:8204,o:'Mr. Spike',        c:'Brock Bowers + Jordan Love',                  g:'−318',me:'Weak',them:'Fair'},
+    {n:'Trey McBride',    p:'te',t:'ARI',v:5106,o:'Crippled Gang',    c:'Chase Brown + 2027 2nd',                      g:'+141',me:'Fair',them:'Fair'},
+    {n:'Bhayshul Tuten',  p:'rb',t:'JAX',v:2890,o:'Jake & Bake',      c:'Rachaad White',                               g:'+96', me:'Fair',them:'Weak'},
+  ],
+  places:[
+    ['Today','Your desk','5 items · 3 new league moves','al'],
+    ['Squad','Roster · Lineup · Season Review · Trajectory','26 players · window peaks 2027','wr'],
+    ['Dealing','Partners · Analyzer · Targets · Managers · Picks','20 targets · deadline wk 13','rb'],
+    ['League','Standings · Activity · Movers · Playoffs','74% odds · 4th by value','te'],
+    ['Draft','Board · Research · Tracker','2026 complete · recap ready','qb'],
+    ['Wire','News · free agents','12 new since Tuesday','def'],
+  ],
+};
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const fmt = n => n.toLocaleString('en-US');
+/* Magnitude, in a poster's own language: the figure's SIZE is the quantity.
+   Absolute across the app (not per group), so Bo Nix 4,867 and Xavier Legette
+   365 can never render identically — which is the finding this has to answer. */
+const VMAX = 9365;
+const vsize = v => (14 + 16 * Math.pow(Math.max(v,0)/VMAX, 0.7)).toFixed(1);
+/* Jittered stagger — linear 0/100/200 is itself a tell. */
+let seed = 7;
+const rnd = () => (seed = (seed*1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+const stag = (i, base) => Math.round(i*base*(0.72 + rnd()*0.62) + rnd()*26);
+
+/* ---------------- 1 · ALMANAC ---------------- */
+function AL(scr){
+  const nav = cur => `<nav class="al-nav">${
+    ['Today','Squad','Dealing','League','Index'].map(l=>
+      `<a href="#" ${l===cur?'aria-current="page"':''}>${l}</a>`).join('')}</nav>`;
+
+  if(scr==='nav'){ let i=0; return `<article class="al dir">
+    <div class="sc">
+      <div class="al-srch"><span>Find</span>
+        <input placeholder="a player, a team, anywhere…" aria-label="Find"></div>
+      <div class="al-ix">
+        <div class="al-ixg">Kept daily</div>
+        ${[['Today','The brief — 5 items','home'],['Your squad','26 players, by value','squad'],
+           ['Build a trade','Analyzer · Targets · Partners','dealing'],
+           ['The league','Standings, activity, odds','league']]
+          .map(([t,s,h])=>`<div class="al-ixr" style="--d:${stag(i++,44)}">
+            <span class="n">${String(i).padStart(2,'0')}</span>
+            <span class="t">${t}<small>${s}</small></span><span class="h">${h}</span></div>`).join('')}
+        <div class="al-ixg">Consulted</div>
+        ${[['Dynasty Trajectory','Where the window peaks','squad'],
+           ['Season Review','Points left on the bench','squad'],
+           ['Manager Scouting','How each owner has traded','dealing'],
+           ['Pick Trades','Moving up and moving down','dealing'],
+           ['Rookie Research','Opportunity against market','draft'],
+           ['News','The full league feed','wire']]
+          .map(([t,s,h])=>`<div class="al-ixr" style="--d:${stag(i++,44)}">
+            <span class="n">${String(i).padStart(2,'0')}</span>
+            <span class="t">${t}<small>${s}</small></span><span class="h">${h}</span></div>`).join('')}
+      </div>
+    </div>${nav('Index')}</article>`; }
+
+  if(scr==='deep'){ let i=0; return `<article class="al dir">
+    <div class="sc">
+      <header class="al-rh"><span class="t">The Call</span>
+        <span class="f">Targets · 20</span></header>
+      <div class="al-v">
+        <div class="lbl">Counter — do not accept</div>
+        <h1>Jefferson costs you <em>6% too much</em>, and the wrong 6%.</h1>
+        <p>The package clears on paper and fails on your field: <b>your starting
+          lineup loses 812</b> while theirs gains 1,240. You are paying a premium
+          to get slightly worse this season.</p>
+      </div>
+      <div class="al-sc2">
+        <div class="hd"><span>Light</span><span>Fair ±5%</span><span>Heavy</span></div>
+        <div class="al-rulebar">
+          <span class="base"></span>
+          ${[0,25,50,75,100].map(p=>`<span class="tick" style="left:${p}%"></span>`).join('')}
+          <span class="band" style="left:40%;width:20%"></span>
+          <span class="you" style="left:72%"></span>
+        </div>
+      </div>
+      <div class="al-tw">
+        <div class="al-cap"><span class="t">Every target</span>
+          <span class="s">ranked by need × value × movability</span>
+          <span class="c">20</span></div>
+        <table class="al-t">
+          <thead><tr><th></th><th>Player</th><th class="r">Value</th>
+            <th class="r">To fair</th></tr></thead>
+          <tbody>
+            ${D.targets.map(t=>`<tr style="--d:${stag(i++,38)}" class="pos-${t.p}">
+              <td class="p" style="--pc:var(--${t.p})">${t.p.toUpperCase()}</td>
+              <td class="nm">${esc(t.n)}<small>${esc(t.o)}</small><br>
+                <small style="margin-left:0">costs ${esc(t.c)}</small></td>
+              <td class="v">${fmt(t.v)}</td>
+              <td class="d ${t.g.startsWith('+')?'up':'dn'}">${t.g}</td></tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>${nav('Dealing')}</article>`; }
+
+  let i=0, j=0;
+  return `<article class="al dir">
+    <div class="sc">
+      <header class="al-rh"><span class="t">${D.team} · Franchise Almanac</span>
+        <span class="f">Fri 11 Sep</span></header>
+      <div class="al-g">
+        <div class="al-marg">§<em>i</em></div>
+        <div class="al-lede">
+          <h1>You're a buyer. <em>Five things</em> need you today.</h1>
+          <p>The roster is worth <b>${fmt(D.value)}</b>, ${D.rank} in the league and
+            flat on the month. The model puts you at <b>${D.odds}%</b> to reach the
+            playoffs — the number that should change how you trade this week.</p>
+        </div>
+        <div></div>
+        <div class="al-fig">
+          <span class="n" data-count="${D.value}">0</span>
+          <span class="g"><b>Team value · 30 days</b>${D.delta} (${D.pct}) ·
+            ${D.rank} of ten · window ${D.window} · FAAB ${D.faab}</span>
+        </div>
+      </div>
+      <div class="al-g">
+        <div class="al-marg">§<em>ii</em></div>
+        <div>
+          <article class="al-e" style="--d:${stag(i++,52)}">
+            <h3>You are carrying <em>five quarterbacks</em></h3>
+            <p>One is dead weight. Kirk Cousins (<span class="fig">1,282</span>)
+              goes to Jake &amp; Bake for Stefon Diggs and fills the WR hole you
+              have had since August.</p>
+            <span class="cta">Build this trade</span></article>
+          <article class="al-e" style="--d:${stag(i++,52)}">
+            <h3>Carnell Tate is down <em>12%</em></h3>
+            <p>Off <span class="fig">508</span> in thirty days at a position you
+              sit below league average in. His owner is rebuilding and has moved
+              two veterans this month.</p></article>
+          <article class="al-e" style="--d:${stag(i++,52)}">
+            <h3>Bo Nix is up <em>10%</em></h3>
+            <p>Up <span class="fig">450</span> at a position of surplus. You start
+              two and roster five.</p></article>
+        </div>
+      </div>
+      <div class="al-tw">
+        <div class="al-cap"><span class="t">The squad</span>
+          <span class="s">by dynasty value</span><span class="c">26</span></div>
+        <table class="al-t">
+          <thead><tr><th></th><th>Player</th><th class="r">Value</th><th class="r">30d</th></tr></thead>
+          <tbody>
+            ${D.roster.map(p=>`<tr style="--d:${stag(j++,30)}">
+              <td class="p" style="--pc:var(--${p.p})">${p.p.toUpperCase()}</td>
+              <td class="nm">${esc(p.n)}<small>${p.t} · ${p.a}</small></td>
+              <td class="v">${fmt(p.v)}</td>
+              <td class="d ${p.c}">${p.d}</td></tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>${nav('Today')}</article>`;
+}
+
+/* ---------------- 2 · BLUEPRINT ---------------- */
+function BP(scr){
+  const nav = cur => `<nav class="bp-nav">${
+    ['Today','Squad','Trade','League','Index'].map(l=>
+      `<a href="#" ${l===cur?'aria-current="page"':''}>${l}</a>`).join('')}</nav>`;
+  const tb = (l,r,lk,rk) => `<header class="bp-tb">
+    <div class="l"><div class="k">${lk}</div><div class="v">${l}</div></div>
+    <div class="r"><div class="k">${rk}</div><div class="v">${r}</div></div></header>`;
+
+  if(scr==='nav'){ let i=0; return `<article class="bp dir">
+    <div class="sc">${tb('Index','21 sheets','Drawing','Contents')}
+      <div class="bp-ix">
+        ${[['Today','The brief — 5 items on the desk','SHT 01'],
+           ['Squad','Roster · lineup · season review · trajectory','SHT 02'],
+           ['Trade','Partners · analyzer · targets · managers · picks','SHT 03'],
+           ['League','Standings · activity · movers · playoff odds','SHT 04'],
+           ['Draft','Board · research · tracker','SHT 05'],
+           ['Wire','News feed and free agents','SHT 06'],
+           ['Trajectory','Projected value, three seasons out','2.4'],
+           ['Season Review','Actual against optimal, by week','2.3'],
+           ['Manager Scouting','Every owner, every season','3.4'],
+           ['Rookie Research','Opportunity against market price','5.2']]
+          .map(([t,s,h])=>`<div class="bp-ixr" style="--d:${stag(i++,40)}">
+            <span class="n">${String(i).padStart(2,'0')}</span>
+            <span class="t">${t}<small>${s}</small></span>
+            <span class="h">${h}</span></div>`).join('')}
+      </div>
+    </div>${nav('Index')}</article>`; }
+
+  if(scr==='deep'){ let i=0; return `<article class="bp dir">
+    <div class="sc">${tb('The call','Counter','Sheet 03.2','Verdict')}
+      <section class="bp-ro">
+        <div class="k" style="font:500 8.5px/1 var(--fn);letter-spacing:.2em;text-transform:uppercase;color:var(--faint)">Justin Jefferson · WR · MIN</div>
+        <div class="n" data-count="6977">0</div>
+        <div class="u">Asking value · you would send 7,409</div>
+        <div class="bp-dimline">
+          <span class="ln"></span><span class="cap" style="left:0"></span>
+          <span class="cap" style="right:0"></span>
+          <span class="fill" style="--w:94%"></span>
+          <span class="an">GAP 432</span>
+        </div>
+        <div class="bp-co">
+          <div class="k">Why counter</div>
+          <h4>Position count balances. The players don't.</h4>
+          <p>Their starting lineup gains 1,240. Yours loses 812. You are paying a
+            6% premium to get slightly worse this season.</p>
+          <span class="go">Ask for a 2027 2nd</span>
+        </div>
+      </section>
+      <div class="bp-w">
+        <div class="bp-lab">Schedule of targets · 20</div>
+        ${D.targets.map(t=>`<div class="bp-sr" style="--d:${stag(i++,34)};--pc:var(--${t.p})">
+          <span class="p">${t.p.toUpperCase()}</span>
+          <span class="nm">${esc(t.n)}<small>${esc(t.o)} · ${esc(t.c)}</small></span>
+          <span class="vv">${fmt(t.v)}<small class="${t.g.startsWith('+')?'up':'dn'}">${t.g}</small></span>
+          <span class="bp-mag"><span class="t0"></span>
+            <i style="--w:${Math.round(t.v/9365*100)}%"></i></span>
+        </div>`).join('')}
+      </div>
+    </div>${nav('Trade')}</article>`; }
+
+  let i=0;
+  return `<article class="bp dir">
+    <div class="sc">${tb(D.team,'Fri 11 Sep','Franchise','Issued')}
+      <section class="bp-ro">
+        <div class="n" data-count="${D.value}">0</div>
+        <div class="u">Team value · ${D.delta} (${D.pct}) over 30 days</div>
+        <div class="bp-dimline">
+          <span class="ln"></span><span class="cap" style="left:0"></span>
+          <span class="cap" style="right:0"></span>
+          <span class="fill" style="--w:74%"></span>
+          <span class="an">4TH OF 10</span>
+        </div>
+        <div class="bp-co">
+          <div class="k">Action required</div>
+          <h4>Five quarterbacks rostered — one is dead weight</h4>
+          <p>Kirk Cousins to Jake &amp; Bake for Stefon Diggs. Fills the WR hole
+            you have carried since August.</p>
+          <span class="go">Build this trade</span>
+        </div>
+      </section>
+      <div class="bp-w">
+        <div class="bp-lab">Standing · window ${D.window} · FAAB ${D.faab} · odds ${D.odds}%</div>
+        ${[['Buy low','Carnell Tate','Down 508 (−12%) in 30 days · fills WR'],
+           ['Sell high','Bo Nix','Up 450 (+10%) at a position of surplus']]
+          .map(([k,t,s])=>`<div class="bp-sr" style="--d:${stag(i++,44)};--pc:var(--alt)">
+            <span class="p" style="color:var(--faint)">${k==='Buy low'?'BUY':'SELL'}</span>
+            <span class="nm">${t}<small>${s}</small></span>
+            <span class="vv" style="font-size:11px;color:var(--faint)">›</span></div>`).join('')}
+        <div class="bp-lab">Squad · 26 · by value</div>
+        ${D.roster.map(p=>`<div class="bp-sr" style="--d:${stag(i++,26)};--pc:var(--${p.p})">
+          <span class="p">${p.p.toUpperCase()}</span>
+          <span class="nm">${esc(p.n)}<small>${p.t} · age ${p.a}</small></span>
+          <span class="vv">${fmt(p.v)}<small class="${p.c}">${p.d}</small></span>
+          <span class="bp-mag"><span class="t0"></span><i style="--w:${p.w}%"></i></span>
+        </div>`).join('')}
+      </div>
+    </div>${nav('Today')}</article>`;
+}
+
+/* ---------------- 3 · MATCHDAY ---------------- */
+function MD(scr){
+  const nav = cur => `<nav class="md-nav">${
+    ['Today','Squad','Trade','League','Index'].map(l=>
+      `<a href="#" ${l===cur?'aria-current="page"':''}>${l}</a>`).join('')}</nav>`;
+
+  if(scr==='nav'){ let i=0; return `<article class="md dir">
+    <div class="sc">
+      <div class="md-srch"><span>Find</span>
+        <input placeholder="anyone, anywhere" aria-label="Find"></div>
+      <div class="md-ix">
+        ${D.places.map(([t,s,sub])=>`
+          <div class="md-ixr" style="--d:${stag(i++,54)}">
+            <span class="t">${t}<small>${esc(s)} — ${esc(sub)}</small></span>
+          </div>`).join('')}
+        <div class="md-ixh">Consulted, not daily</div>
+        ${[['Trajectory','Where your window peaks','squad'],
+           ['Season Review','Points left on the bench','squad'],
+           ['Managers','How every owner trades','trade'],
+           ['Rookie Research','Opportunity vs market','draft']]
+          .map(([t,s,h])=>`<div class="md-ixr sm" style="--d:${stag(i++,54)}">
+            <span class="t">${t}<small>${s}</small></span>
+            <span class="h">${h}</span></div>`).join('')}
+      </div>
+    </div>${nav('Index')}</article>`; }
+
+  if(scr==='deep'){ let i=0, b=0; return `<article class="md dir">
+    <div class="sc">
+      <header class="md-mh"><span class="m">The Call</span>
+        <span class="d">Targets · 20</span></header>
+      <section class="md-post" style="--pc:var(--warn);--d:0">
+        <div class="k">Justin Jefferson · WR · MIN</div>
+        <div class="n words" style="font-size:64px">Counter</div>
+        <div class="sub"><span class="fig" data-count="432">0</span> short of fair.
+          Ask them to add a 2027 2nd.</div>
+        <div class="meta"><span>you give <b>7,409</b></span>
+          <span>you get <b>6,977</b></span><span>band <b>±5%</b></span></div>
+      </section>
+      <div class="md-lead">
+        <p>The package clears on paper and fails on your field.
+          <b>Your starting lineup loses <span class="num">812</span></b> while
+          theirs gains <span class="num">1,240</span>. You'd be paying a premium
+          to get slightly worse this season.</p>
+      </div>
+      ${['wr','rb','te'].map(pos=>{
+        const rows = D.targets.filter(t=>t.p===pos);
+        if(!rows.length) return '';
+        const tot = rows.reduce((a,t)=>a+t.v,0);
+        return `<div class="md-band" style="--pc:var(--${pos});--d:${stag(b++,66)}">
+          <span class="t">${({wr:'Wide receiver',rb:'Running back',te:'Tight end'})[pos]}</span>
+          <span class="c">${rows.length} · ${fmt(tot)}</span></div>
+        <div class="md-w">
+          ${rows.map(t=>`<div class="md-row" style="--d:${stag(i++,26)}">
+            <span class="nm">${esc(t.n)}</span>
+            <span class="vv" style="--fs:${vsize(t.v)}px">${fmt(t.v)}</span>
+            <span class="mt">${t.t} · ${esc(t.o)}</span>
+            <span class="dd ${t.g.startsWith('+')?'up':'dn'}">${t.g} to fair</span>
+            <span class="ct"><b>costs</b> ${esc(t.c)}</span>
+          </div>`).join('')}
+        </div>`; }).join('')}
+    </div>${nav('Trade')}</article>`; }
+
+  let i=0, b=0;
+  const byPos = ['qb','rb','wr','te'].map(p=>[p, D.roster.filter(r=>r.p===p)]);
+  return `<article class="md dir">
+    <div class="sc">
+      <header class="md-mh"><span class="m">${D.team}</span>
+        <span class="d">Fri 11 Sep</span></header>
+      <section class="md-post" style="--pc:var(--ink);--d:0">
+        <div class="k">Team value · 30 days ${D.delta} (${D.pct})</div>
+        <div class="n" data-count="${D.value}">0</div>
+        <div class="sub">You're a buyer. Five things need you today.</div>
+        <div class="meta"><span><b>${D.rank}</b> of ten · window <b>${D.window}</b> ·
+          <b>${D.odds}%</b> to the playoffs · <b>${D.faab}</b> left to spend</span></div>
+      </section>
+      <article class="md-e" style="--pc:var(--warn);--d:${stag(i++,60)}">
+        <div class="k">Act today</div>
+        <h3>Five <span>quarterbacks</span>, one dead weight</h3>
+        <p>Kirk Cousins goes to Jake &amp; Bake for Stefon Diggs and fills the WR
+          hole you've had since August.</p>
+        <span class="cta">Build this trade</span></article>
+      <article class="md-e" style="--pc:var(--ink);--d:${stag(i++,60)}">
+        <div class="k">Buy low</div>
+        <h3>Carnell Tate is down <span>12%</span></h3>
+        <p>Off 508 in thirty days at a position you're below league average in.</p></article>
+      ${byPos.map(([p,rows])=>`
+        <div class="md-band" style="--pc:var(--${p});--d:${stag(b++,64)}">
+          <span class="t">${({qb:'Quarterback',rb:'Running back',wr:'Wide receiver',te:'Tight end'})[p]}</span>
+          <span class="c">${rows.length} · ${fmt(rows.reduce((a,r)=>a+r.v,0))}</span></div>
+        <div class="md-w">
+          ${rows.map(r=>`<div class="md-row" style="--d:${stag(i++,24)}">
+            <span class="nm">${esc(r.n)}</span>
+            <span class="vv" style="--fs:${vsize(r.v)}px">${fmt(r.v)}</span>
+            <span class="mt">${r.t} · age ${r.a}</span>
+            <span class="dd ${r.c}">${r.d}</span></div>`).join('')}
+        </div>`).join('')}
+    </div>${nav('Today')}</article>`;
+}
+
+/* ---------------- notes ---------------- */
+const NOTES = {
+al:{k:'Direction 1', t:'Almanac', em:'',
+  p:[`<b>The opinion:</b> this app is a <i>reference work about your franchise</i> —
+     a record book you consult, kept in print conventions. Running heads, a
+     marginalia rail with section marks, rules that separate instead of boxes
+     that contain, and <b>real tables</b>.`,
+     `<b>This is round-one B, made practical.</b> The density worry has a
+      four-hundred-year-old answer: 26 rows is a <i>table</i>, not a stack of
+      cards. The squad fits on one and a half screens with a rank, a position,
+      an age and a 30-day move on every line — denser than the shipped app and
+      far easier to scan, because tabular figures align and hairline rules
+      carry the eye.`,
+     `Two serifs, neither a default: <b>Instrument Serif</b> for display,
+      <b>Newsreader</b> for text, IBM Plex Mono for figures. Ink and paper, an
+      oxblood spot colour, a slate teal 168° away for the second signal.`],
+  d:[['Signature','<b>The forme locks up.</b> Rules draw left to right, table rows reveal downward under a clip, and the figure\'s numerals settle last — type being set, not content fading in.'],
+     ['Also','Row hover tint · press dims · the number roll you liked, in tabular figures so nothing reflows.'],
+     ['Optimises for','Reading and scanning in the same screen. Best of the three at "what do I do" <i>and</i> "show me all 26".'],
+     ['Costs','Two new font families. Serif body text is a genuine taste bet — it will feel unusual on a sports app for a week.'],
+     ['Breaks','Every card in the library. `Card`, `Badge`, `Chip` are replaced by rules, tables and small caps.'],
+     ['Slop score','<b>0 of 12 markers.</b>']]},
+bp:{k:'Direction 2', t:'Blueprint', em:'',
+  p:[`<b>The opinion:</b> this is a <i>drawing</i> of your franchise — measured,
+     annotated, gridded. A draughtsman's sheet, with a title block, sheet
+     numbers, dimension lines and leader-line callouts.`,
+     `Magnitude comes back from round one, but as <b>measurement</b> rather than
+      a rounded progress bar: a dimension line with end caps and an annotated
+      figure. That is the one idea worth rescuing from old A, and drawn this way
+      it stops reading as a Tailwind meter.`,
+     `One family used across its <b>width axis</b> (Archivo, 62–125) plus mono
+      annotation throughout — so labels are condensed, display is expanded, and
+      the type does work that a single static weight can't. Prussian ground with
+      a real grid; burnt amber for callouts only.`],
+  d:[['Signature','<b>The plot.</b> The grid fades up, rules extend from the left like a pen plotter, dimension fills run out to their measurement, and figures tick up to land on the tick.'],
+     ['Also','Row hover fill · press dim · callouts wipe in from the right.'],
+     ['Optimises for','Precision. The screen that best communicates "these numbers were computed, and here is how big they are relative to each other".'],
+     ['Costs','Zero new fonts. But the grid and dimension lines are ornament if used carelessly — they must always encode a real measurement or this becomes decoration.'],
+     ['Breaks','Radius, shadows, and the idea of a card. Keeps the component <i>concept</i> closer than the other two.'],
+     ['Slop score','<b>0 of 12.</b> Watch the dark blue ground — it is a saturated <i>field</i> with line work on it, not an indigo accent on neutral, which is the distinction that matters.']]},
+md:{k:'Direction 3', t:'Matchday', em:'',
+  p:[`<b>The opinion:</b> this is a <i>publication about a competition</i> —
+     printed, loud, confident. European football editorial rather than American
+     broadcast: poster type, flat colour, hard edges.`,
+     `<b>The colour idea is the point.</b> Your five position hues already exist
+      as tokens and currently appear as 9-pixel tags. Here they become
+      <b>full-bleed bands</b> — a position group header is a solid field of its
+      own colour with the type reversed out. That is a colour world no template
+      produces, and it is built from tokens you already own. No gradients
+      anywhere; colour arrives as flat area, never as a glow or a rail.`,
+     `<b>Bricolage Grotesque</b> across its width and optical-size axes — a face
+      with genuine character that is nobody's default — with Newsreader for the
+      prose passages.`],
+  d:[['Signature','<b>The press run.</b> Colour bands wipe across the page, then the type drops in behind them with a slight vertical squash — ink hitting paper.'],
+     ['Magnitude','A poster encodes quantity in <b>type size</b>, not a bar. Each figure is sized from its own value on an absolute scale, and the band carries the group total — so you read the shape within a position and the weight across them.'],
+     ['Also','Row reveal under a clip · nav marker · the number roll, at poster scale.'],
+     ['Optimises for','Identity and pleasure. The only one of the three that will make you want to open it.'],
+     ['Costs','<b>The least dense of the three</b>, now that the cost line is back: roughly 3–4 targets a screen against Almanac\'s 7. That is the real price of poster type, and it is the thing to weigh. One new font family.'],
+     ['Breaks','Everything. This is a different product\'s visual language.'],
+     ['Slop score','<b>0 of 12.</b> The one to watch is contrast on the colour bands — black on RB-teal and TE-orange passes; black on WR-sky needs the darker light-mode token, which is why the bands swap hue per theme.']]},
+};
+
+/* ---------------- harness ---------------- */
+const phone = document.getElementById('phone');
+const notes = document.getElementById('notes');
+const state = { dir:'al', scr:'home', theme:'dark' };
+const RM = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+function roll(el){
+  const to = +el.dataset.count;
+  if (RM.matches){ el.textContent = fmt(to); return; }
+  const dur = 1000, t0 = performance.now();
+  (function step(t){
+    const k = Math.min(1,(t-t0)/dur);
+    const e = 1 - Math.pow(1-k, 4);
+    el.textContent = fmt(Math.round(to*e));
+    if (k<1) requestAnimationFrame(step);
+  })(performance.now());
+}
+
+function render(){
+  seed = 7;
+  const fn = state.dir==='al'?AL : state.dir==='bp'?BP : MD;
+  phone.dataset.dir = state.dir; phone.dataset.theme = state.theme;
+  phone.innerHTML = fn(state.scr);
+  phone.classList.remove('play'); void phone.offsetWidth; phone.classList.add('play');
+
+  phone.querySelectorAll('[data-count]').forEach(el=>{
+    el.textContent = '0';
+    setTimeout(()=>roll(el), RM.matches ? 0 : 420);
+  });
+
+  const n = NOTES[state.dir];
+  notes.innerHTML = `<div class="k">${n.k}</div><h2>${n.t}</h2>
+    ${n.p.map(x=>`<p>${x}</p>`).join('')}
+    <dl>${n.d.map(([k,v])=>`<div class="rw"><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>
+    <div class="hz-score">Checked against the researched marker list:
+      radius 0 <b>✓</b> · no shadows <b>✓</b> · no icon set <b>✓</b> ·
+      text navigation <b>✓</b> · two faces <b>✓</b> · asymmetric grid <b>✓</b> ·
+      jittered stagger <b>✓</b> · clip/wipe entrance <b>✓</b> ·
+      secondary hue 60°+ <b>✓</b> · ::selection styled <b>✓</b> ·
+      semantic tags <b>✓</b> · reduced-motion <b>✓</b></div>`;
+}
+
+document.querySelectorAll('[data-set]').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    const {set,val} = b.dataset; state[set] = val;
+    document.querySelectorAll(`[data-set="${set}"]`).forEach(o=>
+      o.setAttribute('aria-pressed', String(o.dataset.val===val)));
+    render();
+  });
+});
+document.getElementById('replay').addEventListener('click', render);
+render();
+</script>
