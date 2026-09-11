@@ -528,6 +528,9 @@ body{ margin:0; background:var(--hz-bg); color:var(--hz-t1);
 
 /* Floating navigation needs a scrim, or scrolling content collides with it.
    The bar is glass on purpose; the fade is what keeps it legible. */
+/* ...but not on the nav screens, where a sheet already owns the bottom —
+   there the fade would dim real rows (Rookie Research, News) for nothing. */
+.dir:has(.nav-sheet)::after{ content:none; }
 .a-root::after, .c-root::after, .b-root::after{
   content:''; position:absolute; left:0; right:0; bottom:0; height:118px; z-index:8;
   pointer-events:none;
