@@ -82,26 +82,6 @@ overturned.
   against a +0.98 control (n=318). Sleeper had already raised their projections.
   See the plan's §9c.
 
-### DESIGN-3 — the navigation rebuild
-
-**Trigger: fires with DESIGN-1** (they touch the same files; doing them apart
-means migrating twice). Measured in `review-2026-09/inventory.md`:
-
-- **Four destinations have zero content-level inbound links** — Season Review,
-  my own Trajectory, Manager Scouting, Rookie Research. Rookie Research is also
-  **missing from `PlayerSearchSheet.jsx`'s `DESTINATIONS`**, so it is the one
-  view that cannot be found by searching its own name. That one is a two-line
-  fix and can ship immediately.
-- **All 17 sub-tabs are byte-identical duplicates of the drawer's children** —
-  two navigation systems over one payload.
-- **Section colours reuse the status tokens**: `SideDrawer.jsx:74,85` assign
-  Trade `text-success` and League `text-warning`, the same tokens used for
-  actual status in the same file. Violates CLAUDE.md's own exclusivity rule.
-- **"Pick Trades" is clipped off its own sub-tab row** at 390px.
-- The **"no bottom tab bar" rule is re-litigable** — the owner reopened it for
-  this review. NN/g measures hidden navigation at a 20%+ discoverability drop
-  and 15% slower mobile tasks; the four weekly sections fit a 2–5 tab bar.
-
 ### NEWS-1 — re-measure news coverage after a week of accumulation
 
 **Trigger:** `news.yml` has been running with the accumulating feed for ~7 days
@@ -422,8 +402,14 @@ curl -s 'https://api.sleeper.app/v1/league/1313933520715907072/drafts' | grep -c
 ### DESIGN-1 — build the "Matchday" visual direction **[owner-approved 2026-09-11]**
 
 **Trigger: fired — the owner selected the direction and asked for the build to
-start in a fresh session.** Not started here: the review was scoped as
+start in a fresh session.** Not started in the review: it was scoped as
 diagnosis + mocks only, and the app was deliberately left untouched.
+**Steps 1 and 2 have landed** — DESIGN-2 (the accessibility floor) and DESIGN-3
+(the navigation rebuild), both closed in §3. What remains is the visual work
+itself: the Matchday palette, Bricolage Grotesque, the position bands, and
+type-size-as-magnitude. The tab bar, contents rails and Index built in DESIGN-3
+are in Matchday's *form* but the current tokens, and are the first surfaces to
+re-tint.
 
 **What was decided.** Six directions were mocked across two rounds. Round one
 (Instrument / Dispatch / Control) was rejected — scored against a researched
@@ -865,6 +851,7 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 
 | Item | Closed | How |
 |---|---|---|
+| DESIGN-3 — the navigation rebuild | 2026-09-11 | Primary navigation is a bottom tab bar (Today · Squad · Trade · League · Index); the drawer keeps its utilities and carries zero destinations. `SubTabBar` → `SectionContents`, which wraps instead of scrolling, so "Pick Trades" no longer clips. New `/index` route is the complete map and holds the four consulted views. All three copies of the nav payload collapsed into `src/navigation.js`. Draft and News lost top-level rank, not reachability. The four orphans each got a content-level inbound link, and Rookie Research entered global search. No path moved, so no redirect was needed. Detail retained in §3 below |
 | DESIGN-2 — four ready-now accessibility/truncation bugs | 2026-09-11 | All four fixed in the primitives and tokens, not at 525 call sites: `--text-tertiary` re-derived to clear WCAG AA in both themes (dark 2.51→4.53:1, light 3.23→4.51:1); `.focus-ring` added as the one focus definition and `Input`/`Select`'s `focus:outline-none` removed; `.tap-target` guarantees a 44px hit area with no layout cost (`IconButton` `md` made a real 44px box) — deliberately NOT on `Chip`, where it would cause the bug it fixes; `Est. cost` and the lineup player name now wrap instead of eliding. Detail retained in §3 below |
 | Trade engine over-weighted the partner (3 fixes) | 2026-09-07 | Phase 2 made a cost/appeal trade-off (weight set mid-plateau from a sweep); `myStartersDelta` added and gating the verdict; Layer 4's fill/lineup double-count removed. Detail retained in §1 |
 | Layer 3 scored on a tier that measured the wrong thing | 2026-09-07 | Live playoff odds now score the win window in season (0.988 vs the starting lineup, against the tier's 0.721); tier is the offseason fallback. Killed the dead `Middle` branch that left 40% of the league with no read. Detail retained in §1 |
@@ -876,6 +863,55 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 | Frontier Item 2 blocking question (are losing FAAB bids visible?) | 2026-08-08 | Verified yes; see `docs/analysis/faab-bid-corpus-2026-08.md`. Superseded by OPEN-3 |
 | ACTIVE-1 — season-readiness tests (draft day + Week 1) | 2026-08-08 | Three live contract breaks found and fixed (schedule endpoint, draft `slot_to_roster_id`, stats `pos`/`opp`); 35 new tests (72 → 107) + `scripts/dev/replay-live.mjs`. Detail retained in §1 |
 | ACTIVE-2 — Draft › Research: verify the first pipeline run | 2026-08-14 | Pipeline published 2026-08-14 11:12Z; feed shape, Market vs Model output, and the drawer's Rookies row all verified against live data. Detail retained in §1 |
+
+---
+
+### DESIGN-3 — the record (closed 2026-09-11)
+
+Shipped as step 2 of the Matchday rebuild (PR after #43). **What it was, as
+originally recorded:**
+
+### DESIGN-3 — the navigation rebuild
+
+**Trigger: fires with DESIGN-1** (they touch the same files; doing them apart
+means migrating twice). Measured in `review-2026-09/inventory.md`:
+
+- **Four destinations have zero content-level inbound links** — Season Review,
+  my own Trajectory, Manager Scouting, Rookie Research. Rookie Research is also
+  **missing from `PlayerSearchSheet.jsx`'s `DESTINATIONS`**, so it is the one
+  view that cannot be found by searching its own name. That one is a two-line
+  fix and can ship immediately.
+- **All 17 sub-tabs are byte-identical duplicates of the drawer's children** —
+  two navigation systems over one payload.
+- **Section colours reuse the status tokens**: `SideDrawer.jsx:74,85` assign
+  Trade `text-success` and League `text-warning`, the same tokens used for
+  actual status in the same file. Violates CLAUDE.md's own exclusivity rule.
+- **"Pick Trades" is clipped off its own sub-tab row** at 390px.
+- The **"no bottom tab bar" rule is re-litigable** — the owner reopened it for
+  this review. NN/g measures hidden navigation at a 20%+ discoverability drop
+  and 15% slower mobile tasks; the four weekly sections fit a 2–5 tab bar.
+
+**What shipped, and the one decision not pre-specified.** The brief left "what
+replaces the sub-tab layer" as the step's core design call. The answer was a
+**wrapping contents rail**, not a hidden or collapsed one: the whole reason for
+this step is NN/g's measurement that hidden navigation costs 20%+
+discoverability, so hiding a section's siblings behind a tap to remove a
+duplicate would have traded one measured problem for the same one. What made
+the duplication go away was deleting the drawer's tree, not the rail; what made
+A4's clipping go away was wrapping instead of scrolling, which no entry can
+hide behind. Live at 390px all five Trade labels now fit one line.
+
+**Labels renamed to the mock's, routes deliberately not.** Today · Squad ·
+Trade · League · Index are navigation labels; `/edge` and `/my-team` are
+unchanged, so no deep-link, briefing item or redirect was affected and none was
+needed. Feature names in CLAUDE.md are unchanged and the mapping is stated once
+in the Navigation section. "my team" and "the edge" stay matchable in search.
+
+**Not done here, on purpose:** the tab bar and Index are built in the CURRENT
+(Primetime Blackout) tokens, in Matchday's *form* — text-only, no icons, zero
+radius, the bar inverted against the page. Re-tinting them to the Matchday
+palette belongs to DESIGN-1 (steps 3–5), which is the visual step; doing both
+at once means migrating twice.
 
 ---
 
