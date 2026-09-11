@@ -33,7 +33,7 @@ export default function Card({
       className={cn(
         'relative w-full rounded-none bg-bg-card border border-border-default overflow-hidden',
         cut && 'corner-cut',
-        (interactive || rest.onClick) && 'text-left active:opacity-80 transition-opacity',
+        (interactive || rest.onClick) && 'text-left active:opacity-80 transition-opacity focus-ring',
         !accent && pad,
         className,
       )}

@@ -75,8 +75,13 @@ export default function LineupRow({
         {/* Name + status */}
         <span className="flex-1 min-w-0">
           <span className="flex items-center gap-1.5">
+            {/* Wraps rather than truncates: at 390px the name column is
+                ~150px, so "TreVeyon Henderson" elided to "TreVeyon He…" —
+                and a lineup row whose whole job is telling you who to start
+                must name him. Only genuinely long names take a second line;
+                `leading-tight` keeps the row height honest when one does. */}
             <span className={cn(
-              'font-body font-medium text-sm truncate',
+              'font-body font-medium text-sm leading-tight break-words min-w-0',
               player ? 'text-text-primary' : 'text-text-tertiary italic',
             )}>
               {player?.name ?? 'Empty slot'}

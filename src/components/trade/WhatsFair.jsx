@@ -191,19 +191,25 @@ function TargetCard({ target, fairPackage, packagePending, showNeedTag, onTap })
       )}
       {fairPackage && (
         <div className="flex flex-col gap-0.5 min-w-0">
-          <div className="flex items-baseline gap-1.5 min-w-0">
-            <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary shrink-0">
-              Est. cost:
-            </span>
-            <span className="font-body text-xs text-text-primary dark:text-text-primary truncate min-w-0">
+          {/* What the trade costs you is the most actionable field on the
+              board, so it WRAPS — it must never elide. This was a flex row
+              with `truncate` on the value, which cut the package to
+              "Jordan James + Jordan Love + Jonatha…" on 5 of 11 live cards:
+              a three-player package read as a two-player one. Laid out as a
+              sentence rather than a flex row because flex items don't wrap
+              their own text, and the trailing total has to follow the last
+              name rather than float beside the first line. */}
+          <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary min-w-0">
+            Est. cost:{' '}
+            <span className="font-body text-xs text-text-primary dark:text-text-primary">
               {fairPackage.assets.map(a => a.name).join(' + ')}
-            </span>
-            <span className="font-mono text-[10px] text-text-secondary dark:text-text-secondary shrink-0 tabular-nums">
+            </span>{' '}
+            <span className="font-mono text-[10px] text-text-secondary dark:text-text-secondary tabular-nums whitespace-nowrap">
               (~{(fairPackage.totalValue || 0).toLocaleString()})
             </span>
-          </div>
+          </p>
           {fairPackage.rationale && (
-            <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary truncate min-w-0">
+            <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary min-w-0">
               {fairPackage.rationale}
             </span>
           )}

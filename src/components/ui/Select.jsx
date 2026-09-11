@@ -25,7 +25,7 @@ const Select = forwardRef(function Select({ label, hint, className, children, ..
           className={cn(
             'w-full rounded-none bg-bg-card border border-border-default',
             'px-3 pr-8 py-2.5 font-body text-sm text-text-primary appearance-none',
-            'focus:outline-none focus:border-accent transition-colors',
+            'focus:border-accent transition-colors focus-ring',
             className,
           )}
           {...rest}

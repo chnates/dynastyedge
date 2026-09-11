@@ -24,7 +24,11 @@ export default function Chip({
   return (
     <button
       className={cn(
+        // No `tap-target` here on purpose: chips sit ~8px apart in a scrolling
+        // filter row, so a 44px hit area on a 40px chip would let neighbours
+        // steal each other's taps. See the note in index.css.
         'shrink-0 rounded-none font-mono font-medium uppercase tracking-wider whitespace-nowrap transition-colors',
+        'focus-ring',
         sizeClass,
         active
           ? activeClass
