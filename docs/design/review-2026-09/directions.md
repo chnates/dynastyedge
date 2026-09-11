@@ -144,3 +144,81 @@ the one I'd revisit if a device test shows the glass is cheap.
    free agents, movers.
 5. **Motion last**, to the 3–5 budget, widening the `prefers-reduced-motion`
    guard from one class to a global rule as the first step.
+
+---
+
+# Round two (2026-09-11, after owner feedback)
+
+**Owner's read on round one:** A and C are AI slop; B is the direction; the
+number animation is worth keeping; nav-wise A and B both work, C doesn't; B's
+open question is whether it's practical to use.
+
+That read was correct and is now measured, not conceded — see
+`slop-checklist.md`. Scored against the researched marker list, **round-one A
+failed 10 of 12 and C failed 11 of 12**; B failed 2, which is exactly why it
+was the one that didn't read as generated. The shipped app fails 8 of 12, and
+the single most-cited tell in the research — a thin coloured accent rail down a
+container's left edge — is a **documented primitive** in the design system
+(`Card`'s `accent` prop).
+
+Round two: **https://claude.ai/code/artifact/9ac20b94-855a-4c22-96f1-763fa64491c7**
+(round one stays at `b9e5532d-…` as the record.)
+Source `mocks/directions-2.html`; stills `.screenshots/mocks2/`; motion
+`.screenshots/mocks2/motion-round-two.webm`.
+
+All three are built to the same house rules: **radius 0, no shadows, no icon
+set anywhere, text navigation, two faces each (none on the default list),
+asymmetric grids, jittered stagger, clip-and-wipe entrances, a secondary hue
+60°+ from the primary, styled `::selection`, semantic tags.** All keep the
+number roll. All score **0 of 12**.
+
+## 1 · Almanac — *round-one B, made practical*
+
+A reference work about your franchise, in print conventions: running heads, a
+marginalia rail with section marks, rules instead of boxes, and **real tables**.
+Instrument Serif + Newsreader, ink and paper, oxblood spot with a slate teal
+168° away.
+
+The density answer is the point. 26 rows is a *table*, not a stack of cards —
+and a table is denser **and** more scannable than what ships today, because
+tabular figures align and hairline rules carry the eye. On the Analysis screen
+it fits the verdict, a printed fair-value scale and **seven full targets with
+their complete, untruncated cost strings** — the field that currently elides
+(finding B3).
+
+## 2 · Blueprint — *a drawing of your franchise*
+
+A draughtsman's sheet: title block, sheet numbers, a real grid, leader-line
+callouts. Magnitude returns from round-one A, but as **measurement** — a
+hairline dimension line with end caps and a terminator tick, annotated
+"GAP 432" — not a rounded progress meter. Archivo across its width axis
+(62–125) plus mono annotation: **zero new font families.**
+
+## 3 · Matchday — *a publication about a competition*
+
+Poster type, flat colour, hard edges. The idea worth the risk: **your five
+position hues become full-bleed bands** instead of 9px tags — a position group
+header is a solid field with the type reversed out. That is a colour world no
+template produces, built from tokens you already own, with no gradients
+anywhere. The team-value hero is deliberately **ink, not a position hue**;
+editorial highlights take a semantic colour or plain ink, never a position
+colour (a green "down 12%" would break the status rule).
+
+---
+
+## Recommendation, round two
+
+**Almanac.** It is the direction you already picked, with its one real
+objection answered in the mock rather than argued away. It is the densest of
+the three, the best at both "what do I do today" and "show me all 26", and the
+only one whose dense screen is genuinely *more* legible than what ships now.
+
+Take **Blueprint's dimension line** into it as the magnitude encoding — an
+almanac already wants measured rules, and it's the one idea worth rescuing from
+round one. Keep **Matchday's position bands** in reserve; if Almanac reads too
+quiet after a week on the phone, the bands are the dial to turn up.
+
+Honest costs: two new font families, and serif body text on a sports app is a
+taste bet that will feel unusual for about a week. Blueprint is the low-risk
+pick if that bet feels wrong — zero new fonts, and its callout/spec-row
+vocabulary maps closely onto the components you already have.

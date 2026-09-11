@@ -33,6 +33,7 @@ or `src/components/ui`.
 - [x] Motion inventory (measured) + accessibility pass
 - [x] Part C — three directions, built + captured with working motion
 - [x] Recommendation + "what you didn't ask about"
+- [x] Round 2 — AI-slop research, checklist, three new directions
 - [ ] **Owner decision — stopped here as instructed.**
 
 ## Log
