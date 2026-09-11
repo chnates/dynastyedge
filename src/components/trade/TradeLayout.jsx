@@ -1,15 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import { CalendarClock } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
-import SubTabBar from '../shared/SubTabBar'
-
-const SUB_TABS = [
-  { label: 'Partners',    to: '/trade',             end: true  },
-  { label: 'Analyzer',    to: '/trade/analyze',     end: false },
-  { label: 'Targets',     to: '/trade/whats-fair',  end: false },
-  { label: 'Managers',    to: '/trade/managers',    end: false },
-  { label: 'Pick Trades', to: '/trade/pick-trades', end: false },
-]
+import SectionContents from '../shared/SectionContents'
 
 function DeadlineBanner() {
   const { nflState, isOffseason, tradeDeadline } = useLeagueContext()
@@ -47,7 +39,7 @@ function DeadlineBanner() {
 export default function TradeLayout() {
   return (
     <>
-      <SubTabBar tabs={SUB_TABS} />
+      <SectionContents sectionKey="trade" />
       <DeadlineBanner />
       <Outlet />
     </>

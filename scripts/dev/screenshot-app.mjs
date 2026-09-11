@@ -213,7 +213,10 @@ console.log('app loaded')
 
 let shotTarget = page
 if (drawer) {
-  await page.getByLabel('Open navigation menu').click()
+  // The hamburger stopped being navigation in the Matchday rebuild (nav is the
+  // bottom tab bar); it opens the utility drawer now. Match either label so the
+  // harness keeps working across that rename.
+  await page.getByLabel(/Open (settings and data|navigation menu)/).click()
   // The status rows resolve their feed ages asynchronously (loadNewsFeed /
   // loadHistory / loadRookieIntel fire on open), so wait the full settle
   // budget — a short wait renders "—" for a feed that is merely still in

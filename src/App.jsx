@@ -7,6 +7,8 @@ import { useIdentity } from './hooks/useIdentity'
 import { useAppVersion } from './hooks/useAppVersion'
 import { LeagueContext } from './context/LeagueContext'
 import SideDrawer from './components/shared/SideDrawer'
+import TabBar, { TAB_BAR_HEIGHT } from './components/shared/TabBar'
+import { sectionForPath, INDEX_LABEL } from './navigation'
 import LoadingSpinner from './components/shared/LoadingSpinner'
 import EdgeView from './components/edge/EdgeView'
 import LoginScreen from './components/auth/LoginScreen'
@@ -36,15 +38,7 @@ const DraftTracker      = lazy(() => import('./components/draft/DraftTracker'))
 const RookieResearch    = lazy(() => import('./components/draft/RookieResearchView'))
 const PickTradeCalculator = lazy(() => import('./components/draft/PickTradeCalculator'))
 const PlayerSearchSheet = lazy(() => import('./components/shared/PlayerSearchSheet'))
-
-const SECTION_NAMES = {
-  '/edge':    'The Edge',
-  '/my-team': 'My Team',
-  '/trade':   'Trade',
-  '/league':  'League',
-  '/news':    'News',
-  '/draft':   'Draft',
-}
+const IndexView         = lazy(() => import('./components/shared/IndexView'))
 
 // Param-aware redirect for moved routes that carry a path param (e.g. the
 // team drill-downs). Keeps old deep-links working through the regroup.
@@ -56,11 +50,11 @@ function RedirectParam({ build }) {
 // Refetch league + value data when the app regains focus with stale data.
 const STALE_AFTER_MS = 30 * 60 * 1000
 
+// The header names the section you're in, read from the one navigation map so
+// it can never disagree with the tab bar's label.
 function getSectionName(pathname) {
-  for (const [prefix, name] of Object.entries(SECTION_NAMES)) {
-    if (pathname === prefix || pathname.startsWith(prefix + '/')) return name
-  }
-  return 'DynastyEdge'
+  if (pathname === '/index') return INDEX_LABEL
+  return sectionForPath(pathname)?.label ?? 'DynastyEdge'
 }
 
 function AppShell({ leagueData, updateAvailable, onApplyUpdate, buildId, versionState }) {
@@ -135,7 +129,7 @@ function AppShell({ leagueData, updateAvailable, onApplyUpdate, buildId, version
         <div className="flex items-center h-12 px-1">
           <button
             onClick={() => setDrawerOpen(true)}
-            aria-label="Open navigation menu"
+            aria-label="Open settings and data"
             className="w-11 h-11 flex items-center justify-center rounded-lg text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex-shrink-0"
           >
             <Menu size={22} strokeWidth={1.75} />
@@ -160,15 +154,19 @@ function AppShell({ leagueData, updateAvailable, onApplyUpdate, buildId, version
         </Suspense>
       )}
 
-      {/* The scroll container runs to the physical bottom edge; the home-
-          indicator clearance lives INSIDE it as padding so content scrolls
-          edge-to-edge instead of clipping at a dead bar above the inset. */}
+      {/* The scroll container runs to the physical bottom edge; the tab bar's
+          height AND the home-indicator clearance live INSIDE it as padding so
+          content scrolls edge-to-edge instead of clipping at a dead bar above
+          the inset. NEVER shorten <main> with a bottom offset to make room for
+          the bar — `overflow:hidden` on a root element clips fixed descendants
+          above the bottom inset on iOS, which is the black-bar bug fixed twice
+          already (CLAUDE.md rule 15, failure-archaeology §2b/§2d). */}
       <main
         className="fixed left-0 right-0 overflow-y-auto"
         style={{
           top: 'calc(3rem + env(safe-area-inset-top))',
           bottom: 0,
-          paddingBottom: 'env(safe-area-inset-bottom)',
+          paddingBottom: `calc(${TAB_BAR_HEIGHT} + env(safe-area-inset-bottom))`,
           overscrollBehavior: 'contain',
           WebkitOverflowScrolling: 'touch',
         }}
@@ -203,6 +201,10 @@ function AppShell({ leagueData, updateAvailable, onApplyUpdate, buildId, version
             <Route path="/league/teams/:rosterId" element={<RosterView />} />
             <Route path="/league/trajectory/:rosterId" element={<TrajectoryView />} />
             <Route path="/news" element={<NewsView />} />
+            {/* The app's complete map — the fifth tab. Holds Draft and News,
+                which are seasonal/browse rather than weekly, plus the four
+                views nothing else in the app points at. */}
+            <Route path="/index" element={<IndexView />} />
             <Route path="/draft" element={<DraftLayout />}>
               <Route index element={<Navigate to="board" replace />} />
               <Route path="board" element={<DraftBoard />} />
@@ -233,6 +235,8 @@ function AppShell({ leagueData, updateAvailable, onApplyUpdate, buildId, version
           </Routes>
         </Suspense>
       </main>
+
+      <TabBar />
     </div>
   )
 }
