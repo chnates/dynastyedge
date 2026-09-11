@@ -492,7 +492,7 @@ export default function PlayerProfileDrawer({
                 </span>
               )}
             </div>
-            <h2 className="font-display text-xl uppercase tracking-wide text-text-primary mt-1 leading-tight">
+            <h2 className="font-display font-extrabold text-xl uppercase tracking-[-0.025em] font-extrabold tracking-[-0.025em] text-text-primary mt-1 leading-tight">
               {player.name}
             </h2>
             <p className="font-body text-sm text-text-secondary mt-0.5">

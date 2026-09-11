@@ -2723,12 +2723,16 @@ replaced it and why:
 
 **Navigation is TEXT.** No icon set anywhere in the bar or the Index — a
 thin-line icon set is a named AI-slop marker and Matchday's house rules make
-navigation typographic. The bar is the **inverse of the page** in both themes
-(`bg-text-primary` / `text-bg-primary`, which swap with the theme by
-construction) — the mock's masthead-strip treatment. Inactive tabs sit at 55%
-opacity; the active one is full opacity with a 2px marker in the bar's own ink.
-Red is NOT spent here — it stays rationed to the hero cap, "you" accents and
-the contents rail's active item.
+navigation typographic. The bar is an **ink field** — the same material as the
+hero poster, the section band, the active chip and the CTA — and it inverts with
+the theme by construction (`bg-text-primary` / `text-bg-primary`): a cream slab
+in dark, an ink one in light. **Inverted in BOTH themes is the owner's call**
+(2026-09-11), made when asked directly whether a cream slab pinned to the bottom
+of every screen reads badly at night; the alternatives offered were inverting
+only in light mode, or never. It carries no top border — the inversion is the
+separation. Inactive tabs sit at 55% opacity; the active one is full opacity
+with a 2px marker in the bar's own ink. Red is NOT spent here — it stays
+rationed to "you" accents and the contents rail's active item.
 
 **Two sections lost their top-level rank, not their reachability.** Draft is
 three seasonal views and News is a browse that already surfaces its best items
@@ -3015,217 +3019,289 @@ Scouting did) — note any route-only moves explicitly.
 
 ## Design System
 
-> **Status: SHIPPED AND IN FORCE, but superseded in direction (2026-09-11).**
-> Everything below is the **live truth of what the app renders today** and is
-> what you must match when touching UI before the rebuild lands. But the
-> owner has approved a replacement direction — **"Matchday"** — and the
-> Phase 3 "Primetime Blackout" law below is no longer the target state.
+> **Status: "Matchday" is the live direction, and it is being built in five
+> steps.** Steps 1–3 have landed: the accessibility floor (DESIGN-2), the
+> navigation rebuild (DESIGN-3), and the token + primitive layer below. Step 4
+> rolls the new components through the screens (densest first: My Roster, Trade
+> Targets, League Overview) and step 5 is motion. **Until step 4 lands, screens
+> this document does not describe still carry Primetime Blackout's shapes** —
+> rounded pills, lucide icon medallions, gradient strength bars — repainted in
+> Matchday's colours. That is expected, not drift; the alternative was migrating
+> twice.
 >
-> **Why:** a UX/IA review (`docs/design/review-2026-09/`) found the current
-> look lands on **two of the three aesthetics that read as AI-generated** —
-> near-black with one scarce accent, and hairline rules with zero radius — and
-> that the shipped system fails **8 of 12** researched AI-slop markers, the
-> worst being the thin coloured accent rail that `Card`'s `accent` prop makes a
-> first-class primitive. The brief specified the generic outcome, which is why
-> compliance could never fix it. Scoring: `review-2026-09/slop-checklist.md`.
+> It replaced **"Primetime Blackout"** (Phase 3, 2026-07-20), which shipped
+> competently and was then rejected on review. The reason is worth keeping,
+> because it is a lesson about briefs rather than about execution: Blackout's
+> own law specified **two of the three aesthetics the research names as AI
+> defaults** — a near-black ground with one scarce accent, and hairline rules at
+> zero radius — and the shipped app failed **8 of 12** researched slop markers,
+> the worst being the thin coloured accent rail that `Card`'s `accent` prop made
+> a first-class primitive. **Compliance could not have fixed it, because
+> compliance was what produced it.**
 >
-> **Do not** start restyling from this note. The rebuild is sequenced in
-> `review-2026-09/directions.md`; `docs/open-items.md` → **DESIGN-1** carries
-> the trigger. Until it lands, this section is still the law.
+> Spec: `docs/design/review-2026-09/directions.md` (the direction and its two
+> revisions) · `slop-checklist.md` (the rules any new UI passes) ·
+> `findings.md` (what was measured) · `mocks/directions-2.html`, direction 3
+> (the authority on palette and type — standalone, never imported by the app).
+
+**Matchday in one line: a publication about a competition.** Poster type, flat
+colour, hard edges, no shadows, no icon set in navigation, and the five position
+hues promoted from 9px tags to **full-bleed section bands**.
+
+### The four laws
+
+1. **Colour is a FIELD, not a rail.** Ink and the position hues are painted as
+   solid blocks with the type reversed out — the masthead, the hero poster, the
+   section band, the inline `Mark`, the CTA, the active chip, the tab bar. **A
+   thin coloured rail down a container's left edge is banned**: it is the single
+   most-cited tell in the research and it was a documented primitive here. When
+   something wants a colour, it either becomes a field or the colour moves onto
+   the *word* that carries the finding.
+2. **Magnitude is TYPE SIZE.** Never a progress bar — a meter belongs to a
+   different design language, and refusing it is part of why this direction was
+   chosen. A figure is sized from its own value (`<Magnitude>`); the band above
+   the group carries the group total. Size reads shape *within* a position, the
+   total reads weight *across* positions.
+3. **Separation is a rule, never a shadow and never a radius.** Panels are
+   square with a 1px hairline (`--border-default`) or a 2px masthead rule
+   (`--border-strong`, or ink for the strongest). **Sheets, modals and the side
+   drawer keep their radii and their full gesture contract** — radius 0 is for
+   panels, and the sheet mechanics are untouchable (failure-archaeology §2).
+4. **Status colours and position colours keep separate, exclusive meanings, and
+   navigation may borrow neither.** An editorial highlight takes a semantic
+   colour or plain ink — never a position hue, or "down 12%" reads as a
+   position. Navigation carries no colour, no swatch and no icon at all.
 
 ### Design System Component Library
 
 All UI routes through the shared library at **`src/components/ui`** (barrel
-`index.js`). **Never hand-roll a button, card, bottom sheet, filter chip,
-badge, or input inline** — extend a primitive instead. Class strings inside the
-primitives are kept literal (no runtime color interpolation) so Tailwind's
-content scan always picks them up. The `/design-review` skill audits every diff
-for bypasses and is the enforcement mechanism — run it before committing
-component work.
+`index.js`). **Never hand-roll a button, card, bottom sheet, filter chip, badge,
+band, value figure, or input inline** — extend a primitive instead. Class
+strings inside the primitives are kept literal (no runtime colour
+interpolation) so Tailwind's content scan always picks them up. The
+`/design-review` skill audits every diff for bypasses and is the enforcement
+mechanism — run it on the **consumers**, not on `src/components/ui` while the
+primitives themselves are being edited.
 
 Import everything from the one barrel: `import { Button, Card, Sheet } from '../ui'`
 (path relative to the importing file).
 
-**Core primitives (new in the design system):**
-
 |Primitive|What it is|
 |---------|----------|
-|`Button`|THE button. Variants `primary` (solid accent CTA) · `secondary` (bordered) · `tinted` (accent-tinted footer/link) · `ghost` (quiet) · `danger`; sizes `sm`/`md`/`lg`; `fullWidth`, `icon`/`iconRight`, polymorphic `as`/`href` (renders `<a>`). `sm`/`md` render under 44px, so every Button carries `tap-target`.|
-|`IconButton`|THE icon-only control — the close/affordance button in every sheet/drawer header. Always pass `label` (→ aria-label). **`md` is a real 44px box** (`w-11 h-11`) because it is the sheet close control and headers have the room; **`sm` stays 36px** (`w-9 h-9`) for the one place that doesn't — the swap handle inline in a `LineupRow` — and borrows `tap-target`'s 44px hit area instead.|
-|`Card`|THE surface container (`rounded-none bg-bg-card border border-border-default` — broadcast panels are square). Optional `accent` color class renders the left **edge bar**; `cut` clips the 10px bottom-left corner (the action-card angle); `padding` `none`/`sm`/`md` or a raw class; `interactive`/`onClick` makes it a button.|
-|`Sheet` + `SheetHeader`|THE bottom sheet. Owns the whole sheet contract (`useScrollLock`, `useSheetDrag` swipe-to-dismiss, `overscroll-contain`, safe-area bottom pad, Escape + overlay-tap close, drag handle); `zIndex` is a Tailwind z class so sheets stack. `SheetHeader` adds eyebrow/title/subtitle + the `IconButton` close. **Exception:** a *keyboard-aware* sheet driven by `window.visualViewport` (PlayerSearchSheet, TradeBuilder's add sheet) can't use `Sheet` (which is sized to the layout viewport) — those two are the sanctioned hand-rolled overlays.|
-|`Modal`|THE centered dialog — confirm prompts and small forms that sit mid-screen rather than docking to the bottom (draft "Reset?" confirms, the CSV-name dialog). Owns overlay, `useScrollLock`, Escape + overlay-tap close; `maxWidth`/`surface` props. The bottom-docked counterpart is `Sheet`.|
-|`Chip`|THE filter chip — the QB/RB/WR/TE/All/Picks toggle, square, in the mono score-bug voice. Inactive is quiet; `active` defaults to solid silver with near-black text; pass `activeClass={POS_CHIP_ACTIVE[pos]}` for position-tinted active states. Sizes `sm`/`md`.|
-|`Badge`|THE small status/label badge, square, mono uppercase — `tone` (accent/brand/success/warning/danger/neutral) and `soft` tinted variants; `pill` for rounded. Solid accent (silver) carries near-black text; **`brand` is the rationed red, reserved for "you" labels** (You-chips). (Win-window tiers use `WinWindowBadge`; position tags use `POS_TAG`.)|
-|`Select`|THE dropdown field — a native `<select>` in the `Input` field voice, with the mono micro-`label`, optional `hint`, and the ▾ affordance. Native is deliberate: iOS renders it as the system wheel picker (better than any custom sheet for a one-of-N choice) and `<optgroup>` gives grouped options for free.|
-|`Input` / `SearchInput`|THE text field + search-box variant. Consistent field styling across all search/filter boxes; `SearchInput` adds the leading magnifier. Both `forwardRef`. Keep at `text-sm` (iOS focus-zoom is handled globally).|
+|`Button`|THE button, set in **mono uppercase, tracked** (the mock's `.cta`) — the same voice as every other small label in the app. Variants `primary` (the ink field) · `secondary` (2px rule) · `tinted` (quiet rule, the footer/link idiom) · `ghost` · `danger`; sizes `sm`/`md`/`lg`; `fullWidth`, `icon`/`iconRight`, polymorphic `as`/`href`. Labels **wrap** (`text-balance`) — `whitespace-nowrap` never stopped a long label overflowing 390px, it only stopped it wrapping well. `sm`/`md` render under 44px, so every Button carries `tap-target`.|
+|`IconButton`|THE icon-only control — the close/affordance button in every sheet/drawer header. Always pass `label` (→ aria-label). **`md` is a real 44px box** (`w-11 h-11`); **`sm` stays 36px** (`w-9 h-9`) for the one place without room — the swap handle inline in a `LineupRow` — and borrows `tap-target`'s 44px hit area. Square.|
+|`Card`|THE surface container (`rounded-none bg-bg-card border border-border-default`). Optional `tone` colour class renders a **2px kicker rule across the TOP** — a print convention, and what replaced the banned left rail. `padding` `none`/`sm`/`md` or a raw class; `interactive`/`onClick` makes it a button.|
+|**`Mark`**|THE editorial highlight — a word set in reverse out of a solid block ("Five **quarterbacks**, one dead weight"). The real replacement for `Card`'s rail: colour moves off the container and onto the word that carries the finding. Tones `ink` (default) · `ground` (a second reversal, for use **inside** an ink field) · `alt` · `brand` · status. **Never a position hue.**|
+|**`PositionBand`**|THE section band — a position hue at **full bleed** with the page ground reversed out, carrying the group's count and **total**. The direction's signature. A board that mixes positions takes the neutral ink band (`position` omitted) — picking a hue to make a mixed list colourful would lie about what is in it. Cancels the 16px page gutter by default (`bleed`).|
+|**`Magnitude`**|THE value figure, sized from its own value. See law 2 and the note below on the reference. `null` renders `—` at the base size (rule 7).|
+|`Sheet` + `SheetHeader`|THE bottom sheet. Owns the whole sheet contract (`useScrollLock`, `useSheetDrag` swipe-to-dismiss, `overscroll-contain`, safe-area bottom pad, Escape + overlay-tap close, drag handle); `zIndex` is a Tailwind z class so sheets stack. **Exception:** a *keyboard-aware* sheet driven by `window.visualViewport` (PlayerSearchSheet, TradeBuilder's add sheet) can't use `Sheet` (which is sized to the layout viewport) — those two are the sanctioned hand-rolled overlays.|
+|`Modal`|THE centered dialog — confirm prompts and small forms. Owns overlay, `useScrollLock`, Escape + overlay-tap close. The bottom-docked counterpart is `Sheet`.|
+|`Chip`|THE filter chip — square, mono uppercase. Inactive is quiet; `active` defaults to the **ink field**; pass `activeClass={POS_CHIP_ACTIVE[pos]}` for position-tinted active states.|
+|`Badge`|THE small status/label badge — square, mono uppercase; `tone` (accent/brand/alt/success/warning/danger) and `soft` tinted variants. Solid `accent` is the ink field; **`brand` is the rationed crimson, reserved for "you" labels.** (Win-window tiers use `WinWindowBadge`; position tags use `POS_TAG`; an emphasis inside a sentence is a `Mark`.)|
+|`Select`|THE dropdown field — a native `<select>` in the ruled-field voice. Native is deliberate: iOS renders it as the system wheel picker, and `<optgroup>` gives grouped options for free.|
+|`Input` / `SearchInput`|THE text field + search-box variant — **ruled, not boxed** (a line under a label, the print convention). The focus affordance is the rule thickening to ink; `.focus-ring` still fires, because browsers always treat a text field as focus-visible. Keep at `text-sm` (iOS focus-zoom is handled globally).|
 |`cn`|The one styling primitive — a tiny `className` joiner that drops falsy values. Never pull in a heavier classnames dep.|
 
 **Adopted shared primitives** are re-exported from the same barrel so the
-library is the single import surface (the files stay in `src/components/shared/`):
-`ErrorState`, `Spinner` (LoadingSpinner), `SectionHeader` + `BRAND_TICK`,
-`SectionContents`, `TrendArrow`, `WinWindowBadge`, `Sparkline`, `TeamAvatar`. Import
-these from `'../ui'` going forward. `NewsArticleSheet.jsx` is the canonical
-"migrated to the library" example (`Sheet` + `SheetHeader` + `Button`).
+library is the single import surface (the files stay in
+`src/components/shared/`): `ErrorState`, `Spinner` (LoadingSpinner),
+`SectionHeader` + `BRAND_TICK`, `SectionContents`, `TrendArrow`,
+`WinWindowBadge`, `Sparkline`, `TeamAvatar`. Import these from `'../ui'`.
+
+#### `Magnitude`'s reference is PINNED, and pinned to a contract
+
+`14 + 16·(v/10000)^0.7`, clamped, floor 14px and ceiling 30px.
+
+- **Pinned, not derived per list.** A per-list maximum would resize one player's
+  figure because a *different* player's value moved, and 4,867 would read as
+  huge on a thin board and ordinary on a deep one. The encoding only works if a
+  number means the same thing on every screen.
+- **10000, not the mock's 9365.** 9365 was the top-of-market dynasty value on
+  the day the mock was drawn — it goes stale, and any asset above it runs off
+  the top of the ramp. FantasyCalc's scale is documented as **0–10000**, so the
+  ceiling is a contract rather than a snapshot. The two differ by under a pixel
+  across the whole range (4,867 → 23.6px against the mock's 24.1px).
+- The 0.7 exponent is the mock's: linear crushes the bottom two thirds of the
+  market, where most of a roster lives, into three pixels; log flattens the top,
+  where the decisions are.
 
 ### The accessibility floor (non-negotiable, enforced in the primitives)
 
-Three rules, fixed 2026-09-11 after the design review measured them as broken
-(`docs/design/review-2026-09/findings.md` §X1–X3). They live in the primitives
-and in `index.css`, never at the call site, so no screen can opt out.
+Three rules, set in DESIGN-2 (2026-09-11) and re-derived against Matchday's
+grounds the same week. They live in the primitives and in `index.css`, never at
+the call site, so no screen can opt out.
 
 - **Contrast is a contract.** `--text-tertiary` carries real content — the meta
   line on every player row, timestamps, the reason line under every trade
-  target, **525 uses** — so it must clear WCAG AA body text (4.5:1). It failed
-  in both themes (dark **2.51:1**, light **3.23:1**) and is now dark `#7C7E84`
-  (4.53:1) / light `#67696F` (4.51:1). The ratio on each token is measured
-  against that theme's **worst-case ground, which is a different surface in
-  each**: in dark the *lightest* ground (`--bg-card`) gives the least contrast,
-  in light the *darkest* (`--bg-secondary`) does. AA puts a floor under the
-  bottom of the ramp, so tertiary now necessarily sits closer to secondary —
-  that compression is the cost of legibility, not a regression to undo.
-  **Any change to a ground colour must re-check both tokens in both themes.**
+  target, **525 uses** — so it must clear WCAG AA body text (4.5:1). The ratio
+  on each token is measured against that theme's **worst-case ground, which is a
+  different surface in each**: in dark the *lightest* ground (`--bg-card`) gives
+  the least contrast, in light the *darkest* (`--bg-secondary`) does.
+  **ANY CHANGE TO A GROUND COLOUR MUST RE-MEASURE BOTH TEXT TOKENS IN BOTH
+  THEMES** — Matchday moved every ground, which invalidated every ratio the
+  floor had been set against.
+  Run **`node scripts/dev/contrast-audit.mjs`**: it reads the tokens straight
+  out of `index.css`, so the numbers here cannot drift from the shipped values,
+  and it covers the two reversal cases a text-on-ground audit misses (paper type
+  on a position band; type on an ink field). **40 of 40 pass.**
 - **`.focus-ring` is the one focus definition** (`index.css`), carried by
   `Button`, `IconButton`, `Chip`, interactive `Card`, `Input` and `Select`.
   `:focus-visible`, not `:focus`, so a plain tap stays unmarked while keyboard
-  focus and text fields render the ring. `Input`/`Select` previously set
-  `focus:outline-none` and replaced the outline with a 1px border tint; that
-  `outline-none` is gone. Low practical cost on a touch-only PWA — a real gap
-  nonetheless, and it fires for a Bluetooth keyboard, iPadOS pointer or
-  VoiceOver.
+  focus and text fields render the ring. Inside an `.ink-field` the ring flips
+  to the field's own ground, or it disappears into the block.
 - **`.tap-target` guarantees a 44px hit area without moving the ink** — a
   centered pseudo-element sized `max(100%, 44px)`, so it never shrinks a target
   that is already larger and costs no layout. It is deliberately **NOT** on
   `Chip`: filter chips sit ~8px apart in a scrolling row, so a 44px hit area on
   a 40px chip would let neighbours steal each other's taps — the fix would cause
-  the bug. It also carries `touch-action: manipulation` (findings §X4).
+  the bug. It also carries `touch-action: manipulation`.
 
-**Truncation is not a layout strategy for a load-bearing value.** Two fixed the
-same day: Trade › Targets set `truncate` on `Est. cost`, eliding the package —
-the most actionable field on the board — on 5 of 11 live cards, so a
-three-player price read as a two-player one; and `LineupRow` truncated the
-player name, rendering "TreVeyon He…" on the row whose entire job is telling you
-who to start. Both now wrap. `Est. cost` is laid out as a sentence rather than a
-flex row, because flex items don't wrap their own text and the trailing total
-has to follow the last name instead of floating beside the first line.
+**Truncation is not a layout strategy for a load-bearing value.** Three fixed so
+far: Trade › Targets' `Est. cost` (eliding the package on 5 of 11 live cards),
+`LineupRow`'s player name ("TreVeyon He…" on the row whose whole job is telling
+you who to start), and `PlayerCard`'s name, which lost `truncate` when the value
+column became variable-width. All wrap instead.
 
 ### Theme
 
 - **Default:** Dark mode
-- **Toggle:** Always accessible (top-right corner of app, every screen)
+- **Toggle:** In the side drawer's utility surface
 - **Preference stored in:** `localStorage` key `dynastyedge_theme`
 
-The visual language is **"Primetime Blackout"** (Phase 3, owner-approved
-2026-07-19 — full brief: `docs/design/phase3-design-brief.md`): NFL primetime
-broadcast graphics, blacked out, on the Falcons palette — **silver leads,
-red is scarce**. The design law that resolves every argument:
+### The ink field
 
-1. **Red is rationed.** Falcons brand red appears ONLY on the hero's
-   score-bug cap bar, the owner's own card/row treatments ("you" accents:
-   border, You-chip, my-pick highlights), and the active sub-tab underline.
-   Everything else that wants an accent is **silver** (structure) or keeps
-   its semantic color. If a surface feels like it wants red, the answer is
-   silver.
-2. **Trend/status semantics are untouchable.** Brand red (`--brand`,
-   crimson) and trend/status red (`--danger`, bright salmon) are different
-   values and never swap roles.
-3. **The angle is the one structural flourish** — lower-third headers,
-   score-bug caps, action-card corner cuts. No glows, and no gradients
-   beyond the two sanctioned score-bugs below.
-4. **Boldness is spent in the hero.** The red score-bug hero is the one loud
-   moment per screen; everything else is flat panels and 1px borders.
+`.ink-field` / `.ink-field-cap` (`index.css`) is Matchday's **one structural
+device**: a solid block of `--text-primary` with `--bg-primary` reversed out.
+It **inverts with the theme by construction** — a cream poster on a black page
+in dark, an ink poster on paper in light.
 
-**The two sanctioned gradients** (`index.css`): red score-bug `.bug-red`
-(`linear-gradient(90deg,#C8102E,#7E0E22)` dark / `#A71930→#711022` light,
-white text) and silver score-bug `.bug-silver`
-(`linear-gradient(90deg,#C9CDD1,#8F949B)`, near-black text, both themes).
-**Silver fills always carry near-black text** — solid-accent primitives use
-`text-bg-primary`, never white.
+That is the resolution to **finding B4**. The old hero was `background-color:
+#101013` in *both* themes, so light mode carried a near-black slab at the top of
+a white page belonging to nothing else on it. An ink field belongs to
+everything: the masthead rule, the section band, the CTA, the active chip and
+the **bottom tab bar** are all made of it. (The tab bar is inverted in **both**
+themes — the owner's call, 2026-09-11, when asked whether a cream slab reads
+badly at night.)
 
-### Color palette
+**Content inside a field addresses the field, not the page.** Text is
+`text-bg-primary`, fills are `bg-bg-primary/10`, rules are
+`border-bg-primary/20`. Three rules:
+
+- **Never `text-white`** — on the cream field dark mode paints, it is invisible.
+- **The alpha floor on a field is `/60`.** Measured: the ground over the ink is
+  4.92:1 in dark and 6.54:1 in light at 60%, and 4.19:1 at 55%. The old hero's
+  `text-white/45` micro-labels were under it and got away with it only because
+  the panel was always dark.
+- **A status, tier or medal hue cannot live on a field.** The field inverts, so
+  no single green/amber/cyan clears AA against both versions of it. On a field,
+  direction and rank are carried by **weight, by the sign, or by a second
+  reversal** (`<Mark tone="ground">`, the page's own colours, always legible).
+  This is why the hero's trend chip drops its status hue, the top-3 rank medal
+  becomes a Mark, and the tier dot is gone.
+
+### Colour palette
 
 Tokens live in `index.css` (`:root` light / `.dark` dark) and are exposed via
-Tailwind (`bg-accent`, `text-brand-bright`, `bg-tier-middle/10`, …).
+Tailwind (`bg-accent`, `text-brand-bright`, `bg-tier-middle/10`, …). **The
+ground and every neutral carry a hue** (warm paper / warm ink, ~45–55°) —
+zero-saturation greys are a named marker, and achromatic structure is why the
+old palette read grey with five position hues on screen (finding B6).
+
+**Two hues, 176° apart**, as the round-2 house rules require: the primary spot
+is Falcons crimson (~350°), the secondary is **`--alt`**, a slate teal (~174°),
+whose shipped job is the non-semantic editorial `Mark` — emphasis that is
+neither a status nor "you". The five position hues (165–285°) are the colour
+world on top of that.
 
 #### Dark mode
 
-|Role                |Value                    |
-|--------------------|-------------------------|
-|Background primary  |`#0B0B0D`                |
-|Background secondary|`#101013`                |
-|Background card     |`#141417`                |
-|Border              |`#28282E`                |
-|Text primary        |`#F4F5F7`                |
-|Text secondary      |`#8A9096`                |
-|Text tertiary       |`#54565C`                |
-|Accent (structure)  |`#C9CDD1` (silver)       |
-|Brand red (rationed)|`--brand #C8102E` · gradient partner `--brand-deep #7E0E22` · text-on-dark `--brand-bright #D81E3C`|
-|Success green       |`#37C878`                |
-|Warning amber       |`#F59E0B`                |
-|Danger red (trend/status)|`#FF5C5C` (salmon — never the brand red)|
-|Tier: Contending    |`--tier-contend #C9CDD1` (silver — gold left the system)|
-|Tier: Middle        |`--tier-middle #57C4E8` (cyan)|
-|Tier: Rebuilding    |`--tier-rebuild #8F9BF2` (indigo)|
+|Role                     |Value                                   |
+|-------------------------|----------------------------------------|
+|Background primary       |`#0E0E0D` (warm near-black, not `#000`) |
+|Background secondary     |`#141413` — header, rails, sunken rows  |
+|Background card          |`#171716` — **the worst-case ground**   |
+|Border (hairline)        |`#302F2C`                               |
+|Border strong (rule)     |`#67655D` — 3.07:1, non-text bar        |
+|Text primary             |`#F6F4EE` — 16.31:1                     |
+|Text secondary           |`#A8A49A` — 7.21:1                      |
+|Text tertiary            |`#888377` — 4.75:1                      |
+|Accent (structure)       |`#E4E0D6` — warm near-ink               |
+|Alt (secondary hue)      |`#6FB3AC` — slate teal, 7.45:1          |
+|Brand crimson (rationed) |`--brand #C8102E` · `--brand-deep #7E0E22` · text-on-ink `--brand-bright #EA465B` (4.72:1)|
+|Success                  |`#5CC98C` — 8.70:1                      |
+|Warning                  |`#E3AA42` — 8.62:1                      |
+|Danger (trend/status)    |`#EE7A72` — 6.55:1, never the brand red |
+|Tier: Contending         |`#E4E0D6` (the ink family)              |
+|Tier: Middle             |`#57C4E8`                               |
+|Tier: Rebuilding         |`#9AA3EE`                               |
 
 #### Light mode
 
-|Role                                 |Value    |
-|-------------------------------------|---------|
-|Background primary                   |`#F0F1F3`|
-|Background secondary                 |`#E7E9EC`|
-|Background card                      |`#FFFFFF`|
-|Border                               |`#D9DCE1`|
-|Text primary                         |`#101013`|
-|Text secondary                       |`#54565C`|
-|Text tertiary                        |`#8A9096`|
-|Accent (structure)                   |`#5C6470` ("silver" reads as slate on white)|
-|Brand red                            |`#A71930` (deepened for contrast on white; `--brand-bright` = same)|
-|Success green                        |`#1F9D5C`|
-|Danger red (trend/status)            |`#D8383F`|
-|Warning amber                        |`#F59E0B` (unchanged)|
-|Tiers                                |Contending `#4A5560` · Middle `#0E7C9E` · Rebuilding `#5560CE`|
+|Role                     |Value                                   |
+|-------------------------|----------------------------------------|
+|Background primary       |`#F4F2EC` (paper)                       |
+|Background secondary     |`#E8E5DC` — **the worst-case ground**   |
+|Background card          |`#FBFAF6` — lifts by tone, never shadow |
+|Border (hairline)        |`#CDC9BD`                               |
+|Border strong (rule)     |`#868274` — 3.05:1, non-text bar        |
+|Text primary             |`#111110` — 15.00:1                     |
+|Text secondary           |`#4C4941` — 7.14:1                      |
+|Text tertiary            |`#686456` — 4.70:1                      |
+|Accent (structure)       |`#2E2C27`                               |
+|Alt (secondary hue)      |`#2C6760` — 5.18:1                      |
+|Brand crimson            |`#A71930` (`--brand-bright` the same)   |
+|Success                  |`#147247` — 4.73:1                      |
+|Warning                  |`#7A5606` — 5.27:1                      |
+|Danger                   |`#AB3831` — 4.99:1                      |
+|Tiers                    |Contending `#2E2C27` · Middle `#0E6E8C` · Rebuilding `#4A55BE`|
 
 ### Position identity colors (consistent across entire app)
 
-Every position has its own identity color — this is what keeps the app from
-feeling monochrome. Tokens live in `index.css` (`--pos-*`), are exposed via
-Tailwind (`text-pos-qb`, `bg-pos-rb/15`, …), and all class maps live in
-`src/utils/positionColors.js` (`POS_TEXT`, `POS_BG`, `POS_TAG`,
-`POS_CHIP_ACTIVE`, `POS_SVG`). **Never hand-roll position colors locally, and
-never reuse status colors (success/warning/danger) to mean a position.**
+Every position has its own identity colour — under Matchday this is the app's
+colour world, not a decorative tag. Tokens live in `index.css` (`--pos-*`), are
+exposed via Tailwind (`text-pos-qb`, `bg-pos-rb/15`, …), and all class maps live
+in `src/utils/positionColors.js` (`POS_TEXT`, `POS_BG`, **`POS_FIELD`**,
+`POS_TAG`, `POS_CHIP_ACTIVE`, `POS_BAR`, `POS_BAR_DIM`, `POS_SVG`). **Never
+hand-roll position colours locally, and never reuse status colours
+(success/warning/danger) to mean a position.**
 
-|Position|Dark mode          |Light mode         |
-|--------|-------------------|-------------------|
-|QB      |`#F2758F` (pink)   |`#C4335A`          |
-|RB      |`#3AD0A4` (teal)   |`#0F8A66`          |
-|WR      |`#57A9F2` (sky)    |`#1F6FC0`          |
-|TE      |`#F0964E` (orange) |`#C05F1A`          |
-|DEF     |`#9AA3EE` (violet) |`#5A64C8`          |
+|Position|Dark mode          |Light mode                         |
+|--------|-------------------|-----------------------------------|
+|QB      |`#F2758F` (pink)   |`#C4335A`                          |
+|RB      |`#3AD0A4` (teal)   |`#0D7A5A` — deepened for the band  |
+|WR      |`#57A9F2` (sky)    |`#1F6FC0`                          |
+|TE      |`#F0964E` (orange) |`#AA5417` — deepened for the band  |
+|DEF     |`#9AA3EE` (violet) |`#5A64C8`                          |
+
+**Light RB and TE are deepened from their pre-Matchday values** (`#0F8A66`,
+`#C05F1A`). A `PositionBand` reverses **paper type out of the hue**, and on the
+old values that read **3.87:1** and **3.83:1** — under the AA body bar, and band
+labels are small bold display type, not "large text". Every band label now
+clears 4.5:1 in both themes (dark ones clear 7.1:1 or better, so that side
+needed no change).
 
 Where they apply:
 
-- Position labels on player rows (roster, free agents, movers, draft, drawers)
-- Position rank (`#3 WR`) on PlayerCard and in the Player Profile drawer
-- Active position filter chips everywhere (tinted style: `bg-pos-x/15 text-pos-x
-  border-pos-x/40`); the All / Picks chips keep the solid accent style
-- Positional strength bars + labels on TeamCard (above-average = position color)
-- Position group headers in RosterView (the lower-third's trailing slash via
-  `SectionHeader`'s `accentBar` prop — the bug itself stays silver)
+- The **`PositionBand`** — a full-bleed field with the label and the group total
+  reversed out. This is the primary use.
+- Position labels and position rank (`#3 WR`) on player rows and in drawers
+- Active position filter chips (`POS_CHIP_ACTIVE`, the tinted identity style);
+  All / Picks chips keep the ink field
+- Positional strength bars on TeamCard (`POS_BAR` — **flat, not a gradient**;
+  the gradient bars were the last gradients in the app after the score-bugs
+  left)
 - Roster Analysis age-chart lanes (`POS_SVG` for SVG fill/stroke)
-- Lineup slot labels (FLEX / Superflex slots keep accent)
 - Position tags in the trade builder / What's Fair / lineup FA drawer (`POS_TAG`)
-
-Status colors (success/warning/danger) keep their exclusive meanings:
-health/verdicts/flags — a TE label must never read as "danger".
 
 ### Pick round colors (consistent across entire app)
 
 Class maps live in `src/utils/roundColors.js` (`ROUND_CLASSES`, `ROUND_TEXT`,
 `ROUND_LABELS`) — shared by PickBadge and TeamCard, never redefined locally.
 
-**1st round is silver-on-charcoal** — the old gold-amber collided with the
-warning color once Contending went silver; 2nd/3rd/4th keep their hue
-families, tuned to the Blackout palette.
+> **Outstanding, step 4:** these are hardcoded hexes tuned to the Blackout
+> palette (1st is silver-on-charcoal, chosen when Contending went silver) and
+> have not been repainted for warm paper/ink. They are the largest remaining
+> Blackout artefact in the token layer.
 
 |Round|Dark bg  |Dark text|Light bg    |Light text  |
 |-----|---------|---------|------------|------------|
@@ -3241,99 +3317,77 @@ families, tuned to the Blackout palette.
 |🔴 Hard block / Decline|Danger red   |Out, IR, bye, decline verdict                 |
 |🟡 Soft flag / Counter |Warning amber|Questionable, projection flag, counter verdict|
 |🟢 Confirmed / Accept  |Success green|Healthy, optimal, accept verdict              |
-|🎯 Priority            |Accent silver|Top trade partner tier                        |
+|🎯 Priority            |Ink          |Top trade partner tier                        |
 |✅ Good Fit            |Muted green  |Second trade partner tier                     |
 |⚪ Poor Fit            |Text tertiary|Lowest trade partner tier                     |
 
 Verdict blocks (Accept/Decline/Counter) use a **flat tint** of their status
-color (`bg-x/10`) — the old diagonal gradients left with Phase 3 (only the
-two score-bug gradients exist).
+colour (`bg-x/10`). Status colours never appear on an ink field (see above) and
+never mean a position or a section.
 
 ### Win window tier colors
 
-Every tier has an identity color — maps live in `src/utils/tierColors.js`
+Every tier has an identity colour — maps live in `src/utils/tierColors.js`
 (`TIER_BADGE`, `TIER_TEXT`), shared by `WinWindowBadge` and the League health
-banner chips. Never redefine locally.
-
-|Tier      |Color                                   |
-|----------|----------------------------------------|
-|Contending|Silver (`--tier-contend` — gold left the system in Phase 3)|
-|Middle    |Cyan (`--tier-middle`)                  |
-|Rebuilding|Indigo (`--tier-rebuild`)               |
-
-Rank medals (below) keep gold/silver/bronze — they are ordinal semantics,
-not brand.
+banner chips. Never redefine locally. Contending takes the **ink family**:
+under Matchday the structural colour is ink, not a metal.
 
 ### Rank medals
 
-Ranking ordinals (league value rank, position rank cards, the League team
-list) color the top 3 as medals — gold/silver/bronze — via `rankClass(rank)` in
-`src/utils/rankColors.js`. Everyone else stays text-tertiary.
+Ranking ordinals (league value rank, position rank cards, the League team list)
+colour the top 3 as medals — gold/silver/bronze — via `rankClass(rank)` in
+`src/utils/rankColors.js`. Everyone else stays text-tertiary. **A medal cannot
+be used on an ink field** (amber vanishes on the cream one); there, top-3 is a
+`<Mark tone="ground">`.
 
 ### Team avatars
 
 `src/components/shared/TeamAvatar.jsx` shows the owner's Sleeper avatar
 everywhere teams appear (team cards, position rankings, the League team list,
-matchups, roster hero header, side drawer). Sources, in order: custom team avatar URL
+matchups, roster hero header). Sources, in order: custom team avatar URL
 (`user.metadata.avatar`), Sleeper CDN thumb
 (`https://sleepercdn.com/avatars/thumbs/{user.avatar}`), then a deterministic
-gradient initial circle (hash of team name). Static `<img>` tags only — this
-is not an API call, so it doesn't go through `fetchJSON`. Always render the
+gradient initial circle (hash of team name). Static `<img>` tags only — this is
+not an API call, so it doesn't go through `fetchJSON`. Always render the
 fallback on image error; never let a broken avatar break a card.
 
-### Ambient background (flat blackout)
+### Ambient background — there isn't one
 
-The app shell's `.app-bg` (`index.css`) is **flat** — the old blue/violet
-radial glows left with Phase 3. The ONE sanctioned ambient device is a faint
-red conic sweep (`.hero-sweep`, `rgba(216,30,60,.06)`, **dark mode only** —
-on light backgrounds it read as a pink cast) applied to the roots of the
-screens that carry a score-bug hero (The Edge, RosterView; the login screen
-bakes the same sweep into `.login-bg`). The fixed app header stays
-translucent (`bg-bg-secondary/85 backdrop-blur-md`). Bottom sheets and
-drawers keep their opaque backgrounds.
+`.app-bg` and `.login-bg` are **flat**. Matchday is flat colour and hard edges:
+no gradients anywhere (Blackout's two sanctioned score-bug gradients are gone),
+no glows, no radial washes, and no `.hero-sweep` red conic — the hero is a
+**field**, which needs no atmosphere behind it. The fixed app header is opaque
+(`bg-bg-secondary`, no translucency or backdrop-blur — see rule 16) and closes
+with a 2px ink masthead rule.
 
-### Score-bug heroes + the angle language
+**Never re-propose an inset or neon glow on a tinted content card** — it was
+built and reverted two minutes later for reading muddy (failure-archaeology
+§5a). Matchday's answer to "this needs depth" is **size and ground**, never
+elevation.
 
-The one loud moment per screen. The Edge's hero, the Roster view's team
-header, and the Playoff Odds summary are **red score-bug heroes**: a
-`.bug-red` cap bar (Anton label, e.g. "{team} · Franchise Report", short
-mono dateline right) over a flat near-black `.hero-card` panel (`#101013`,
-1px border) that is **deliberately dark in BOTH themes** — hero content is
-white-on-dark: white text at varying opacities, `bg-white/15
-border-white/20` chips, the marquee value in white mono (no text glow — no
-glows anywhere). The Edge's hero closes with a divider-separated **stat
-strip** (rank / record / window / FAAB, mono micro-labels); tier dots there
-pin the dark-theme tier literals since the panel never changes theme. Top-3
-value rank shows in `text-amber-300` (medal gold).
+### Heroes, mastheads and bands
 
-The angle language rolls through the app:
+The loud moments, all made of the same ink:
 
-- **Section headers are silver lower-thirds** — `SectionHeader` renders the
-  label in a `.bug-silver` block with a hard 8px angled trailing cut
-  (`.lower-third`) plus a small identity-colored trailing slash. The bug is
-  ALWAYS silver (structure never takes identity color); `accentBar` (e.g.
-  `POS_BG[pos]`, default `BRAND_TICK` = silver) colors only the slash;
-  `null` renders a bare muted label.
-- **TeamCard carries a score-bug caption bar**: rank ordinal (zero-padded) +
-  Anton team name + tier label; the owner's card's cap goes `.bug-silver`
-  with the red You-badge (and a `border-brand/60` card border — "you" is
-  red).
-- **Action cards cut the bottom-left corner** (10px, `.corner-cut` /
-  `Card`'s `cut` prop) — RosterActionItems, the Trade counter callout.
-- Briefing items (The Edge) and the Roster Analysis button are cards with a
-  3px left edge bar + tinted icon medallion in their tone color.
-- Trend chips (The Edge, Market Movers) render as filled tinted pills, not
-  bare colored text.
-- **"New" badges are solid silver with near-black text; "You" badges are
-  solid brand red with white text** — everywhere.
-- Footer/link buttons ("All market movers →", "Full activity feed →",
-  manager ledger buttons, the Movers row Trade button) are accent-tinted
-  (`border-accent/25 bg-accent/5`), not gray-bordered.
-- **The active contents-rail item is underlined in brand red**
-  (`SectionContents`, Anton labels) — the third and last of red's sanctioned
-  surfaces, inherited from the sub-tab bar it replaced. The bottom tab bar
-  deliberately does **not** spend red: it is already the inverse of the page,
-  and its active marker is ink in the bar's own text colour.
+- **The poster hero** — The Edge's franchise report, the Roster view's team
+  header, the Optimizer's moves card, the Playoff Odds summary and the login
+  screen. An `.ink-field-cap` strip (display label left, mono dateline right)
+  closed by a hairline in its own ink, over an `.ink-field` panel, so cap and
+  body read as one block. **The Edge's hero keeps team value as its marquee
+  figure** — leading with the instruction instead was built, reviewed and
+  **reverted on the owner's call (2026-09-11)**; the argument for the swap is
+  recorded in `review-2026-09/unasked.md` §1 if it is ever revisited.
+- **The app masthead** — the fixed header, display uppercase, closed by a 2px
+  ink rule. The contents rail under it carries the same rule.
+- **`SectionHeader`** — label, count, and a rule. It replaced Blackout's silver
+  "lower-third": a gradient block with an 8px angled trailing cut and a small
+  skewed identity slash. All three left — the gradient (flat colour), the clip
+  (hard edges), and the slash (a decorative mark carrying nothing the label
+  didn't). Colour moves onto the rule.
+- **`PositionBand`** — the full-bleed position field. For a position group
+  inside a list, prefer this over `SectionHeader`: the field is the direction's
+  signature and the total says more.
+- **`Mark`** — the reversed-out word inside a sentence.
 
 ### Section identity colors — GONE (2026-09-11, DESIGN-3)
 
@@ -3341,70 +3395,142 @@ The angle language rolls through the app:
 section an identity hue defined inline in its `NAV_TREE` — and two of the six
 were **status tokens**: Trade `text-success`, League `text-warning`, the same
 values used for real success/error state in the same file. A green TRADE above
-an amber LEAGUE read as "good / caution" before it read as navigation, in
-direct breach of this document's own exclusivity rule ("a TE label must never
-read as danger").
+an amber LEAGUE read as "good / caution" before it read as navigation, in direct
+breach of law 4.
 
-The fix was structural, not a re-hue: navigation is now **text**, in the
-Matchday idiom — the tab bar, the contents rails and the Index carry no icons,
-no swatches and no section hues. The Index deliberately carries no swatch
-either: a section colour there would collide with the five position hues, which
-are load-bearing on every other screen.
+The fix was structural, not a re-hue: navigation is **text**, in the Matchday
+idiom — the tab bar, the contents rails and the Index carry no icons, no
+swatches and no section hues. The Index deliberately carries no swatch either: a
+section colour there would collide with the five position hues, which are
+load-bearing on every other screen.
 
-**Status colours (success / warning / danger) and the position hues keep their
-exclusive meanings, and navigation may never borrow either.**
+**Red is still rationed**, to two surfaces only: the "you" treatments (the
+You-chip, my-row borders, my-pick highlights) and the **active contents-rail
+underline**. The tab bar deliberately does not spend it — the bar is already an
+ink field, and its active marker is ink in the bar's own colour.
 
 ### Logo — the Crown Crest
 
-The mark is a crown built from analytics: three ascending rounded bars
-(a rising chart) as the crown's prongs, a jewel dot floating above each tip,
-and a detached base band as the circlet. Phase 3 cut: **red crown, silver
-EDGE** — the crown wears the brand-red ramp (`#D81E3C→#7E0E22` dark /
-`#A71930→#711022` light), the app icon grounds it in silver on the red
-score-bug gradient.
+The mark is a crown built from analytics: three ascending rounded bars (a rising
+chart) as the crown's prongs, a jewel dot floating above each tip, and a
+detached base band as the circlet.
 
-- **In-app lockup:** `src/components/shared/DynastyEdgeLogo.jsx` — red-ramp
-  crown + "DYNASTY**EDGE**" wordmark in Anton ("EDGE" in the silver
-  structure gradient). Used in the side drawer.
+> **Outstanding, step 4:** the logo and the generated app icons still wear
+> Blackout's red-ramp gradient over silver. Matchday has no gradients, and the
+> wordmark is still set in Anton, which the app no longer loads — so the in-app
+> lockup currently falls back. Re-cutting the mark flat, and regenerating the
+> icons, is queued with the screen roll-through.
+
+- **In-app lockup:** `src/components/shared/DynastyEdgeLogo.jsx` — crown +
+  "DYNASTY**EDGE**" wordmark.
 - **App icon / favicons:** generated by `node scripts/generate-icons.mjs`
   (sharp + png-to-ico, devDependencies) into `public/`:
-  `apple-touch-icon.png` (180px, **full-bleed red gradient + silver crown,
-  no border, no pre-rounded corners** — iOS applies its own mask),
-  `favicon-32x32.png`, `favicon-16x16.png`, `favicon.ico`, `logo.svg`
-  (rounded gradient square).
-- The crown geometry lives in both the component and the script — keep them
-  in sync and re-run the script after any change. Never ship an app icon
-  with its own border or baked-in rounding (it clips badly on iOS).
+  `apple-touch-icon.png` (180px, **full-bleed, no border, no pre-rounded
+  corners** — iOS applies its own mask), `favicon-32x32.png`,
+  `favicon-16x16.png`, `favicon.ico`, `logo.svg`.
+- The crown geometry lives in both the component and the script — keep them in
+  sync and re-run the script after any change. Never ship an app icon with its
+  own border or baked-in rounding (it clips badly on iOS).
 
 ### Typography
 
-- **Display / headers:** `Anton` — **400 only** (it ships one weight; never
-  pair it with `font-bold`, the synthesized bold distorts it). Uppercase,
-  tracked. Display-only — never body text.
-- **Body / UI:** `Archivo` (400/500/600/700)
-- **Numbers / values:** `IBM Plex Mono` for FantasyCalc values and scores;
-  also the **micro-label "score-bug" voice** — stat eyebrows, badges, chips
-  are IBM Plex Mono 500–600 uppercase with wide tracking
+- **Display / headers:** **`Bricolage Grotesque`**, variable — `wght` 200–800
+  (the app uses 700/800), `opsz` 12–96 driven **automatically** from font-size,
+  `wdth` 75–100. Uppercase, negative tracking at display sizes. Display-only —
+  never body text.
+- **Body / UI:** `Archivo` (400–700, **plus italic** — the `.aside` voice)
+- **Numbers / values:** `IBM Plex Mono` for FantasyCalc values and scores; also
+  the **micro-label voice** — stat eyebrows, badges, chips and now **buttons**
+  are IBM Plex Mono 500–600 uppercase with wide tracking.
 
-Load from Google Fonts (`index.html`). Barlow Condensed and IBM Plex Sans
-left the font request in Phase 3.
+Loaded from Google Fonts (`index.html`). Three families, as before the swap:
+**Anton is gone.**
+
+> **Why Anton went.** It ships **one weight**, so every display size carried the
+> same stroke and the scale could only work through size (finding B5) — and the
+> house rules ask for 300–800. Its uppercase was also, in the review's words,
+> "the most generic possible sports choice".
+
+> **MEASURED CORRECTION TO THE SPEC.** `directions.md` rev 1 change 7 pushes
+> Bricolage to **`wdth 125`**. Google Fonts' Bricolage Grotesque has no such
+> setting: its `wdth` axis runs **75–100 with a default of 100** (probed
+> 2026-09-11 — `css2?family=Bricolage+Grotesque:wdth@75..125` returns HTTP 400,
+> `@75..100` returns 200). **100 is both the maximum and the default, so the
+> mock's declaration was a no-op** — which explains the recorded complaint that
+> it "still reads fairly neutral even pushed onto its axes". It was never
+> pushed. `font-stretch` is therefore **not** set (it would clamp silently and
+> mislead the next reader); the work moves to `opsz` and `wght`. **If Bricolage
+> doesn't earn its keep on device, the recorded swap candidate is Big Shoulders
+> Display** — and the reason to swap is now evidence-backed, not taste.
+
+#### The type scale
+
+A **custom ladder on a 1.25 ratio**, replacing Tailwind's default in
+`tailwind.config.js`. The default scale is itself a marker, and it is not a
+ratio at all — its steps run 1.17 / 1.14 / 1.13 / 1.11 / 1.20 / 1.25 / 1.20 /
+1.33. Anchored at **`sm` = 14px**, the app's most-used size, so that step is
+unchanged and the blast radius falls on the display end.
+
+|Key|px|Key|px|
+|---|---|---|---|
+|`2xs`|8.96|`xl`|27.34|
+|`xs`|11.20|`2xl`|34.18|
+|`sm`|**14.00**|`3xl`|42.72|
+|`base`|17.50|`4xl`|53.40|
+|`lg`|21.88|`5xl`|66.76|
+
+Each step carries **its own line-height and letter-spacing** — default values
+for both are a separate marker. The ladder tightens from 1.55 at body to 0.90 at
+poster scale, and tracking runs +0.01em at caption to −0.05em at the marquee
+figure. A `tracking-*` utility at the call site still wins (Tailwind emits
+letterSpacing after fontSize), so the small uppercase labels keep their positive
+tracking.
+
+#### Italic, and `text-wrap: balance`
+
+Both are on the marker list precisely because generated UI never reaches for
+them.
+
+- **`.aside`** (`index.css`) is italic, and it is **one specific voice: the
+  app's honest caveat** — "values are at today's prices", "this is a local
+  preview", the reason a section is empty. Never decoration, never emphasis
+  (emphasis is a `Mark`). Carried by `ErrorState` and `Select`'s hint today.
+- **`text-balance`** is on `Button`, `SheetHeader`'s title, `ErrorState`, the
+  Index rows and the player name.
+- **`::selection`** is styled as the ink field — the browser's default blue is a
+  hue this palette does not contain.
 
 ### Spacing and layout
 
-- Content padding: `16px` left/right on mobile
-- Card border radius: **0** (broadcast panels are square). **Sheets, modals,
-  and the drawer keep their radii** and full gesture contract — the Phase 3
-  repaint never touched sheet mechanics.
+- Content padding: `16px` left/right on mobile. A `PositionBand` **cancels it**
+  (`-mx-4 px-4`) to bleed.
+- Panel border radius: **0**. **Sheets, modals and the drawer keep their radii**
+  and their full gesture contract.
 - Side drawer width: `80vw`, max `300px`; respects iPhone safe-area insets
-- Section headers: the silver lower-third bug — Anton, 11px, wide tracking
-- Player cards: compact — name + team + value must fit in one row at 390px
+- Section headers: Bricolage extra-bold, 12px, wide tracking, over a rule
+- Player rows: compact, and **nothing load-bearing truncates** — the value
+  column is variable-width, so a long name wraps
 
 ### Motion
 
-- Tab transitions: fade (150ms)
-- Drawer open (free agents, team drill-down): slide up (250ms ease-out)
-- Value updates in trade builder: brief flash highlight on the total when it changes
-- No heavy animations — this is a utility app, not a showcase
+> **Step 5 owns this and has not started.** What is here is the pre-Matchday
+> state, kept accurate rather than aspirational.
+
+Measured across the codebase: **one** `@keyframes` (`.edge-rise`, a fade-up on
+The Edge), 78 `transition-*` utilities of which **74 animate opacity or colour
+and only 3 animate `transform`**, and **6** explicit timing values in the whole
+app — so virtually every transition runs Tailwind's default 150ms
+`cubic-bezier(.4,0,.2,1)`. **There is no easing curve in this app that anyone
+chose.** The app fades and tints; it never moves.
+
+`prefers-reduced-motion` is honoured, but the guard covers exactly one class.
+**Any direction that adds motion must widen that guard first** — it is not a
+general rule today.
+
+Step 5's brief: the "press run" — flat colour bands wipe across, then type drops
+in behind them; custom easing `cubic-bezier(.16,1,.3,1)`; **jittered** stagger
+(linear 0/100/200ms is itself a marker); clip/wipe entrances, never fade-up;
+`:active` feedback on every pressable; a 3–5 moment budget.
 
 -----
 
@@ -3437,6 +3563,7 @@ dynastyedge/
 │       ├── trade-structure-backtest.mjs ← analysis-only: the DISCONFIRMED trade-structure profiling test (frontier Item 3); drives the shipped buildManagerProfiles so it cannot drift
 │       ├── optimizer-signal-backtest.mjs ← analysis-only: measures whether a better weekly PROJECTION is obtainable (it is not) and what DEF streaming is worth; see docs/analysis/optimizer-data-sources-2026-09.md
 │       ├── asset-aging-backtest.mjs ← analysis-only: THE keep-score calibration — longitudinal player aging (the survivorship trap the trajectory curves fall into) + whether rookie picks deliver their market price; see docs/analysis/asset-aging-and-pick-value-2026-09.md
+│       ├── contrast-audit.mjs ← THE accessibility-floor instrument: reads the tokens out of src/index.css and measures each against its theme's WORST-CASE ground, plus the two reversal cases a text-on-ground audit misses (paper type on a position band, type on an ink field). Exits non-zero on any failure — re-run after ANY ground-colour change.
 │       └── news-coverage.mjs ← analysis-only: THE news-pipeline acceptance metric — how many of my rostered players the app can actually resolve in the feed (no arg = live feed); see docs/analysis/news-sources-2026-09.md
 ├── public/
 │   └── favicon.ico
@@ -3446,7 +3573,10 @@ dynastyedge/
 │   │   │   ├── index.js             ← the single import surface (re-exports every primitive)
 │   │   │   ├── Button.jsx           ← THE button (primary/secondary/tinted/ghost/danger · sm/md/lg)
 │   │   │   ├── IconButton.jsx       ← THE icon-only/close control (pass `label`)
-│   │   │   ├── Card.jsx             ← THE surface container (+ optional accent edge bar)
+│   │   │   ├── Card.jsx             ← THE surface container (+ optional `tone` kicker rule; the left accent RAIL is banned)
+│   │   │   ├── Mark.jsx             ← THE editorial highlight — a word reversed out of a block; what REPLACED Card's accent rail. Never a position hue.
+│   │   │   ├── PositionBand.jsx     ← THE full-bleed position field + group total — Matchday's signature
+│   │   │   ├── Magnitude.jsx        ← THE value figure: type SIZE is the quantity (finding B2). Reference PINNED to FantasyCalc's 0–10000 contract, never derived per list.
 │   │   │   ├── Sheet.jsx            ← THE bottom sheet + SheetHeader (owns scroll-lock/drag/safe-area)
 │   │   │   ├── Modal.jsx            ← THE centered dialog (confirms / small forms)
 │   │   │   ├── Chip.jsx             ← THE filter chip (toggle pill, position-tinted active)
@@ -3503,7 +3633,7 @@ dynastyedge/
 │   │   │   ├── PickTradeCalculator.jsx ← move-up/move-down pick package planner (routed under Trade › Pick Trades; file stays here)
 │   │   │   └── boardStorage.js      ← shared draft-section localStorage keys
 │   │   └── shared/
-│   │       ├── SideDrawer.jsx       ← the app's only navigation
+│   │       ├── SideDrawer.jsx       ← the utility surface (refresh, data status, theme, sign out) — ZERO destinations
 │   │       ├── TabBar.jsx           ← THE primary navigation (bottom tab bar, text-only) — reads src/navigation.js
 │   │       ├── SectionContents.jsx  ← THE within-section nav (wrapping contents rail) — never duplicate it
 │   │       ├── IndexView.jsx        ← THE complete map (the 5th tab): every section + the four consulted views
@@ -4013,7 +4143,10 @@ Two things the roll must not break, both pinned by tests:
    the appearance** (black on a light appearance, white on dark), so the bar
    matches the header in both themes with no hand-drawn strip. The bar color
    comes from **two static `prefers-color-scheme` `theme-color` metas** (light
-   `#E7E9EC`, dark `#101013` — each matching the header). They must be static:
+   `#E8E5DC`, dark `#141413` — each matching the header, i.e. `--bg-secondary`
+   in that theme). **They moved with the Matchday repaint** (from `#E7E9EC` /
+   `#101013`); any future change to a ground colour must move them again, or the
+   iOS status bar stops matching the header. They must be static:
    a single JS-mutated `theme-color` gets cached at launch in standalone mode,
    which is what previously rendered a stuck black band (owner-directed change
    2026-07-20 — the earlier `black-translucent` + light-mode dark strip design
@@ -4071,12 +4204,17 @@ Two things the roll must not break, both pinned by tests:
    the one place the tab bar, the contents rails, the Index and global search
    all read.
 1. **Design System library:** All new UI comes from `src/components/ui`
-   (`Button`, `IconButton`, `Card`, `Sheet`/`SheetHeader`, `Chip`, `Badge`,
-   `Input`/`SearchInput`, `Select`, `cn`, plus the re-exported shared
-   primitives) — import
-   from the `'../ui'` barrel. Never reintroduce a hand-rolled button, card,
-   bottom sheet, filter chip, badge, or input inline; extend a primitive
-   instead. Run `/design-review` before committing component work.
+   (`Button`, `IconButton`, `Card`, `Mark`, `PositionBand`, `Magnitude`,
+   `Sheet`/`SheetHeader`, `Modal`, `Chip`, `Badge`, `Input`/`SearchInput`,
+   `Select`, `cn`, plus the re-exported shared primitives) — import from the
+   `'../ui'` barrel. Never reintroduce a hand-rolled button, card, bottom
+   sheet, filter chip, badge, band, value figure, or input inline; extend a
+   primitive instead. Three Matchday laws bind here specifically: **colour is a
+   field, never a left-edge rail** (that is what `Card`'s deleted `accent` prop
+   was); **magnitude is type size, never a progress bar** (`Magnitude`); and a
+   `Mark` **never takes a position hue**. Run `/design-review` on the CONSUMERS
+   before committing component work — not on `src/components/ui` while the
+   primitives themselves are being edited.
 1. **Lint gate:** `npm run lint` (ESLint 9 flat config: recommended +
    react-hooks rules at error severity, scoped to `src/` + `scripts/`) must
    exit 0 before any commit, alongside `npm test` and `npm run build`. CI

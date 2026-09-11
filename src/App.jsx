@@ -123,7 +123,7 @@ function AppShell({ leagueData, updateAvailable, onApplyUpdate, buildId, version
           Solid (no translucency/backdrop-blur) so there's no -webkit-backdrop-
           filter hairline at the safe-area/content boundary. */}
       <header
-        className="fixed top-0 left-0 right-0 z-30 bg-bg-secondary border-b border-border-default"
+        className="fixed top-0 left-0 right-0 z-30 bg-bg-secondary border-b-2 border-text-primary"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
         <div className="flex items-center h-12 px-1">
@@ -134,7 +134,7 @@ function AppShell({ leagueData, updateAvailable, onApplyUpdate, buildId, version
           >
             <Menu size={22} strokeWidth={1.75} />
           </button>
-          <span className="font-body font-semibold text-[17px] text-text-primary ml-1">
+          <span className="font-display font-extrabold uppercase text-lg tracking-[-0.02em] text-text-primary ml-1">
             {getSectionName(location.pathname)}
           </span>
           <span className="flex-1" />

@@ -12,9 +12,14 @@ import { cn } from '../ui'
 //
 // Matchday's house rule is that navigation is TEXT — no icon set anywhere — so
 // there are no glyphs here by design and the label does all the work. The bar
-// is the inverse of the page in both themes (`bg-text-primary` /
-// `text-bg-primary` swap with the theme automatically), which is the mock's
-// masthead-strip treatment.
+// is an INK FIELD — the same material as the hero poster, the section band, the
+// active chip and the CTA — and it inverts with the theme by construction
+// (`bg-text-primary` / `text-bg-primary`): a cream slab in dark, an ink one in
+// light. That is the mock's masthead-strip treatment and it is what the owner
+// chose when asked (2026-09-11): inverted in BOTH themes rather than sitting on
+// the page ground at night. It carries no top border — the inversion is the
+// separation, and a hairline in the page's border colour would read as grime on
+// the cream edge.
 //
 // Active state is computed from the route family (`activeTabFor`), not from
 // NavLink's own matching, because Draft and News have no tab of their own — they
@@ -40,7 +45,7 @@ export default function TabBar() {
   return (
     <nav
       aria-label="Primary"
-      className="fixed left-0 right-0 bottom-0 z-30 flex bg-text-primary text-bg-primary border-t border-border-default"
+      className="fixed left-0 right-0 bottom-0 z-30 flex bg-text-primary text-bg-primary"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       {tabs.map(({ key, label, to }) => {
@@ -52,7 +57,7 @@ export default function TabBar() {
             aria-current={isCurrent ? 'page' : undefined}
             className={cn(
               'tap-target focus-ring flex-1 min-w-0 flex flex-col items-center justify-center',
-              'font-display text-[10px] uppercase tracking-[0.1em] leading-none whitespace-nowrap',
+              'font-display font-extrabold text-[10px] uppercase tracking-[0.1em] leading-none whitespace-nowrap',
               'transition-opacity duration-200',
               isCurrent ? 'opacity-100' : 'opacity-55 hover:opacity-80',
             )}

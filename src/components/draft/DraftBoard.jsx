@@ -211,7 +211,7 @@ function CsvNamingOverlay({ file, onConfirm, onCancel }) {
   const [name, setName] = useState(() => file.name.replace(/\.[^.]+$/, ''))
   return (
     <Modal onClose={onCancel} maxWidth="max-w-sm" label="Name this ranking" className="p-5">
-      <h3 className="font-display text-lg uppercase text-text-primary mb-1">Name this ranking</h3>
+      <h3 className="font-display font-extrabold text-lg uppercase tracking-[-0.025em] text-text-primary mb-1">Name this ranking</h3>
       <p className="font-body text-sm text-text-secondary mb-4">{file.name}</p>
       <Input
         type="text"
@@ -238,7 +238,7 @@ function CsvNamingOverlay({ file, onConfirm, onCancel }) {
 function ResetBoardConfirm({ onConfirm, onCancel }) {
   return (
     <Modal onClose={onCancel} label="Reset my board" className="p-5 text-center">
-      <h3 className="font-display text-lg uppercase text-text-primary mb-2">Reset My Board?</h3>
+      <h3 className="font-display font-extrabold text-lg uppercase tracking-[-0.025em] text-text-primary mb-2">Reset My Board?</h3>
       <p className="font-body text-sm text-text-secondary mb-5">
         This restores the default FantasyCalc order and cannot be undone.
       </p>

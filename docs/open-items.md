@@ -404,12 +404,58 @@ curl -s 'https://api.sleeper.app/v1/league/1313933520715907072/drafts' | grep -c
 **Trigger: fired — the owner selected the direction and asked for the build to
 start in a fresh session.** Not started in the review: it was scoped as
 diagnosis + mocks only, and the app was deliberately left untouched.
-**Steps 1 and 2 have landed** — DESIGN-2 (the accessibility floor) and DESIGN-3
-(the navigation rebuild), both closed in §3. What remains is the visual work
-itself: the Matchday palette, Bricolage Grotesque, the position bands, and
-type-size-as-magnitude. The tab bar, contents rails and Index built in DESIGN-3
-are in Matchday's *form* but the current tokens, and are the first surfaces to
-re-tint.
+
+**STATUS: steps 1–3 of 5 have landed. This item stays OPEN until step 5.**
+
+| Step | What | State |
+|---|---|---|
+| 1 | The accessibility floor + the truncation bugs (DESIGN-2) | shipped, closed in §3 |
+| 2 | The navigation rebuild — tab bar, contents rail, Index (DESIGN-3) | shipped, closed in §3 |
+| 3 | **Tokens and primitives** | **shipped 2026-09-11** |
+| 4 | Roll the new components through the screens — densest first (My Roster, Trade Targets, League Overview), so density problems surface early | **not started** |
+| 5 | Motion — the "press run", custom easing, jittered stagger, and widening the `prefers-reduced-motion` guard from one class to a global rule as its first step | **not started** |
+
+**What step 3 landed.** The Matchday palette in both themes (warm paper/ink,
+neutrals carrying the ground's hue, `--alt` as a secondary hue 176° from the
+crimson spot, styled `::selection`); a custom 1.25 type scale replacing
+Tailwind's default, anchored at `sm` = 14px; Bricolage Grotesque in place of
+Anton; `.ink-field` as the one structural device, which is what resolves
+finding **B4**; the three new primitives — **`Mark`** (what replaced `Card`'s
+banned left accent rail), **`PositionBand`** (the full-bleed position field
+carrying the group total) and **`Magnitude`** (type size as the quantity, the
+answer to finding **B2**); every other primitive repainted; and the step-2
+navigation surfaces finished in the new palette. `PositionBand` and `Magnitude`
+are wired into **My Roster only**, deliberately — it is the screen B2 was
+measured on, so the step's central claim is verifiable rather than shipped
+untested. `scripts/dev/contrast-audit.mjs` is the new accessibility-floor
+instrument: **40 of 40 pass**.
+
+**Two measured corrections to the spec, both recorded in CLAUDE.md:**
+
+- **`directions.md`'s `wdth 125` for Bricolage is not executable.** The Google
+  Fonts face has `wdth` 75–**100** with a default of 100 — probed 2026-09-11,
+  `wdth@75..125` returns HTTP 400. 100 is both the maximum and the default, so
+  the mock's declaration was a no-op, which explains the recorded complaint
+  that Bricolage "still reads fairly neutral even pushed onto its axes". It was
+  never pushed. **If the swap to Big Shoulders Display is ever made, this is
+  now the evidence for it rather than a taste call.**
+- **`Magnitude`'s reference is pinned to 10000, not the mock's 9365.** 9365 was
+  a top-of-market snapshot; FantasyCalc's scale is a documented 0–10000
+  contract. Under a pixel of difference across the range.
+
+**Carried into step 4, explicitly:** the radius sweep on consumers (~36
+`rounded-full` and ~35 `rounded-lg` remain outside the primitives); lucide's
+icon medallions on The Edge's briefing items and the roster shortcuts; the pick
+round colours in `roundColors.js`, which are hardcoded hexes still tuned to the
+Blackout palette and are the largest remaining Blackout artefact; and the logo
++ generated app icons, which still wear the red-ramp gradient and set the
+wordmark in a font the app no longer loads.
+
+**Verify on device, and note it is SILENT until then:** the PWA `theme-color`
+metas moved with `--bg-secondary` (light `#E7E9EC` → `#E8E5DC`, dark `#101013`
+→ `#141413`). Per failure-archaeology §1, a meta change does not take effect
+until the home-screen app is removed and re-added — the original regression of
+this kind hid for weeks.
 
 **What was decided.** Six directions were mocked across two rounds. Round one
 (Instrument / Dispatch / Control) was rejected — scored against a researched
