@@ -11,7 +11,7 @@ import { useLeagueContext } from '../../context/LeagueContext'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { getTeamName } from '../../hooks/useLeague'
 import { POS_TEXT } from '../../utils/positionColors'
-import { Sheet, IconButton, Button, Badge, Card, Loading, TrendArrow, cn } from '../ui'
+import { Sheet, IconButton, Button, Badge, Card, Loading, Row, RuledList, TrendArrow, cn } from '../ui'
 
 // ── Opportunity grade ────────────────────────────────────────────────────────
 
@@ -696,13 +696,9 @@ export default function PlayerProfileDrawer({
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
                 Latest News
               </p>
-              <div className="flex flex-col">
+              <RuledList>
                 {intel.news.map((n, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setOpenArticle(n)}
-                    className={`w-full text-left press ${i < intel.news.length - 1 ? 'pb-2.5 mb-2.5 border-b border-border-default' : ''}`}
-                  >
+                  <Row key={i} onClick={() => setOpenArticle(n)} padding="sm">
                     <div className="flex items-baseline justify-between gap-2">
                       <p className="flex-1 font-body text-sm font-medium text-text-primary leading-snug">
                         {n.headline}
@@ -724,9 +720,9 @@ export default function PlayerProfileDrawer({
                       )}
 
                     </div>
-                  </button>
+                  </Row>
                 ))}
-              </div>
+              </RuledList>
             </div>
           )}
 

@@ -4,7 +4,7 @@ import PickBadge from '../roster/PickBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { useScrollLock } from '../../hooks/useScrollLock'
 import { useSheetDrag } from '../../hooks/useSheetDrag'
-import { Button, Chip, cn } from '../ui'
+import { Button, Chip, Row, cn } from '../ui'
 import { POS_CHIP_ACTIVE, POS_TAG as POS_TAGS } from '../../utils/positionColors'
 
 const FILTER_TABS = ['All', 'QB', 'RB', 'WR', 'TE', 'Picks']
@@ -167,10 +167,10 @@ function PlayerRow({ player, isSelected, onTap, onInfo, onWhatsFair }) {
 
 function PickRow({ pick, isSelected, onTap }) {
   return (
-    <button
+    <Row
       onClick={onTap}
-      className={`w-full flex items-center gap-3 py-2.5 border-b border-border-default dark:border-border-default last:border-0 press text-left
-        ${isSelected ? 'bg-accent/5' : ''}`}
+      padding="sm"
+      className={`flex items-center gap-3 ${isSelected ? 'bg-accent/5' : ''}`}
     >
       <span className="w-3.5 shrink-0 flex justify-center text-[10px]">
         {isSelected && <span className="text-success">✓</span>}
@@ -182,7 +182,7 @@ function PickRow({ pick, isSelected, onTap }) {
       <span className="font-mono text-sm text-text-secondary dark:text-text-secondary shrink-0 tabular-nums">
         {(pick.value ?? 0) > 0 ? `~${(pick.value).toLocaleString()}` : '—'}
       </span>
-    </button>
+    </Row>
   )
 }
 

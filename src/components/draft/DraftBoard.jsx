@@ -14,7 +14,7 @@ import { buildRookieProspects } from '../../utils/rookieAdp'
 import { useSleeperDraft, buildDraftOrder } from '../../hooks/useSleeperDraft'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { BOARD_ORDER_KEY, NOTES_KEY, CSV_KEY } from './boardStorage'
-import { Modal, Button, Input, Loading } from '../ui'
+import { Modal, Button, Chip, Input, Loading } from '../ui'
 import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
@@ -735,17 +735,15 @@ export default function DraftBoard() {
 
         {/* ── Board mode toggle ── */}
         <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-          <div className="flex rounded-none border border-border-default overflow-hidden">
+          <div className="flex gap-1.5">
             {['FantasyCalc', 'My Board'].map(mode => (
-              <button
+              <Chip
                 key={mode}
+                active={boardMode === mode}
                 onClick={() => handleBoardModeToggle(mode)}
-                className={`px-3 py-1.5 font-body text-xs font-semibold transition-colors ${
-                  boardMode === mode ? 'bg-accent text-bg-primary' : 'bg-bg-card text-text-secondary'
-                }`}
               >
                 {mode}
-              </button>
+              </Chip>
             ))}
           </div>
           {boardMode === 'My Board' && (
