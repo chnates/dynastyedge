@@ -1329,9 +1329,24 @@ Counter or Decline.** The app proposed and then argued with itself.
       measured what the lexicographic rule was costing. The earlier ruling is
       superseded, not forgotten — if the trade-off is ever revisited, the
       original objection is the thing to answer.
-- Each target card carries **both** reads — `{appeal} for you` above
-  `{appeal} for them`, each a `Badge` (`Strong` green / `Fair` neutral / `Weak`
-  amber, never brand red) plus one short line. The board no longer hands over an
+- Each target is a **ruled row, not a card** (law 5): the board is an
+  enumeration of twenty, and twenty bordered rectangles is exactly the shape
+  finding B7 named. It sits under a **neutral ink band** — the board mixes
+  positions, so the hue rides on a 7px swatch per row instead.
+  **The hierarchy is inverted from what finding B2 measured.** B2: "the loudest
+  element on every one is the player's *name* … the least decision-relevant
+  field on the card (you know who Ja'Marr Chase is). The most decision-relevant
+  fields, the two appeal reads, are the smallest text on the card." So the name
+  drops out of display uppercase into body text, the value becomes a
+  **`Magnitude`** (size is the quantity), and the appeals come up out of 9px
+  badges into labelled `YOU` / `THEM` lines.
+- Each target row carries **both** reads — `YOU {appeal}` above
+  `THEM {appeal}` plus one short line. **Only `Strong` and `Weak` are
+  `Mark`ed** (success / warning): `Fair` is the null result, and marking all
+  three would put forty coloured blocks down a twenty-row board and scan as
+  noise. Marking the two decisive tiers leaves a readable pattern of "gettable"
+  and "they won't bite" down the list, which is the question the board answers.
+  Never brand red — that is reserved for "you" accents. The board no longer hands over an
   offer without saying what it is worth to the team being asked to accept it —
   or to mine. `myAppeal` / `mySummary` / `myStartersDelta` / `myConcern` are
   computed **once, for the winning package, after phase 2 has chosen it**, so
