@@ -111,7 +111,7 @@ export default function PlayerSearchSheet({ onClose }) {
     <div
       ref={overlayRef}
       onClick={handleOverlayClick}
-      className="fixed left-0 right-0 z-50 flex items-end bg-black/60"
+      className="overlay-ink fixed left-0 right-0 z-50 flex items-end bg-black/60"
       style={{
         top: vp.offsetTop,
         height: vp.height,
@@ -131,7 +131,7 @@ export default function PlayerSearchSheet({ onClose }) {
     >
       <div
         ref={sheetRef}
-        className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default flex flex-col max-h-full min-h-0"
+        className="sheet-print w-full bg-bg-secondary rounded-t-2xl border-t border-border-default flex flex-col max-h-full min-h-0"
       >
         {/* Handle bar */}
         <div className="flex justify-center pt-3 pb-1 shrink-0">

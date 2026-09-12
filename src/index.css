@@ -358,6 +358,36 @@ body {
 
 .press-bar { animation: press-bar 1.15s var(--ez) infinite; }
 
+/* ── The sheet arriving ────────────────────────────────────────── */
+/* A sheet used to appear between one frame and the next, which on a surface
+   that covers most of the screen reads as a glitch rather than a transition.
+   It now PRINTS up from the bottom edge — the band wipe again, rotated — while
+   the scrim inks in behind it.
+
+   IT ANIMATES `clip-path`, NEVER `transform`, AND THAT IS NOT A STYLE CHOICE.
+   `transform` on the sheet panel belongs to `useSheetDrag`, which writes it
+   inline during a drag and again for the spring-back. An entrance animating the
+   same property would fight the gesture for it — and the sheet family is six
+   settled battles deep (failure-archaeology §2), none of them visible to
+   headless Chromium. Clipping leaves the gesture's property untouched.
+
+   `backwards` again, for a second reason on top of the flash: the panel is
+   `rounded-t-2xl`, and a lingering `inset(0 0 0 0)` would be a square clip
+   sitting on a rounded box forever. It reverts instead. During the wipe the
+   rounded corners are simply the last thing revealed, which is correct. */
+@keyframes sheet-print {
+  from { clip-path: inset(100% 0 0 0); }
+  to   { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes overlay-ink {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.sheet-print  { animation: sheet-print 0.34s var(--ez) backwards; }
+.overlay-ink  { animation: overlay-ink 0.24s var(--ez) backwards; }
+
 .press-band { animation: press-band 0.62s var(--ez) backwards; }
 .press-ink  { animation: press-ink  0.58s var(--ez) backwards; transform-origin: top; }
 .press-set  { animation: press-set  0.44s var(--ez) backwards; }

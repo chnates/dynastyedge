@@ -3712,9 +3712,19 @@ as the **DEFAULT `transition-timing-function`**. That is the point of setting
 DEFAULT rather than adding named curves: it reaches all 69 `transition-*`
 utilities at once, with no call-site change and no way for a screen to miss it.
 
-It is an **expo-out** — ~80% of the distance in the first third of the duration,
-then a settle. That shape is what lets the durations below be numbers that would
-feel sluggish on a symmetric ease, and it is why a 620ms band wipe reads fast.
+It is an **expo-out**, and its profile is worth knowing precisely because
+**nominal duration is not perceived duration on this curve**. Measured by
+solving the bezier:
+
+|fraction of duration|0.10|0.20|**0.33**|0.42|0.62|1.00|
+|---|---|---|---|---|---|---|
+|`--ez` travelled|49%|75%|**88%**|95%|99%|100%|
+|Tailwind's default|3%|13%|41%|64%|89%|100%|
+
+So a 620ms band wipe is 95% done in **264ms** and a 340ms sheet in **145ms** —
+which is why the numbers in the ladder below look larger than they feel, and why
+the press run can afford 620ms without reading as slow. Set a duration by the
+*perceived* travel you want and then roughly double it.
 
 **Duration is a function of how far a thing travels, which in practice means how
 big it is.** A chip tint and a 300px drawer crossing the screen shared one number
@@ -3863,6 +3873,29 @@ its label, because a full-width rule there reads as a divider.
 
 `animate-pulse` was a green dot beside the words "Live Intelligence". It is gone
 rather than restyled: the dot said nothing the label did not.
+
+#### The sheet arriving
+
+A sheet used to appear between one frame and the next, which on a surface
+covering most of the screen reads as a glitch rather than a transition. It now
+**prints up from the bottom edge** (`.sheet-print`, 340ms — 95% of the travel by
+145ms) while the scrim inks in behind it (`.overlay-ink`, 240ms). Carried by
+`Sheet`, `Modal`, and both sanctioned hand-rolled overlays (`PlayerSearchSheet`,
+`TradeBuilder`'s add sheet).
+
+**It animates `clip-path`, never `transform`, and that is not a style choice.**
+`transform` on the sheet panel belongs to `useSheetDrag`, which writes it inline
+during a drag and again for the spring-back; an entrance animating the same
+property would fight the gesture for it. The sheet family is six settled battles
+deep (failure-archaeology §2) and none of them is visible to headless Chromium,
+so the entrance was built to stay out of the gesture's way by construction.
+**Nothing about `useSheetDrag`, `useScrollLock`, the arming condition, the
+overscroll containment or the safe-area padding was touched.**
+
+`backwards` again, and here for a second reason on top of the flash: the panel
+is `rounded-t-2xl`, and a lingering `inset(0 0 0 0)` would leave a square clip
+sitting on a rounded box forever. During the wipe the rounded corners are simply
+the last thing revealed, which is correct.
 
 #### The moment budget — four moments, and everything else is instant
 

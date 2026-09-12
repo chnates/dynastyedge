@@ -44,10 +44,10 @@ export default function Modal({
       role="dialog"
       aria-modal="true"
       aria-label={label}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+      className="overlay-ink fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
     >
       <div
-        className={cn('w-full rounded-2xl border border-border-default', maxWidth, surface, className)}
+        className={cn('sheet-print w-full rounded-2xl border border-border-default', maxWidth, surface, className)}
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         {children}

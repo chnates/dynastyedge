@@ -257,7 +257,7 @@ function AddAssetSheet({
     <div
       ref={overlayRef}
       onClick={handleOverlayClick}
-      className="fixed left-0 right-0 z-50 flex items-end bg-black/60"
+      className="overlay-ink fixed left-0 right-0 z-50 flex items-end bg-black/60"
       style={{
         top: vp.offsetTop,
         height: vp.height,
@@ -274,7 +274,7 @@ function AddAssetSheet({
           the only thing that holds it down. */}
       <div
         ref={sheetRef}
-        className="w-full bg-bg-secondary dark:bg-bg-secondary rounded-t-2xl border-t border-border-default dark:border-border-default flex flex-col min-h-0"
+        className="sheet-print w-full bg-bg-secondary dark:bg-bg-secondary rounded-t-2xl border-t border-border-default dark:border-border-default flex flex-col min-h-0"
         style={{ maxHeight: `calc(${vp.height}px - 3rem - env(safe-area-inset-top) - 8px)` }}
       >
 
