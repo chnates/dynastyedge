@@ -20,6 +20,14 @@ export { default as Card } from './Card'
 export { default as Mark } from './Mark'
 export { default as PositionBand } from './PositionBand'
 export { default as Magnitude, magnitudeSize, MAGNITUDE_REFERENCE } from './Magnitude'
+// The two DENSITY REGISTERS (finding B7). A screen picks one per block by
+// cardinality and consequence: many things you scan -> RuledList; one thing you
+// act on -> Lede. Neither draws a rectangle; that is the point.
+export { default as RuledList } from './RuledList'
+export { default as Lede } from './Lede'
+// The third block shape: a door out of this screen. Extracted from the Index's
+// row in step 4 so shortcuts stop being Cards with a lucide medallion.
+export { default as NavRow } from './NavRow'
 export { default as Sheet, SheetHeader } from './Sheet'
 export { default as Modal } from './Modal'
 export { default as Chip } from './Chip'

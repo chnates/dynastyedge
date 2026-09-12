@@ -41,9 +41,14 @@ export default function PositionBand({
   // The count/total line only renders what it was given, so a band above a list
   // of unpriced assets shows "5" rather than "5 · 0" (rule 7's discipline: an
   // absent value is never printed as a zero).
+  //
+  // A total of 0 is treated as absent for the same reason, and it is a real
+  // case rather than a hypothetical: the DEF group holds exactly one defense,
+  // FantasyCalc ranks zero defenses, so the group total is genuinely 0 and the
+  // band read "1 · 0". Every row under it already shows the honest em dash.
   const meta = [
     count != null ? String(count) : null,
-    total != null ? total.toLocaleString() : null,
+    total ? total.toLocaleString() : null,
   ].filter(Boolean).join(' · ')
 
   return (

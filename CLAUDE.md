@@ -570,25 +570,37 @@ across future seasons.
   color-coded by round (see color system below)
 - Each pick shows original owner if different from current owner
 - Total roster value score at top (sum of all player values + pick values)
-- **Action Items** (`RosterActionItems`, shared with The Edge — see Feature 12):
-  generated roster alerts, each with an urgency tone and an optional deep-link
-  action. Four types, all derived from live data:
-  1. **Taxi deadline** (red) — any taxi player with `years_exp >= 2` must be
+- **Action Items** (`RosterActionItems`, shared with The Edge — see Feature 12),
+  under an **"On your desk"** neutral band: generated roster alerts, each a
+  **`Lede`** — eyebrow, a headline with the finding in a `Mark`, the sentence,
+  and a real CTA. Four types, all derived from live data:
+  1. **Taxi deadline** — any taxi player with `years_exp >= 2` must be
      activated before the regular season (see League Context taxi rules).
-  2. **Bloated QB room** (amber) — 4+ rostered QBs. Names the most expendable
+  2. **Bloated QB room** — 4+ rostered QBs. Names the most expendable
      QB (lowest dynasty value) and, via `suggestSellMove`, a concrete partner
      and return; the action deep-links into the Analyzer with `preloadTrade`
      already filling both sides.
-  3. **IR slot opportunity** (blue) — an active player whose `injury_status`
+  3. **IR slot opportunity** — an active player whose `injury_status`
      is `Out` or `PUP` and who isn't on IR yet.
-  4. **Missing future 1st** (red) — no 1st-round pick in a `PICK_YEARS` season
+  4. **Missing future 1st** — no 1st-round pick in a `pickYears` season
      later than the current one; deep-links to Trade Partners.
+
+  **Types 1, 3 and 4 aggregate — one item per type, never one per player.**
+  A `Lede` is the open density register, for *one* decision; three stacked
+  entries reading "X can go on IR" with identical prose is the
+  icon+title+one-liner pattern wearing editorial clothes, and it was what the
+  first Matchday pass produced (measured on screen, 2026-09-12: three
+  near-identical blocks where the old tinted rectangles had at least been
+  short). An aggregated item names every player it covers in its prose.
 
   Items are **dismissible**, persisted in `dynastyedge_action_dismissals`
   against a `conditionSnapshot` — a dismissal only holds while the condition
   is unchanged, so a re-bloated QB room or a newly injured player re-surfaces
-  rather than staying silently hidden forever.
-- **Roster Analysis button** (below Action Items) → bottom sheet
+  rather than staying silently hidden forever. **An aggregated item snapshots
+  the SET, not the count** (sorted sleeper ids, joined): one player aging off
+  taxi while another ages on would leave the count unchanged, and a dismissal
+  must not survive that swap.
+- **Roster Analysis** — a `NavRow` beside Dynasty Trajectory → bottom sheet
   (`RosterAnalysisSheet`): age chart with one lane per position (QB/RB/WR/TE),
   each lane shaded with its position-specific peak window (RB 23–26, WR 24–28,
   TE 25–29, QB 26–33); dots are tappable (detail row below the chart) and a
@@ -3048,7 +3060,7 @@ Scouting did) — note any route-only moves explicitly.
 colour, hard edges, no shadows, no icon set in navigation, and the five position
 hues promoted from 9px tags to **full-bleed section bands**.
 
-### The four laws
+### The five laws
 
 1. **Colour is a FIELD, not a rail.** Ink and the position hues are painted as
    solid blocks with the type reversed out — the masthead, the hero poster, the
@@ -3071,6 +3083,28 @@ hues promoted from 9px tags to **full-bleed section bands**.
    navigation may borrow neither.** An editorial highlight takes a semantic
    colour or plain ink — never a position hue, or "down 12%" reads as a
    position. Navigation carries no colour, no swatch and no icon at all.
+5. **A block is a RULED ROW, a LEDE, or a DOOR — a rectangle is the last
+   resort.** This is the answer to finding **B7**, and it is not a padding
+   scale. B7 measured that "every screen is a vertical stack of full-width,
+   evenly-spaced, 1px-bordered rectangles… an Action Item you must act on today
+   and a Market Radar row you'll never tap have the same padding, the same
+   border and the same width." Matchday's mock contains **zero bordered boxes
+   in its content area**, so the second density register is reached by deleting
+   the rectangle, not by tuning it:
+
+   | Register | For | Shape |
+   |---|---|---|
+   | **`RuledList`** of rows | many things you SCAN — 26 players, 10 teams, 20 targets | a shared column, hairline separators, no box, ~10px rhythm; the `PositionBand` above carries the group |
+   | **`Lede`** | ONE thing you ACT ON | eyebrow · display headline with a `Mark` · prose · ink CTA; no box; ~3× a row's height |
+   | **`NavRow`** | a way OUT of this screen | display title · detail · hairline; no icon, no chevron |
+
+   **The register is chosen by cardinality and consequence, never by taste.**
+   The corollary is the load-bearing half: an enumeration must never be built
+   from `Lede`s. Three IR alerts rendered as three `Lede`s reproduce the exact
+   icon+title+one-liner pattern the direction exists to kill — so repeated items
+   of one kind **aggregate into a single `Lede`** (Feature 1's action items).
+   `Card` survives only for a genuinely standalone panel that is none of the
+   three: a chart, an explainer, a form.
 
 ### Design System Component Library
 
@@ -3094,6 +3128,9 @@ Import everything from the one barrel: `import { Button, Card, Sheet } from '../
 |**`Mark`**|THE editorial highlight — a word set in reverse out of a solid block ("Five **quarterbacks**, one dead weight"). The real replacement for `Card`'s rail: colour moves off the container and onto the word that carries the finding. Tones `ink` (default) · `ground` (a second reversal, for use **inside** an ink field) · `alt` · `brand` · status. **Never a position hue.**|
 |**`PositionBand`**|THE section band — a position hue at **full bleed** with the page ground reversed out, carrying the group's count and **total**. The direction's signature. A board that mixes positions takes the neutral ink band (`position` omitted) — picking a hue to make a mixed list colourful would lie about what is in it. Cancels the 16px page gutter by default (`bleed`).|
 |**`Magnitude`**|THE value figure, sized from its own value. See law 2 and the note below on the reference. `null` renders `—` at the base size (rule 7).|
+|**`RuledList`**|THE DENSE register — many things you SCAN. Rows on the page's own ground, separated by a hairline, **no box and no per-row background**; it draws the closing rule and strips the last row's. Identity comes from the `PositionBand` above, not from a border around each row. `flush` cancels the page gutter.|
+|**`Lede`**|THE OPEN register — one thing you ACT ON. Eyebrow · headline (with a `Mark` on the word carrying the finding) · prose · a solid ink CTA. No box. A pressable `Lede` is a `<button>`, so `action` takes a **string** there; an entry needing real controls leaves `onClick` unset and passes nodes to `action` / `aside` (the dismiss slot on the eyebrow line).|
+|**`NavRow`**|THE DOOR — a row that takes you somewhere. Display-type title, small detail, optional mono hint, hairline, **no icon and no chevron**. Extracted from the Index's row so shortcuts stop being `Card`s with a lucide medallion.|
 |`Sheet` + `SheetHeader`|THE bottom sheet. Owns the whole sheet contract (`useScrollLock`, `useSheetDrag` swipe-to-dismiss, `overscroll-contain`, safe-area bottom pad, Escape + overlay-tap close, drag handle); `zIndex` is a Tailwind z class so sheets stack. **Exception:** a *keyboard-aware* sheet driven by `window.visualViewport` (PlayerSearchSheet, TradeBuilder's add sheet) can't use `Sheet` (which is sized to the layout viewport) — those two are the sanctioned hand-rolled overlays.|
 |`Modal`|THE centered dialog — confirm prompts and small forms. Owns overlay, `useScrollLock`, Escape + overlay-tap close. The bottom-docked counterpart is `Sheet`.|
 |`Chip`|THE filter chip — square, mono uppercase. Inactive is quiet; `active` defaults to the **ink field**; pass `activeClass={POS_CHIP_ACTIVE[pos]}` for position-tinted active states.|
@@ -4205,14 +4242,19 @@ Two things the roll must not break, both pinned by tests:
    all read.
 1. **Design System library:** All new UI comes from `src/components/ui`
    (`Button`, `IconButton`, `Card`, `Mark`, `PositionBand`, `Magnitude`,
-   `Sheet`/`SheetHeader`, `Modal`, `Chip`, `Badge`, `Input`/`SearchInput`,
-   `Select`, `cn`, plus the re-exported shared primitives) — import from the
+   `RuledList`, `Lede`, `NavRow`, `Sheet`/`SheetHeader`, `Modal`, `Chip`,
+   `Badge`, `Input`/`SearchInput`, `Select`, `cn`, plus the re-exported shared
+   primitives) — import from the
    `'../ui'` barrel. Never reintroduce a hand-rolled button, card, bottom
-   sheet, filter chip, badge, band, value figure, or input inline; extend a
-   primitive instead. Three Matchday laws bind here specifically: **colour is a
+   sheet, filter chip, badge, band, value figure, row list, or input inline;
+   extend a primitive instead. Four Matchday laws bind here specifically:
+   **colour is a
    field, never a left-edge rail** (that is what `Card`'s deleted `accent` prop
-   was); **magnitude is type size, never a progress bar** (`Magnitude`); and a
-   `Mark` **never takes a position hue**. Run `/design-review` on the CONSUMERS
+   was); **magnitude is type size, never a progress bar** (`Magnitude`); a
+   `Mark` **never takes a position hue**; and **a block is a ruled row, a
+   `Lede`, or a `NavRow` before it is a `Card`** (law 5 — a stack of identical
+   bordered rectangles is the failure, and an enumeration built from `Lede`s is
+   the same failure inverted). Run `/design-review` on the CONSUMERS
    before committing component work — not on `src/components/ui` while the
    primitives themselves are being edited.
 1. **Lint gate:** `npm run lint` (ESLint 9 flat config: recommended +
