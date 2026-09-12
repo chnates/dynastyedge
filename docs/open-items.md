@@ -131,8 +131,15 @@ low-signal feeds to chase the number.**
 
 ### NEWS-2 — wire the feed's `coverage` block into the drawer's data-status row
 
-**Trigger:** ready now; small, and gated only on whether it earns its screen
-space. Owner call.
+**CLOSED 2026-09-12** — built alongside the retention fix, which is what made
+it newly relevant. The News row now carries one indented line ("5d deep · 119
+players"), amber under 48h of depth. It surfaces **depth, not item count**, for
+the reason the re-spec below gives. Verified in both states against real feed
+payloads (healthy 112h, and the pre-fix 28h feed rendering amber and correctly
+dropping the player count it has no field for). Original item kept below.
+
+**Trigger (original):** ready now; small, and gated only on whether it earns its
+screen space. Owner call.
 
 Phase 2's step 5 asked for a relevance/source breakdown "in the feed JSON so
 the side drawer's data-status block can show feed health". **The data shipped;

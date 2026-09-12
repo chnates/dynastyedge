@@ -80,6 +80,7 @@ function stripHtml(s) {
 let newsFeedPromise = null
 let newsFeedUpdatedAt = null
 let newsFeedFetchedAt = null
+let newsFeedCoverage = null
 
 // `force` re-fetches the feed on demand (the drawer's Refresh button) and
 // refreshes the cached `updatedAt` so the feed-age readout can move. A failed
@@ -90,6 +91,7 @@ export function loadNewsFeed(force = false) {
     newsFeedPromise = fetchJSON(NEWS_FEED_URL, { timeoutMs: 10000, label: 'News feed' })
       .then(data => {
         if (typeof data?.updatedAt === 'string') newsFeedUpdatedAt = data.updatedAt
+        if (data?.coverage && typeof data.coverage === 'object') newsFeedCoverage = data.coverage
         newsFeedFetchedAt = Date.now()
         return Array.isArray(data?.items) ? data.items : []
       })
@@ -109,6 +111,19 @@ export function getNewsFeedUpdatedAt() {
 // above: this moves on every successful (re)fetch.
 export function getNewsFeedFetchedAt() {
   return newsFeedFetchedAt
+}
+
+// The feed's own health block — `{ total, playerItems, playerCap,
+// distinctPlayers, withPlayerIds, withAthleteIds, spanHours, sources }` — as
+// published by scripts/fetch-news.mjs. Powers the drawer's feed-health line.
+//
+// This exists because publish age surfaces a DEAD pipeline but not a DEGRADED
+// one. The 2026-09 retention collapse published on time for days while the
+// window's depth fell 159h → 27.5h. Best-effort and versionless: an older feed
+// carrying no `coverage` (or a newer one carrying different keys) leaves this
+// null and the line simply hides, same contract as the feed itself.
+export function getNewsFeedCoverage() {
+  return newsFeedCoverage
 }
 
 export function normalizeName(s) {

@@ -361,9 +361,13 @@ architecture:
   players was what the cap was failing to buy. `playerCap` ships alongside
   `playerItems` so "is the cap binding?" is answerable from the feed alone
   rather than by reading the script.
-  **The drawer's data-status block does not read it yet** — publish age already
-  surfaces a *dead* pipeline; this block would surface a *degraded* one. Open
-  item `NEWS-2`, which must surface **span**, not `playerItems`.
+  **The drawer's News row reads it** (2026-09-12, NEWS-2): one indented line
+  under the row — *"5d deep · 119 players"* — amber under
+  `NEWS_SPAN_THIN_HOURS` (48). It shows **depth, deliberately not item count**:
+  during the collapse the item count sat at exactly its cap, which is what a
+  healthy full feed looks like. Versionless and best-effort — a feed carrying
+  no `coverage` (or no `distinctPlayers`) renders a shorter line or none at
+  all, never an error.
 - **News items are tappable everywhere they appear** (profile drawer
   "Latest News", The Edge "Headlines") → `NewsArticleSheet`, a bottom sheet
   (z-60, layers above the profile drawer) with the full stored story, a
@@ -2899,7 +2903,10 @@ above an amber LEAGUE read as "good / caution" before it read as navigation.
 in navigation may wear a status token.
 
 **Data status — five rows** (Rosters · Values · News · History · Rookies), each showing
-the app-side "last refreshed" age of that source. The three Actions-published
+the app-side "last refreshed" age of that source. **News carries a second,
+indented line** — the retained window's depth and how many players it reaches,
+amber when depth falls under 48h. Publish age surfaces a *dead* pipeline; that
+line surfaces a *degraded* one (see the `coverage` block). The three Actions-published
 feeds (News, History, Rookies) additionally show their **publish age** from the feed's
 own `updatedAt` — labelled separately, because that's the number that only
 moves when the cron publishes, and it's how a dead pipeline becomes visible.

@@ -5,7 +5,7 @@ import { cn } from '../ui'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useIdentity } from '../../hooks/useIdentity'
 import { getTeamName } from '../../hooks/useLeague'
-import { loadNewsFeed, getNewsFeedUpdatedAt, getNewsFeedFetchedAt } from '../../hooks/usePlayerIntel'
+import { loadNewsFeed, getNewsFeedUpdatedAt, getNewsFeedFetchedAt, getNewsFeedCoverage } from '../../hooks/usePlayerIntel'
 import { loadHistory, getHistoryFetchedAt } from '../../hooks/useValueHistory'
 import { loadRookieIntel, getRookieIntelFetchedAt } from '../../hooks/useRookieIntel'
 import { formatBuildId } from '../../utils/appVersion'
@@ -16,6 +16,20 @@ import { formatBuildId } from '../../utils/appVersion'
 // hour (2h ≈ four missed runs), the values cron daily (36h ≈ a missed day).
 const NEWS_STALE_MS = 2 * 60 * 60 * 1000
 const VALUES_STALE_MS = 36 * 60 * 60 * 1000
+
+// Amber when the news feed's retained window is shallower than this.
+//
+// Publish age surfaces a DEAD pipeline; this surfaces a DEGRADED one. The
+// 2026-09 collapse published on time for days while the window's depth fell
+// 159h → 27.5h, and the obvious health number could not see it: `playerItems`
+// sat at exactly its cap the whole time, which is what a full feed looks like.
+// DEPTH is the number that told the story, so depth is what is watched here.
+//
+// 48h: the window is designed to hold player items for 7 days (168h) and
+// measured 112h the day retention was fixed, so anything under 48h means
+// eviction has started eating the window again — not merely a quiet news day.
+// See docs/analysis/news-retention-2026-09.md.
+const NEWS_SPAN_THIN_HOURS = 48
 
 // How long "Updated ✓" lingers before the button settles back to idle.
 const DONE_LINGER_MS = 2200
@@ -34,6 +48,23 @@ function formatAgo(ts) {
   const hours = Math.floor(mins / 60)
   if (hours < 48) return `${hours}h ago`
   return `${Math.floor(hours / 24)}d ago`
+}
+
+// One diagnostic line for the News row: window depth + players reached.
+//
+// Depth leads because depth is what fails silently. Item count deliberately is
+// NOT shown: during the 2026-09 collapse it sat at exactly its cap, reading as
+// a healthy full feed while the window shrank to a day. Returns {} when the
+// feed carried no usable coverage block, so the caller renders nothing.
+function newsHealth(coverage) {
+  const hours = Number(coverage?.spanHours)
+  if (!Number.isFinite(hours) || hours <= 0) return {}
+  const players = Number(coverage?.distinctPlayers)
+  const depth = hours < 48 ? `${hours}h deep` : `${Math.round(hours / 24)}d deep`
+  return {
+    health: Number.isFinite(players) && players > 0 ? `${depth} · ${players} players` : depth,
+    healthThin: hours < NEWS_SPAN_THIN_HOURS,
+  }
 }
 
 function formatFeedAge(iso) {
@@ -72,13 +103,23 @@ export default function SideDrawer({
     newsFetched: null, historyFetched: null, rookieFetched: null,
   })
   function readFeedStamps() {
-    setFeed(f => ({ ...f, newsPub: getNewsFeedUpdatedAt(), newsFetched: getNewsFeedFetchedAt() }))
+    setFeed(f => ({
+      ...f,
+      newsPub: getNewsFeedUpdatedAt(),
+      newsFetched: getNewsFeedFetchedAt(),
+      newsCoverage: getNewsFeedCoverage(),
+    }))
   }
   useEffect(() => {
     if (!isOpen) return
     let cancelled = false
     loadNewsFeed().then(() => {
-      if (!cancelled) setFeed(f => ({ ...f, newsPub: getNewsFeedUpdatedAt(), newsFetched: getNewsFeedFetchedAt() }))
+      if (!cancelled) setFeed(f => ({
+        ...f,
+        newsPub: getNewsFeedUpdatedAt(),
+        newsFetched: getNewsFeedFetchedAt(),
+        newsCoverage: getNewsFeedCoverage(),
+      }))
     })
     loadHistory().then(h => {
       if (!cancelled) setFeed(f => ({ ...f, valuesPub: h?.updatedAt ?? null, historyFetched: getHistoryFetchedAt() }))
@@ -101,6 +142,11 @@ export default function SideDrawer({
       key: 'news', label: 'News', refreshed: formatAgo(feed.newsFetched),
       feedAge: formatFeedAge(feed.newsPub),
       feedStale: Date.now() - Date.parse(feed.newsPub ?? '') > NEWS_STALE_MS,
+      // Feed HEALTH, distinct from feed AGE: depth of the retained window and
+      // how many players it reaches. A degraded run publishes on time, so age
+      // alone can't see it. Hidden entirely when the feed carried no coverage
+      // block (older feed, or the fetch failed) — never an error.
+      ...newsHealth(feed.newsCoverage),
     },
     {
       key: 'history', label: 'History', refreshed: formatAgo(feed.historyFetched),
@@ -272,10 +318,11 @@ export default function SideDrawer({
               spinner → ✓/✗. The two feeds also show their publish age ("feed
               Xh"), the number that only moves when the cron publishes. */}
           <div className="px-3 pt-1 pb-1.5 space-y-1">
-            {dataStatus.map(({ key, label, refreshed, feedAge, feedStale }) => {
+            {dataStatus.map(({ key, label, refreshed, feedAge, feedStale, health, healthThin }) => {
               const st = phase !== 'idle' ? (sources[key] ?? 'loading') : null
               return (
-                <div key={key} className="flex items-center gap-2 text-[11px] font-body">
+                <div key={key}>
+                <div className="flex items-center gap-2 text-[11px] font-body">
                   {/* Typographic marks, not an icon set: a check, a cross, an
                       ellipsis and a middot are all characters, and they read at
                       11px where a 11px stroked glyph does not. */}
@@ -297,6 +344,21 @@ export default function SideDrawer({
                       </span>
                     )}
                   </span>
+                </div>
+                {/* Feed health, indented under its row to read as a note on it
+                    rather than a source of its own. Full-strength tertiary, not
+                    the /70 the feed-age SUFFIX beside it uses: this is a line of
+                    real content on its own, and the accessibility floor sets
+                    tertiary at exactly the AA bar (4.75:1 dark / 4.70:1 light),
+                    so any alpha under it fails. */}
+                {health && (
+                  <div className={cn(
+                    'pl-5 text-[10px] font-body tabular-nums',
+                    healthThin ? 'text-warning' : 'text-text-tertiary',
+                  )}>
+                    {health}
+                  </div>
+                )}
                 </div>
               )
             })}
