@@ -14,8 +14,7 @@ import { buildRookieProspects } from '../../utils/rookieAdp'
 import { useSleeperDraft, buildDraftOrder } from '../../hooks/useSleeperDraft'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { BOARD_ORDER_KEY, NOTES_KEY, CSV_KEY } from './boardStorage'
-import LoadingSpinner from '../shared/LoadingSpinner'
-import { Modal, Button, Input } from '../ui'
+import { Modal, Button, Input, Loading } from '../ui'
 import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
@@ -725,7 +724,7 @@ export default function DraftBoard() {
     })
   }
 
-  if (loading || rookieLoading) return <LoadingSpinner message="Loading draft data…" />
+  if (loading || rookieLoading) return <Loading message="Loading draft data…" />
   if (error || rookieError) {
     return <ErrorState message={error || rookieError} onRetry={error ? retry : rookieRetry} />
   }

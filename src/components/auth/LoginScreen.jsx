@@ -4,10 +4,9 @@ import { fetchJSON } from '../../utils/fetchJSON'
 import { useIdentity } from '../../hooks/useIdentity'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getTeamName } from '../../hooks/useLeague'
-import { Input, Button } from '../ui'
+import { Input, Button, Loading } from '../ui'
 import DynastyEdgeLogo from '../shared/DynastyEdgeLogo'
 import TeamAvatar from '../shared/TeamAvatar'
-import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 
 // Gated sign-in: resolve a Sleeper username to a roster in this league (the
@@ -89,7 +88,7 @@ export default function LoginScreen() {
         </div>
 
         {sleeperLoading && !signInRosters ? (
-          <LoadingSpinner message="Loading league…" />
+          <Loading message="Loading league…" padded={false} />
         ) : sleeperError && !signInRosters ? (
           <ErrorState message={sleeperError} onRetry={sleeperRetry} />
         ) : (

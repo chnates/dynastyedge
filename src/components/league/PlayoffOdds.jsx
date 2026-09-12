@@ -3,12 +3,11 @@ import { usePlayoffOdds } from '../../hooks/usePlayoffOdds'
 import { getDeadlineVerdict } from '../../utils/playoffOdds'
 import { assignWinWindowTiers } from '../../utils/rosterAnalysis'
 import { getTeamName } from '../../hooks/useLeague'
-import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import TeamAvatar from '../shared/TeamAvatar'
 import { rankClass } from '../../utils/rankColors'
-import { Badge, PositionBand, RuledList } from '../ui'
+import { Badge, PositionBand, RuledList, Loading } from '../ui'
 
 const VERDICT_TONE = {
   success: 'text-success',
@@ -192,7 +191,7 @@ export default function PlayoffOdds() {
     )
   }, [results])
 
-  if (loading) return <LoadingSpinner message="Simulating the season…" />
+  if (loading) return <Loading message="Simulating the season…" />
   if (error) return <ErrorState message={error} onRetry={retry} />
   if (!league || !status) return <ErrorState message="Could not load playoff odds." onRetry={retry} />
 

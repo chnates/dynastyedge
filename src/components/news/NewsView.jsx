@@ -3,8 +3,7 @@ import { useNewsFeed } from '../../hooks/useNewsFeed'
 import { useWatchlist } from '../../hooks/useWatchlist'
 import { relativeTime } from '../../hooks/usePlayerIntel'
 import { POS_TEXT } from '../../utils/positionColors'
-import { Badge, Chip, PositionBand, Row, RuledList, SearchInput } from '../ui'
-import LoadingSpinner from '../shared/LoadingSpinner'
+import { Badge, Chip, PositionBand, Row, RuledList, SearchInput, Loading } from '../ui'
 import SectionHeader from '../shared/SectionHeader'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import NewsArticleSheet from '../shared/NewsArticleSheet'
@@ -108,7 +107,7 @@ export default function NewsView() {
     return BUCKET_ORDER.map(label => ({ label, items: map[label] })).filter(g => g.items.length)
   }, [filtered])
 
-  if (loading) return <LoadingSpinner message="Loading news…" />
+  if (loading) return <Loading message="Loading news…" />
 
   return (
     <div className="px-4 pb-6">

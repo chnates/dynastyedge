@@ -5,11 +5,10 @@ import { getTeamName } from '../../hooks/useLeague'
 import { assignWinWindowTiers } from '../../utils/rosterAnalysis'
 import TeamAvatar from '../shared/TeamAvatar'
 import WinWindowBadge from '../shared/WinWindowBadge'
-import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import SectionHeader from '../shared/SectionHeader'
 import ManagerScoutingSheet from './ManagerScoutingSheet'
-import { Badge, Button, Card, PositionBand } from '../ui'
+import { Badge, Button, Card, PositionBand, Loading } from '../ui'
 
 function fmtNet(net) {
   return `${net >= 0 ? '+' : '−'}${Math.abs(Math.round(net)).toLocaleString()}`
@@ -171,7 +170,7 @@ export default function ManagersView() {
     [league]
   )
 
-  if (loading && !analysis) return <LoadingSpinner message="Walking league history…" />
+  if (loading && !analysis) return <Loading message="Walking league history…" />
   if (error && !analysis) return <ErrorState message={error} onRetry={retry} />
   if (!analysis) return <ErrorState message="Could not build manager profiles." onRetry={retry} />
 

@@ -11,7 +11,7 @@ import { useLeagueContext } from '../../context/LeagueContext'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { getTeamName } from '../../hooks/useLeague'
 import { POS_TEXT } from '../../utils/positionColors'
-import { Sheet, IconButton, Button, Badge, Card, TrendArrow, cn } from '../ui'
+import { Sheet, IconButton, Button, Badge, Card, Loading, TrendArrow, cn } from '../ui'
 
 // ── Opportunity grade ────────────────────────────────────────────────────────
 
@@ -530,10 +530,7 @@ export default function PlayerProfileDrawer({
               Player Status
             </p>
             {newsLoading ? (
-              <div className="flex items-center gap-2 py-1">
-                <div className="h-3 w-3 rounded-full border-2 border-accent border-t-transparent animate-spin" />
-                <span className="font-body text-xs text-text-tertiary">Loading…</span>
-              </div>
+              <Loading inline message="Loading…" />
             ) : (
               <div className="flex items-start gap-3">
                 <span className={`inline-block w-2.5 h-2.5 shrink-0 mt-1 ${flagStyle.dot}`} />
@@ -641,10 +638,7 @@ export default function PlayerProfileDrawer({
                 Production
               </p>
               {intel.loading ? (
-                <div className="flex items-center gap-2 py-1">
-                  <div className="h-3 w-3 rounded-full border-2 border-accent border-t-transparent animate-spin" />
-                  <span className="font-body text-xs text-text-tertiary">Loading stats…</span>
-                </div>
+                <Loading inline message="Loading stats…" />
               ) : (
                 <>
                   {intel.seasonSummary && (

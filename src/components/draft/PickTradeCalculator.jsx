@@ -10,8 +10,8 @@ import {
 import { buildRookieProspects } from '../../utils/rookieAdp'
 import { ROUND_TEXT, ROUND_LABELS } from '../../utils/roundColors'
 import SectionHeader from '../shared/SectionHeader'
-import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
+import { Loading } from '../ui'
 
 const MODES = [
   { id: 'up',   label: 'Move Up' },
@@ -182,7 +182,7 @@ export default function PickTradeCalculator() {
     }
   }, [market, allRosters, priceFor, draftSeason])
 
-  if (loading && !league) return <LoadingSpinner message="Loading pick market…" />
+  if (loading && !league) return <Loading message="Loading pick market…" />
   if (error && !league) return <ErrorState message={error} onRetry={retry} />
   if (!league) return <ErrorState message="Could not load league data." onRetry={retry} />
 

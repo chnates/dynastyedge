@@ -11,11 +11,10 @@ import { POSITIONS } from '../../constants'
 import { useWatchlist } from '../../hooks/useWatchlist'
 import { useValueHistory } from '../../hooks/useValueHistory'
 import { POS_BG } from '../../utils/positionColors'
-import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import Sparkline from '../shared/Sparkline'
-import { Magnitude, PositionBand, Row, RuledList } from '../ui'
+import { Magnitude, PositionBand, Row, RuledList, Loading } from '../ui'
 
 // Ignore deep free agents whose tiny values produce noisy trend swings.
 const MIN_FA_VALUE = 500
@@ -188,7 +187,7 @@ export default function MarketMovers() {
     return { watching, risers, fallers, buyLow, sellHigh, myDeficits, mySurpluses }
   }, [league, values, watchlist, myRosterId])
 
-  if (loading && !league) return <LoadingSpinner message="Loading market data…" />
+  if (loading && !league) return <Loading message="Loading market data…" />
   if (error && !league)   return <ErrorState message={error} onRetry={retry} />
   if (!movers) return <ErrorState message="Could not load market data." onRetry={retry} />
 

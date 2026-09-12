@@ -8,9 +8,8 @@ import { usePlayoffOdds } from '../../hooks/usePlayoffOdds'
 import { rankTradePartners } from '../../utils/rosterAnalysis'
 import { buildAgeCurves, buildRosterTrajectory, getTrajectoryRead } from '../../utils/dynastyTrajectory'
 import WinWindowBadge from '../shared/WinWindowBadge'
-import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
-import { Card, Chip, Button, cn } from '../ui'
+import { Card, Chip, Button, cn, Loading } from '../ui'
 import { POS_CHIP_ACTIVE } from '../../utils/positionColors'
 
 const FILTER_TABS = ['All', 'QB', 'RB', 'WR', 'TE', 'Picks']
@@ -252,7 +251,7 @@ export default function TradePartnerFinder() {
     return [...partners].sort((a, b) => b.positionalDeltas[activeFilter] - a.positionalDeltas[activeFilter])
   }, [analysis, activeFilter])
 
-  if (loading && !league) return <LoadingSpinner message="Analyzing trade partners…" />
+  if (loading && !league) return <Loading message="Analyzing trade partners…" />
   if (error && !league)   return <ErrorState message={error} onRetry={retry} />
   if (!league?.myRoster) return <ErrorState message="Could not load league data." onRetry={retry} />
 

@@ -3214,6 +3214,7 @@ Import everything from the one barrel: `import { Button, Card, Sheet } from '../
 |**`Lede`**|THE OPEN register — one thing you ACT ON. Eyebrow · headline (with a `Mark` on the word carrying the finding) · prose · a solid ink CTA. No box. A pressable `Lede` is a `<button>`, so `action` takes a **string** there; an entry needing real controls leaves `onClick` unset and passes nodes to `action` / `aside` (the dismiss slot on the eyebrow line).|
 |**`Row`**|THE member of a `RuledList` — the tappable row itself. **Always carries `.focus-ring`**; renders a `<button>` for `onClick`, a `<Link>` for `to`, a plain `<div>` for neither (a row that is not tappable must not announce itself as a control). Paddings `sm`/`md`/`lg`. Extracted after `/design-review`'s judgement pass caught **eleven hand-rolled copies that had drifted apart on the focus ring** — an accessibility-floor gap the nine mechanical detectors could not see.|
 |**`NavRow`**|THE DOOR — a row that takes you somewhere. Display-type title, small detail, optional mono hint, hairline, **no icon and no chevron**. Extracted from the Index's row so shortcuts stop being `Card`s with a lucide medallion.|
+|**`Loading`**|THE loading indicator — a rule that prints and clears (`.press-bar`) under a mono label. **There is no spinner in this app.** `inline` for a section inside a card or drawer; the block form carries the page gutter (`padded={false}` when the caller already has one). Never render it without a label — the label is the information, the movement is only liveness.|
 |`Sheet` + `SheetHeader`|THE bottom sheet. Owns the whole sheet contract (`useScrollLock`, `useSheetDrag` swipe-to-dismiss, `overscroll-contain`, safe-area bottom pad, Escape + overlay-tap close, drag handle); `zIndex` is a Tailwind z class so sheets stack. **Exception:** a *keyboard-aware* sheet driven by `window.visualViewport` (PlayerSearchSheet, TradeBuilder's add sheet) can't use `Sheet` (which is sized to the layout viewport) — those two are the sanctioned hand-rolled overlays.|
 |`Modal`|THE centered dialog — confirm prompts and small forms. Owns overlay, `useScrollLock`, Escape + overlay-tap close. The bottom-docked counterpart is `Sheet`.|
 |`Chip`|THE filter chip — square, mono uppercase. Inactive is quiet; `active` defaults to the **ink field**; pass `activeClass={POS_CHIP_ACTIVE[pos]}` for position-tinted active states.|
@@ -3224,7 +3225,7 @@ Import everything from the one barrel: `import { Button, Card, Sheet } from '../
 
 **Adopted shared primitives** are re-exported from the same barrel so the
 library is the single import surface (the files stay in
-`src/components/shared/`): `ErrorState`, `Spinner` (LoadingSpinner),
+`src/components/shared/`): `ErrorState`,
 `SectionHeader` + `BRAND_TICK`, `SectionContents`, `TrendArrow`,
 `WinWindowBadge`, `Sparkline`, `TeamAvatar`. Import these from `'../ui'`.
 
@@ -3827,6 +3828,72 @@ Targets 43/43, Managers 15/15, Pick Trades 53/53, League 36/36, Movers 84/84,
 Free Agents 155/155, Playoffs 15/15, Season Review 14/14, Trajectory 44/44,
 Draft Board 486/486, Research 484/484, Tracker 60/60, News 333/333, Index 21/21.
 
+#### There is no spinner — `Loading` and the press bar
+
+**The app has no loading spinner.** It carried four `animate-spin` circles and
+one `animate-pulse`, both on the researched marker list; the circles were also,
+with the avatar and the sheet grabbers, the last radius in an app whose law 3 is
+square-with-a-hairline.
+
+**`Loading`** (`components/ui/`) replaced all five, and the replacement is not a
+stock indeterminate progress bar either. There is no track and no segment
+travelling along one: the rule **prints** from the left, holds, and **clears**
+from the left — `.press-bar`, the press run's own wipe, looped. Waiting reads as
+the press running rather than as a widget borrowed from elsewhere. Flat ink,
+square, no gradient, no radius.
+
+**The label is the information; the movement is only liveness** — which is why
+the indicator never renders without one. A spinning circle answers "the app is
+alive" and answers it identically for a 200ms wait and a 20s one. The app
+already shipped the better idiom in WhatsFair's *"Working out what it would
+cost… — N to go"*, and that is text.
+
+That split is what makes it degrade correctly: under reduced motion the global
+guard caps iterations at 1 and duration at 0.01ms, and with no fill mode the
+rule reverts to its base state — **a solid, still ink rule under its label**.
+Nothing throbs and nothing is lost.
+
+Two variants. The **block** form (a view-level state) carries the page's own
+16px gutter, because nearly every caller is an early `return` that replaces a
+view *before* its padding wrapper exists; `padded={false}` is for the one caller
+already inside one. The predecessor was centred, which is why it never exposed
+this — a centred spinner cannot touch the screen edge, a full-width rule can.
+The **`inline`** form (a section inside a card or drawer) is a 16px rule beside
+its label, because a full-width rule there reads as a divider.
+
+`animate-pulse` was a green dot beside the words "Live Intelligence". It is gone
+rather than restyled: the dot said nothing the label did not.
+
+#### The moment budget — four moments, and everything else is instant
+
+| moment | where | why it earns a place |
+|---|---|---|
+| **the press run** | The Edge's entrance, and nowhere else | the signature |
+| **the press** | every pressable, 90ms | the app answering a finger |
+| **the sheet** | a sheet printing up from the bottom edge | the one surface that arrives |
+| **the press bar** | loading | the app saying it is working |
+
+**The press run is on the home screen only, and the budget is what decides
+that.** A 620ms wipe on every navigation is a wipe you see forty times a day,
+and it delays reading a screen you navigated to *deliberately* — you already
+know what you want. The Edge is the opposite case: it is the default route, you
+arrive without a target, and you read it top to bottom. **The signature stays
+app-wide by being a MATERIAL rather than a page transition** — the same band
+wipe carries the sheet and the loading bar, so the idiom appears on every screen
+while exactly one screen animates its entrance.
+
+Considered and cut, with the reason each failed:
+
+- **An entrance on every screen** — see above.
+- **A number roll-up on `Magnitude`.** It re-renders on every data refresh and
+  every trade-builder toggle, so it would fire constantly; and law 2 says type
+  size *is* the quantity, so animating the size puts the wrong quantity on
+  screen while it animates.
+- **A sliding tab-bar marker.** The marker would be briefly under the wrong tab,
+  and a tab change should read as instant.
+- **A verdict reveal on THE CALL.** It recomputes on every asset toggle — dozens
+  of times per trade.
+
 -----
 
 ## File Structure
@@ -3872,6 +3939,7 @@ dynastyedge/
 │   │   │   ├── Mark.jsx             ← THE editorial highlight — a word reversed out of a block; what REPLACED Card's accent rail. Never a position hue.
 │   │   │   ├── PositionBand.jsx     ← THE full-bleed position field + group total — Matchday's signature
 │   │   │   ├── Magnitude.jsx        ← THE value figure: type SIZE is the quantity (finding B2). Reference PINNED to FantasyCalc's 0–10000 contract (and MAGNITUDE_TEAM_REFERENCE for roster sums), never derived per list.
+│   │   │   ├── Loading.jsx          ← THE loading indicator — a printing rule under a label. There is NO spinner: `animate-spin`/`animate-pulse` are named markers and the circle was one of the app's last radii.
 │   │   │   ├── RuledList.jsx        ← THE DENSE register (finding B7): rows on the page's ground, hairline separators, NO box
 │   │   │   ├── Row.jsx              ← THE member of a RuledList — always carries .focus-ring. Extracted after /design-review caught eleven hand-rolled copies that had drifted apart on it.
 │   │   │   ├── Lede.jsx             ← THE OPEN register: eyebrow · marked headline · prose · ink CTA. What replaced The Edge's icon+title+one-liner briefing cards.
@@ -3882,6 +3950,7 @@ dynastyedge/
 │   │   │   ├── Badge.jsx            ← THE small status/label badge (New/You, tone/soft)
 │   │   │   ├── Input.jsx            ← THE text field + SearchInput variant
 │   │   │   ├── Select.jsx           ← THE dropdown field (native select + label/hint)
+│   │   │   ├── motion.js            ← the JS half of the reduced-motion guard (`prefersReducedMotion`, `scrollToTopOf`) + `stagger()`, the jittered press-run delays
 │   │   │   └── cn.js                ← tiny className joiner (the one styling primitive)
 │   │   ├── auth/
 │   │   │   └── LoginScreen.jsx      ← Sleeper-username sign-in + team-picker fallback (gates the app)
@@ -3946,7 +4015,6 @@ dynastyedge/
 │   │       ├── DynastyEdgeLogo.jsx
 │   │       ├── TeamAvatar.jsx       ← Sleeper avatar + gradient-initial fallback
 │   │       ├── Sparkline.jsx        ← tiny SVG trend line for value history
-│   │       └── LoadingSpinner.jsx
 │   ├── hooks/
 │   │   ├── useSleeper.js        ← league/rosters/users/picks/state fetch
 │   │   ├── useFantasyCalc.js    ← FantasyCalc fetch + module cache

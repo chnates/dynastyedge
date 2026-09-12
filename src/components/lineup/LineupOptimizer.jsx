@@ -19,7 +19,7 @@ import {
   assignWinWindowTiers,
 } from '../../utils/rosterAnalysis'
 import { ROSTER_SLOTS, POSITIONS, PICK_YEARS } from '../../constants'
-import { Button, Card, ErrorState, Spinner, SectionHeader, WinWindowBadge, cn } from '../ui'
+import { Button, Card, ErrorState, Loading, SectionHeader, WinWindowBadge, cn } from '../ui'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import LineupRow from './LineupRow'
 import LineupMovesCard from './LineupMovesCard'
@@ -192,7 +192,7 @@ export default function LineupOptimizer() {
   const loading = leagueLoading || fcLoading || lineupData.loading
   const error   = leagueError || lineupData.error
 
-  if (loading) return <Spinner message="Loading lineup data…" />
+  if (loading) return <Loading message="Loading lineup data…" />
   if (error) return <ErrorState message={error} onRetry={() => { leagueRetry(); lineupData.retry() }} />
   if (lineupData.isOffseason) return <OffseasonPlaceholder league={league} />
   if (!analysis) return <ErrorState message="Could not build lineup view." onRetry={() => { leagueRetry(); lineupData.retry() }} />

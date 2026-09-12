@@ -327,6 +327,37 @@ body {
   to   { opacity: 1; clip-path: inset(0 0 0 0); }
 }
 
+/* ── The press bar — the app's loading indicator ───────────────── */
+/* Matchday has no spinner. The app carried four `animate-spin` circles and one
+   `animate-pulse`, and both of those are on the researched marker list; the
+   circles were also, along with the avatar and the sheet grabbers, the last
+   radius in an app whose law 3 is square-with-a-hairline.
+
+   What replaced them is not a stock indeterminate progress bar either. There is
+   no track and no segment travelling along one: the rule PRINTS from the left,
+   holds, and CLEARS from the left — the press run's own wipe, looped, so
+   waiting reads as the press running rather than as a widget borrowed from
+   somewhere else. Flat ink, square, no gradient, no radius.
+
+   THE LABEL IS THE INFORMATION AND THE MOVEMENT IS ONLY LIVENESS, which is why
+   the indicator never appears without one. A spinning circle answers "the app
+   is alive" and answers it identically for a 200ms wait and a 20s one; the app
+   already had the better idiom shipped in WhatsFair's "Working out what it
+   would cost… — N to go", which is text.
+
+   That split is also what makes it degrade correctly. Under reduced motion the
+   global guard caps the iteration count at 1 and the duration at 0.01ms, and
+   because there is no fill mode the rule reverts to its base state — a solid,
+   still ink rule under its label. Nothing throbs, and nothing is lost. */
+@keyframes press-bar {
+  0%   { clip-path: inset(0 100% 0 0); }
+  42%  { clip-path: inset(0 0 0 0); }
+  58%  { clip-path: inset(0 0 0 0); }
+  100% { clip-path: inset(0 0 0 100%); }
+}
+
+.press-bar { animation: press-bar 1.15s var(--ez) infinite; }
+
 .press-band { animation: press-band 0.62s var(--ez) backwards; }
 .press-ink  { animation: press-ink  0.58s var(--ez) backwards; transform-origin: top; }
 .press-set  { animation: press-set  0.44s var(--ez) backwards; }

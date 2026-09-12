@@ -6,7 +6,7 @@ import { joinAnd } from '../../utils/recommendations'
 import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import {
-  Card, Chip, Badge, SearchInput, SectionHeader, Spinner, ErrorState, Button,
+  Card, Chip, Badge, SearchInput, SectionHeader, Loading, ErrorState, Button,
   scrollToTopOf,
 } from '../ui'
 
@@ -200,7 +200,7 @@ export default function RookieResearchView() {
   }, [rows, query, pos, sort])
 
   if (error) return <ErrorState message="Couldn't load the rookie class." onRetry={retry} />
-  if (leagueLoading || researchLoading) return <Spinner />
+  if (leagueLoading || researchLoading) return <Loading />
 
   const asOf = intel?.asOf ?? null
   const needList = [...deficits]

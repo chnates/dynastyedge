@@ -5,8 +5,7 @@ import { usePlayerDB } from '../../hooks/usePlayerDB'
 import { useWeeklyProjections } from '../../hooks/weeklyProjections'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { recommendFreeAgents } from '../../utils/recommendations'
-import { Card, Chip, RuledList, SearchInput } from '../ui'
-import LoadingSpinner from '../shared/LoadingSpinner'
+import { Card, Chip, RuledList, SearchInput, Loading } from '../ui'
 import ErrorState from '../shared/ErrorState'
 import SectionHeader from '../shared/SectionHeader'
 import TrendArrow from '../shared/TrendArrow'
@@ -315,7 +314,7 @@ export default function FreeAgentsView() {
     : (showProj ? [SORT_VALUE, SORT_PROJ, SORT_AGE] : [SORT_VALUE, SORT_AGE])
   const activeSort = sortMode === 'proj' && !showProj ? 'value' : sortMode
 
-  if (loading && !league) return <LoadingSpinner message="Loading league data…" />
+  if (loading && !league) return <Loading message="Loading league data…" />
   if (error && !league)   return <ErrorState message={error} onRetry={retry} />
 
   return (

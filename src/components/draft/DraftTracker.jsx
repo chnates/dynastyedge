@@ -5,10 +5,9 @@ import { buildRookieProspects } from '../../utils/rookieAdp'
 import { useSleeperDraft, buildDraftOrder, FALLBACK_DRAFT_SEASON } from '../../hooks/useSleeperDraft'
 import { deriveDraftState, buildBestAvailable, buildMyCapital, buildRecap, VOE_NEUTRAL } from '../../utils/draftLive'
 import { getTeamName } from '../../hooks/useLeague'
-import { Sheet, Modal, Button, Card } from '../ui'
+import { Sheet, Modal, Button, Card, Loading } from '../ui'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { BOARD_ORDER_KEY, NOTES_KEY, readJSON } from './boardStorage'
-import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
@@ -1048,7 +1047,7 @@ export default function DraftTracker() {
   )
 
   if (loading || rookieLoading || (sleeperDraft.loading && !sleeperDraft.data)) {
-    return <LoadingSpinner message="Loading draft data…" />
+    return <Loading message="Loading draft data…" />
   }
   if (error || rookieError) {
     return <ErrorState message={error || rookieError} onRetry={error ? retry : rookieRetry} />

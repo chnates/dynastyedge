@@ -3,7 +3,7 @@ import WinWindowBadge from '../shared/WinWindowBadge'
 import SectionHeader from '../shared/SectionHeader'
 import TheCall from './TheCall'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
-import { Card, Button, Badge } from '../ui'
+import { Card, Button, Badge, Loading } from '../ui'
 import { POS_TEXT } from '../../utils/positionColors'
 import { relativeTime } from '../../hooks/usePlayerIntel'
 
@@ -792,11 +792,8 @@ export default function TradeVerdict({
           {bothSides && <PitchCard pitch={pitch} />}
 
           {intelligenceLoading && (
-            <Card padding="none" className="flex items-center justify-center gap-2 py-3 mb-4">
-              <div className="h-3.5 w-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin" />
-              <span className="font-body text-xs text-text-secondary dark:text-text-secondary">
-                Loading player news…
-              </span>
+            <Card padding="none" className="px-4 py-3 mb-4">
+              <Loading inline message="Loading player news…" />
             </Card>
           )}
 
@@ -806,7 +803,6 @@ export default function TradeVerdict({
                 <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary">
                   Live Intelligence
                 </p>
-                <span className="inline-block w-1.5 h-1.5 bg-success animate-pulse" />
               </div>
               {liveIntelligence.map(intel => (
                 <PlayerNewsCard

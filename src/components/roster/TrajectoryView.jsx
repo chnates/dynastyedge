@@ -2,14 +2,13 @@ import { useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getTeamName } from '../../hooks/useLeague'
 import { useLeagueContext } from '../../context/LeagueContext'
-import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import SectionHeader from '../shared/SectionHeader'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import Sparkline from '../shared/Sparkline'
 import TeamAvatar from '../shared/TeamAvatar'
 import { POS_TEXT, POS_SVG } from '../../utils/positionColors'
-import { Lede, Mark, PositionBand, RuledList } from '../ui'
+import { Lede, Mark, PositionBand, RuledList, Loading } from '../ui'
 
 // The verdict's tone, as a Mark tone. Never a position hue (law 4).
 const VERDICT_MARK = { ascending: 'success', declining: 'warning', balanced: 'ink' }
@@ -201,7 +200,7 @@ export default function TrajectoryView() {
     return { curves, trajectory, leagueAvg, peakIdx, players, verdict: getTrajectoryVerdict(trajectory) }
   }, [league, values, roster, currentSeason])
 
-  if (loading && !league) return <LoadingSpinner message="Projecting trajectory…" />
+  if (loading && !league) return <Loading message="Projecting trajectory…" />
   if (error && !league) return <ErrorState message={error} onRetry={retry} />
   if (!roster || !model) return <ErrorState message="Could not build trajectory." onRetry={retry} />
 

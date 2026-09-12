@@ -18,9 +18,8 @@ import { POS_BG, POS_TEXT } from '../../utils/positionColors'
 import { TIER_BADGE, TIER_TEXT } from '../../utils/tierColors'
 import {
   Badge, Lede, Magnitude, MAGNITUDE_TEAM_REFERENCE, Mark, NavRow,
-  PositionBand, Row, RuledList, markedHeadline, stagger,
+  PositionBand, Row, RuledList, markedHeadline, stagger, Loading,
 } from '../ui'
-import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import NewsArticleSheet from '../shared/NewsArticleSheet'
@@ -182,7 +181,7 @@ export default function EdgeView() {
     [history, league]
   )
 
-  if (loading && !league) return <LoadingSpinner message="Preparing your briefing…" />
+  if (loading && !league) return <Loading message="Preparing your briefing…" />
   if (error && !league)   return <ErrorState message={error} onRetry={retry} />
   if (!league?.myRoster || !signals) return <ErrorState message="Could not load your briefing." onRetry={retry} />
 
