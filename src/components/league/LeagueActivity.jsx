@@ -5,10 +5,9 @@ import { usePlayerDB } from '../../hooks/usePlayerDB'
 import { getTeamName } from '../../hooks/useLeague'
 import { findPickValue, buildDraftPickIndex, buildGenericRoundValues } from '../../utils/pickCapital'
 import { useSleeperDraft } from '../../hooks/useSleeperDraft'
-import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
-import { Chip, Badge, Button, cn } from '../ui'
+import { Chip, Badge, Button, cn, Loading } from '../ui'
 
 const PAGE_SIZE = 25
 const ROUND_SUFFIXES = ['', '1st', '2nd', '3rd', '4th', '5th']
@@ -43,7 +42,7 @@ function AssetLine({ sign, asset, onSelectPlayer }) {
       {asset.player ? (
         <button
           onClick={() => onSelectPlayer(asset.player)}
-          className="font-body text-xs text-text-primary dark:text-text-primary truncate min-w-0 underline decoration-dotted decoration-text-tertiary underline-offset-2 active:opacity-60 transition-opacity"
+          className="font-body text-xs text-text-primary dark:text-text-primary truncate min-w-0 underline decoration-dotted decoration-text-tertiary underline-offset-2 press"
         >
           {asset.label}
         </button>
@@ -170,7 +169,7 @@ export default function LeagueActivity() {
   }, [transactions, filter, myRosterId])
 
   const loading = (leagueLoading && !league) || (txLoading && !transactions)
-  if (loading) return <LoadingSpinner message="Loading league activity…" />
+  if (loading) return <Loading message="Loading league activity…" />
   if (leagueError && !league) return <ErrorState message={leagueError} onRetry={leagueRetry} />
   if (txError && !transactions) return <ErrorState message={txError} onRetry={txRetry} />
   if (!league || !transactions || !filtered) return <ErrorState message="Could not load activity." onRetry={() => { leagueRetry(); txRetry() }} />
@@ -274,7 +273,6 @@ export default function LeagueActivity() {
                 }`}
               >
                 <div className="flex items-center gap-1.5 mb-2">
-                  <meta.Icon size={13} strokeWidth={2} className={meta.color} />
                   <span className={`font-body text-[11px] font-semibold uppercase tracking-wider ${meta.color}`}>
                     {meta.label}
                   </span>

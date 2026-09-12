@@ -6,7 +6,8 @@ import { joinAnd } from '../../utils/recommendations'
 import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import {
-  Card, Chip, Badge, SearchInput, SectionHeader, Spinner, ErrorState, Button,
+  Card, Chip, Badge, SearchInput, SectionHeader, Loading, ErrorState, Button,
+  scrollToTopOf,
 } from '../ui'
 
 const POS_FILTERS = ['ALL', 'QB', 'RB', 'WR', 'TE']
@@ -199,7 +200,7 @@ export default function RookieResearchView() {
   }, [rows, query, pos, sort])
 
   if (error) return <ErrorState message="Couldn't load the rookie class." onRetry={retry} />
-  if (leagueLoading || researchLoading) return <Spinner />
+  if (leagueLoading || researchLoading) return <Loading />
 
   const asOf = intel?.asOf ?? null
   const needList = [...deficits]
@@ -274,7 +275,7 @@ export default function RookieResearchView() {
               setSort('fit'); setPos('ALL'); setQuery('')
               // The board it re-ranks is below two full sections — without the
               // scroll the tap changes state the user can't see.
-              boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              scrollToTopOf(boardRef.current)
             }}
           >
             See the whole class ranked for my roster

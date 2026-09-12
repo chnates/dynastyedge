@@ -8,9 +8,9 @@ import { LeagueContext } from './context/LeagueContext'
 import SideDrawer from './components/shared/SideDrawer'
 import TabBar, { TAB_BAR_HEIGHT } from './components/shared/TabBar'
 import { sectionForPath, INDEX_LABEL } from './navigation'
-import LoadingSpinner from './components/shared/LoadingSpinner'
 import EdgeView from './components/edge/EdgeView'
 import LoginScreen from './components/auth/LoginScreen'
+import { Loading } from './components/ui'
 
 // The Edge stays eager — it's the default route and must render without a
 // lazy-chunk flash. Every other section loads on first navigation.
@@ -133,9 +133,9 @@ function AppShell({ leagueData, updateAvailable, onApplyUpdate, buildId, version
           <button
             onClick={() => setDrawerOpen(true)}
             aria-label="Open settings and data"
-            className="tap-target focus-ring h-11 flex items-center text-text-primary
+            className="tap-target focus-ring press h-11 flex items-center text-text-primary
                        font-mono text-[10px] font-semibold uppercase tracking-[0.14em]
-                       hover:opacity-70 transition-opacity flex-shrink-0"
+                       hover:opacity-70 flex-shrink-0"
           >
             Menu
           </button>
@@ -146,9 +146,9 @@ function AppShell({ leagueData, updateAvailable, onApplyUpdate, buildId, version
           <button
             onClick={() => setSearchOpen(true)}
             aria-label="Search players"
-            className="tap-target focus-ring h-11 flex items-center text-text-primary
+            className="tap-target focus-ring press h-11 flex items-center text-text-primary
                        font-mono text-[10px] font-semibold uppercase tracking-[0.14em]
-                       hover:opacity-70 transition-opacity flex-shrink-0"
+                       hover:opacity-70 flex-shrink-0"
           >
             Find
           </button>
@@ -178,7 +178,7 @@ function AppShell({ leagueData, updateAvailable, onApplyUpdate, buildId, version
           WebkitOverflowScrolling: 'touch',
         }}
       >
-        <Suspense fallback={<LoadingSpinner message="Loading…" />}>
+        <Suspense fallback={<Loading message="Loading…" />}>
           <Routes>
             <Route path="/" element={<Navigate to="/edge" replace />} />
             <Route path="/edge" element={<EdgeView />} />

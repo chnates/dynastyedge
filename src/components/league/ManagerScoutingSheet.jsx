@@ -41,7 +41,7 @@ function AssetLine({ sign, asset, onSelectPlayer }) {
       {asset.player ? (
         <button
           onClick={() => onSelectPlayer(asset.player)}
-          className="font-body text-xs text-text-primary dark:text-text-primary truncate min-w-0 text-left underline decoration-dotted decoration-text-tertiary underline-offset-2 active:opacity-60 transition-opacity"
+          className="font-body text-xs text-text-primary dark:text-text-primary truncate min-w-0 text-left underline decoration-dotted decoration-text-tertiary underline-offset-2 press"
         >
           {asset.label}
         </button>
@@ -156,7 +156,7 @@ function DraftPickRow({ row, onSelectPlayer }) {
       {row.player.player ? (
         <button
           onClick={() => onSelectPlayer(row.player.player)}
-          className="font-body text-xs text-text-primary dark:text-text-primary truncate min-w-0 text-left underline decoration-dotted decoration-text-tertiary underline-offset-2 active:opacity-60 transition-opacity"
+          className="font-body text-xs text-text-primary dark:text-text-primary truncate min-w-0 text-left underline decoration-dotted decoration-text-tertiary underline-offset-2 press"
         >
           {row.player.label}
         </button>

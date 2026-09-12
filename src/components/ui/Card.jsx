@@ -48,7 +48,7 @@ export default function Card({
     <Tag
       className={cn(
         'relative w-full rounded-none bg-bg-card border border-border-default overflow-hidden',
-        (interactive || rest.onClick) && 'text-left active:opacity-80 transition-opacity focus-ring',
+        (interactive || rest.onClick) && 'text-left press focus-ring',
         !tone && pad,
         className,
       )}

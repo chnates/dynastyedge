@@ -19,8 +19,8 @@ import TradeBuilder from './TradeBuilder'
 import TradeVerdict from './TradeVerdict'
 import PartnerContextStrip from './PartnerContextStrip'
 import PartnerSelect, { buildPartnerOptions } from './PartnerSelect'
-import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
+import { Loading } from '../ui'
 
 const DRAFT_KEY = 'dynastyedge_trade_draft'
 
@@ -372,7 +372,7 @@ export default function TradeAnalyzer() {
     setWhatsFairTarget(null)
   }
 
-  if (loading && !league) return <LoadingSpinner message="Loading trade data…" />
+  if (loading && !league) return <Loading message="Loading trade data…" />
   if (error && !league)   return <ErrorState message={error} onRetry={retry} />
   if (!league?.myRoster) return <ErrorState message="Could not load league data." onRetry={retry} />
 

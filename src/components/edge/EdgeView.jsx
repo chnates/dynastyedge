@@ -18,9 +18,8 @@ import { POS_BG, POS_TEXT } from '../../utils/positionColors'
 import { TIER_BADGE, TIER_TEXT } from '../../utils/tierColors'
 import {
   Badge, Lede, Magnitude, MAGNITUDE_TEAM_REFERENCE, Mark, NavRow,
-  PositionBand, Row, RuledList, markedHeadline,
+  PositionBand, Row, RuledList, markedHeadline, stagger, Loading,
 } from '../ui'
-import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import NewsArticleSheet from '../shared/NewsArticleSheet'
@@ -182,7 +181,7 @@ export default function EdgeView() {
     [history, league]
   )
 
-  if (loading && !league) return <LoadingSpinner message="Preparing your briefing…" />
+  if (loading && !league) return <Loading message="Preparing your briefing…" />
   if (error && !league)   return <ErrorState message={error} onRetry={retry} />
   if (!league?.myRoster || !signals) return <ErrorState message="Could not load your briefing." onRetry={retry} />
 
@@ -231,12 +230,22 @@ export default function EdgeView() {
     else navigate(action.to, action.state ? { state: action.state } : undefined)
   }
 
-  // Staggered entrance — each top-level block rises in sequence.
-  let riseIndex = 0
-  const rise = (extra = '') => ({
-    className: `edge-rise ${extra}`.trim(),
-    style: { animationDelay: `${Math.min(riseIndex++ * 60, 360)}ms` },
+  // THE PRESS RUN — the app's one animated screen entrance (see CLAUDE.md →
+  // Motion for why it is only this one). Blocks set under a downward clip in a
+  // JITTERED sequence: the old version was `Math.min(riseIndex++ * 60, 360)`,
+  // a textbook linear 0/60/120/180 stagger, which is itself a named marker.
+  // `stagger()` sums independently-drawn gaps, so the delays advance
+  // monotonically but no two gaps match.
+  let runIndex = 0
+  const run = (extra = '', klass = 'press-set') => ({
+    className: `${klass} ${extra}`.trim(),
+    style: { animationDelay: `${stagger(runIndex++)}ms` },
   })
+  // The hero is the band, so its type has to land BEHIND the wipe rather than
+  // with it — the fixed offset is the mock's, and it puts the ink down when the
+  // band is roughly a third of the way across.
+  const heroDelay = stagger(0)
+  const heroInkStyle = { animationDelay: `${heroDelay + 180}ms` }
 
   const dateline = new Date().toLocaleDateString([], {
     weekday: 'short', month: 'short', day: 'numeric',
@@ -246,7 +255,7 @@ export default function EdgeView() {
     <div className="px-4 pb-6">
 
       {/* ── Hero: the red score-bug franchise report ── */}
-      <div {...rise('mt-4')}>
+      <div {...run('mt-4', 'press-band')}>
         <div className="ink-field-cap flex items-center justify-between gap-2 px-3 py-1.5">
           <span className="font-display text-[12px] uppercase tracking-[0.1em] leading-none truncate">
             {myTeamName} · Franchise Report
@@ -265,11 +274,14 @@ export default function EdgeView() {
 
           <button
             onClick={() => navigate('/my-team')}
-            className="w-full flex items-end justify-between gap-3 mt-3 text-left active:opacity-70 transition-opacity"
+            className="w-full flex items-end justify-between gap-3 mt-3 text-left press"
           >
             <div>
               <div className="flex items-baseline gap-2">
-                <span className="font-mono text-4xl font-medium tabular-nums text-bg-primary leading-none">
+                <span
+                  style={heroInkStyle}
+                  className="press-ink font-mono text-4xl font-medium tabular-nums text-bg-primary leading-none"
+                >
                   {myRoster.totalValue.toLocaleString()}
                 </span>
                 <TrendChip trend={signals.teamTrend} value={signals.playerValue} onHero />
@@ -285,7 +297,7 @@ export default function EdgeView() {
           <div className="flex mt-3 pt-2.5 border-t border-bg-primary/20 divide-x divide-bg-primary/20">
             <button
               onClick={() => navigate('/league')}
-              className="text-left pr-3 active:opacity-70 transition-opacity"
+              className="text-left pr-3 press"
             >
               <p className="font-mono text-base font-semibold tabular-nums leading-none text-bg-primary">
                 {/* Top 3 reverses a second time — the page ground with the
@@ -308,7 +320,7 @@ export default function EdgeView() {
             )}
             <button
               onClick={() => navigate('/league')}
-              className="text-left px-3 active:opacity-70 transition-opacity"
+              className="text-left px-3 press"
             >
               <p className="font-display text-[14px] uppercase tracking-[0.02em] leading-none text-bg-primary">
                 {signals.myTier}
@@ -326,12 +338,12 @@ export default function EdgeView() {
       </div>
 
       {/* ── Roster action items (shared component, dismissible) ── */}
-      <div {...rise()}>
+      <div {...run()}>
         <RosterActionItems myRoster={myRoster} nflState={nflState} allRosters={league.allRosters} pickYears={league.pickYears} />
       </div>
 
       {/* ── Roster Analysis shortcut (opens the same sheet as My Roster) ── */}
-      <div {...rise()}>
+      <div {...run()}>
         <NavRow
           size="sm"
           onClick={() => setAnalysisOpen(true)}
@@ -342,7 +354,7 @@ export default function EdgeView() {
 
       {/* ── Your Briefing — prioritized, every row goes somewhere ── */}
       {briefing.length > 0 && (
-        <section {...rise()}>
+        <section {...run()}>
           <PositionBand label="Your Briefing" count={briefing.length} className="mt-5" />
           <RuledList>
             {briefing.map(item => (
@@ -366,7 +378,7 @@ export default function EdgeView() {
 
       {/* ── Headlines on my players + watchlist ── */}
       {newsItems.length > 0 && (
-        <section {...rise()}>
+        <section {...run()}>
           <PositionBand label="Headlines" count={newsItems.length} className="mt-5" />
           <RuledList>
             {newsItems.map((n, i) => {
@@ -404,7 +416,7 @@ export default function EdgeView() {
       )}
 
       {/* ── Market radar: watchlist + my roster movers ── */}
-      <section {...rise()}>
+      <section {...run()}>
         <PositionBand label="Market Radar" count={radar.length || null} className="mt-5" />
         {radar.length === 0 ? (
           <p className="font-body text-xs text-text-tertiary dark:text-text-tertiary px-1 pb-1">
@@ -449,7 +461,7 @@ export default function EdgeView() {
 
       {/* ── Around the league: latest moves ── */}
       {recentTx.length > 0 && (
-        <section {...rise()}>
+        <section {...run()}>
           <PositionBand
             label="Around the League"
             count={freshTx.length > 0 ? `${freshTx.length} new` : recentTx.length}
@@ -497,7 +509,7 @@ export default function EdgeView() {
       )}
 
       {/* ── League pulse footer — chips open the Overview pre-filtered ── */}
-      <div {...rise('flex items-center gap-1.5 mt-5')}>
+      <div {...run('flex items-center gap-1.5 mt-5')}>
         {TIERS.map(tier => (
           <button
             key={tier}
@@ -505,7 +517,7 @@ export default function EdgeView() {
               try { sessionStorage.setItem('dynastyedge_league_tier', tier) } catch { /* private mode */ }
               navigate('/league')
             }}
-            className={`px-2.5 py-1 font-body text-xs font-medium border active:opacity-70 transition-opacity ${TIER_BADGE[tier]}`}
+            className={`px-2.5 py-1 font-body text-xs font-medium border press ${TIER_BADGE[tier]}`}
           >
             {signals.tierCounts[tier]} {tier}
           </button>

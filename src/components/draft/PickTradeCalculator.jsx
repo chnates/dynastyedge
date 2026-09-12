@@ -10,8 +10,8 @@ import {
 import { buildRookieProspects } from '../../utils/rookieAdp'
 import { ROUND_TEXT, ROUND_LABELS } from '../../utils/roundColors'
 import SectionHeader from '../shared/SectionHeader'
-import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
+import { Loading } from '../ui'
 
 const MODES = [
   { id: 'up',   label: 'Move Up' },
@@ -62,7 +62,7 @@ function PackageRow({ pkg, actionLabel, onBuild }) {
 function PickHeaderRow({ pick, subtitle, expanded, onTap }) {
   const chevron = expanded ? '▾' : '▸'
   return (
-    <button onClick={onTap} className="w-full flex items-center gap-2 py-2.5 text-left active:opacity-60 transition-opacity">
+    <button onClick={onTap} className="w-full flex items-center gap-2 py-2.5 text-left press">
       <span className={`font-mono text-sm font-bold tabular-nums shrink-0 w-12 ${ROUND_TEXT[pick.round] ?? 'text-text-primary'}`}>
         {pick.slotLabel ?? ROUND_LABELS[pick.round] ?? `R${pick.round}`}
       </span>
@@ -182,7 +182,7 @@ export default function PickTradeCalculator() {
     }
   }, [market, allRosters, priceFor, draftSeason])
 
-  if (loading && !league) return <LoadingSpinner message="Loading pick market…" />
+  if (loading && !league) return <Loading message="Loading pick market…" />
   if (error && !league) return <ErrorState message={error} onRetry={retry} />
   if (!league) return <ErrorState message="Could not load league data." onRetry={retry} />
 
@@ -224,7 +224,7 @@ export default function PickTradeCalculator() {
           <button
             key={m.id}
             onClick={() => { setMode(m.id); setExpandedKey(null) }}
-            className={`flex-1 py-2 font-body text-xs font-semibold uppercase tracking-wider transition-colors
+            className={`focus-ring press flex-1 py-2 font-body text-xs font-semibold uppercase tracking-wider
               ${mode === m.id ? 'bg-accent text-bg-primary' : 'text-text-secondary dark:text-text-secondary'}`}
           >
             {m.label}
@@ -254,7 +254,12 @@ export default function PickTradeCalculator() {
                   onTap={() => setExpandedKey(expanded ? null : key)}
                 />
                 {expanded && (
-                  <div className="pb-2.5 pl-2 border-l-2 border-accent/30 ml-1 mb-2">
+                  // Indent alone ties the expansion to its row. This carried a
+                  // `border-l-2 border-accent/30` — the banned left rail (law 1),
+                  // and the second time step 4's lesson has bitten: nothing
+                  // looking for `Card`'s deleted `accent` prop finds a raw
+                  // border-l. Audit for the shape.
+                  <div className="pb-2.5 pl-3 mb-2">
                     {packages.length === 0 ? (
                       <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary py-1">
                         No pick package from your inventory gets close — add a
@@ -309,7 +314,7 @@ export default function PickTradeCalculator() {
                   onTap={() => setExpandedKey(expanded ? null : key)}
                 />
                 {expanded && (
-                  <div className="pb-2.5 pl-2 border-l-2 border-accent/30 ml-1 mb-2">
+                  <div className="pb-2.5 pl-3 mb-2">
                     {offers.length === 0 ? (
                       <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary py-1">
                         No team's pick inventory adds up to fair value for this

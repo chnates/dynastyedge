@@ -14,8 +14,7 @@ import { buildRookieProspects } from '../../utils/rookieAdp'
 import { useSleeperDraft, buildDraftOrder } from '../../hooks/useSleeperDraft'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { BOARD_ORDER_KEY, NOTES_KEY, CSV_KEY } from './boardStorage'
-import LoadingSpinner from '../shared/LoadingSpinner'
-import { Modal, Button, Input } from '../ui'
+import { Modal, Button, Card, Chip, Input, Loading } from '../ui'
 import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
@@ -284,11 +283,16 @@ function SortablePlayerRow({
 
       <button
         onClick={onSelect}
-        className={`flex-1 text-left py-2.5 flex items-center gap-2 active:opacity-60 transition-opacity min-w-0 ${drafted ? 'opacity-50' : ''}`}
+        className={`flex-1 text-left py-2.5 flex items-center gap-2 press min-w-0 ${drafted ? 'opacity-50' : ''}`}
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center flex-wrap gap-x-1">
-            <span className={`font-body text-sm font-medium leading-tight truncate ${drafted ? 'text-text-tertiary line-through' : 'text-text-primary'}`}>{player.name}</span>
+            {/* Wraps, never elides. The overflow sweep caught "Montana
+                Lemonious-Craig" clipped by 4px here — a player's NAME on the
+                board whose whole job is telling you who he is. Sixth
+                recurrence of the truncation rule; the row already wraps
+                (`flex-wrap`), so the name only needed to stop opting out. */}
+            <span className={`font-body text-sm font-medium leading-tight text-balance ${drafted ? 'text-text-tertiary line-through' : 'text-text-primary'}`}>{player.name}</span>
             {hasNote && <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.14em] text-brand-bright">Noted</span>}
             {drafted && <DraftedChip />}
             {!drafted && fillsNeed && <FillsNeedBadge />}
@@ -702,7 +706,7 @@ export default function DraftBoard() {
       return (
         <div key={tier.id}>
           <TierHeader tier={tier} />
-          <div className="rounded-none bg-bg-card border border-border-default px-3">
+          <Card padding="none" className="px-3">
             {players.map(player => (
               <SortablePlayerRow
                 key={player.sleeperId}
@@ -719,13 +723,13 @@ export default function DraftBoard() {
                 onSelect={() => setSelected(player)}
               />
             ))}
-          </div>
+          </Card>
         </div>
       )
     })
   }
 
-  if (loading || rookieLoading) return <LoadingSpinner message="Loading draft data…" />
+  if (loading || rookieLoading) return <Loading message="Loading draft data…" />
   if (error || rookieError) {
     return <ErrorState message={error || rookieError} onRetry={error ? retry : rookieRetry} />
   }
@@ -736,17 +740,15 @@ export default function DraftBoard() {
 
         {/* ── Board mode toggle ── */}
         <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-          <div className="flex rounded-none border border-border-default overflow-hidden">
+          <div className="flex gap-1.5">
             {['FantasyCalc', 'My Board'].map(mode => (
-              <button
+              <Chip
                 key={mode}
+                active={boardMode === mode}
                 onClick={() => handleBoardModeToggle(mode)}
-                className={`px-3 py-1.5 font-body text-xs font-semibold transition-colors ${
-                  boardMode === mode ? 'bg-accent text-bg-primary' : 'bg-bg-card text-text-secondary'
-                }`}
               >
                 {mode}
-              </button>
+              </Chip>
             ))}
           </div>
           {boardMode === 'My Board' && (
@@ -828,7 +830,7 @@ export default function DraftBoard() {
                 <button
                   onClick={sleeperDraft.refresh}
                   aria-label="Refresh draft"
-                  className="text-text-tertiary active:opacity-60 transition-opacity"
+                  className="text-text-tertiary press"
                 >
                 </button>
               )}
@@ -935,7 +937,7 @@ export default function DraftBoard() {
             size="lg"
             fullWidth
             onClick={() => navigate('/draft/research')}
-            className="mt-4 py-2.5 text-xs active:opacity-70"
+            className="mt-4 py-2.5 text-xs"
           >
             Value prices consensus. Who gets the job? Open Rookie Research →
           </Button>

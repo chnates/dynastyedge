@@ -6,7 +6,7 @@ import { useLeagueContext } from '../../context/LeagueContext'
 import { POS_TEXT } from '../../utils/positionColors'
 import { SEARCH_DESTINATIONS } from '../../navigation'
 import PlayerProfileDrawer from './PlayerProfileDrawer'
-import { SearchInput, IconButton, TrendArrow } from '../ui'
+import { SearchInput, IconButton, TrendArrow, Row, RuledList } from '../ui'
 
 const MAX_RESULTS = 40
 const MAX_DESTINATIONS = 8
@@ -111,7 +111,7 @@ export default function PlayerSearchSheet({ onClose }) {
     <div
       ref={overlayRef}
       onClick={handleOverlayClick}
-      className="fixed left-0 right-0 z-50 flex items-end bg-black/60"
+      className="overlay-ink fixed left-0 right-0 z-50 flex items-end bg-black/60"
       style={{
         top: vp.offsetTop,
         height: vp.height,
@@ -131,7 +131,7 @@ export default function PlayerSearchSheet({ onClose }) {
     >
       <div
         ref={sheetRef}
-        className="w-full bg-bg-secondary rounded-t-2xl border-t border-border-default flex flex-col max-h-full min-h-0"
+        className="sheet-print w-full bg-bg-secondary rounded-t-2xl border-t border-border-default flex flex-col max-h-full min-h-0"
       >
         {/* Handle bar */}
         <div className="flex justify-center pt-3 pb-1 shrink-0">
@@ -179,20 +179,23 @@ export default function PlayerSearchSheet({ onClose }) {
                 <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary px-1 pb-1">
                   Jump to
                 </p>
-                {destinations.map(d => (
-                  <button
-                    key={d.to}
-                    onClick={() => goTo(d.to)}
-                    className="w-full py-2.5 border-b border-border-default last:border-0 text-left active:opacity-60 transition-opacity flex items-center gap-2.5"
-                  >
-                    <span className="flex-1 font-body font-medium text-sm text-text-primary truncate min-w-0">
-                      {d.label}
-                    </span>
-                    <span className="font-body text-[11px] text-text-tertiary shrink-0 uppercase tracking-wide">
-                      {d.section}
-                    </span>
-                  </button>
-                ))}
+                <RuledList>
+                  {destinations.map(d => (
+                    <Row
+                      key={d.to}
+                      onClick={() => goTo(d.to)}
+                      padding="sm"
+                      className="flex items-center gap-2.5"
+                    >
+                      <span className="flex-1 font-body font-medium text-sm text-text-primary min-w-0 text-balance">
+                        {d.label}
+                      </span>
+                      <span className="font-body text-[11px] text-text-tertiary shrink-0 uppercase tracking-wide">
+                        {d.section}
+                      </span>
+                    </Row>
+                  ))}
+                </RuledList>
               </div>
             )}
             {results.length > 0 && (
@@ -202,14 +205,11 @@ export default function PlayerSearchSheet({ onClose }) {
                     Players
                   </p>
                 )}
-                {results.map(p => (
-              <button
-                key={p.sleeperId}
-                onClick={() => setSelected(p)}
-                className="w-full py-2.5 border-b border-border-default last:border-0 text-left active:opacity-60 transition-opacity"
-              >
+                <RuledList>
+                  {results.map(p => (
+              <Row key={p.sleeperId} onClick={() => setSelected(p)} padding="sm">
                 <div className="flex items-center gap-2">
-                  <span className="flex-1 font-body font-medium text-sm text-text-primary truncate min-w-0">
+                  <span className="flex-1 font-body font-medium text-sm text-text-primary min-w-0 text-balance">
                     {p.name}
                   </span>
                   <span className="font-body text-[11px] text-text-tertiary shrink-0 uppercase tracking-wide">
@@ -225,8 +225,9 @@ export default function PlayerSearchSheet({ onClose }) {
                     <TrendArrow trend={p.trend30Day ?? 0} />
                   </span>
                 </div>
-              </button>
-                ))}
+              </Row>
+                  ))}
+                </RuledList>
               </div>
             )}
           </>

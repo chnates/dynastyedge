@@ -52,11 +52,11 @@ export default function Sheet({
       role="dialog"
       aria-modal="true"
       aria-label={label}
-      className={cn('fixed inset-0 flex items-end bg-black/60', zIndex)}
+      className={cn('overlay-ink fixed inset-0 flex items-end bg-black/60', zIndex)}
     >
       <div
         ref={sheetRef}
-        className={cn('w-full rounded-t-2xl border-t border-border-default', surface, className)}
+        className={cn('sheet-print w-full rounded-t-2xl border-t border-border-default', surface, className)}
       >
         <div
           ref={scrollRef}

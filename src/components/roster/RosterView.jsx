@@ -2,14 +2,13 @@ import { useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getTeamName } from '../../hooks/useLeague'
 import { useLeagueContext } from '../../context/LeagueContext'
-import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import PlayerCard from './PlayerCard'
 import PickBadge from './PickBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import RosterAnalysisSheet from './RosterAnalysisSheet'
 import RosterActionItems from './RosterActionItems'
-import { PositionBand, RuledList, NavRow } from '../ui'
+import { PositionBand, RuledList, NavRow, Loading } from '../ui'
 import TeamAvatar from '../shared/TeamAvatar'
 
 const POSITION_ORDER = ['QB', 'RB', 'WR', 'TE', 'DEF']
@@ -58,7 +57,7 @@ export default function RosterView() {
     return { byPosition, taxi, ir, picksByYear }
   }, [displayRoster])
 
-  if (loading && !league) return <LoadingSpinner message="Loading roster data…" />
+  if (loading && !league) return <Loading message="Loading roster data…" />
   if (error && !league) return <ErrorState message={error} onRetry={retry} />
   if (!displayRoster) return <ErrorState message="Could not load roster." onRetry={retry} />
 
@@ -76,7 +75,7 @@ export default function RosterView() {
       {selectedRosterId && (
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center gap-1 pt-4 pb-1 text-accent font-body text-sm"
+          className="focus-ring press flex items-center gap-1 pt-4 pb-1 text-accent font-body text-sm"
         >
           ← Back
         </button>

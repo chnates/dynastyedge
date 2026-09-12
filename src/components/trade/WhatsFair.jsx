@@ -10,7 +10,7 @@ import PartnerContextStrip from './PartnerContextStrip'
 import PartnerSelect, { buildPartnerOptions } from './PartnerSelect'
 import {
   Badge, Chip, ErrorState, Lede, Magnitude, Mark, PositionBand, Row, RuledList,
-  Spinner, TrendArrow, WinWindowBadge, cn,
+  Loading, TrendArrow, WinWindowBadge, cn,
 } from '../ui'
 import { POS_BG, POS_CHIP_ACTIVE } from '../../utils/positionColors'
 
@@ -385,7 +385,7 @@ export default function WhatsFair() {
     [league, scopedRosterId]
   )
 
-  if (loading && !league) return <Spinner message="Finding trade targets…" />
+  if (loading && !league) return <Loading message="Finding trade targets…" />
   if (error && !league)   return <ErrorState message={error} onRetry={retry} />
   if (!league?.myRoster) return <ErrorState message="Could not load league data." onRetry={retry} />
 

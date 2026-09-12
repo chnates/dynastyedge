@@ -11,7 +11,7 @@ import { useLeagueContext } from '../../context/LeagueContext'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { getTeamName } from '../../hooks/useLeague'
 import { POS_TEXT } from '../../utils/positionColors'
-import { Sheet, IconButton, Button, Badge, Card, TrendArrow, cn } from '../ui'
+import { Sheet, IconButton, Button, Badge, Card, Loading, Row, RuledList, TrendArrow, cn } from '../ui'
 
 // ── Opportunity grade ────────────────────────────────────────────────────────
 
@@ -525,15 +525,12 @@ export default function PlayerProfileDrawer({
           {researchRow && <RookieOpportunity research={researchRow} />}
 
           {/* Player Status */}
-          <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+          <Card padding="sm">
             <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
               Player Status
             </p>
             {newsLoading ? (
-              <div className="flex items-center gap-2 py-1">
-                <div className="h-3 w-3 rounded-full border-2 border-accent border-t-transparent animate-spin" />
-                <span className="font-body text-xs text-text-tertiary">Loading…</span>
-              </div>
+              <Loading inline message="Loading…" />
             ) : (
               <div className="flex items-start gap-3">
                 <span className={`inline-block w-2.5 h-2.5 shrink-0 mt-1 ${flagStyle.dot}`} />
@@ -561,7 +558,7 @@ export default function PlayerProfileDrawer({
                 </p>
               </div>
             )}
-          </div>
+          </Card>
 
           {/* Depth Chart — NFL position room, viewed player highlighted.
               Best-effort: hides entirely when Sleeper has no depth order. */}
@@ -636,15 +633,12 @@ export default function PlayerProfileDrawer({
 
           {/* Production — recent games in-season, last-season summary otherwise */}
           {(intel.loading || intel.seasonSummary || intel.recentGames.some(g => g.pts != null)) && (
-            <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+            <Card padding="sm">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
                 Production
               </p>
               {intel.loading ? (
-                <div className="flex items-center gap-2 py-1">
-                  <div className="h-3 w-3 rounded-full border-2 border-accent border-t-transparent animate-spin" />
-                  <span className="font-body text-xs text-text-tertiary">Loading stats…</span>
-                </div>
+                <Loading inline message="Loading stats…" />
               ) : (
                 <>
                   {intel.seasonSummary && (
@@ -693,22 +687,18 @@ export default function PlayerProfileDrawer({
                   )}
                 </>
               )}
-            </div>
+            </Card>
           )}
 
           {/* Latest News (ESPN — unofficial, hidden when unavailable) */}
           {intel.news.length > 0 && (
-            <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+            <Card padding="sm">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
                 Latest News
               </p>
-              <div className="flex flex-col">
+              <RuledList>
                 {intel.news.map((n, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setOpenArticle(n)}
-                    className={`w-full text-left active:opacity-60 transition-opacity ${i < intel.news.length - 1 ? 'pb-2.5 mb-2.5 border-b border-border-default' : ''}`}
-                  >
+                  <Row key={i} onClick={() => setOpenArticle(n)} padding="sm">
                     <div className="flex items-baseline justify-between gap-2">
                       <p className="flex-1 font-body text-sm font-medium text-text-primary leading-snug">
                         {n.headline}
@@ -730,15 +720,15 @@ export default function PlayerProfileDrawer({
                       )}
 
                     </div>
-                  </button>
+                  </Row>
                 ))}
-              </div>
-            </div>
+              </RuledList>
+            </Card>
           )}
 
           {/* Dynasty value — never for a defense (see isDefense above) */}
           {!isDefense && (
-          <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+          <Card padding="sm">
             <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
               Dynasty Value
             </p>
@@ -770,22 +760,22 @@ export default function PlayerProfileDrawer({
                 </div>
               )}
             </div>
-          </div>
+          </Card>
           )}
 
           {/* Role / opportunity — hidden when FP dynasty outlook is available */}
           {role && !(isDraftContext && fpNotes?.dynastyOutlook) && (
-            <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+            <Card padding="sm">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-1.5">
                 Dynasty Outlook
               </p>
               <p className="font-body text-sm text-text-primary leading-snug">{role}</p>
-            </div>
+            </Card>
           )}
 
           {/* External rankings */}
           {myRankings.length > 0 && (
-            <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+            <Card padding="sm">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
                 Ranking Sources
               </p>
@@ -805,32 +795,32 @@ export default function PlayerProfileDrawer({
                   </span>
                 </div>
               </div>
-            </div>
+            </Card>
           )}
 
           {/* Scouting Report (FantasyPros) */}
           {isDraftContext && fpNotes?.scoutingReport && (
-            <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+            <Card padding="sm">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
                 Scouting Report
               </p>
               <p className="font-body text-sm text-text-primary leading-relaxed">{fpNotes.scoutingReport}</p>
-            </div>
+            </Card>
           )}
 
           {/* Dynasty Outlook (FantasyPros) */}
           {isDraftContext && fpNotes?.dynastyOutlook && (
-            <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+            <Card padding="sm">
               <p className="font-body text-sm font-bold uppercase tracking-wide text-accent mb-2">
                 Dynasty Outlook
               </p>
               <p className="font-body text-sm text-text-primary leading-relaxed">{fpNotes.dynastyOutlook}</p>
-            </div>
+            </Card>
           )}
 
           {/* Comparable players */}
           {comparables.length > 0 && (
-            <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+            <Card padding="sm">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
                 Comparable Players
               </p>
@@ -852,12 +842,12 @@ export default function PlayerProfileDrawer({
                   </div>
                 ))}
               </div>
-            </div>
+            </Card>
           )}
 
           {/* Trend detail */}
           {player.trend30Day != null && Math.abs(player.trend30Day) > 50 && (
-            <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+            <Card padding="sm">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-1.5">
                 30-Day Trend
               </p>
@@ -868,12 +858,12 @@ export default function PlayerProfileDrawer({
                 </span>
                 <span className="font-body text-xs text-text-tertiary">over past 30 days</span>
               </div>
-            </div>
+            </Card>
           )}
 
           {/* Roster Context */}
           {league && playerContext !== 'loading' && (
-            <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+            <Card padding="sm">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
                 {playerContext === 'mine' ? 'Your Roster' : playerContext === 'opponent' ? 'Roster' : `Your ${player.position ?? 'Position'}`}
               </p>
@@ -977,12 +967,12 @@ export default function PlayerProfileDrawer({
                   )}
                 </>
               )}
-            </div>
+            </Card>
           )}
 
           {/* Scout Note (Draft Board context only) */}
           {isDraftContext && (
-            <div key={player.sleeperId} className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+            <Card key={player.sleeperId} padding="sm">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
                 Scout Note
               </p>
@@ -993,7 +983,7 @@ export default function PlayerProfileDrawer({
                 rows={3}
                 className="w-full bg-transparent font-body text-sm text-text-primary placeholder:text-text-tertiary resize-none focus:outline-none leading-snug"
               />
-            </div>
+            </Card>
           )}
 
           {/* Analyze Trade button — not for a defense (see isDefense above) */}

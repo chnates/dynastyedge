@@ -5,11 +5,18 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-09-12 (DESIGN-1 **step 4** — the components rolled
-through the screens; law 5's three block registers, B2's inversion on Trade
-Targets, law 2's bar test, lucide removed entirely, all three Blackout artefacts
-cleared. The app now fails **0 of 12** slop markers; only motion, step 5,
-remains. Previously 2026-09-11: UX/IA + visual review — `docs/design/review-2026-09/`.
+**Last reviewed:** 2026-09-12 (DESIGN-1 **CLOSED** — step 5, motion, shipped and
+the Matchday rebuild is complete: the global reduced-motion guard, one easing
+curve reaching all 69 transitions, the press run, `.press` as the third
+control-level contract, `Loading` in place of every spinner, the sheet entrance,
+and a written four-moment budget. **0 of 12** slop markers, re-scored from
+scratch rather than inherited — which is how two live accent rails and a
+clipping player name were found. Step 5 also fixed a **white screen shipped to
+`main`** by step 4 (League › Activity) and recorded why neither lint nor build
+could see it. What it hands on is in §3's DESIGN-1 record: 21 hand-rolled panels
+across nine files, the nested-button bug in Market Movers, and the on-device PWA
+verification. Earlier the same day, step 4 rolled the components through the
+screens. Previously 2026-09-11: UX/IA + visual review — `docs/design/review-2026-09/`.
 The owner approved a replacement visual direction ("Matchday") and the Phase 3
 "Primetime Blackout" law is superseded; the audit also turned up four
 independent, ready-now bugs. New: **DESIGN-1**, **DESIGN-2**, **DESIGN-3**.
@@ -402,144 +409,6 @@ curl -s 'https://api.sleeper.app/v1/league/1313933520715907072/drafts' | grep -c
 ---
 
 ## 2. Deferred — waiting on a trigger
-
-### DESIGN-1 — build the "Matchday" visual direction **[owner-approved 2026-09-11]**
-
-**Trigger: fired — the owner selected the direction and asked for the build to
-start in a fresh session.** Not started in the review: it was scoped as
-diagnosis + mocks only, and the app was deliberately left untouched.
-
-**STATUS: steps 1–4 of 5 have landed. This item stays OPEN until step 5.**
-
-| Step | What | State |
-|---|---|---|
-| 1 | The accessibility floor + the truncation bugs (DESIGN-2) | shipped, closed in §3 |
-| 2 | The navigation rebuild — tab bar, contents rail, Index (DESIGN-3) | shipped, closed in §3 |
-| 3 | **Tokens and primitives** | **shipped 2026-09-11** |
-| 4 | **Roll the components through the screens** | **shipped 2026-09-12** |
-| 5 | Motion — the "press run", custom easing, jittered stagger, and widening the `prefers-reduced-motion` guard from one class to a global rule as its first step | **not started** |
-
-**What step 4 landed.** The three block registers that answer finding **B7** and
-are now **law 5** — `RuledList` (many things you scan), `Lede` (one thing you act
-on), `NavRow` (a way out) — plus `Row`, the tappable member of a list. B7's fix
-turned out to be *deleting the rectangle*, not tuning its padding: Matchday's
-mock has zero bordered boxes in its content area. **B2's unfixed case** (Trade
-Targets) is inverted — the name out of display type, the value into a
-`Magnitude`, the two appeal reads out of 9px badges into marked lines. **Law 2
-gained a measured bar test**: Playoff Odds' bar stays (a real proportion of a
-bounded whole), TeamCard's strength bars are gone (they clamped, their complement
-was meaningless, and their reference moved when a *different* team traded).
-**lucide is entirely removed** — 51 icons, 32 files, dependency uninstalled. The
-radius sweep took 63 consumer uses to 3 (avatar, sheet grabbers, spinners). All
-three inherited Blackout artefacts are cleared: `roundColors` re-cut as an
-ink-density ramp, the logo and generated icons re-cut flat.
-
-**The app now fails 0 of `slop-checklist.md`'s 12 markers** (8 at the review, 3
-entering step 4). The two still technically live are motion's, and they are step
-5's.
-
-**Three lessons worth more than the diff:**
-
-1. **Deleting a primitive does not delete the pattern.** `Card`'s banned left
-   accent rail went in step 3, and a raw `border-l-[3px]` on Trajectory's
-   verdict survived every step-4 sweep because nothing looking for the *prop*
-   could find the *shape*. Audit for the shape.
-2. **An enumeration must never be built from `Lede`s.** The first pass rendered
-   three IR alerts as three near-identical editorial blocks — the exact
-   icon+title+one-liner pattern the direction exists to kill, three times
-   taller. Repeated items of one kind aggregate into one.
-3. **`/design-review`'s nine greps are not the review.** They passed 955 added
-   lines clean while eleven hand-rolled copies of one row had drifted apart on
-   `.focus-ring` — an accessibility-floor gap. Run the judgement pass.
-
-**Carried into step 5, explicitly:**
-
-- **Motion, the whole of it.** Widen the `prefers-reduced-motion` guard from one
-  class to a global rule FIRST; then the press run, custom easing
-  `cubic-bezier(.16,1,.3,1)`, jittered stagger (The Edge's is linear 60ms
-  today), clip/wipe entrances rather than `edge-rise`'s fade-up, `:active` on
-  every pressable, a 3–5 moment budget.
-- **Five pre-existing hand-rolled rows** the step-4 diff deliberately did not
-  widen into: `PlayerSearchSheet` (×2), `TradeBuilder`'s add sheet,
-  `PlayerProfileDrawer`'s news list, `DraftTracker`. Plus **two chip ladders**
-  in `DraftBoard` and `DraftTracker`. All should take `Row` / `Chip`.
-- **Draft Board, Draft Tracker and the profile drawer** still hold hand-rolled
-  `bg-bg-card border` panels inside them. They are the densest remaining
-  screens and were out of step 4's named scope.
-- **Verify the PWA metas and the new app icon on device** — a meta or icon
-  change is silent until the home-screen app is removed and re-added
-  (failure-archaeology §1). `index.html`'s icon `?v=` went to 4.
-
-**What step 3 landed.** The Matchday palette in both themes (warm paper/ink,
-neutrals carrying the ground's hue, `--alt` as a secondary hue 176° from the
-crimson spot, styled `::selection`); a custom 1.25 type scale replacing
-Tailwind's default, anchored at `sm` = 14px; Bricolage Grotesque in place of
-Anton; `.ink-field` as the one structural device, which is what resolves
-finding **B4**; the three new primitives — **`Mark`** (what replaced `Card`'s
-banned left accent rail), **`PositionBand`** (the full-bleed position field
-carrying the group total) and **`Magnitude`** (type size as the quantity, the
-answer to finding **B2**); every other primitive repainted; and the step-2
-navigation surfaces finished in the new palette. `PositionBand` and `Magnitude`
-are wired into **My Roster only**, deliberately — it is the screen B2 was
-measured on, so the step's central claim is verifiable rather than shipped
-untested. `scripts/dev/contrast-audit.mjs` is the new accessibility-floor
-instrument: **40 of 40 pass**.
-
-**Two measured corrections to the spec, both recorded in CLAUDE.md:**
-
-- **`directions.md`'s `wdth 125` for Bricolage is not executable.** The Google
-  Fonts face has `wdth` 75–**100** with a default of 100 — probed 2026-09-11,
-  `wdth@75..125` returns HTTP 400. 100 is both the maximum and the default, so
-  the mock's declaration was a no-op, which explains the recorded complaint
-  that Bricolage "still reads fairly neutral even pushed onto its axes". It was
-  never pushed. **If the swap to Big Shoulders Display is ever made, this is
-  now the evidence for it rather than a taste call.**
-- **`Magnitude`'s reference is pinned to 10000, not the mock's 9365.** 9365 was
-  a top-of-market snapshot; FantasyCalc's scale is a documented 0–10000
-  contract. Under a pixel of difference across the range.
-
-~~**Carried into step 4, explicitly:** the radius sweep on consumers (~36
-`rounded-full` and ~35 `rounded-lg` remain outside the primitives); lucide's
-icon medallions on The Edge's briefing items and the roster shortcuts; the pick
-round colours in `roundColors.js`, which are hardcoded hexes still tuned to the
-Blackout palette and are the largest remaining Blackout artefact; and the logo
-+ generated app icons, which still wear the red-ramp gradient and set the
-wordmark in a font the app no longer loads.~~ **All four done 2026-09-12** —
-see "What step 4 landed" above.
-
-**Verify on device, and note it is SILENT until then:** the PWA `theme-color`
-metas moved with `--bg-secondary` (light `#E7E9EC` → `#E8E5DC`, dark `#101013`
-→ `#141413`). Per failure-archaeology §1, a meta change does not take effect
-until the home-screen app is removed and re-added — the original regression of
-this kind hid for weeks.
-
-**What was decided.** Six directions were mocked across two rounds. Round one
-(Instrument / Dispatch / Control) was rejected — scored against a researched
-AI-slop marker list, two of the three failed **10 and 11 of 12**. Round two
-(Almanac / Blueprint / Matchday) was built to that checklist and all three
-score 0. **The owner chose Matchday.**
-
-Matchday in one line: *a publication about a competition* — poster type
-(Bricolage Grotesque on its width/optical axes), flat colour with hard edges,
-zero radius, no shadows, no icon set, text navigation, and **the five position
-hues promoted from 9px tags to full-bleed section bands**. Magnitude is encoded
-as **type size**, not a bar, with the band carrying the group total.
-
-**Where the spec lives:** `docs/design/review-2026-09/directions.md` (the
-direction, its two revisions, and the build sequence) ·
-`slop-checklist.md` (the rules any new UI must pass) · `mocks/directions-2.html`
-(the working mock — standalone, never imported by the app).
-
-**Known costs, already measured and accepted:** it is the least dense of the
-three (~3–4 targets per screen against Almanac's 7); it needs one new font
-family; and Bricolage may not earn its keep on device, in which case the swap
-candidate recorded is Big Shoulders Display.
-
-**Settled during review, do not re-litigate:** the home hero keeps team value
-as its marquee figure. Leading with the instruction instead was built, reviewed
-and **reverted on the owner's call (2026-09-11)** — he preferred the look. The
-argument for the swap is still recorded in `unasked.md` §1 if it is ever
-revisited.
 
 ### OPEN-1 — Normalize FAAB stats to percent-of-budget
 
@@ -953,6 +822,7 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 
 | Item | Closed | How |
 |---|---|---|
+| DESIGN-1 — build the "Matchday" visual direction | 2026-09-12 | All five steps shipped. Step 5 (motion) landed the GLOBAL `prefers-reduced-motion` guard first, one easing token (`--ez`) emitted as Tailwind's DEFAULT so all 69 transitions moved at once, a duration ladder scaled to element size, the press run replacing `.edge-rise`'s fade-up and linear stagger, `.press` as the third control-level contract (one definition replacing 41 `active:` states at three values across 20 files), `Loading` replacing every spinner, the sheet entrance, and a written four-moment budget. **0 of 12 slop markers**, re-scored from scratch. Detail retained in §3 below |
 | DESIGN-3 — the navigation rebuild | 2026-09-11 | Primary navigation is a bottom tab bar (Today · Squad · Trade · League · Index); the drawer keeps its utilities and carries zero destinations. `SubTabBar` → `SectionContents`, which wraps instead of scrolling, so "Pick Trades" no longer clips. New `/index` route is the complete map and holds the four consulted views. All three copies of the nav payload collapsed into `src/navigation.js`. Draft and News lost top-level rank, not reachability. The four orphans each got a content-level inbound link, and Rookie Research entered global search. No path moved, so no redirect was needed. Detail retained in §3 below |
 | DESIGN-2 — four ready-now accessibility/truncation bugs | 2026-09-11 | All four fixed in the primitives and tokens, not at 525 call sites: `--text-tertiary` re-derived to clear WCAG AA in both themes (dark 2.51→4.53:1, light 3.23→4.51:1); `.focus-ring` added as the one focus definition and `Input`/`Select`'s `focus:outline-none` removed; `.tap-target` guarantees a 44px hit area with no layout cost (`IconButton` `md` made a real 44px box) — deliberately NOT on `Chip`, where it would cause the bug it fixes; `Est. cost` and the lineup player name now wrap instead of eliding. Detail retained in §3 below |
 | Trade engine over-weighted the partner (3 fixes) | 2026-09-07 | Phase 2 made a cost/appeal trade-off (weight set mid-plateau from a sweep); `myStartersDelta` added and gating the verdict; Layer 4's fill/lineup double-count removed. Detail retained in §1 |
@@ -965,6 +835,216 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 | Frontier Item 2 blocking question (are losing FAAB bids visible?) | 2026-08-08 | Verified yes; see `docs/analysis/faab-bid-corpus-2026-08.md`. Superseded by OPEN-3 |
 | ACTIVE-1 — season-readiness tests (draft day + Week 1) | 2026-08-08 | Three live contract breaks found and fixed (schedule endpoint, draft `slot_to_roster_id`, stats `pos`/`opp`); 35 new tests (72 → 107) + `scripts/dev/replay-live.mjs`. Detail retained in §1 |
 | ACTIVE-2 — Draft › Research: verify the first pipeline run | 2026-08-14 | Pipeline published 2026-08-14 11:12Z; feed shape, Market vs Model output, and the drawer's Rookies row all verified against live data. Detail retained in §1 |
+
+---
+
+### DESIGN-1 — the record (closed 2026-09-12)
+
+**Step 5 — motion — shipped 2026-09-12** (branch
+`claude/matchday-step-5-motion-ox7q58`). What it landed, in the order it landed:
+
+1. **The global reduced-motion guard, first and deliberately.** The old one
+   covered one class. A class-scoped guard has to be extended by whoever adds
+   the next animation, and the failure is silent for everyone who doesn't have
+   the setting on — so it went in before any motion did, and the step would have
+   been safe to abandon at that commit. Includes the JS half (`scrollToTopOf`),
+   because CSS cannot reach a `scrollIntoView({ behavior: 'smooth' })` argument.
+2. **One curve, one ladder.** `--ez` as Tailwind's DEFAULT timing function
+   reaches all 69 transitions with no call-site change. The curve's real profile
+   was measured, not assumed: 88% of the travel in the first third, 95% at 42%.
+   Nominal duration is not perceived duration — pick the travel you want and
+   roughly double it.
+3. **The press run**, replacing `.edge-rise` (a fade-up) and its linear
+   0/60/120/180 stagger — the last two live slop markers.
+4. **`.press`**, the third control-level contract beside `.focus-ring` and
+   `.tap-target`. Verified by DOM probe at 100% coverage on all 18 routes.
+5. **`Loading`** — the app has no spinner. Four `animate-spin` and one
+   `animate-pulse` gone.
+6. **The sheet entrance**, animating `clip-path` so it cannot contend with
+   `useSheetDrag` for `transform`.
+7. **A four-moment budget, written down** with the reason each cut item failed.
+
+**What step 5 hands on:**
+
+- **21 hand-rolled `bg-bg-card border` panels across nine files** —
+  `TrajectoryView` (4), `RosterAnalysisSheet` (4), `ManagerScoutingSheet` (4),
+  `LineupOptimizer` (3), `ManagersView` (2), and one each in
+  `LineupEfficiency`, `PlayoffOdds`, `LeagueActivity`, `PickTradeCalculator`.
+  Step 5 converted the three densest screens named in its scope (the profile
+  drawer, the draft tracker, the draft board — 17 panels). These nine were never
+  in scope for step 4 or step 5; the fix is mechanical (`<Card padding="sm">`,
+  and a tag balancer for the closes), it just needs its own diff.
+- **`MarketMovers` nests a `<button>` inside a `<button>`** — the Trade action
+  inside the tappable row (`MoverRow`, `src/components/league/MarketMovers.jsx`).
+  Invalid HTML, React warns on it, and it is the exact shape CLAUDE.md already
+  records as fixed on the Partners card ("a sibling *below* the card, never
+  nested inside its `<button>`"). Reproduces identically on clean `main`, so it
+  predates this work. Not fixed in step 5 because the fix restructures the row's
+  layout and needs its own decision about where the Trade button goes.
+- **Verify the PWA metas and the app icon on device.** Carried from step 4 and
+  still not done — a meta or icon change is silent until the home-screen app is
+  removed and re-added (failure-archaeology §1). `index.html`'s icon `?v=` is
+  at 4.
+- **Bricolage Grotesque on device.** Step 3 measured that the spec's `wdth 125`
+  is not executable (the axis tops out at 100). If the face doesn't earn its
+  keep on a real phone, the recorded swap candidate is Big Shoulders Display.
+
+**Three lessons worth more than the diff, all of them about verification:**
+
+1. **Neither lint nor build can catch an undefined component.** eslint-scope
+   does not resolve a `JSXIdentifier`, and a bad element type is a runtime
+   throw. Step 4's lucide removal left `<meta.Icon />` behind in
+   `LeagueActivity` and **shipped League › Activity to `main` as a white
+   screen** — found here by a route sweep, after lint, 275 tests and a clean
+   build had all passed on it. The route sweep is now a documented gate.
+2. **Re-score, don't inherit a score.** Step 4 recorded 0 of 12. Two raw
+   `border-l-2` accent rails in Pick Trades were live the whole time and were
+   found only by re-running the checklist from scratch at the end of step 5.
+3. **A rule needs an instrument.** The `--overflow` sweep found a sixth
+   truncation of a load-bearing value (a player's name on the Draft Board,
+   clipped by 4px) that no amount of looking at screenshots had caught.
+
+**What it was, as originally recorded:**
+
+### DESIGN-1 — build the "Matchday" visual direction **[owner-approved 2026-09-11]**
+
+**Trigger: fired — the owner selected the direction and asked for the build to
+start in a fresh session.** Not started in the review: it was scoped as
+diagnosis + mocks only, and the app was deliberately left untouched.
+
+**STATUS: ALL FIVE STEPS SHIPPED — closed 2026-09-12.** (This table is the
+historical record; the closing summary is above.)
+
+| Step | What | State |
+|---|---|---|
+| 1 | The accessibility floor + the truncation bugs (DESIGN-2) | shipped 2026-09-11, closed in §3 |
+| 2 | The navigation rebuild — tab bar, contents rail, Index (DESIGN-3) | shipped 2026-09-11, closed in §3 |
+| 3 | Tokens and primitives | shipped 2026-09-11 |
+| 4 | Roll the components through the screens | shipped 2026-09-12 |
+| 5 | Motion — the guard, the curve, the press run, `.press`, `Loading`, the sheet, the budget | **shipped 2026-09-12** |
+
+**What step 4 landed.** The three block registers that answer finding **B7** and
+are now **law 5** — `RuledList` (many things you scan), `Lede` (one thing you act
+on), `NavRow` (a way out) — plus `Row`, the tappable member of a list. B7's fix
+turned out to be *deleting the rectangle*, not tuning its padding: Matchday's
+mock has zero bordered boxes in its content area. **B2's unfixed case** (Trade
+Targets) is inverted — the name out of display type, the value into a
+`Magnitude`, the two appeal reads out of 9px badges into marked lines. **Law 2
+gained a measured bar test**: Playoff Odds' bar stays (a real proportion of a
+bounded whole), TeamCard's strength bars are gone (they clamped, their complement
+was meaningless, and their reference moved when a *different* team traded).
+**lucide is entirely removed** — 51 icons, 32 files, dependency uninstalled. The
+radius sweep took 63 consumer uses to 3 (avatar, sheet grabbers, spinners). All
+three inherited Blackout artefacts are cleared: `roundColors` re-cut as an
+ink-density ramp, the logo and generated icons re-cut flat.
+
+**The app now fails 0 of `slop-checklist.md`'s 12 markers** (8 at the review, 3
+entering step 4). The two still technically live are motion's, and they are step
+5's.
+
+**Three lessons worth more than the diff:**
+
+1. **Deleting a primitive does not delete the pattern.** `Card`'s banned left
+   accent rail went in step 3, and a raw `border-l-[3px]` on Trajectory's
+   verdict survived every step-4 sweep because nothing looking for the *prop*
+   could find the *shape*. Audit for the shape.
+2. **An enumeration must never be built from `Lede`s.** The first pass rendered
+   three IR alerts as three near-identical editorial blocks — the exact
+   icon+title+one-liner pattern the direction exists to kill, three times
+   taller. Repeated items of one kind aggregate into one.
+3. **`/design-review`'s nine greps are not the review.** They passed 955 added
+   lines clean while eleven hand-rolled copies of one row had drifted apart on
+   `.focus-ring` — an accessibility-floor gap. Run the judgement pass.
+
+~~**Carried into step 5, explicitly:**~~ **All four done 2026-09-12 — see the
+closing record above for what step 5 in turn hands on.**
+
+- **Motion, the whole of it.** Widen the `prefers-reduced-motion` guard from one
+  class to a global rule FIRST; then the press run, custom easing
+  `cubic-bezier(.16,1,.3,1)`, jittered stagger (The Edge's is linear 60ms
+  today), clip/wipe entrances rather than `edge-rise`'s fade-up, `:active` on
+  every pressable, a 3–5 moment budget.
+- **Five pre-existing hand-rolled rows** the step-4 diff deliberately did not
+  widen into: `PlayerSearchSheet` (×2), `TradeBuilder`'s add sheet,
+  `PlayerProfileDrawer`'s news list, `DraftTracker`. Plus **two chip ladders**
+  in `DraftBoard` and `DraftTracker`. All should take `Row` / `Chip`.
+- **Draft Board, Draft Tracker and the profile drawer** still hold hand-rolled
+  `bg-bg-card border` panels inside them. They are the densest remaining
+  screens and were out of step 4's named scope.
+- **Verify the PWA metas and the new app icon on device** — a meta or icon
+  change is silent until the home-screen app is removed and re-added
+  (failure-archaeology §1). `index.html`'s icon `?v=` went to 4.
+
+**What step 3 landed.** The Matchday palette in both themes (warm paper/ink,
+neutrals carrying the ground's hue, `--alt` as a secondary hue 176° from the
+crimson spot, styled `::selection`); a custom 1.25 type scale replacing
+Tailwind's default, anchored at `sm` = 14px; Bricolage Grotesque in place of
+Anton; `.ink-field` as the one structural device, which is what resolves
+finding **B4**; the three new primitives — **`Mark`** (what replaced `Card`'s
+banned left accent rail), **`PositionBand`** (the full-bleed position field
+carrying the group total) and **`Magnitude`** (type size as the quantity, the
+answer to finding **B2**); every other primitive repainted; and the step-2
+navigation surfaces finished in the new palette. `PositionBand` and `Magnitude`
+are wired into **My Roster only**, deliberately — it is the screen B2 was
+measured on, so the step's central claim is verifiable rather than shipped
+untested. `scripts/dev/contrast-audit.mjs` is the new accessibility-floor
+instrument: **40 of 40 pass**.
+
+**Two measured corrections to the spec, both recorded in CLAUDE.md:**
+
+- **`directions.md`'s `wdth 125` for Bricolage is not executable.** The Google
+  Fonts face has `wdth` 75–**100** with a default of 100 — probed 2026-09-11,
+  `wdth@75..125` returns HTTP 400. 100 is both the maximum and the default, so
+  the mock's declaration was a no-op, which explains the recorded complaint
+  that Bricolage "still reads fairly neutral even pushed onto its axes". It was
+  never pushed. **If the swap to Big Shoulders Display is ever made, this is
+  now the evidence for it rather than a taste call.**
+- **`Magnitude`'s reference is pinned to 10000, not the mock's 9365.** 9365 was
+  a top-of-market snapshot; FantasyCalc's scale is a documented 0–10000
+  contract. Under a pixel of difference across the range.
+
+~~**Carried into step 4, explicitly:** the radius sweep on consumers (~36
+`rounded-full` and ~35 `rounded-lg` remain outside the primitives); lucide's
+icon medallions on The Edge's briefing items and the roster shortcuts; the pick
+round colours in `roundColors.js`, which are hardcoded hexes still tuned to the
+Blackout palette and are the largest remaining Blackout artefact; and the logo
++ generated app icons, which still wear the red-ramp gradient and set the
+wordmark in a font the app no longer loads.~~ **All four done 2026-09-12** —
+see "What step 4 landed" above.
+
+**Verify on device, and note it is SILENT until then:** the PWA `theme-color`
+metas moved with `--bg-secondary` (light `#E7E9EC` → `#E8E5DC`, dark `#101013`
+→ `#141413`). Per failure-archaeology §1, a meta change does not take effect
+until the home-screen app is removed and re-added — the original regression of
+this kind hid for weeks.
+
+**What was decided.** Six directions were mocked across two rounds. Round one
+(Instrument / Dispatch / Control) was rejected — scored against a researched
+AI-slop marker list, two of the three failed **10 and 11 of 12**. Round two
+(Almanac / Blueprint / Matchday) was built to that checklist and all three
+score 0. **The owner chose Matchday.**
+
+Matchday in one line: *a publication about a competition* — poster type
+(Bricolage Grotesque on its width/optical axes), flat colour with hard edges,
+zero radius, no shadows, no icon set, text navigation, and **the five position
+hues promoted from 9px tags to full-bleed section bands**. Magnitude is encoded
+as **type size**, not a bar, with the band carrying the group total.
+
+**Where the spec lives:** `docs/design/review-2026-09/directions.md` (the
+direction, its two revisions, and the build sequence) ·
+`slop-checklist.md` (the rules any new UI must pass) · `mocks/directions-2.html`
+(the working mock — standalone, never imported by the app).
+
+**Known costs, already measured and accepted:** it is the least dense of the
+three (~3–4 targets per screen against Almanac's 7); it needs one new font
+family; and Bricolage may not earn its keep on device, in which case the swap
+candidate recorded is Big Shoulders Display.
+
+**Settled during review, do not re-litigate:** the home hero keeps team value
+as its marquee figure. Leading with the instruction instead was built, reviewed
+and **reverted on the owner's call (2026-09-11)** — he preferred the look. The
+argument for the swap is still recorded in `unasked.md` §1 if it is ever
+revisited.
 
 ---
 

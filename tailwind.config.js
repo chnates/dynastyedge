@@ -47,11 +47,39 @@ export default {
         // ONE weight, so every display size carried the same stroke and the
         // scale had to do its work through size alone (findings.md B5) — and
         // the house rules ask for 300–800. Bricolage is variable across weight,
-        // width and optical size; `.font-display` in index.css pushes the WIDTH
-        // axis to 125, without which it lands on a neutral grotesk.
+        // width and optical size — but its `wdth` axis tops out at 100, which
+        // is also its default, so the spec's "push it to 125" is not
+        // executable. `.font-display` in index.css carries that measurement
+        // and drives `opsz` and `wght` instead.
         display: ['"Bricolage Grotesque"', 'sans-serif'],
         body: ['Archivo', 'sans-serif'],
         mono: ['"IBM Plex Mono"', 'monospace'],
+      },
+      // ── MOTION: one curve, and durations scaled to element size ──
+      //
+      // Setting DEFAULT (rather than adding named curves) is the point: it
+      // reaches all 69 `transition-*` utilities in the app at once, without a
+      // call-site change and without any screen being able to miss it. Before
+      // this the app carried three explicit timing values in total, so almost
+      // every transition ran Tailwind's own `cubic-bezier(.4,0,.2,1)` — the
+      // mechanical half of "there is no easing curve in this app that anyone
+      // chose" (findings.md → Motion).
+      transitionTimingFunction: {
+        DEFAULT: 'var(--ez)',
+      },
+      // Duration is a function of how far the thing travels, which in practice
+      // means how big it is. A 2px chip tint and a 300px drawer crossing the
+      // screen should not share a number; they did.
+      //
+      // DEFAULT stays 150ms — the same value Tailwind ships, restated as a
+      // deliberate choice so the diff is honest about what actually changed
+      // here (the curve, not the speed of a colour tint).
+      transitionDuration: {
+        DEFAULT: '150ms',
+        tap:   '90ms',   // press feedback: must read as instantaneous
+        mark:  '150ms',  // small ink — a chip, a badge, a row tint, a link
+        panel: '240ms',  // a block or an overlay resolving
+        sheet: '340ms',  // a full-width surface crossing the screen
       },
       colors: {
         'bg-primary':    'rgb(var(--bg-primary) / <alpha-value>)',

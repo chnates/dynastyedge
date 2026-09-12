@@ -3068,26 +3068,27 @@ Scouting did) — note any route-only moves explicitly.
 
 ## Design System
 
-> **Status: "Matchday" is the live direction. Steps 1–4 of 5 have landed;
-> only motion (step 5) remains.** Step 1 was the accessibility floor
-> (DESIGN-2), step 2 the navigation rebuild (DESIGN-3), step 3 the token +
-> primitive layer, and **step 4 (2026-09-12) rolled the components through the
-> screens**: the three block registers of law 5, the B2 hierarchy inversion on
-> Trade Targets, the bar ruling in law 2, **lucide removed entirely** (51 icons,
-> 32 files, dependency uninstalled), the radius sweep (63 consumer uses → 3),
-> and all three inherited Blackout artefacts — `roundColors`, the logo, the
-> generated icons.
+> **Status: "Matchday" is the live direction, and all five steps have landed
+> (2026-09-12).** Step 1 was the accessibility floor (DESIGN-2), step 2 the
+> navigation rebuild (DESIGN-3), step 3 the token + primitive layer, step 4 the
+> component roll-through (law 5's three block registers, B2's inversion on Trade
+> Targets, law 2's bar ruling, **lucide removed entirely** — 51 icons, 32 files,
+> dependency uninstalled — the radius sweep, and all three inherited Blackout
+> artefacts), and **step 5 the motion layer** (see the Motion section: the global
+> reduced-motion guard, one easing curve, the press run, `.press`, the press bar,
+> the sheet entrance, and a four-moment budget).
 >
-> **The app now fails 0 of `slop-checklist.md`'s 12 markers** — 8 at the
-> review, 3 entering step 4. The two still technically live are motion's
-> (fade-up entrance, linear stagger); they are **step 5's first task**, with
-> widening the `prefers-reduced-motion` guard from one class to a global rule.
+> **The app fails 0 of `slop-checklist.md`'s 12 markers** — 8 at the review, 3
+> entering step 4, 2 entering step 5.
 >
-> **Step 4's most useful lesson: deleting a primitive does not delete the
-> pattern.** `Card`'s banned left accent rail was removed in step 3, and a raw
-> `border-l-[3px]` on Trajectory's verdict card survived every sweep of step 4
-> because nothing looking for the *prop* could find the *shape*. Audit for the
-> shape.
+> **The same lesson has now bitten three times, so read it as a rule: deleting a
+> primitive does not delete the pattern, and a grep for an API cannot find a
+> shape.** `Card`'s banned left accent rail was removed in step 3. A raw
+> `border-l-[3px]` on Trajectory's verdict survived every sweep of step 4. Two
+> more raw `border-l-2` rails in Pick Trades survived step 4 *and* step 5's own
+> component work, and were caught only by re-scoring the checklist from scratch
+> at the end. **Audit for the shape, and re-score rather than inheriting a
+> score.**
 >
 > It replaced **"Primetime Blackout"** (Phase 3, 2026-07-20), which shipped
 > competently and was then rejected on review. The reason is worth keeping,
@@ -3214,6 +3215,7 @@ Import everything from the one barrel: `import { Button, Card, Sheet } from '../
 |**`Lede`**|THE OPEN register — one thing you ACT ON. Eyebrow · headline (with a `Mark` on the word carrying the finding) · prose · a solid ink CTA. No box. A pressable `Lede` is a `<button>`, so `action` takes a **string** there; an entry needing real controls leaves `onClick` unset and passes nodes to `action` / `aside` (the dismiss slot on the eyebrow line).|
 |**`Row`**|THE member of a `RuledList` — the tappable row itself. **Always carries `.focus-ring`**; renders a `<button>` for `onClick`, a `<Link>` for `to`, a plain `<div>` for neither (a row that is not tappable must not announce itself as a control). Paddings `sm`/`md`/`lg`. Extracted after `/design-review`'s judgement pass caught **eleven hand-rolled copies that had drifted apart on the focus ring** — an accessibility-floor gap the nine mechanical detectors could not see.|
 |**`NavRow`**|THE DOOR — a row that takes you somewhere. Display-type title, small detail, optional mono hint, hairline, **no icon and no chevron**. Extracted from the Index's row so shortcuts stop being `Card`s with a lucide medallion.|
+|**`Loading`**|THE loading indicator — a rule that prints and clears (`.press-bar`) under a mono label. **There is no spinner in this app.** `inline` for a section inside a card or drawer; the block form carries the page gutter (`padded={false}` when the caller already has one). Never render it without a label — the label is the information, the movement is only liveness.|
 |`Sheet` + `SheetHeader`|THE bottom sheet. Owns the whole sheet contract (`useScrollLock`, `useSheetDrag` swipe-to-dismiss, `overscroll-contain`, safe-area bottom pad, Escape + overlay-tap close, drag handle); `zIndex` is a Tailwind z class so sheets stack. **Exception:** a *keyboard-aware* sheet driven by `window.visualViewport` (PlayerSearchSheet, TradeBuilder's add sheet) can't use `Sheet` (which is sized to the layout viewport) — those two are the sanctioned hand-rolled overlays.|
 |`Modal`|THE centered dialog — confirm prompts and small forms. Owns overlay, `useScrollLock`, Escape + overlay-tap close. The bottom-docked counterpart is `Sheet`.|
 |`Chip`|THE filter chip — square, mono uppercase. Inactive is quiet; `active` defaults to the **ink field**; pass `activeClass={POS_CHIP_ACTIVE[pos]}` for position-tinted active states.|
@@ -3224,7 +3226,7 @@ Import everything from the one barrel: `import { Button, Card, Sheet } from '../
 
 **Adopted shared primitives** are re-exported from the same barrel so the
 library is the single import surface (the files stay in
-`src/components/shared/`): `ErrorState`, `Spinner` (LoadingSpinner),
+`src/components/shared/`): `ErrorState`,
 `SectionHeader` + `BRAND_TICK`, `SectionContents`, `TrendArrow`,
 `WinWindowBadge`, `Sparkline`, `TeamAvatar`. Import these from `'../ui'`.
 
@@ -3269,6 +3271,9 @@ the call site, so no screen can opt out.
   `:focus-visible`, not `:focus`, so a plain tap stays unmarked while keyboard
   focus and text fields render the ring. Inside an `.ink-field` the ring flips
   to the field's own ground, or it disappears into the block.
+- **`.press` is the one press definition** (see Motion) — the third sibling of
+  these two, carried by every primitive so no screen ships a control that
+  doesn't answer a finger.
 - **`.tap-target` guarantees a 44px hit area without moving the ink** — a
   centered pseudo-element sized `max(100%, 44px)`, so it never shrinks a target
   that is already larger and costs no layout. It is deliberately **NOT** on
@@ -3658,24 +3663,270 @@ them.
 
 ### Motion
 
-> **Step 5 owns this and has not started.** What is here is the pre-Matchday
-> state, kept accurate rather than aspirational.
+> **Step 5 shipped 2026-09-12 and this section is the live truth.** The measured
+> starting point, for reference: **one** `@keyframes`
+> (`.edge-rise`, a fade-up on The Edge), 69 `transition-*` utilities of which
+> **67 animate opacity or colour and one animates `transform`**, and **3**
+> explicit timing values in the whole app — so virtually every transition ran
+> Tailwind's default 150ms `cubic-bezier(.4,0,.2,1)`. There was no easing curve
+> in this app that anyone chose. The app faded and tinted; it never moved.
 
-Measured across the codebase: **one** `@keyframes` (`.edge-rise`, a fade-up on
-The Edge), 78 `transition-*` utilities of which **74 animate opacity or colour
-and only 3 animate `transform`**, and **6** explicit timing values in the whole
-app — so virtually every transition runs Tailwind's default 150ms
-`cubic-bezier(.4,0,.2,1)`. **There is no easing curve in this app that anyone
-chose.** The app fades and tints; it never moves.
+#### The reduced-motion guard is GLOBAL, and it landed first
 
-`prefers-reduced-motion` is honoured, but the guard covers exactly one class.
-**Any direction that adds motion must widen that guard first** — it is not a
-general rule today.
+`index.css` closes with a `@media (prefers-reduced-motion: reduce)` block over
+`*`, `*::before` and `*::after`. It zeroes animation and transition **duration
+and delay**, caps `animation-iteration-count` at 1, and sets `scroll-behavior:
+auto`. `!important` throughout: the point is that no screen and no future
+primitive can opt out.
 
-Step 5's brief: the "press run" — flat colour bands wipe across, then type drops
-in behind them; custom easing `cubic-bezier(.16,1,.3,1)`; **jittered** stagger
-(linear 0/100/200ms is itself a marker); clip/wipe entrances, never fade-up;
-`:active` feedback on every pressable; a 3–5 moment budget.
+**It was written before any motion was added, deliberately.** The old guard
+covered exactly one class (`.edge-rise`) — adequate only while nothing else
+moved, and a trap the moment that stopped being true, because a class-scoped
+guard has to be extended by whoever adds the next animation and the failure is
+silent for everyone who doesn't have the setting on.
+
+Three details are load-bearing:
+
+- **Duration goes to 0.01ms, not 0.** Zero makes some engines skip the animation
+  entirely, which also skips its `end` event; 0.01ms runs it in one frame and
+  still fires.
+- **Delay goes to 0 as well.** Zeroing only the duration of a jittered stagger
+  leaves the delays intact, so the last row of a list would still sit blank for
+  400ms — a *slower* first paint than no motion at all, the exact opposite of
+  what the setting asks for.
+- **CSS cannot reach a programmatic smooth scroll.** `scroll-behavior: auto`
+  does not override a `scrollIntoView({ behavior: 'smooth' })` argument, and a
+  long smooth scroll is a reliable vestibular trigger. The two places that jump
+  the page — THE CALL's act anchors and Rookie Research's board jump — go
+  through **`scrollToTopOf`** in `components/ui/motion.js`, which reads the
+  media query at call time (not cached: the setting can change mid-session).
+
+**`useSheetDrag`'s spring-back is caught by the duration rule and that is
+correct** — a released sheet snaps home instead of easing. The gesture itself is
+direct manipulation rather than animation and is untouched.
+
+#### One curve, and durations scaled to element size
+
+**`--ez: cubic-bezier(.16, 1, .3, 1)`** (`index.css`, on `:root` — motion does
+not invert with the theme) is the app's only easing token, and Tailwind emits it
+as the **DEFAULT `transition-timing-function`**. That is the point of setting
+DEFAULT rather than adding named curves: it reaches all 69 `transition-*`
+utilities at once, with no call-site change and no way for a screen to miss it.
+
+It is an **expo-out**, and its profile is worth knowing precisely because
+**nominal duration is not perceived duration on this curve**. Measured by
+solving the bezier:
+
+|fraction of duration|0.10|0.20|**0.33**|0.42|0.62|1.00|
+|---|---|---|---|---|---|---|
+|`--ez` travelled|49%|75%|**88%**|95%|99%|100%|
+|Tailwind's default|3%|13%|41%|64%|89%|100%|
+
+So a 620ms band wipe is 95% done in **264ms** and a 340ms sheet in **145ms** —
+which is why the numbers in the ladder below look larger than they feel, and why
+the press run can afford 620ms without reading as slow. Set a duration by the
+*perceived* travel you want and then roughly double it.
+
+**Duration is a function of how far a thing travels, which in practice means how
+big it is.** A chip tint and a 300px drawer crossing the screen shared one number
+before this. The ladder (`tailwind.config.js` → `transitionDuration`):
+
+|token|ms|for|
+|---|---|---|
+|`duration-tap`|90|press feedback — must read as instantaneous|
+|`duration-mark`|150|small ink: a chip, a badge, a row tint, a link|
+|`duration-panel`|240|a block, or an overlay resolving|
+|`duration-sheet`|340|a full-width surface crossing the screen|
+
+`DEFAULT` stays **150ms** — the value Tailwind already shipped, restated as a
+chosen one so the diff is honest about what actually changed here: the curve,
+not the speed of a colour tint. An un-suffixed `transition-colors` is therefore
+`mark`-speed by definition and needs no class.
+
+**The one deliberate exception is `useSheetDrag`'s spring-back**, which sets an
+inline `transform 0.25s ease-out`. It is left exactly as it is: it belongs to the
+sheet-gesture family (failure-archaeology §2, six settled battles), the release
+is the tail of a direct manipulation rather than an entrance, and nothing about
+it is improved by a house curve.
+
+#### The press run — the signature entrance
+
+*"Flat colour bands wipe across the page, then type drops in behind them. Ink
+hitting paper."* Three keyframes in `index.css`, fired in that order:
+
+|class|what|duration|
+|---|---|---|
+|`.press-band`|a solid field prints left to right (`clip-path` inset from the right)|620ms|
+|`.press-ink`|the type lands behind the band — a short drop from above with a slight vertical over-scale, `transform-origin: top`|580ms|
+|`.press-set`|a row sets under a downward clip, opacity floor **0.2**, never 0|440ms|
+
+It replaced **`.edge-rise`**, a 0.35s fade-up on Tailwind's default ease — two of
+the twelve researched slop markers in one animation (a fade-up entrance, and at
+the call site a linear 0/60/120/180ms stagger), and the only keyframe in the app.
+
+Every property is compositor-cheap (`clip-path`, `opacity`, `transform`).
+**Nothing animates layout** — motion must not cost a paint.
+
+**The fill mode is `backwards`, and both alternatives are wrong.** With no fill a
+delayed block paints at full opacity through its delay and then jumps to the
+start of its own animation — a flash. With `both` the block keeps its final
+keyframe forever, which for a wipe is a permanent `clip-path: inset(0 0 0 0)`:
+visually identical, and it silently clips **`.tap-target`'s 44px hit area** back
+to the element box at the block's edges, because clip-path clips hit-testing as
+well as paint.
+
+#### The stagger is jittered, and monotonic by construction
+
+**`stagger(index)`** (`components/ui/motion.js`) is a **cumulative sum of
+independently-drawn gaps**, each within 0.6×–1.45× of a 46ms base, capped at
+420ms. Two properties it needs and the obvious implementations don't have:
+
+- **Pure in the index, not `Math.random()`.** React re-renders; a random delay
+  would hand a block a different number on each pass.
+- **Independent of call ORDER.** The mock advanced one shared LCG per call,
+  which is right for a template rendered top to bottom and wrong here —
+  conditional sections mean block 5 is not always the fifth call. Hashing the
+  index means a block's delay depends only on where it sits.
+
+**Summing gaps rather than scaling a linear base is a measured choice.** The
+mock's multiplicative form (`i * base * jitter`) produces 15 / 52 / 123 / 176 /
+**145** / 270 / 361 / 420 / **398** on nine blocks — two inversions, where a
+later block lands *before* an earlier one. That reads as broken, not irregular.
+The shipped form gives 0 / 57 / 107 / 145 / 189 / 248 / 292 / 348 / 399: gaps of
+38–59ms, no two alike, never out of order.
+
+#### The press — `.press`, the third control-level contract
+
+**`.press` (`index.css`) is the one definition of "this control answers a
+finger": a 90ms dip to 60%, on `--ez`.** It is the sibling of `.focus-ring`
+(focus) and `.tap-target` (hit area), and it exists for the same reason both of
+those do — a control-level contract belongs in one place, not at forty call
+sites. **Every pressable in the app carries it**, and the primitives carry it so
+no screen can miss it.
+
+The audit it came out of: **41 `active:` opacity states across 20 files at three
+different values for one gesture** — `Button` dipped to 70%, `Card` to 80%,
+everything else to 60% — plus five consumers restating `Button`'s own
+`active:opacity-70` on a `Button`, and roughly a dozen real pressables with no
+press state at all (the header's Menu and Find, the Playoff Odds and Roster
+Analysis explainer toggles, the action-item Dismiss, the roster Back link, the
+Index rows, four drawer rows, the tab bar, the contents rail, Pick Trades' mode
+toggle). That is the same drift `/design-review`'s nine greps sailed past on
+`.focus-ring` in step 4.
+
+**The dip is `filter: opacity()`, not `opacity`, and that is what lets one rule
+cover the app.** A flat `opacity: 0.6` is *absolute*, so it is wrong on any
+control whose resting opacity already means something — and there are two: an
+inactive tab-bar item sits at 55%, a drafted prospect row at 50%. Pressing
+either would have moved it to 60%, i.e. **brighter**. `filter` composes:
+1 × 0.6 on an ordinary control, 0.55 × 0.6 = 0.33 on the faded tab. Same
+proportion, no exceptions needed.
+
+**`.press` owns the whole transition**, colour properties included, so an
+element carrying it takes no `transition-*` utility — a Tailwind
+`transition-colors` sits in the utilities layer and would replace the shorthand
+outright, silently dropping the dip. `:not(:disabled)` so a disabled control
+does not answer at all.
+
+**Deliberately not `.press`**, because their press already says something more
+specific: the trade builder's remove controls flash `danger`/`warning`, the
+login team rows tint their background, the draft board's drag handle swaps its
+cursor.
+
+**Verified by probe, not by eye** — every pressable on every route, counted in
+the live DOM: The Edge 42/42, My Team 49/49, Lineup 61/61, Trade Analyzer 15/15,
+Targets 43/43, Managers 15/15, Pick Trades 53/53, League 36/36, Movers 84/84,
+Free Agents 155/155, Playoffs 15/15, Season Review 14/14, Trajectory 44/44,
+Draft Board 486/486, Research 484/484, Tracker 60/60, News 333/333, Index 21/21.
+
+#### There is no spinner — `Loading` and the press bar
+
+**The app has no loading spinner.** It carried four `animate-spin` circles and
+one `animate-pulse`, both on the researched marker list; the circles were also,
+with the avatar and the sheet grabbers, the last radius in an app whose law 3 is
+square-with-a-hairline.
+
+**`Loading`** (`components/ui/`) replaced all five, and the replacement is not a
+stock indeterminate progress bar either. There is no track and no segment
+travelling along one: the rule **prints** from the left, holds, and **clears**
+from the left — `.press-bar`, the press run's own wipe, looped. Waiting reads as
+the press running rather than as a widget borrowed from elsewhere. Flat ink,
+square, no gradient, no radius.
+
+**The label is the information; the movement is only liveness** — which is why
+the indicator never renders without one. A spinning circle answers "the app is
+alive" and answers it identically for a 200ms wait and a 20s one. The app
+already shipped the better idiom in WhatsFair's *"Working out what it would
+cost… — N to go"*, and that is text.
+
+That split is what makes it degrade correctly: under reduced motion the global
+guard caps iterations at 1 and duration at 0.01ms, and with no fill mode the
+rule reverts to its base state — **a solid, still ink rule under its label**.
+Nothing throbs and nothing is lost.
+
+Two variants. The **block** form (a view-level state) carries the page's own
+16px gutter, because nearly every caller is an early `return` that replaces a
+view *before* its padding wrapper exists; `padded={false}` is for the one caller
+already inside one. The predecessor was centred, which is why it never exposed
+this — a centred spinner cannot touch the screen edge, a full-width rule can.
+The **`inline`** form (a section inside a card or drawer) is a 16px rule beside
+its label, because a full-width rule there reads as a divider.
+
+`animate-pulse` was a green dot beside the words "Live Intelligence". It is gone
+rather than restyled: the dot said nothing the label did not.
+
+#### The sheet arriving
+
+A sheet used to appear between one frame and the next, which on a surface
+covering most of the screen reads as a glitch rather than a transition. It now
+**prints up from the bottom edge** (`.sheet-print`, 340ms — 95% of the travel by
+145ms) while the scrim inks in behind it (`.overlay-ink`, 240ms). Carried by
+`Sheet`, `Modal`, and both sanctioned hand-rolled overlays (`PlayerSearchSheet`,
+`TradeBuilder`'s add sheet).
+
+**It animates `clip-path`, never `transform`, and that is not a style choice.**
+`transform` on the sheet panel belongs to `useSheetDrag`, which writes it inline
+during a drag and again for the spring-back; an entrance animating the same
+property would fight the gesture for it. The sheet family is six settled battles
+deep (failure-archaeology §2) and none of them is visible to headless Chromium,
+so the entrance was built to stay out of the gesture's way by construction.
+**Nothing about `useSheetDrag`, `useScrollLock`, the arming condition, the
+overscroll containment or the safe-area padding was touched.**
+
+`backwards` again, and here for a second reason on top of the flash: the panel
+is `rounded-t-2xl`, and a lingering `inset(0 0 0 0)` would leave a square clip
+sitting on a rounded box forever. During the wipe the rounded corners are simply
+the last thing revealed, which is correct.
+
+#### The moment budget — four moments, and everything else is instant
+
+| moment | where | why it earns a place |
+|---|---|---|
+| **the press run** | The Edge's entrance, and nowhere else | the signature |
+| **the press** | every pressable, 90ms | the app answering a finger |
+| **the sheet** | a sheet printing up from the bottom edge | the one surface that arrives |
+| **the press bar** | loading | the app saying it is working |
+
+**The press run is on the home screen only, and the budget is what decides
+that.** A 620ms wipe on every navigation is a wipe you see forty times a day,
+and it delays reading a screen you navigated to *deliberately* — you already
+know what you want. The Edge is the opposite case: it is the default route, you
+arrive without a target, and you read it top to bottom. **The signature stays
+app-wide by being a MATERIAL rather than a page transition** — the same band
+wipe carries the sheet and the loading bar, so the idiom appears on every screen
+while exactly one screen animates its entrance.
+
+Considered and cut, with the reason each failed:
+
+- **An entrance on every screen** — see above.
+- **A number roll-up on `Magnitude`.** It re-renders on every data refresh and
+  every trade-builder toggle, so it would fire constantly; and law 2 says type
+  size *is* the quantity, so animating the size puts the wrong quantity on
+  screen while it animates.
+- **A sliding tab-bar marker.** The marker would be briefly under the wrong tab,
+  and a tab change should read as instant.
+- **A verdict reveal on THE CALL.** It recomputes on every asset toggle — dozens
+  of times per trade.
 
 -----
 
@@ -3722,6 +3973,7 @@ dynastyedge/
 │   │   │   ├── Mark.jsx             ← THE editorial highlight — a word reversed out of a block; what REPLACED Card's accent rail. Never a position hue.
 │   │   │   ├── PositionBand.jsx     ← THE full-bleed position field + group total — Matchday's signature
 │   │   │   ├── Magnitude.jsx        ← THE value figure: type SIZE is the quantity (finding B2). Reference PINNED to FantasyCalc's 0–10000 contract (and MAGNITUDE_TEAM_REFERENCE for roster sums), never derived per list.
+│   │   │   ├── Loading.jsx          ← THE loading indicator — a printing rule under a label. There is NO spinner: `animate-spin`/`animate-pulse` are named markers and the circle was one of the app's last radii.
 │   │   │   ├── RuledList.jsx        ← THE DENSE register (finding B7): rows on the page's ground, hairline separators, NO box
 │   │   │   ├── Row.jsx              ← THE member of a RuledList — always carries .focus-ring. Extracted after /design-review caught eleven hand-rolled copies that had drifted apart on it.
 │   │   │   ├── Lede.jsx             ← THE OPEN register: eyebrow · marked headline · prose · ink CTA. What replaced The Edge's icon+title+one-liner briefing cards.
@@ -3732,6 +3984,7 @@ dynastyedge/
 │   │   │   ├── Badge.jsx            ← THE small status/label badge (New/You, tone/soft)
 │   │   │   ├── Input.jsx            ← THE text field + SearchInput variant
 │   │   │   ├── Select.jsx           ← THE dropdown field (native select + label/hint)
+│   │   │   ├── motion.js            ← the JS half of the reduced-motion guard (`prefersReducedMotion`, `scrollToTopOf`) + `stagger()`, the jittered press-run delays
 │   │   │   └── cn.js                ← tiny className joiner (the one styling primitive)
 │   │   ├── auth/
 │   │   │   └── LoginScreen.jsx      ← Sleeper-username sign-in + team-picker fallback (gates the app)
@@ -3794,9 +4047,8 @@ dynastyedge/
 │   │       ├── WinWindowBadge.jsx
 │   │       ├── TrendArrow.jsx
 │   │       ├── DynastyEdgeLogo.jsx
-│   │       ├── TeamAvatar.jsx       ← Sleeper avatar + gradient-initial fallback
-│   │       ├── Sparkline.jsx        ← tiny SVG trend line for value history
-│   │       └── LoadingSpinner.jsx
+│   │       ├── TeamAvatar.jsx       ← Sleeper avatar + FLAT initial fallback (the gradient went in step 4)
+│   │       └── Sparkline.jsx        ← tiny SVG trend line for value history
 │   ├── hooks/
 │   │   ├── useSleeper.js        ← league/rosters/users/picks/state fetch
 │   │   ├── useFantasyCalc.js    ← FantasyCalc fetch + module cache
@@ -3959,6 +4211,25 @@ the draft/state/matchup endpoints, and leaves everything else on the live API.
 Screenshots land in `.screenshots/replay-<scenario>/`. It complements the
 `tests/` suite rather than replacing it: the tests pin the pure logic, this
 proves the components actually render it.
+
+**NEITHER LINT NOR BUILD CAN CATCH AN UNDEFINED COMPONENT.** `no-undef` is on
+(via `js.configs.recommended`), but eslint-scope does not resolve a
+**`JSXIdentifier`** as a variable reference — that is what `react/jsx-no-undef`
+exists for, and this repo does not carry eslint-plugin-react. Vite does not
+catch it either: a bad element type is a *runtime* `Element type is invalid`,
+thrown during render. So `<Foo />` with no `Foo` in scope passes lint, passes
+`npm run build`, and white-screens the view — and with no error boundary, the
+whole app tree with it.
+
+**The only proof is rendering every route.** This is not hypothetical: step 4's
+lucide removal emptied `LeagueActivity`'s `TYPE_META` of its `Icon` field and
+left the `<meta.Icon />` render behind, and **League › Activity shipped to
+`main` as a white screen** — found in step 5 by a route sweep, after lint, 275
+tests and a clean build had all passed on it. Sweep with
+`scripts/dev/screenshot-app.mjs`, hash-navigating each route and failing on
+`pageerror`; a crash kills the tree, so **run the suspect route FIRST or reload
+between routes** — otherwise every route after the first failure reports an
+empty page and no error of its own, which reads like a different bug.
 
 **Lint:** `npm run lint` runs ESLint 9 (flat config, `eslint.config.js`) over
 `src/` and `scripts/` — `@eslint/js` recommended rules plus

@@ -4,7 +4,6 @@ import { useLeagueContext } from '../../context/LeagueContext'
 import { assignWinWindowTiers, computeLeagueAverages, getPositionalStrength, POSITION_DEPTH } from '../../utils/rosterAnalysis'
 import { getTeamName } from '../../hooks/useLeague'
 import { POSITIONS } from '../../constants'
-import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import TeamCard from './TeamCard'
@@ -13,7 +12,7 @@ import { POS_CHIP_ACTIVE, POS_TEXT, POS_BG } from '../../utils/positionColors'
 import { TIER_BADGE, TIER_TEXT } from '../../utils/tierColors'
 import { rankClass } from '../../utils/rankColors'
 import TeamAvatar from '../shared/TeamAvatar'
-import { Chip, Badge, Magnitude, MAGNITUDE_REFERENCE, PositionBand, Row, RuledList, cn } from '../ui'
+import { Chip, Badge, Magnitude, MAGNITUDE_REFERENCE, PositionBand, Row, RuledList, cn, Loading } from '../ui'
 
 const SORT_OPTIONS = [
   { id: 'value',  label: 'Overall Value' },
@@ -181,7 +180,7 @@ export default function LeagueOverview() {
     }
   }, [league, sortMode, posFilter, myRosterId])
 
-  if (loading && !league) return <LoadingSpinner message="Loading league data…" />
+  if (loading && !league) return <Loading message="Loading league data…" />
   if (error && !league)   return <ErrorState message={error} onRetry={retry} />
   if (!league || !derived) return <ErrorState message="Could not load league data." onRetry={retry} />
 

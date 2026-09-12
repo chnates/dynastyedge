@@ -41,11 +41,15 @@ export { default as Badge } from './Badge'
 export { Input, SearchInput } from './Input'
 export { default as Select } from './Select'
 export { cn } from './cn'
+// The JS half of the reduced-motion guard — CSS cannot reach a programmatic
+// scrollIntoView({ behavior: 'smooth' }) argument.
+export { prefersReducedMotion, scrollToTopOf, stagger } from './motion'
 
 // Adopted shared primitives (re-exported so the library is the one surface).
 // Files stay in components/shared/ — import them from here going forward.
 export { default as ErrorState } from '../shared/ErrorState'
-export { default as Spinner } from '../shared/LoadingSpinner'
+// THE loading indicator — a printing rule under a label, never a spinner.
+export { default as Loading } from './Loading'
 export { default as SectionHeader, BRAND_TICK } from '../shared/SectionHeader'
 export { default as SectionContents } from '../shared/SectionContents'
 export { default as TrendArrow } from '../shared/TrendArrow'

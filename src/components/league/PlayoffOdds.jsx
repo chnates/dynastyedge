@@ -3,12 +3,11 @@ import { usePlayoffOdds } from '../../hooks/usePlayoffOdds'
 import { getDeadlineVerdict } from '../../utils/playoffOdds'
 import { assignWinWindowTiers } from '../../utils/rosterAnalysis'
 import { getTeamName } from '../../hooks/useLeague'
-import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import TeamAvatar from '../shared/TeamAvatar'
 import { rankClass } from '../../utils/rankColors'
-import { Badge, PositionBand, RuledList } from '../ui'
+import { Badge, PositionBand, RuledList, Loading } from '../ui'
 
 const VERDICT_TONE = {
   success: 'text-success',
@@ -121,7 +120,7 @@ function HowToRead({ playoffTeams }) {
   const [open, setOpen] = useState(false)
   return (
     <div className="rounded-none bg-bg-card border border-border-default mt-4">
-      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between px-3 py-3">
+      <button onClick={() => setOpen(o => !o)} className="focus-ring press w-full flex items-center justify-between px-3 py-3">
         <span className="font-body text-xs font-semibold uppercase tracking-[0.08em] text-text-secondary">
           How this works
         </span>
@@ -192,7 +191,7 @@ export default function PlayoffOdds() {
     )
   }, [results])
 
-  if (loading) return <LoadingSpinner message="Simulating the season…" />
+  if (loading) return <Loading message="Simulating the season…" />
   if (error) return <ErrorState message={error} onRetry={retry} />
   if (!league || !status) return <ErrorState message="Could not load playoff odds." onRetry={retry} />
 

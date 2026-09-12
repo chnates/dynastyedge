@@ -4,7 +4,7 @@ import PickBadge from '../roster/PickBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { useScrollLock } from '../../hooks/useScrollLock'
 import { useSheetDrag } from '../../hooks/useSheetDrag'
-import { Button, Chip, cn } from '../ui'
+import { Button, Chip, Row, cn } from '../ui'
 import { POS_CHIP_ACTIVE, POS_TAG as POS_TAGS } from '../../utils/positionColors'
 
 const FILTER_TABS = ['All', 'QB', 'RB', 'WR', 'TE', 'Picks']
@@ -52,7 +52,7 @@ function AssetChip({ asset, onRemove, onTap }) {
         <button
           onClick={onTap}
           aria-label={`View ${asset.name} profile`}
-          className="flex-1 flex items-center gap-1 min-w-0 text-left active:opacity-60 transition-opacity"
+          className="flex-1 flex items-center gap-1 min-w-0 text-left press"
         >
           {inner}
         </button>
@@ -100,7 +100,7 @@ function TradeColumn({ label, assets, total, onRemove, onAdd, addLabel, onTapPla
       </div>
       <button
         onClick={onAdd}
-        className="w-full mt-1.5 flex items-center justify-center gap-1 py-2 border border-dashed border-border-default dark:border-border-default text-text-secondary dark:text-text-secondary font-body text-[11px] font-semibold uppercase tracking-wide active:opacity-60 transition-opacity"
+        className="w-full mt-1.5 flex items-center justify-center gap-1 py-2 border border-dashed border-border-default dark:border-border-default text-text-secondary dark:text-text-secondary font-body text-[11px] font-semibold uppercase tracking-wide press"
       >
         {addLabel}
       </button>
@@ -116,7 +116,7 @@ function PlayerRow({ player, isSelected, onTap, onInfo, onWhatsFair }) {
     >
       <button
         onClick={onTap}
-        className="flex-1 flex items-center gap-1.5 py-2.5 transition-opacity active:opacity-60 text-left min-w-0"
+        className="flex-1 flex items-center gap-1.5 py-2.5 press text-left min-w-0"
       >
         {/* Selection indicator */}
         <span className="w-3.5 shrink-0 flex justify-center text-[10px]">
@@ -167,10 +167,10 @@ function PlayerRow({ player, isSelected, onTap, onInfo, onWhatsFair }) {
 
 function PickRow({ pick, isSelected, onTap }) {
   return (
-    <button
+    <Row
       onClick={onTap}
-      className={`w-full flex items-center gap-3 py-2.5 border-b border-border-default dark:border-border-default last:border-0 transition-opacity active:opacity-60 text-left
-        ${isSelected ? 'bg-accent/5' : ''}`}
+      padding="sm"
+      className={`flex items-center gap-3 ${isSelected ? 'bg-accent/5' : ''}`}
     >
       <span className="w-3.5 shrink-0 flex justify-center text-[10px]">
         {isSelected && <span className="text-success">✓</span>}
@@ -182,7 +182,7 @@ function PickRow({ pick, isSelected, onTap }) {
       <span className="font-mono text-sm text-text-secondary dark:text-text-secondary shrink-0 tabular-nums">
         {(pick.value ?? 0) > 0 ? `~${(pick.value).toLocaleString()}` : '—'}
       </span>
-    </button>
+    </Row>
   )
 }
 
@@ -257,7 +257,7 @@ function AddAssetSheet({
     <div
       ref={overlayRef}
       onClick={handleOverlayClick}
-      className="fixed left-0 right-0 z-50 flex items-end bg-black/60"
+      className="overlay-ink fixed left-0 right-0 z-50 flex items-end bg-black/60"
       style={{
         top: vp.offsetTop,
         height: vp.height,
@@ -274,7 +274,7 @@ function AddAssetSheet({
           the only thing that holds it down. */}
       <div
         ref={sheetRef}
-        className="w-full bg-bg-secondary dark:bg-bg-secondary rounded-t-2xl border-t border-border-default dark:border-border-default flex flex-col min-h-0"
+        className="sheet-print w-full bg-bg-secondary dark:bg-bg-secondary rounded-t-2xl border-t border-border-default dark:border-border-default flex flex-col min-h-0"
         style={{ maxHeight: `calc(${vp.height}px - 3rem - env(safe-area-inset-top) - 8px)` }}
       >
 

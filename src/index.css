@@ -85,6 +85,25 @@
   --pos-wr:         31 111 192;   /* #1F6FC0 sky   — 4.58:1 under paper type */
   --pos-te:        170 84 23;     /* #AA5417 orange— 4.70:1 under paper type */
   --pos-def:        90 100 200;   /* #5A64C8 violet— 4.58:1 under paper type */
+
+  /* ── The curve ────────────────────────────────────────────────
+     ONE easing token, and the whole app's motion is on it. Before this the
+     app carried three explicit timing values in total, so virtually every
+     transition ran Tailwind's default `cubic-bezier(.4,0,.2,1)` — default
+     easing is to motion what Inter is to type (findings.md → Motion).
+
+     `cubic-bezier(.16,1,.3,1)` is the round-2 house rule (slop-checklist.md
+     rule 6) and it is an expo-out: ~80% of the distance is covered in the
+     first third of the duration, then it settles. That shape is what makes a
+     620ms band wipe read as fast rather than slow, and it is why the duration
+     ladder below can afford numbers that would feel sluggish on a linear or
+     symmetric ease.
+
+     Declared here, on `:root`, rather than in the theme blocks — motion does
+     not invert with the theme. Tailwind emits it as the DEFAULT
+     `transition-timing-function`, so every `transition-*` utility in the app
+     picks it up with no call-site change. */
+  --ez: cubic-bezier(.16, 1, .3, 1);
 }
 
 .dark {
@@ -255,22 +274,168 @@ body {
   color: rgb(var(--text-tertiary));
 }
 
-/* ── The Edge: staggered card entrance ───────────────────────── */
-/* Motion is step 5 of the Matchday rebuild and is deliberately untouched here
-   — including this fade-up, which the checklist flags and step 5 replaces with
-   the "press run" band wipe. */
+/* ── The press run — Matchday's signature entrance ─────────────── */
+/* "Flat colour bands wipe across the page, then type drops in behind them.
+   Ink hitting paper." (directions.md, direction 3's MOTION block.)
 
-@keyframes edge-rise {
-  from { opacity: 0; transform: translateY(8px); }
+   It replaced `.edge-rise`, a 0.35s fade-up on Tailwind's default ease. That
+   animation was TWO of the twelve researched slop markers on its own — a
+   fade-up entrance, and (at the call site) a linear 0/60/120/180ms stagger —
+   and it was the only keyframe in the app.
+
+   Three keyframes, in the order they fire on a block:
+
+   1. `.press-band` — a solid field prints left to right. This is the wipe, and
+      it is the app's one motion MATERIAL: the same movement carries the sheet
+      arriving and the loading bar (see `.press-bar`). It is the reason the
+      signature reads app-wide while only ONE screen animates its entrance.
+   2. `.press-ink` — the type lands behind the band it was printed under. A
+      short drop FROM ABOVE with a slight vertical over-scale that settles; the
+      transform origin is the top edge, so it reads as ink striking paper and
+      spreading, not as a card sliding up.
+   3. `.press-set` — a row sets under a downward clip. Rows are the dense
+      register (law 5) and there are a lot of them, so this is the quietest of
+      the three: the clip does the work and the opacity floor is 0.2, never 0,
+      so a row is never fully absent from the page.
+
+   Every property here is compositor-cheap — `clip-path`, `opacity`,
+   `transform`. Nothing animates layout: motion must not cost a paint
+   (failure-archaeology §4e-v is the same lesson from the other direction).
+
+   THE FILL MODE IS `backwards`, AND THE ALTERNATIVES ARE BOTH WRONG.
+   Without any fill a delayed block paints at full opacity through its delay
+   and then jumps to the start of its own animation — a flash, not an entrance.
+   With `both` the block keeps its FINAL keyframe forever, which for a wipe
+   means a permanent `clip-path: inset(0 0 0 0)`: visually identical, and it
+   silently clips `.tap-target`'s 44px hit area back to the element box at the
+   block's own edges, because clip-path clips hit-testing as well as paint.
+   `backwards` gives the from-state during the delay and then reverts to the
+   base value, so there is no flash and no residue. */
+
+@keyframes press-band {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes press-ink {
+  from { opacity: 0; transform: translateY(-9px) scaleY(1.08); }
   to   { opacity: 1; transform: none; }
 }
 
-.edge-rise {
-  animation: edge-rise 0.35s ease-out both;
+@keyframes press-set {
+  from { opacity: 0.2; clip-path: inset(0 0 100% 0); }
+  to   { opacity: 1; clip-path: inset(0 0 0 0); }
 }
 
+/* ── The press bar — the app's loading indicator ───────────────── */
+/* Matchday has no spinner. The app carried four `animate-spin` circles and one
+   `animate-pulse`, and both of those are on the researched marker list; the
+   circles were also, along with the avatar and the sheet grabbers, the last
+   radius in an app whose law 3 is square-with-a-hairline.
+
+   What replaced them is not a stock indeterminate progress bar either. There is
+   no track and no segment travelling along one: the rule PRINTS from the left,
+   holds, and CLEARS from the left — the press run's own wipe, looped, so
+   waiting reads as the press running rather than as a widget borrowed from
+   somewhere else. Flat ink, square, no gradient, no radius.
+
+   THE LABEL IS THE INFORMATION AND THE MOVEMENT IS ONLY LIVENESS, which is why
+   the indicator never appears without one. A spinning circle answers "the app
+   is alive" and answers it identically for a 200ms wait and a 20s one; the app
+   already had the better idiom shipped in WhatsFair's "Working out what it
+   would cost… — N to go", which is text.
+
+   That split is also what makes it degrade correctly. Under reduced motion the
+   global guard caps the iteration count at 1 and the duration at 0.01ms, and
+   because there is no fill mode the rule reverts to its base state — a solid,
+   still ink rule under its label. Nothing throbs, and nothing is lost. */
+@keyframes press-bar {
+  0%   { clip-path: inset(0 100% 0 0); }
+  42%  { clip-path: inset(0 0 0 0); }
+  58%  { clip-path: inset(0 0 0 0); }
+  100% { clip-path: inset(0 0 0 100%); }
+}
+
+.press-bar { animation: press-bar 1.15s var(--ez) infinite; }
+
+/* ── The sheet arriving ────────────────────────────────────────── */
+/* A sheet used to appear between one frame and the next, which on a surface
+   that covers most of the screen reads as a glitch rather than a transition.
+   It now PRINTS up from the bottom edge — the band wipe again, rotated — while
+   the scrim inks in behind it.
+
+   IT ANIMATES `clip-path`, NEVER `transform`, AND THAT IS NOT A STYLE CHOICE.
+   `transform` on the sheet panel belongs to `useSheetDrag`, which writes it
+   inline during a drag and again for the spring-back. An entrance animating the
+   same property would fight the gesture for it — and the sheet family is six
+   settled battles deep (failure-archaeology §2), none of them visible to
+   headless Chromium. Clipping leaves the gesture's property untouched.
+
+   `backwards` again, for a second reason on top of the flash: the panel is
+   `rounded-t-2xl`, and a lingering `inset(0 0 0 0)` would be a square clip
+   sitting on a rounded box forever. It reverts instead. During the wipe the
+   rounded corners are simply the last thing revealed, which is correct. */
+@keyframes sheet-print {
+  from { clip-path: inset(100% 0 0 0); }
+  to   { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes overlay-ink {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.sheet-print  { animation: sheet-print 0.34s var(--ez) backwards; }
+.overlay-ink  { animation: overlay-ink 0.24s var(--ez) backwards; }
+
+.press-band { animation: press-band 0.62s var(--ez) backwards; }
+.press-ink  { animation: press-ink  0.58s var(--ez) backwards; transform-origin: top; }
+.press-set  { animation: press-set  0.44s var(--ez) backwards; }
+
+/* ── The reduced-motion guard: GLOBAL, and deliberately first ──── */
+/* This rule is the precondition for every other line of motion in the app, so
+   it landed BEFORE any of it. It used to cover exactly one class (`.edge-rise`,
+   the fade-up the press run replaced) — adequate only because nothing else in
+   the app moved, and a trap the moment
+   that stopped being true: a guard scoped to a class list has to be extended by
+   whoever adds the next animation, and the failure mode is silent for everyone
+   who doesn't have the setting on.
+
+   `*` rather than a list, and `!important` rather than a cascade, because the
+   point is that NO screen and no future primitive can opt out. What it covers:
+
+   - `animation-duration` / `transition-duration` → 0.01ms, not 0. Zero makes
+     some engines skip the animation entirely, which also skips its `end` event;
+     0.01ms runs it in one frame and still fires, so any code awaiting a
+     transition still resolves.
+   - `animation-delay` → 0. Zeroing only the DURATION of a jittered stagger
+     leaves the delay intact, so the last row of a list would still sit blank
+     for 400ms — a slower first paint than no motion at all, which is the exact
+     opposite of what the setting asks for.
+   - `animation-iteration-count` → 1, which stops an indefinite loop. The
+     loading indicator is designed for this: under reduced motion its bar holds
+     still and the mono label alone says the app is working (see `.press-bar`).
+   - `scroll-behavior` → auto. Note the CSS property does NOT override a
+     JS `scrollIntoView({ behavior: 'smooth' })` argument; the two programmatic
+     smooth scrolls in the app (THE CALL's act jumps, Rookie Research's board
+     jump) read the same media query at the call site, via `prefersReducedMotion`
+     in `components/ui/motion.js`.
+
+   Not covered, correctly: `useSheetDrag`'s spring-back sets an inline
+   `transition` and is caught by the duration rule, so a released sheet snaps
+   home instead of easing. That is the right behaviour and it leaves the gesture
+   itself — which is direct manipulation, not animation — untouched. */
 @media (prefers-reduced-motion: reduce) {
-  .edge-rise { animation: none; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ── Focus ring: ONE definition, shared by every control ──────── */
@@ -294,6 +459,58 @@ body {
 .ink-field .focus-ring:focus-visible,
 .ink-field-cap .focus-ring:focus-visible {
   outline-color: rgb(var(--bg-primary));
+}
+
+/* ── The press: one definition of "this control answers a finger" ── */
+/* Third sibling of `.focus-ring` and `.tap-target`, and it exists for the same
+   reason both of those do: a control-level contract belongs in ONE place, not
+   at forty call sites.
+
+   The audit that produced it: 41 `active:` opacity states across 20 files, at
+   THREE different values for one gesture — `Button` dipped to 70%, `Card` to
+   80%, everything else to 60% — plus five consumers restating `Button`'s own
+   `active:opacity-70` on a `Button`, and roughly a dozen real pressables (the
+   app header's Menu and Find, the Playoff Odds and Roster Analysis explainer
+   toggles, the action-item Dismiss, the roster Back link, the Index rows, four
+   drawer rows, the tab bar) with no press state at all. That is precisely the
+   shape of the `.focus-ring` drift `/design-review`'s nine greps sailed past in
+   step 4 — eleven hand-rolled rows that had quietly stopped agreeing.
+
+   90ms, because a press must read as instantaneous: the finger is already down,
+   so this is confirmation, not animation. On `--ez` like everything else.
+
+   THE DIP IS `filter: opacity()`, NOT `opacity`, AND THAT IS THE WHOLE REASON
+   ONE RULE CAN COVER THE APP. A flat `opacity: 0.6` is ABSOLUTE, so it is wrong
+   on any control whose RESTING opacity already means something — and the app
+   has two: a tab-bar item sits at 55% when inactive, and a drafted prospect row
+   sits at 50%. Pressing either would have moved it to 60%, i.e. BRIGHTER, which
+   reads as the opposite of a press. `filter` composes instead: 1 x 0.6 = 0.6 on
+   an ordinary control, 0.55 x 0.6 = 0.33 on the faded tab. Both dip by the same
+   proportion, which is what "pressed" should mean, so neither needs an
+   exception.
+
+   IT OWNS THE WHOLE TRANSITION, deliberately. A Tailwind `transition-colors` on
+   the same element would sit in the utilities layer and replace this rule's
+   `transition` shorthand outright, silently dropping the dip from it — so
+   `.press` declares the colour properties too and an element carrying it needs
+   no `transition-*` utility. Anything genuinely different keeps its own state
+   and does not take this class: the trade builder's remove controls flash
+   `danger` rather than dipping, the login team rows tint their background, a
+   drag handle swaps its cursor.
+
+   `:not(:disabled)` so a disabled control does not answer at all. Without it a
+   disabled Button would still dip under the finger, which reads as "it
+   worked". */
+.press {
+  transition:
+    opacity 90ms var(--ez),
+    filter 90ms var(--ez),
+    color 150ms var(--ez),
+    background-color 150ms var(--ez),
+    border-color 150ms var(--ez);
+}
+.press:not(:disabled):active {
+  filter: opacity(0.6);
 }
 
 /* ── Touch targets: hit area ≥ 44px, with no layout cost ──────── */

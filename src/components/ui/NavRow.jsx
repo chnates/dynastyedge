@@ -39,7 +39,7 @@ export default function NavRow({
       {...tagProps}
       className={cn(
         'focus-ring flex w-full items-baseline gap-3 py-4 text-left border-b border-border-default',
-        'hover:bg-bg-secondary active:opacity-60 transition-colors',
+        'hover:bg-bg-secondary press',
         className,
       )}
       style={{ touchAction: 'manipulation' }}

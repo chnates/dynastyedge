@@ -2,14 +2,13 @@ import { useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getTeamName } from '../../hooks/useLeague'
 import { useLeagueContext } from '../../context/LeagueContext'
-import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import SectionHeader from '../shared/SectionHeader'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import Sparkline from '../shared/Sparkline'
 import TeamAvatar from '../shared/TeamAvatar'
 import { POS_TEXT, POS_SVG } from '../../utils/positionColors'
-import { Lede, Mark, PositionBand, RuledList } from '../ui'
+import { Lede, Mark, PositionBand, RuledList, Loading } from '../ui'
 
 // The verdict's tone, as a Mark tone. Never a position hue (law 4).
 const VERDICT_MARK = { ascending: 'success', declining: 'warning', balanced: 'ink' }
@@ -201,7 +200,7 @@ export default function TrajectoryView() {
     return { curves, trajectory, leagueAvg, peakIdx, players, verdict: getTrajectoryVerdict(trajectory) }
   }, [league, values, roster, currentSeason])
 
-  if (loading && !league) return <LoadingSpinner message="Projecting trajectory…" />
+  if (loading && !league) return <Loading message="Projecting trajectory…" />
   if (error && !league) return <ErrorState message={error} onRetry={retry} />
   if (!roster || !model) return <ErrorState message="Could not build trajectory." onRetry={retry} />
 
@@ -338,7 +337,7 @@ export default function TrajectoryView() {
             <button
               key={player.sleeperId}
               onClick={() => setSelectedPlayer(player)}
-              className={`w-full flex items-center gap-2.5 py-2.5 text-left active:opacity-60 transition-opacity ${
+              className={`w-full flex items-center gap-2.5 py-2.5 text-left press ${
                 i < players.length - 1 ? 'border-b border-border-default' : ''
               }`}
             >
@@ -374,7 +373,7 @@ export default function TrajectoryView() {
 
       {/* How this works */}
       <div className="rounded-none bg-bg-card border border-border-default mt-4">
-        <button onClick={() => setHowToOpen(o => !o)} className="w-full flex items-center justify-between px-3 py-3">
+        <button onClick={() => setHowToOpen(o => !o)} className="focus-ring press w-full flex items-center justify-between px-3 py-3">
           <span className="font-body text-xs font-semibold uppercase tracking-[0.08em] text-text-secondary">
             How this works
           </span>

@@ -5,10 +5,9 @@ import { buildRookieProspects } from '../../utils/rookieAdp'
 import { useSleeperDraft, buildDraftOrder, FALLBACK_DRAFT_SEASON } from '../../hooks/useSleeperDraft'
 import { deriveDraftState, buildBestAvailable, buildMyCapital, buildRecap, VOE_NEUTRAL } from '../../utils/draftLive'
 import { getTeamName } from '../../hooks/useLeague'
-import { Sheet, Modal, Button, Card } from '../ui'
+import { Sheet, Modal, Button, Card, Chip, Loading, Row, RuledList } from '../ui'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { BOARD_ORDER_KEY, NOTES_KEY, readJSON } from './boardStorage'
-import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
@@ -85,7 +84,7 @@ function StatusBar({ status, fetchedAt, refreshing, syncError, onRefresh }) {
         <button
           onClick={onRefresh}
           disabled={refreshing}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-bg-card border border-border-default text-text-secondary active:opacity-60 transition-opacity flex-shrink-0"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-bg-card border border-border-default text-text-secondary press flex-shrink-0"
         >
           <span className="font-body text-[11px] font-semibold uppercase tracking-wide">Refresh</span>
         </button>
@@ -102,7 +101,7 @@ function StatusBar({ status, fetchedAt, refreshing, syncError, onRefresh }) {
 function DraftCapitalCard({ capital, taxiUsed, taxiSlots, draftSeason }) {
   if (!capital.length && taxiSlots == null) return null
   return (
-    <div className="mx-4 mt-3 px-3 py-2.5 rounded-none bg-bg-card border border-border-default">
+    <Card padding="none" className="mx-4 mt-3 px-3 py-2.5">
       <div className="flex items-center justify-between mb-1.5">
         <span className="font-body text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
           My Draft Capital
@@ -138,7 +137,7 @@ function DraftCapitalCard({ capital, taxiUsed, taxiSlots, draftSeason }) {
           ))}
         </div>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -182,7 +181,7 @@ function BestAvailableCard({ rows, onSelect }) {
         <button
           key={player.sleeperId}
           onClick={() => onSelect(player)}
-          className="w-full flex items-center gap-2 py-1.5 text-left active:opacity-60 transition-opacity"
+          className="w-full flex items-center gap-2 py-1.5 text-left press"
         >
           <span className="font-body text-[10px] text-text-tertiary w-24 flex-shrink-0 truncate">{tag}</span>
           <span className="font-body text-sm font-medium text-text-primary flex-1 truncate">{player.name}</span>
@@ -253,17 +252,14 @@ function ProspectList({
 
       <div className="flex gap-1.5 mb-2 overflow-x-auto">
         {POS_FILTERS.map(pos => (
-          <button
+          <Chip
             key={pos}
+            active={posFilter === pos}
+            activeClass={POS_CHIP_ACTIVE[pos]}
             onClick={() => setPosFilter(pos)}
-            className={`flex-shrink-0 px-3 py-1.5 font-body text-xs font-semibold uppercase tracking-wide transition-colors ${
-              posFilter === pos
-                ? POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-bg-primary'
-                : 'bg-bg-card border border-border-default text-text-secondary'
-            }`}
           >
             {pos}
-          </button>
+          </Chip>
         ))}
       </div>
 
@@ -272,7 +268,7 @@ function ProspectList({
           {prospects.length === 0 ? 'No rookie prospects loaded yet.' : 'No prospects match.'}
         </p>
       ) : (
-        <div className="rounded-none bg-bg-card border border-border-default px-3">
+        <Card padding="none" className="px-3">
           {list.map((player, i) => {
             const rank = sortMode === 'board' && boardRankMap
               ? boardRankMap[player.sleeperId]
@@ -281,7 +277,7 @@ function ProspectList({
               <button
                 key={player.sleeperId}
                 onClick={() => onSelect(player)}
-                className={`w-full text-left py-2.5 flex items-center gap-2 active:opacity-60 transition-opacity ${
+                className={`w-full text-left py-2.5 flex items-center gap-2 press ${
                   i < list.length - 1 ? 'border-b border-border-default' : ''
                 }`}
               >
@@ -320,13 +316,13 @@ function ProspectList({
               </button>
             )
           })}
-        </div>
+        </Card>
       )}
     </div>
   )
 }
 
-function PickRow({ player, teamName, isMine, label, delta, isLast, onSelect }) {
+function PickRow({ player, teamName, isMine, label, delta, onSelect }) {
   const Inner = (
     <>
       <span className={`font-mono text-xs font-bold w-10 flex-shrink-0 ${isMine ? 'text-brand-bright' : 'text-text-tertiary'}`}>
@@ -345,13 +341,16 @@ function PickRow({ player, teamName, isMine, label, delta, isLast, onSelect }) {
       </span>
     </>
   )
-  const cls = `w-full text-left py-2.5 flex items-center gap-2 ${isLast ? '' : 'border-b border-border-default'} ${
-    isMine ? 'bg-brand/5 -mx-3 px-3' : ''
-  }`
-  return onSelect ? (
-    <button onClick={onSelect} className={`${cls} active:opacity-60 transition-opacity`}>{Inner}</button>
-  ) : (
-    <div className={cls}>{Inner}</div>
+  // `Row` draws the hairline and decides button-vs-div from `onClick`, so the
+  // `isLast` bookkeeping goes with it — `RuledList` strips the closing border.
+  return (
+    <Row
+      onClick={onSelect ?? undefined}
+      padding="sm"
+      className={`flex items-center gap-2 ${isMine ? 'bg-brand/5 -mx-3 px-3' : ''}`}
+    >
+      {Inner}
+    </Row>
   )
 }
 
@@ -578,8 +577,9 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects, my
                     <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-success mb-1.5">
                       Biggest Steals
                     </p>
-                    <div className="rounded-none bg-bg-card border border-border-default px-3 mb-3">
-                      {recap.steals.map((e, i) => (
+                    <Card padding="none" className="px-3 mb-3">
+                      <RuledList>
+                      {recap.steals.map(e => (
                         <PickRow
                           key={e.pick.pick_no}
                           pick={e.pick}
@@ -588,11 +588,11 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects, my
                           isMine={e.pick.roster_id === myRosterId}
                           label={pickSlotLabel(e.pick, teams)}
                           delta={e.delta}
-                          isLast={i === recap.steals.length - 1}
                           onSelect={values?.playerMap?.[String(e.pick.player_id)] ? () => setSelected(e.player) : null}
                         />
                       ))}
-                    </div>
+                      </RuledList>
+                    </Card>
                   </>
                 )}
                 {recap.reaches.length > 0 && (
@@ -600,8 +600,9 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects, my
                     <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-danger mb-1.5">
                       Biggest Reaches
                     </p>
-                    <div className="rounded-none bg-bg-card border border-border-default px-3">
-                      {recap.reaches.map((e, i) => (
+                    <Card padding="none" className="px-3">
+                      <RuledList>
+                      {recap.reaches.map(e => (
                         <PickRow
                           key={e.pick.pick_no}
                           pick={e.pick}
@@ -610,11 +611,11 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects, my
                           isMine={e.pick.roster_id === myRosterId}
                           label={pickSlotLabel(e.pick, teams)}
                           delta={e.delta}
-                          isLast={i === recap.reaches.length - 1}
                           onSelect={values?.playerMap?.[String(e.pick.player_id)] ? () => setSelected(e.player) : null}
                         />
                       ))}
-                    </div>
+                      </RuledList>
+                    </Card>
                   </>
                 )}
               </div>
@@ -623,8 +624,9 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects, my
             <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary mb-1.5">
               Full Results
             </p>
-            <div className="rounded-none bg-bg-card border border-border-default px-3">
-              {recap.entries.map((e, i) => (
+            <Card padding="none" className="px-3">
+              <RuledList>
+              {recap.entries.map(e => (
                 <PickRow
                   key={e.pick.pick_no}
                   pick={e.pick}
@@ -633,11 +635,11 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects, my
                   isMine={e.pick.roster_id === myRosterId}
                   label={pickSlotLabel(e.pick, teams)}
                   delta={e.delta}
-                  isLast={i === recap.entries.length - 1}
                   onSelect={values?.playerMap?.[String(e.pick.player_id)] ? () => setSelected(e.player) : null}
                 />
               ))}
-            </div>
+              </RuledList>
+            </Card>
           </div>
         ) : (
           <>
@@ -663,8 +665,9 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects, my
                     Drafted — {sortedPicks.length} of {totalPicks}
                   </p>
                 </button>
-                <div className="rounded-none bg-bg-card border border-border-default px-3">
-                  {(allPicksOpen ? recentPicks : recentPicks.slice(0, 3)).map((pick, i, arr) => {
+                <Card padding="none" className="px-3">
+                  <RuledList>
+                  {(allPicksOpen ? recentPicks : recentPicks.slice(0, 3)).map(pick => {
                     const player = resolvePick(pick)
                     const adp = adpById[String(pick.player_id)] ?? null
                     return (
@@ -676,12 +679,12 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects, my
                         isMine={pick.roster_id === myRosterId}
                         label={pickSlotLabel(pick, teams)}
                         delta={adp != null ? pick.pick_no - adp : null}
-                        isLast={i === arr.length - 1}
                         onSelect={values?.playerMap?.[String(pick.player_id)] ? () => setSelected(player) : null}
                       />
                     )
                   })}
-                </div>
+                  </RuledList>
+                </Card>
               </div>
             )}
           </>
@@ -884,7 +887,7 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
             <button
               onClick={onCheckAgain}
               disabled={checking}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-bg-secondary border border-border-default text-text-secondary active:opacity-60 transition-opacity flex-shrink-0"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-bg-secondary border border-border-default text-text-secondary press flex-shrink-0"
             >
               <span className="font-body text-[10px] font-semibold uppercase tracking-wide">Check</span>
             </button>
@@ -911,12 +914,12 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
           {undrafted.length === 0 ? (
             <p className="text-center text-text-tertiary font-body text-sm py-6">All prospects drafted.</p>
           ) : (
-            <div className="rounded-none bg-bg-card border border-border-default px-3">
+            <Card padding="none" className="px-3">
               {undrafted.map((player, i) => (
                 <button
                   key={player.sleeperId}
                   onClick={() => setLogModal(player)}
-                  className={`w-full text-left py-2.5 flex items-center gap-2 active:opacity-60 transition-opacity ${
+                  className={`w-full text-left py-2.5 flex items-center gap-2 press ${
                     i < undrafted.length - 1 ? 'border-b border-border-default' : ''
                   }`}
                 >
@@ -941,7 +944,7 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
                   </span>
                 </button>
               ))}
-            </div>
+            </Card>
           )}
         </div>
 
@@ -959,7 +962,7 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
               </p>
             </button>
             {draftedOpen && (
-              <div className="rounded-none bg-bg-card border border-border-default px-3">
+              <Card padding="none" className="px-3">
                 {draftedSorted.map((pick, i) => {
                   const player = values?.playerMap?.[pick.sleeperId]
                   const team = getTeamName(userMap[pick.rosterId])
@@ -968,7 +971,7 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
                     <button
                       key={pick.sleeperId}
                       onClick={() => setEditModal({ pick, player })}
-                      className={`w-full text-left py-2.5 flex items-center gap-2 active:opacity-60 transition-opacity ${
+                      className={`w-full text-left py-2.5 flex items-center gap-2 press ${
                         i < draftedSorted.length - 1 ? 'border-b border-border-default' : ''
                       }`}
                     >
@@ -987,7 +990,7 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
                     </button>
                   )
                 })}
-              </div>
+              </Card>
             )}
           </div>
         )}
@@ -1048,7 +1051,7 @@ export default function DraftTracker() {
   )
 
   if (loading || rookieLoading || (sleeperDraft.loading && !sleeperDraft.data)) {
-    return <LoadingSpinner message="Loading draft data…" />
+    return <Loading message="Loading draft data…" />
   }
   if (error || rookieError) {
     return <ErrorState message={error || rookieError} onRetry={error ? retry : rookieRetry} />
