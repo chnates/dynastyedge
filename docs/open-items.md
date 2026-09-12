@@ -68,7 +68,9 @@ overturned.
   you roster exactly one, so the app must never suggest adding them (now
   League Context doctrine in CLAUDE.md). 163 tests, lint + build clean.
 - **Phase 2 — SHIPPED 2026-09-04, acceptance test MISSED (10 of 25 vs a target
-  of 12) — see NEWS-1 below and `docs/analysis/news-sources-2026-09.md`.**
+  of 12) — see NEWS-3 below, `docs/analysis/news-sources-2026-09.md`, and
+  `docs/analysis/news-retention-2026-09.md` (which found the accumulation
+  described two lines down was never actually reaching 7 days).**
   FantasyPros dropped (all three endpoints dead); ten sources probed and
   adopted, ten rejected; the feed now accumulates across runs (7d player / 48h
   general) instead of being a 20-hour snapshot; and items carry `playerIds`
@@ -93,50 +95,74 @@ overturned.
   against a +0.98 control (n=318). Sleeper had already raised their projections.
   See the plan's §9c.
 
-### NEWS-1 — re-measure news coverage after a week of accumulation
+### NEWS-3 — re-measure news coverage once the window fills to 7 days
 
-**Trigger:** `news.yml` has been running with the accumulating feed for ~7 days
-(i.e. on or after **2026-09-11**).
+**Trigger:** on or after **2026-09-19** (the retention fix landed 2026-09-12
+with the window at 112h of its 168h target).
 
-Phase 2's pre-registered acceptance test — ≥12 of 25 rostered players resolved
-in a fresh pull — **missed at 10**. It was measured on a *cold* feed, before
-any accumulation had happened, which is not the shipped design: the window
-holds 240 player items and a single cold pull only produces 127.
+NEWS-1 fired, found a **regression**, and the cause was a retention bug rather
+than a coverage ceiling — eviction was recency-only, so the item cap bound at
+~30 hours and the documented 7-day window had never once bound. Fixed
+2026-09-12 (diversity-aware eviction + cap 240 → 400). One published run moved
+span **27.5h → 112h** and the acceptance number **6 → 8 of 30**. Full memo:
+`docs/analysis/news-retention-2026-09.md`.
 
-Two facts bound what more work could buy, and both argue for measuring before
-building:
+**Do this:** run `node scripts/dev/news-coverage.mjs` against the live feed.
 
-- The app now resolves **every** player the matcher can find (achieved =
-  ceiling). No further matching work can move the number.
-- All 15 misses are **genuine absence** — each was verified present in the
-  player index and absent from the feed's entire text. There simply was no
-  news about Jordan James or Jalen Royals in any of eleven sources on
-  2026-09-04, in the preseason.
+**Predicted before the fact: 9–11, i.e. still short of the ≥12 target.** Record
+whatever it actually is. Then make the owner call §9 of the memo sets up, which
+is *not* "add sources":
 
-**Do this:** run `node scripts/dev/news-coverage.mjs` (no argument reads the
-live feed). If a saturated window clears 12, close this item. If it doesn't,
-the honest read is that free NFL news does not cover a 26-deep dynasty roster
-carrying taxi-squad rookies, and the **target should move rather than the
-sources** — do not bolt on low-signal feeds to chase the number. Record
-whichever way it goes.
+- Matching is saturated — the metric's achieved number equals its ceiling
+  again, so no matching work can move it.
+- The residual is **source-kind, not source-count**. CeeDee Lamb, Jonathan
+  Taylor, DJ Moore, Mark Andrews and Jordan Love had **zero** occurrences in
+  266 items over 112 hours of eleven national sources — not even a bare
+  surname. These feeds publish injury/transaction/storyline news; a healthy
+  starter on a quiet week generates no item anywhere in them.
+- The denominator can't reach 30: **1 of the 30 is a team defense** (the player
+  index is skill positions only) and **5 are taxi**, 4 of those never-played
+  rookies. ≥12 of 30 means 12 of the ~24 reachable.
+
+So the two live options are **move the target** to what this source population
+can deliver, or find a per-player notes feed covering *all* rostered NFL
+players. NEWS-1's standing ruling still holds either way: **do not bolt on
+low-signal feeds to chase the number.**
 
 ### NEWS-2 — wire the feed's `coverage` block into the drawer's data-status row
 
-**Trigger:** ready now; small, and gated only on whether it earns its screen
-space. Owner call.
+**CLOSED 2026-09-12** — built alongside the retention fix, which is what made
+it newly relevant. The News row now carries one indented line ("5d deep · 119
+players"), amber under 48h of depth. It surfaces **depth, not item count**, for
+the reason the re-spec below gives. Verified in both states against real feed
+payloads (healthy 112h, and the pre-fix 28h feed rendering amber and correctly
+dropping the player count it has no field for). Original item kept below.
+
+**Trigger (original):** ready now; small, and gated only on whether it earns its
+screen space. Owner call.
 
 Phase 2's step 5 asked for a relevance/source breakdown "in the feed JSON so
 the side drawer's data-status block can show feed health". **The data shipped;
 the UI did not.** `news.json` now carries
-`{ total, playerItems, withPlayerIds, withAthleteIds, spanHours, sources }`
-next to `updatedAt`, and nothing in the app reads it — the drawer still shows
-only the News row's refresh age and publish age.
+`{ total, playerItems, playerCap, distinctPlayers, withPlayerIds,
+withAthleteIds, spanHours, sources }` next to `updatedAt`, and nothing in the
+app reads it — the drawer still shows only the News row's refresh age and
+publish age.
 
 What it would add: a dead pipeline is already visible through publish age, but
 a **degraded** one is not. A run where RotoWire's markup changed, or where the
 player DB fetch failed and every new item landed in the general bucket, still
 publishes a fresh `updatedAt` while `playerItems` quietly collapses. That is
 the failure this block was published to make visible.
+
+**SURFACE `spanHours`, NOT `playerItems` — this item as originally specified
+would NOT have caught the 2026-09 collapse.** That failure ran for days with
+`playerItems` sitting at *exactly* its cap, which is what a full, healthy feed
+looks like; depth had meanwhile fallen 159h → 27.5h. Span was the number that
+told the story, and `distinctPlayers` was what the cap was failing to buy.
+`playerCap` now ships beside `playerItems` so "is the cap binding?" is
+answerable from the feed alone. A useful one-liner is span + distinct players,
+with the amber rule on **span**, not on item count.
 
 Keep it to one line under the existing News row — the drawer is already dense,
 and this is diagnostic, not daily information.
@@ -822,6 +848,7 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 
 | Item | Closed | How |
 |---|---|---|
+| NEWS-1 — re-measure news coverage after accumulation | 2026-09-12 | **Measured, and it was a REGRESSION: 6 of 30, worse than the 10 of 26 it was opened on, with span collapsed 159h → 27.5h.** Cause was retention, not coverage: eviction was recency-only, so the 240-item cap bound at ~30h and the 7-day window had never once bound; the cap was also spent on redundancy (240 items → just 97 distinct players, one carrying 23). Fixed with diversity-aware eviction (≤3 per player, soft) + cap 240 → 400, sized off **wire** bytes (37KB gzipped, not the 141KB raw the docs assumed). One published run: span **112h**, cap unpinned **186/400**, distinct players **97 → 119**, feed *smaller* on the wire, acceptance **6 → 8 of 30**. Still a MISS; matching is saturated (achieved = ceiling) and the residual is source-*kind*, not source-count. Re-measure at 7 days = **NEWS-3**. Detail retained in §3 below |
 | DESIGN-1 — build the "Matchday" visual direction | 2026-09-12 | All five steps shipped. Step 5 (motion) landed the GLOBAL `prefers-reduced-motion` guard first, one easing token (`--ez`) emitted as Tailwind's DEFAULT so all 69 transitions moved at once, a duration ladder scaled to element size, the press run replacing `.edge-rise`'s fade-up and linear stagger, `.press` as the third control-level contract (one definition replacing 41 `active:` states at three values across 20 files), `Loading` replacing every spinner, the sheet entrance, and a written four-moment budget. **0 of 12 slop markers**, re-scored from scratch. Detail retained in §3 below |
 | DESIGN-3 — the navigation rebuild | 2026-09-11 | Primary navigation is a bottom tab bar (Today · Squad · Trade · League · Index); the drawer keeps its utilities and carries zero destinations. `SubTabBar` → `SectionContents`, which wraps instead of scrolling, so "Pick Trades" no longer clips. New `/index` route is the complete map and holds the four consulted views. All three copies of the nav payload collapsed into `src/navigation.js`. Draft and News lost top-level rank, not reachability. The four orphans each got a content-level inbound link, and Rookie Research entered global search. No path moved, so no redirect was needed. Detail retained in §3 below |
 | DESIGN-2 — four ready-now accessibility/truncation bugs | 2026-09-11 | All four fixed in the primitives and tokens, not at 525 call sites: `--text-tertiary` re-derived to clear WCAG AA in both themes (dark 2.51→4.53:1, light 3.23→4.51:1); `.focus-ring` added as the one focus definition and `Input`/`Select`'s `focus:outline-none` removed; `.tap-target` guarantees a 44px hit area with no layout cost (`IconButton` `md` made a real 44px box) — deliberately NOT on `Chip`, where it would cause the bug it fixes; `Est. cost` and the lineup player name now wrap instead of eliding. Detail retained in §3 below |
@@ -837,6 +864,41 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 | ACTIVE-2 — Draft › Research: verify the first pipeline run | 2026-08-14 | Pipeline published 2026-08-14 11:12Z; feed shape, Market vs Model output, and the drawer's Rookies row all verified against live data. Detail retained in §1 |
 
 ---
+
+### NEWS-1 — the record (closed 2026-09-12)
+
+### NEWS-1 — re-measure news coverage after a week of accumulation
+
+**Trigger:** `news.yml` has been running with the accumulating feed for ~7 days
+(i.e. on or after **2026-09-11**).
+
+Phase 2's pre-registered acceptance test — ≥12 of 25 rostered players resolved
+in a fresh pull — **missed at 10**. It was measured on a *cold* feed, before
+any accumulation had happened, which is not the shipped design: the window
+holds 240 player items and a single cold pull only produces 127.
+
+Two facts bound what more work could buy, and both argue for measuring before
+building:
+
+- The app now resolves **every** player the matcher can find (achieved =
+  ceiling). No further matching work can move the number.
+- All 15 misses are **genuine absence** — each was verified present in the
+  player index and absent from the feed's entire text. There simply was no
+  news about Jordan James or Jalen Royals in any of eleven sources on
+  2026-09-04, in the preseason.
+
+**Do this:** run `node scripts/dev/news-coverage.mjs` (no argument reads the
+live feed). If a saturated window clears 12, close this item. If it doesn't,
+the honest read is that free NFL news does not cover a 26-deep dynasty roster
+carrying taxi-squad rookies, and the **target should move rather than the
+sources** — do not bolt on low-signal feeds to chase the number. Record
+whichever way it goes.
+
+**Outcome:** see the closed-table row above and
+`docs/analysis/news-retention-2026-09.md`. The item's own prediction — that
+the target should move rather than the sources — is now measured, twice over.
+
+-----
 
 ### DESIGN-1 — the record (closed 2026-09-12)
 
