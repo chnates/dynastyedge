@@ -51,7 +51,7 @@ function OffseasonPlaceholder({ league }) {
     <div className="px-4 pb-4">
       <div className="pt-4 pb-3 border-b border-border-default dark:border-border-default flex flex-col items-center text-center gap-2">
 
-        <h2 className="font-display font-extrabold text-2xl uppercase tracking-[-0.025em] font-extrabold tracking-[-0.025em] text-text-primary dark:text-text-primary">
+        <h2 className="font-display font-extrabold text-2xl uppercase tracking-[-0.025em] text-text-primary dark:text-text-primary">
           Lineup Optimizer
         </h2>
         <p className="font-body text-sm text-text-secondary dark:text-text-secondary">

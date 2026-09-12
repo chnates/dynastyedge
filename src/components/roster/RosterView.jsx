@@ -92,7 +92,7 @@ export default function RosterView() {
         <div className="ink-field px-4 pt-3 pb-3">
           <div className="flex items-center gap-2.5">
             <TeamAvatar owner={displayRoster.owner} size={36} />
-            <h1 className="font-display font-extrabold text-2xl uppercase tracking-[-0.025em] font-extrabold tracking-[-0.025em] text-bg-primary leading-tight min-w-0 truncate">
+            <h1 className="font-display font-extrabold text-2xl uppercase tracking-[-0.025em] text-bg-primary leading-tight min-w-0 text-balance">
               {teamName}
             </h1>
           </div>
