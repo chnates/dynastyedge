@@ -274,7 +274,7 @@ architecture:
 - **The feed ACCUMULATES.** It used to be a snapshot of one fetch capped at
   100 items, which spanned ~20 hours because 100 general-interest items
   flushed the player news out. Each run now merges into the last run's output,
-  retaining **player items 7 days (400 max, and at most 3 per player)** and
+  retaining **player items 7 days (400 max, ~3 per player)** and
   **general items 48 hours (80 max)**. This is what makes a
   source like RotoWire (25 player items per pull) compound across 48 runs a
   day. The workflow therefore reads the previous `news.json` off the
@@ -291,6 +291,14 @@ architecture:
   alone). The policy is pure and lives in `scripts/newsRetention.mjs` so
   `tests/newsRetention.test.mjs` can pin it — **do not inline it back into the
   fetch script, and do not "simplify" it to a `slice`.**
+  **`PER_PLAYER_MAX` is a soft quota, deliberately.** Admission is "any player
+  named still has room", and quota is charged to *every* player an item names,
+  so a roundup carrying one rarely-covered player is admitted and bills the
+  stars alongside him. A player can therefore exceed 3 — measured on the first
+  published run, 16 of 119 players did, to a maximum of 6, and all of the
+  excess arrived in multi-player items. Enforcing a hard per-player ceiling
+  would mean rejecting the roundup, i.e. dropping the rare player the rule
+  exists to protect. Do not "fix" the overflow.
   **Why:** with recency-only eviction the 240-item cap bound at ~30 hours and
   the documented 7-day window had never once bound. Measured 2026-09-12:
   `playerItems` pinned at exactly 240, oldest retained item 29.7h, player

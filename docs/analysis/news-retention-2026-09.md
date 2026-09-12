@@ -158,6 +158,92 @@ So the honest verification splits in two:
 - **On/after 2026-09-19 (the acceptance number):** re-run the metric against
   the accumulated feed. Tracked as **NEWS-3**.
 
-## 8 — Result (observed 2026-09-12, one run)
+## 8 — Result (one published run, 2026-09-12T18:33Z)
 
-See §8 of this file as updated after the pipeline run — structural gates only.
+Workflow dispatched on the branch; the feed was really re-published and
+re-measured from the CDN.
+
+| | before | after 1 run | target |
+|---|---|---|---|
+| `spanHours` | **27.5** | **112** | 168 (7d) |
+| `playerItems` / cap | **240 / 240 (pinned)** | **186 / 400** | not pinned |
+| `distinctPlayers` | 97 | **119** | — |
+| items | 320 | 266 | — |
+| wire bytes (gzip) | 37.0 KB | **33.8 KB** | — |
+| **acceptance: resolved / rostered** | **6 / 30** | **8 / 30** | ≥ 12 |
+
+**RESULT: the retention bug is fixed; the acceptance target is still a MISS.**
+
+The structural gates all pass, and pass decisively: the cap no longer binds
+(186 of 400, 214 slots spare), depth is 4× deeper and now sits *inside* the
+7-day window for the first time, and the feed is **smaller on the wire than
+before** — removing redundancy paid for the depth outright.
+
+The pre-registration in §7 was **too pessimistic and is corrected here**: it
+predicted the acceptance number could not move today because discarded history
+is unrecoverable. It moved 6 → 8. The reason is a mechanism §2 missed — the
+sources' own RSS backlogs were *already* serving items older than 30h on every
+single pull, and recency-eviction at the cap was throwing them away as they
+arrived. Depth did not have to be re-accumulated at wall-clock rate; most of it
+came back in one run.
+
+`PER_PLAYER_MAX` behaves as a **soft** quota: 16 of 119 players hold more than
+3 items (max 6), every one of the excess arriving in a multi-player item that
+was admitted for some *other*, rarely-covered player it names. That is the
+admission rule working as designed and tested; a hard ceiling would reject
+those roundups and drop the rare players the rule exists to protect.
+
+## 9 — The remaining gap is NOT volume, NOT matching, and NOT retention
+
+Five of the 22 uncovered players are CeeDee Lamb, Jonathan Taylor, DJ Moore,
+Mark Andrews and Jordan Love — top-of-market players, in week 1 of a live
+season, across 266 items and 112 hours from eleven national sources. Checked
+directly against the feed's full text:
+
+```
+ceedee lamb 0 · ceedee 0 · lamb 0 · jonathan taylor 0 · dj moore 0
+mark andrews 0 · jordan love 0 · rachaad white 0 · chase brown 0
+tank dell 0 · josh downs 0
+```
+
+**Zero occurrences — not even a bare surname.** The app's matcher is not
+failing (the metric's ceiling equals its achieved number, 8 = 8); these names
+are simply absent.
+
+That identifies what these sources actually are. National RSS publishes
+*storylines* — columns, game recaps, injuries, transactions — and RotoWire's
+page publishes player *notes*, which are also injury/transaction triggered. A
+healthy starter with no injury and no transaction generates no item in any of
+them. So the feed is not under-sampling the NFL; it is faithfully sampling a
+population that **does not include most of a dynasty roster on a quiet week**.
+
+The denominator makes this sharper. Of the 30 rostered spots:
+
+- **1 is a team defense** (KC) — structurally unmatchable, the player index is
+  skill positions only. The real denominator is 29.
+- **5 are taxi**, 4 of those never-played rookies (Bryce Lance, Brenen
+  Thompson, Caleb Douglas, Jalen Royals, Jordan James) — genuinely outside
+  national coverage.
+
+So ~6 of 30 cannot be reached by any feed of this kind, and ≥12 of 30 means
+resolving 12 of the ~24 that can — half a roster, every week, from
+injury-and-transaction news.
+
+**This is exactly the outcome NEWS-1 pre-registered as the honest one:** "free
+NFL news does not cover a 26-deep dynasty roster carrying taxi-squad rookies,
+and the **target should move rather than the sources** — do not bolt on
+low-signal feeds to chase the number."
+
+Three things are now measured that were not before, and all three argue the
+same way:
+
+1. Retention was broken and is fixed — worth 6 → 8 and 4× the depth.
+2. Matching is saturated — achieved equals ceiling, again.
+3. The residual is **source-kind**, not source-count. More RSS feeds of the
+   same kind add items about the same storylines.
+
+**Recommendation (owner call, not taken here):** let the window finish filling
+to 168h and re-measure (NEWS-3). Expect 9–11, not 12. Then either move the
+target to something the source population can actually deliver, or accept that
+the remaining lever is a per-player notes feed covering *all* rostered NFL
+players rather than another headline RSS. Do not add sources to chase 12.
