@@ -14,7 +14,7 @@ import { buildRookieProspects } from '../../utils/rookieAdp'
 import { useSleeperDraft, buildDraftOrder } from '../../hooks/useSleeperDraft'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { BOARD_ORDER_KEY, NOTES_KEY, CSV_KEY } from './boardStorage'
-import { Modal, Button, Chip, Input, Loading } from '../ui'
+import { Modal, Button, Card, Chip, Input, Loading } from '../ui'
 import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
@@ -701,7 +701,7 @@ export default function DraftBoard() {
       return (
         <div key={tier.id}>
           <TierHeader tier={tier} />
-          <div className="rounded-none bg-bg-card border border-border-default px-3">
+          <Card padding="none" className="px-3">
             {players.map(player => (
               <SortablePlayerRow
                 key={player.sleeperId}
@@ -718,7 +718,7 @@ export default function DraftBoard() {
                 onSelect={() => setSelected(player)}
               />
             ))}
-          </div>
+          </Card>
         </div>
       )
     })

@@ -525,7 +525,7 @@ export default function PlayerProfileDrawer({
           {researchRow && <RookieOpportunity research={researchRow} />}
 
           {/* Player Status */}
-          <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+          <Card padding="sm">
             <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
               Player Status
             </p>
@@ -558,7 +558,7 @@ export default function PlayerProfileDrawer({
                 </p>
               </div>
             )}
-          </div>
+          </Card>
 
           {/* Depth Chart — NFL position room, viewed player highlighted.
               Best-effort: hides entirely when Sleeper has no depth order. */}
@@ -633,7 +633,7 @@ export default function PlayerProfileDrawer({
 
           {/* Production — recent games in-season, last-season summary otherwise */}
           {(intel.loading || intel.seasonSummary || intel.recentGames.some(g => g.pts != null)) && (
-            <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+            <Card padding="sm">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
                 Production
               </p>
@@ -687,12 +687,12 @@ export default function PlayerProfileDrawer({
                   )}
                 </>
               )}
-            </div>
+            </Card>
           )}
 
           {/* Latest News (ESPN — unofficial, hidden when unavailable) */}
           {intel.news.length > 0 && (
-            <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+            <Card padding="sm">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
                 Latest News
               </p>
@@ -723,12 +723,12 @@ export default function PlayerProfileDrawer({
                   </Row>
                 ))}
               </RuledList>
-            </div>
+            </Card>
           )}
 
           {/* Dynasty value — never for a defense (see isDefense above) */}
           {!isDefense && (
-          <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+          <Card padding="sm">
             <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
               Dynasty Value
             </p>
@@ -760,22 +760,22 @@ export default function PlayerProfileDrawer({
                 </div>
               )}
             </div>
-          </div>
+          </Card>
           )}
 
           {/* Role / opportunity — hidden when FP dynasty outlook is available */}
           {role && !(isDraftContext && fpNotes?.dynastyOutlook) && (
-            <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+            <Card padding="sm">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-1.5">
                 Dynasty Outlook
               </p>
               <p className="font-body text-sm text-text-primary leading-snug">{role}</p>
-            </div>
+            </Card>
           )}
 
           {/* External rankings */}
           {myRankings.length > 0 && (
-            <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+            <Card padding="sm">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
                 Ranking Sources
               </p>
@@ -795,32 +795,32 @@ export default function PlayerProfileDrawer({
                   </span>
                 </div>
               </div>
-            </div>
+            </Card>
           )}
 
           {/* Scouting Report (FantasyPros) */}
           {isDraftContext && fpNotes?.scoutingReport && (
-            <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+            <Card padding="sm">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
                 Scouting Report
               </p>
               <p className="font-body text-sm text-text-primary leading-relaxed">{fpNotes.scoutingReport}</p>
-            </div>
+            </Card>
           )}
 
           {/* Dynasty Outlook (FantasyPros) */}
           {isDraftContext && fpNotes?.dynastyOutlook && (
-            <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+            <Card padding="sm">
               <p className="font-body text-sm font-bold uppercase tracking-wide text-accent mb-2">
                 Dynasty Outlook
               </p>
               <p className="font-body text-sm text-text-primary leading-relaxed">{fpNotes.dynastyOutlook}</p>
-            </div>
+            </Card>
           )}
 
           {/* Comparable players */}
           {comparables.length > 0 && (
-            <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+            <Card padding="sm">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
                 Comparable Players
               </p>
@@ -842,12 +842,12 @@ export default function PlayerProfileDrawer({
                   </div>
                 ))}
               </div>
-            </div>
+            </Card>
           )}
 
           {/* Trend detail */}
           {player.trend30Day != null && Math.abs(player.trend30Day) > 50 && (
-            <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+            <Card padding="sm">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-1.5">
                 30-Day Trend
               </p>
@@ -858,12 +858,12 @@ export default function PlayerProfileDrawer({
                 </span>
                 <span className="font-body text-xs text-text-tertiary">over past 30 days</span>
               </div>
-            </div>
+            </Card>
           )}
 
           {/* Roster Context */}
           {league && playerContext !== 'loading' && (
-            <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+            <Card padding="sm">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
                 {playerContext === 'mine' ? 'Your Roster' : playerContext === 'opponent' ? 'Roster' : `Your ${player.position ?? 'Position'}`}
               </p>
@@ -967,12 +967,12 @@ export default function PlayerProfileDrawer({
                   )}
                 </>
               )}
-            </div>
+            </Card>
           )}
 
           {/* Scout Note (Draft Board context only) */}
           {isDraftContext && (
-            <div key={player.sleeperId} className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+            <Card key={player.sleeperId} padding="sm">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
                 Scout Note
               </p>
@@ -983,7 +983,7 @@ export default function PlayerProfileDrawer({
                 rows={3}
                 className="w-full bg-transparent font-body text-sm text-text-primary placeholder:text-text-tertiary resize-none focus:outline-none leading-snug"
               />
-            </div>
+            </Card>
           )}
 
           {/* Analyze Trade button — not for a defense (see isDefense above) */}

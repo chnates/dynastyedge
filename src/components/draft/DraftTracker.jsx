@@ -101,7 +101,7 @@ function StatusBar({ status, fetchedAt, refreshing, syncError, onRefresh }) {
 function DraftCapitalCard({ capital, taxiUsed, taxiSlots, draftSeason }) {
   if (!capital.length && taxiSlots == null) return null
   return (
-    <div className="mx-4 mt-3 px-3 py-2.5 rounded-none bg-bg-card border border-border-default">
+    <Card padding="none" className="mx-4 mt-3 px-3 py-2.5">
       <div className="flex items-center justify-between mb-1.5">
         <span className="font-body text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
           My Draft Capital
@@ -137,7 +137,7 @@ function DraftCapitalCard({ capital, taxiUsed, taxiSlots, draftSeason }) {
           ))}
         </div>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -268,7 +268,7 @@ function ProspectList({
           {prospects.length === 0 ? 'No rookie prospects loaded yet.' : 'No prospects match.'}
         </p>
       ) : (
-        <div className="rounded-none bg-bg-card border border-border-default px-3">
+        <Card padding="none" className="px-3">
           {list.map((player, i) => {
             const rank = sortMode === 'board' && boardRankMap
               ? boardRankMap[player.sleeperId]
@@ -316,7 +316,7 @@ function ProspectList({
               </button>
             )
           })}
-        </div>
+        </Card>
       )}
     </div>
   )
@@ -914,7 +914,7 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
           {undrafted.length === 0 ? (
             <p className="text-center text-text-tertiary font-body text-sm py-6">All prospects drafted.</p>
           ) : (
-            <div className="rounded-none bg-bg-card border border-border-default px-3">
+            <Card padding="none" className="px-3">
               {undrafted.map((player, i) => (
                 <button
                   key={player.sleeperId}
@@ -944,7 +944,7 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
                   </span>
                 </button>
               ))}
-            </div>
+            </Card>
           )}
         </div>
 
@@ -962,7 +962,7 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
               </p>
             </button>
             {draftedOpen && (
-              <div className="rounded-none bg-bg-card border border-border-default px-3">
+              <Card padding="none" className="px-3">
                 {draftedSorted.map((pick, i) => {
                   const player = values?.playerMap?.[pick.sleeperId]
                   const team = getTeamName(userMap[pick.rosterId])
@@ -990,7 +990,7 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
                     </button>
                   )
                 })}
-              </div>
+              </Card>
             )}
           </div>
         )}
