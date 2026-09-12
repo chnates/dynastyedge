@@ -196,7 +196,7 @@ export default function SideDrawer({
     <>
       {/* Scrim */}
       <div
-        className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-200 ${
+        className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-panel ${
           isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
         onClick={onClose}
@@ -205,7 +205,7 @@ export default function SideDrawer({
 
       {/* Drawer panel */}
       <div
-        className={`fixed top-0 left-0 bottom-0 z-50 w-[80vw] max-w-[300px] bg-bg-secondary border-r border-border-default flex flex-col transition-transform duration-[250ms] ease-out ${
+        className={`fixed top-0 left-0 bottom-0 z-50 w-[80vw] max-w-[300px] bg-bg-secondary border-r border-border-default flex flex-col transition-transform duration-sheet ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
         style={{

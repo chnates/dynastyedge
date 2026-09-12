@@ -58,7 +58,7 @@ export default function TabBar() {
             className={cn(
               'tap-target focus-ring flex-1 min-w-0 flex flex-col items-center justify-center',
               'font-display font-extrabold text-[10px] uppercase tracking-[0.1em] leading-none whitespace-nowrap',
-              'transition-opacity duration-200',
+              'transition-opacity duration-mark',
               isCurrent ? 'opacity-100' : 'opacity-55 hover:opacity-80',
             )}
             style={{ height: TAB_BAR_HEIGHT }}

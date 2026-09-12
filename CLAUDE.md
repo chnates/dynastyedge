@@ -3700,6 +3700,40 @@ Three details are load-bearing:
 correct** — a released sheet snaps home instead of easing. The gesture itself is
 direct manipulation rather than animation and is untouched.
 
+#### One curve, and durations scaled to element size
+
+**`--ez: cubic-bezier(.16, 1, .3, 1)`** (`index.css`, on `:root` — motion does
+not invert with the theme) is the app's only easing token, and Tailwind emits it
+as the **DEFAULT `transition-timing-function`**. That is the point of setting
+DEFAULT rather than adding named curves: it reaches all 69 `transition-*`
+utilities at once, with no call-site change and no way for a screen to miss it.
+
+It is an **expo-out** — ~80% of the distance in the first third of the duration,
+then a settle. That shape is what lets the durations below be numbers that would
+feel sluggish on a symmetric ease, and it is why a 620ms band wipe reads fast.
+
+**Duration is a function of how far a thing travels, which in practice means how
+big it is.** A chip tint and a 300px drawer crossing the screen shared one number
+before this. The ladder (`tailwind.config.js` → `transitionDuration`):
+
+|token|ms|for|
+|---|---|---|
+|`duration-tap`|90|press feedback — must read as instantaneous|
+|`duration-mark`|150|small ink: a chip, a badge, a row tint, a link|
+|`duration-panel`|240|a block, or an overlay resolving|
+|`duration-sheet`|340|a full-width surface crossing the screen|
+
+`DEFAULT` stays **150ms** — the value Tailwind already shipped, restated as a
+chosen one so the diff is honest about what actually changed here: the curve,
+not the speed of a colour tint. An un-suffixed `transition-colors` is therefore
+`mark`-speed by definition and needs no class.
+
+**The one deliberate exception is `useSheetDrag`'s spring-back**, which sets an
+inline `transform 0.25s ease-out`. It is left exactly as it is: it belongs to the
+sheet-gesture family (failure-archaeology §2, six settled battles), the release
+is the tail of a direct manipulation rather than an entrance, and nothing about
+it is improved by a house curve.
+
 -----
 
 ## File Structure

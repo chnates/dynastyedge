@@ -85,6 +85,25 @@
   --pos-wr:         31 111 192;   /* #1F6FC0 sky   — 4.58:1 under paper type */
   --pos-te:        170 84 23;     /* #AA5417 orange— 4.70:1 under paper type */
   --pos-def:        90 100 200;   /* #5A64C8 violet— 4.58:1 under paper type */
+
+  /* ── The curve ────────────────────────────────────────────────
+     ONE easing token, and the whole app's motion is on it. Before this the
+     app carried three explicit timing values in total, so virtually every
+     transition ran Tailwind's default `cubic-bezier(.4,0,.2,1)` — default
+     easing is to motion what Inter is to type (findings.md → Motion).
+
+     `cubic-bezier(.16,1,.3,1)` is the round-2 house rule (slop-checklist.md
+     rule 6) and it is an expo-out: ~80% of the distance is covered in the
+     first third of the duration, then it settles. That shape is what makes a
+     620ms band wipe read as fast rather than slow, and it is why the duration
+     ladder below can afford numbers that would feel sluggish on a linear or
+     symmetric ease.
+
+     Declared here, on `:root`, rather than in the theme blocks — motion does
+     not invert with the theme. Tailwind emits it as the DEFAULT
+     `transition-timing-function`, so every `transition-*` utility in the app
+     picks it up with no call-site change. */
+  --ez: cubic-bezier(.16, 1, .3, 1);
 }
 
 .dark {
