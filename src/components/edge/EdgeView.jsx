@@ -18,7 +18,7 @@ import { POS_BG, POS_TEXT } from '../../utils/positionColors'
 import { TIER_BADGE, TIER_TEXT } from '../../utils/tierColors'
 import {
   Badge, Lede, Magnitude, MAGNITUDE_TEAM_REFERENCE, Mark, NavRow,
-  PositionBand, RuledList, markedHeadline,
+  PositionBand, Row, RuledList, markedHeadline,
 } from '../ui'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
@@ -373,11 +373,7 @@ export default function EdgeView() {
               const isFresh = lastVisit && n.published &&
                 new Date(n.published).getTime() > lastVisit
               return (
-                <button
-                  key={i}
-                  onClick={() => setOpenArticle(n)}
-                  className="w-full py-2.5 border-b border-border-default dark:border-border-default last:border-0 text-left active:opacity-60 transition-opacity"
-                >
+                <Row key={i} onClick={() => setOpenArticle(n)} padding="sm">
                   <div className="flex items-center gap-1.5">
                     <span className="font-body text-xs font-semibold text-text-primary dark:text-text-primary truncate">
                       {n.player.name}
@@ -399,7 +395,7 @@ export default function EdgeView() {
                   >
                     {n.headline}
                   </p>
-                </button>
+                </Row>
               )
             })}
           </RuledList>
@@ -419,12 +415,7 @@ export default function EdgeView() {
         ) : (
           <RuledList>
             {radar.map(p => (
-              <button
-                key={p.sleeperId}
-                onClick={() => setSelectedPlayer(p)}
-                className="w-full py-2.5 border-b border-border-default text-left
-                           active:opacity-60 transition-opacity focus-ring"
-              >
+              <Row key={p.sleeperId} onClick={() => setSelectedPlayer(p)} padding="sm">
                 <div className="flex items-baseline gap-2">
                   <span className={`shrink-0 w-[7px] h-[7px] self-center ${POS_BG[p.position] ?? 'bg-text-tertiary'}`} aria-hidden="true" />
                   <span className="flex-1 min-w-0 font-body font-medium text-sm text-text-primary text-balance">
@@ -449,7 +440,7 @@ export default function EdgeView() {
                   {getSeries(p.sleeperId) && <Sparkline data={getSeries(p.sleeperId)} />}
                   <TrendChip trend={p.trend30Day} value={p.value} />
                 </div>
-              </button>
+              </Row>
             ))}
           </RuledList>
         )}
@@ -471,10 +462,11 @@ export default function EdgeView() {
               const involvesMe = (tx.roster_ids ?? []).includes(myRosterId)
               const isFresh = lastVisit && (tx.status_updated ?? 0) > lastVisit
               return (
-                <button
+                <Row
                   key={tx.transaction_id}
                   onClick={() => navigate('/league/activity')}
-                  className="w-full flex items-center gap-2.5 py-2.5 border-b border-border-default dark:border-border-default last:border-0 text-left active:opacity-60 transition-opacity"
+                  padding="sm"
+                  className="flex items-center gap-2.5"
                 >
                   <span className={`shrink-0 w-8 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] ${color}`}>
                     {kind}
@@ -496,7 +488,7 @@ export default function EdgeView() {
                   <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary shrink-0">
                     {relativeTime(tx.status_updated)}
                   </span>
-                </button>
+                </Row>
               )
             })}
           </RuledList>

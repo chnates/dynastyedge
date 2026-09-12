@@ -6,7 +6,7 @@ import { POSITIONS, PICK_YEARS } from '../../constants'
 import { POS_TEXT } from '../../utils/positionColors'
 import { rankClass } from '../../utils/rankColors'
 import TeamAvatar from '../shared/TeamAvatar'
-import { Badge, Magnitude, MAGNITUDE_TEAM_REFERENCE, Mark, cn } from '../ui'
+import { Badge, Magnitude, MAGNITUDE_TEAM_REFERENCE, Mark, Row, cn } from '../ui'
 
 function getPositionalTrend(roster) {
   const result = {}
@@ -119,16 +119,9 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
         : { value: roster.totalValue, label: 'dynasty pts' }
 
   return (
-    <button
-      onClick={() => onTap(roster.rosterId)}
-      className={cn(
-        'w-full text-left py-3 border-b border-border-default focus-ring',
-        'active:opacity-60 transition-opacity',
-        // Red stays rationed to "you". A row, not a whole card, so the accent
-        // is a left marker on the rank rather than a border around a box.
-        isMyTeam && 'bg-brand/5',
-      )}
-    >
+    /* Red stays rationed to "you": a row, not a whole card, so the accent is a
+       tint plus the rank ordinal rather than a border around a box. */
+    <Row onClick={() => onTap(roster.rosterId)} className={cn(isMyTeam && 'bg-brand/5')}>
       <div className="flex items-baseline gap-2">
         {rank != null && (
           <span className={cn(
@@ -195,6 +188,6 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
           </span>
         </div>
       )}
-    </button>
+    </Row>
   )
 }

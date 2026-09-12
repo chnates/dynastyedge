@@ -15,7 +15,7 @@ import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import Sparkline from '../shared/Sparkline'
-import { Magnitude, PositionBand, RuledList } from '../ui'
+import { Magnitude, PositionBand, Row, RuledList } from '../ui'
 
 // Ignore deep free agents whose tiny values produce noisy trend swings.
 const MIN_FA_VALUE = 500
@@ -49,13 +49,7 @@ function TrendChip({ trend, value }) {
 
 function MoverRow({ player, ownerLabel, note, series, onClick, onBuildTrade }) {
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onClick}
-      onKeyDown={e => { if (e.key === 'Enter') onClick() }}
-      className="w-full text-left py-2.5 border-b border-border-default dark:border-border-default last:border-0 active:opacity-60 transition-opacity cursor-pointer"
-    >
+    <Row onClick={onClick} padding="sm">
       <div className="flex items-baseline gap-2">
         <span className={`shrink-0 w-[7px] h-[7px] self-center ${POS_BG[player.position] ?? 'bg-text-tertiary'}`} aria-hidden="true" />
         <span className="flex-1 min-w-0 font-body font-medium text-sm text-text-primary text-balance">
@@ -88,7 +82,7 @@ function MoverRow({ player, ownerLabel, note, series, onClick, onBuildTrade }) {
           </button>
         )}
       </div>
-    </div>
+    </Row>
   )
 }
 

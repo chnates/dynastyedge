@@ -13,7 +13,7 @@ import { POS_CHIP_ACTIVE, POS_TEXT, POS_BG } from '../../utils/positionColors'
 import { TIER_BADGE, TIER_TEXT } from '../../utils/tierColors'
 import { rankClass } from '../../utils/rankColors'
 import TeamAvatar from '../shared/TeamAvatar'
-import { Chip, Badge, Magnitude, MAGNITUDE_REFERENCE, PositionBand, RuledList, cn } from '../ui'
+import { Chip, Badge, Magnitude, MAGNITUDE_REFERENCE, PositionBand, Row, RuledList, cn } from '../ui'
 
 const SORT_OPTIONS = [
   { id: 'value',  label: 'Overall Value' },
@@ -52,14 +52,7 @@ function PositionRankCard({ roster, posFilter, tier, posStrength, posRank, onTap
   const isMyTeam = roster.rosterId === myRosterId
 
   return (
-    <button
-      onClick={() => onTap(roster.rosterId)}
-      className={cn(
-        'w-full text-left py-3 border-b border-border-default focus-ring',
-        'active:opacity-60 transition-opacity',
-        isMyTeam && 'bg-brand/5',
-      )}
-    >
+    <Row onClick={() => onTap(roster.rosterId)} className={cn(isMyTeam && 'bg-brand/5')}>
       <div className="flex items-baseline gap-2">
         <span className={cn(
           'shrink-0 w-5 font-mono text-[11px] font-semibold tabular-nums leading-none',
@@ -91,7 +84,7 @@ function PositionRankCard({ roster, posFilter, tier, posStrength, posRank, onTap
           {tier}
         </span>
       </div>
-    </button>
+    </Row>
   )
 }
 

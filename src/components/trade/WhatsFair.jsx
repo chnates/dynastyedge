@@ -9,7 +9,7 @@ import { suggestFairPackage } from '../../utils/tradeAnalysis'
 import PartnerContextStrip from './PartnerContextStrip'
 import PartnerSelect, { buildPartnerOptions } from './PartnerSelect'
 import {
-  Badge, Chip, ErrorState, Lede, Magnitude, Mark, PositionBand, RuledList,
+  Badge, Chip, ErrorState, Lede, Magnitude, Mark, PositionBand, Row, RuledList,
   Spinner, TrendArrow, WinWindowBadge, cn,
 } from '../ui'
 import { POS_BG, POS_CHIP_ACTIVE } from '../../utils/positionColors'
@@ -109,12 +109,7 @@ function CashOutBlock({ board, onTap }) {
           </p>
           <RuledList>
             {targets.map(t => (
-              <button
-                key={t.sleeperId}
-                onClick={() => onTap(t)}
-                className="w-full text-left py-3 border-b border-border-default
-                           active:opacity-60 transition-opacity focus-ring"
-              >
+              <Row key={t.sleeperId} onClick={() => onTap(t)}>
                 <div className="flex items-baseline gap-2">
                   <span
                     className={cn('shrink-0 w-[7px] h-[7px] self-center', POS_BG[t.position] ?? 'bg-text-tertiary')}
@@ -139,7 +134,7 @@ function CashOutBlock({ board, onTap }) {
                 <p className="mt-1 pl-[15px] font-body text-[10px] text-text-tertiary leading-snug">
                   {t.reasons.join(' · ')}
                 </p>
-              </button>
+              </Row>
             ))}
           </RuledList>
         </>
@@ -177,11 +172,7 @@ function AppealLine({ label, tier, children }) {
 // appeal reads come up out of 9px badges into marked lines.
 function TargetRow({ target, fairPackage, packagePending, showNeedTag, onTap }) {
   return (
-    <button
-      onClick={onTap}
-      className="w-full text-left py-3 border-b border-border-default
-                 active:opacity-60 transition-opacity focus-ring"
-    >
+    <Row onClick={onTap}>
       <div className="flex items-baseline gap-2">
         {/* The board mixes positions, so its band is neutral ink and the hue
             rides on the row instead — the mock's `.sw` swatch. */}
@@ -294,7 +285,7 @@ function TargetRow({ target, fairPackage, packagePending, showNeedTag, onTap }) 
           )}
         </div>
       )}
-    </button>
+    </Row>
   )
 }
 
