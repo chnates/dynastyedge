@@ -1626,8 +1626,11 @@ talented roster, bad record — a frustrated owner is a buy window) or
 - Team name + owner username
 - Win window tier badge (Contending / Middle / Rebuilding)
 - Total roster value
-- Positional strength bars: QB · RB · WR · TE — each shown relative to league average
-  (above average = filled, below average = unfilled)
+- Positional read: QB · RB · WR · TE — each letter **lit in its position hue
+  when the team is above league average there, muted when below**, with the
+  30-day trend arrow beside it. This replaced a fill bar that clamped at twice
+  league average (see law 2's bar test); the binary is what this line always
+  meant.
 - Pick capital: 2026 / 2027 / 2028 — show count of picks owned per year
 - FAAB remaining (from Sleeper roster data, format as `$XXX`)
 - Win/loss record next to the owner username (when the season has records)
@@ -3089,6 +3092,40 @@ hues promoted from 9px tags to **full-bleed section bands**.
    chosen. A figure is sized from its own value (`<Magnitude>`); the band above
    the group carries the group total. Size reads shape *within* a position, the
    total reads weight *across* positions.
+
+   **A bar survives only where the number is a genuine proportion of a bounded
+   whole** — decided 2026-09-12, and argued from what each number *is* rather
+   than from consistency. The test has three parts, all three required:
+   a **real complement** (the empty track means something), **no clamp**, and
+   an **absolute mapping** (a fixed reference, not one that moves).
+   - **League › Playoffs' odds bar passes and STAYS.** A probability is a
+     proportion of 100%; the empty track is the chance you miss; `width:
+     playoffPct * 100%` never clamps and 100% genuinely means certainty. B2
+     called it "by a distance the most scannable screen in the app" and it is.
+   - **TeamCard's positional strength bars FAILED all three and are gone.**
+     They computed `min(100, strength / (leagueAvg * 2) * 100)`, so: they
+     **clamped** — anything at twice league average pinned at 100%, and the two
+     strongest QB rooms rendered identically while differing by thousands
+     (finding B2 re-created inside the encoding meant to fix it, visible on the
+     live board); the **complement was meaningless**, since twice-league-average
+     is not a whole anyone is a fraction of; and the **reference moved**, so a
+     team's own bar changed length when a *different* team traded. What replaced
+     them is what Feature 5 always actually specified — "above average = filled,
+     below average = unfilled", a **binary**: the position letter takes its hue
+     when the team is above average there and mutes when below, with the 30-day
+     trend beside it.
+
+   **`Magnitude` needs a contract reference, and a quantity without one does not
+   get sized.** The player scale is FantasyCalc's documented 0–10000. A **team
+   total is a different quantity** — a sum of ~26 players, live range
+   58,000–118,000 — and passing it the player reference clamped all ten teams to
+   the 30px ceiling. `MAGNITUDE_TEAM_REFERENCE` is the second contract:
+   `MAGNITUDE_REFERENCE × ROSTER_SLOTS.length` (110,000), i.e. a lineup of
+   maximum-value players, both factors constants the app already owns. A
+   positional sum likewise takes `MAGNITUDE_REFERENCE × POSITION_DEPTH[pos]`,
+   derived from the same depth `getPositionalStrength` sums over. **Where no
+   contract ceiling exists, use a plain figure** — inventing a reference is the
+   per-list-maximum failure the primitive exists to prevent.
 3. **Separation is a rule, never a shadow and never a radius.** Panels are
    square with a 1px hairline (`--border-default`) or a 2px masthead rule
    (`--border-strong`, or ink for the strongest). **Sheets, modals and the side
@@ -3313,7 +3350,7 @@ Every position has its own identity colour — under Matchday this is the app's
 colour world, not a decorative tag. Tokens live in `index.css` (`--pos-*`), are
 exposed via Tailwind (`text-pos-qb`, `bg-pos-rb/15`, …), and all class maps live
 in `src/utils/positionColors.js` (`POS_TEXT`, `POS_BG`, **`POS_FIELD`**,
-`POS_TAG`, `POS_CHIP_ACTIVE`, `POS_BAR`, `POS_BAR_DIM`, `POS_SVG`). **Never
+`POS_TAG`, `POS_CHIP_ACTIVE`, `POS_SVG`). **Never
 hand-roll position colours locally, and never reuse status colours
 (success/warning/danger) to mean a position.**
 
@@ -3339,9 +3376,8 @@ Where they apply:
 - Position labels and position rank (`#3 WR`) on player rows and in drawers
 - Active position filter chips (`POS_CHIP_ACTIVE`, the tinted identity style);
   All / Picks chips keep the ink field
-- Positional strength bars on TeamCard (`POS_BAR` — **flat, not a gradient**;
-  the gradient bars were the last gradients in the app after the score-bugs
-  left)
+- The positional read on a League row — the position letter itself, lit or
+  muted (`POS_TEXT`). `POS_BAR` / `POS_BAR_DIM` are **gone with the bars**
 - Roster Analysis age-chart lanes (`POS_SVG` for SVG fill/stroke)
 - Position tags in the trade builder / What's Fair / lineup FA drawer (`POS_TAG`)
 

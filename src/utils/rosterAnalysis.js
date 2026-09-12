@@ -1,7 +1,9 @@
 import { POSITIONS } from '../constants'
 import { buildValueLineup } from './lineupBuild'
 
-const POSITION_DEPTH = { QB: 3, RB: 5, WR: 5, TE: 3 }
+// Exported so a <Magnitude> over a positional SUM can derive its reference
+// from the same depth the sum uses, rather than inventing one.
+export const POSITION_DEPTH = { QB: 3, RB: 5, WR: 5, TE: 3 }
 
 export function getPositionalStrength(roster) {
   const result = {}

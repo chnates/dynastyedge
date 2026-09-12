@@ -1,12 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLeagueContext } from '../../context/LeagueContext'
-import { assignWinWindowTiers, computeLeagueAverages, getPositionalStrength } from '../../utils/rosterAnalysis'
+import { assignWinWindowTiers, computeLeagueAverages, getPositionalStrength, POSITION_DEPTH } from '../../utils/rosterAnalysis'
 import { getTeamName } from '../../hooks/useLeague'
 import { POSITIONS } from '../../constants'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
-import SectionHeader from '../shared/SectionHeader'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import TeamCard from './TeamCard'
 import MatchupCard from './MatchupCard'
@@ -14,7 +13,7 @@ import { POS_CHIP_ACTIVE, POS_TEXT, POS_BG } from '../../utils/positionColors'
 import { TIER_BADGE, TIER_TEXT } from '../../utils/tierColors'
 import { rankClass } from '../../utils/rankColors'
 import TeamAvatar from '../shared/TeamAvatar'
-import { Chip, Badge, cn } from '../ui'
+import { Chip, Badge, Magnitude, MAGNITUDE_REFERENCE, PositionBand, RuledList, cn } from '../ui'
 
 const SORT_OPTIONS = [
   { id: 'value',  label: 'Overall Value' },
@@ -46,6 +45,8 @@ function writeSession(key, value) {
   }
 }
 
+// The position-ranking row. Same register as the team row above it: this is a
+// ten-item enumeration, so a ruled row under the position's own band.
 function PositionRankCard({ roster, posFilter, tier, posStrength, posRank, onTap, myRosterId }) {
   const teamName = getTeamName(roster.owner)
   const isMyTeam = roster.rosterId === myRosterId
@@ -53,34 +54,42 @@ function PositionRankCard({ roster, posFilter, tier, posStrength, posRank, onTap
   return (
     <button
       onClick={() => onTap(roster.rosterId)}
-      className={`w-full rounded-none bg-bg-card dark:bg-bg-card border px-3 py-3 text-left active:opacity-70 transition-opacity ${
-        isMyTeam ? 'border-brand/60' : 'border-border-default dark:border-border-default'
-      }`}
+      className={cn(
+        'w-full text-left py-3 border-b border-border-default focus-ring',
+        'active:opacity-60 transition-opacity',
+        isMyTeam && 'bg-brand/5',
+      )}
     >
-      <div className="flex items-center gap-2 mb-2">
-        <span className={`font-mono text-lg font-bold tabular-nums w-6 shrink-0 ${rankClass(posRank)}`}>
-          {posRank}
+      <div className="flex items-baseline gap-2">
+        <span className={cn(
+          'shrink-0 w-5 font-mono text-[11px] font-semibold tabular-nums leading-none',
+          isMyTeam ? 'text-brand-bright' : rankClass(posRank),
+        )}>
+          {String(posRank).padStart(2, '0')}
         </span>
-        <TeamAvatar owner={roster.owner} size={26} />
-        <div className="flex-1 min-w-0 flex items-center gap-1.5">
-          <p className="font-body text-sm font-semibold text-text-primary dark:text-text-primary truncate">
-            {teamName}
-          </p>
-          {isMyTeam && (
-            <Badge tone="brand" className="shrink-0">You</Badge>
-          )}
-        </div>
+        <TeamAvatar owner={roster.owner} size={20} />
+        <span className="flex-1 min-w-0 font-body text-sm font-medium text-text-primary text-balance">
+          {teamName}
+        </span>
+        {isMyTeam && <Badge tone="brand" className="shrink-0 self-center">You</Badge>}
+        {/* Size is the quantity here too, on the position's own scale. */}
+        <span className="shrink-0 self-center">
+          {/* A positional strength is a SUM over POSITION_DEPTH players, so its
+              reference is the player ceiling times that same depth — derived
+              from the code that builds the sum, never from this list. */}
+          <Magnitude
+            value={posStrength > 0 ? posStrength : null}
+            reference={MAGNITUDE_REFERENCE * (POSITION_DEPTH[posFilter] ?? 1)}
+          />
+        </span>
       </div>
-      <div className="flex items-center justify-between">
-        <WinWindowBadge tier={tier} />
-        <div className="flex items-baseline gap-1">
-          <span className={`font-mono text-base font-semibold tabular-nums ${POS_TEXT[posFilter] ?? 'text-accent'}`}>
-            {posStrength.toLocaleString()}
-          </span>
-          <span className={`font-body text-[10px] font-semibold ${POS_TEXT[posFilter] ?? 'text-text-tertiary dark:text-text-tertiary'}`}>
-            {posFilter}
-          </span>
-        </div>
+      <div className="mt-1 pl-7 flex items-center gap-2">
+        <span className={cn('font-mono text-[9px] font-semibold uppercase tracking-[0.14em]', POS_TEXT[posFilter] ?? '')}>
+          {posFilter} strength
+        </span>
+        <span className={cn('font-mono text-[9px] font-semibold uppercase tracking-[0.14em]', TIER_TEXT[tier] ?? '')}>
+          {tier}
+        </span>
       </div>
     </button>
   )
@@ -235,12 +244,16 @@ export default function LeagueOverview() {
       {/* ── Current Matchups (in-season only) ── */}
       {!isOffseason && matchups?.length > 0 && (
         <section>
-          <SectionHeader label={currentWeek ? `Week ${currentWeek}` : 'This Week'} />
-          <div className="flex flex-col gap-2">
+          <PositionBand
+            label={currentWeek ? `Week ${currentWeek}` : 'This Week'}
+            count={matchups.length}
+            className="mt-4"
+          />
+          <RuledList>
             {matchups.map((pair, i) => (
               <MatchupCard key={i} pair={pair} />
             ))}
-          </div>
+          </RuledList>
         </section>
       )}
 
@@ -285,36 +298,40 @@ export default function LeagueOverview() {
       {/* ── Team List OR Position Ranking ── */}
       {posFilter === 'ALL' || effectiveSort !== 'value' ? (
         <div>
-          <div className="-mt-4 pb-1">
-            <SectionHeader label="All Teams" count={tierFilteredRosters.length} />
-          </div>
+          {/* Ten teams is an enumeration and the list mixes positions, so:
+              neutral ink band, ruled rows. */}
+          <PositionBand label="All Teams" count={tierFilteredRosters.length} />
           {effectiveSort === 'value' && (
-            <p className="font-body text-[11px] leading-snug text-text-tertiary dark:text-text-tertiary pb-2">
-              Bars = position strength vs league avg
-              <span className="opacity-60"> (marker = average)</span> · arrow = 30-day trend
+            <p className="font-body text-[11px] leading-snug text-text-tertiary pt-2">
+              A position letter is lit when the team is above league average
+              there · arrow = 30-day trend
             </p>
           )}
-          <div className="flex flex-col gap-2">
-          {tierFilteredRosters.map(roster => (
-            <TeamCard
-              key={roster.rosterId}
-              roster={roster}
-              rank={rankMap[roster.rosterId]}
-              divergence={divergenceMap[roster.rosterId] ?? null}
-              leagueAverages={leagueAverages}
-              winWindowTiers={winWindowTiers}
-              sortMode={effectiveSort}
-              onTap={handleTeamTap}
-            />
-          ))}
-          </div>
+          <RuledList>
+            {tierFilteredRosters.map(roster => (
+              <TeamCard
+                key={roster.rosterId}
+                roster={roster}
+                rank={rankMap[roster.rosterId]}
+                divergence={divergenceMap[roster.rosterId] ?? null}
+                leagueAverages={leagueAverages}
+                winWindowTiers={winWindowTiers}
+                sortMode={effectiveSort}
+                onTap={handleTeamTap}
+              />
+            ))}
+          </RuledList>
         </div>
       ) : (
         <div>
-          <div className="-mt-4 pb-1">
-            <SectionHeader label={`${posFilter} Ranking`} accentBar={POS_BG[posFilter]} />
-          </div>
-          <div className="flex flex-col gap-2">
+          {/* One position, so the band CAN carry its hue — this is the case
+              PositionBand exists for. */}
+          <PositionBand
+            position={posFilter}
+            label={`${posFilter} Ranking`}
+            count={tierFilteredPositionRanked.length}
+          />
+          <RuledList>
             {tierFilteredPositionRanked.map(({ roster, posStrength, posRank, tier }) => (
               <PositionRankCard
                 key={roster.rosterId}
@@ -327,7 +344,7 @@ export default function LeagueOverview() {
                 myRosterId={myRosterId}
               />
             ))}
-          </div>
+          </RuledList>
         </div>
       )}
     </div>

@@ -1,15 +1,12 @@
 import { getTeamName } from '../../hooks/useLeague'
 import { useLeagueContext } from '../../context/LeagueContext'
-import { getPositionalStrength } from '../../utils/rosterAnalysis'
+import { getPositionalStrength, POSITION_DEPTH } from '../../utils/rosterAnalysis'
 import { TIER_TEXT } from '../../utils/tierColors'
 import { POSITIONS, PICK_YEARS } from '../../constants'
-import { POS_TEXT, POS_BAR, POS_BAR_DIM } from '../../utils/positionColors'
-import { ROUND_CLASSES, ROUND_TEXT, ROUND_LABELS } from '../../utils/roundColors'
+import { POS_TEXT } from '../../utils/positionColors'
 import { rankClass } from '../../utils/rankColors'
 import TeamAvatar from '../shared/TeamAvatar'
-import { Badge } from '../ui'
-
-const POSITION_DEPTH = { QB: 3, RB: 5, WR: 5, TE: 3 }
+import { Badge, Magnitude, MAGNITUDE_TEAM_REFERENCE, Mark, cn } from '../ui'
 
 function getPositionalTrend(roster) {
   const result = {}
@@ -32,6 +29,67 @@ const DIVERGENCE_META = {
   over:  { label: 'Overachieving',   cls: 'bg-accent/15 text-accent' },
 }
 
+// A LEAGUE ROW — ten teams is an enumeration, so this is a ruled row inside a
+// <RuledList>, not a bordered card with a caption bar (law 5).
+//
+// THE POSITIONAL STRENGTH BARS ARE GONE, and not for consistency with law 2.
+// They computed `min(100, strength / (leagueAvg * 2) * 100)`, which fails three
+// ways that a bar must not:
+//
+//   1. IT CLAMPED. Anything at twice the league average pinned at 100%, so the
+//      two strongest QB rooms in the league rendered identically while
+//      differing by thousands of points — finding B2 re-created INSIDE the one
+//      encoding that was supposed to fix it. Visible on the live board: the
+//      top three teams' bars are near-indistinguishable.
+//   2. THE COMPLEMENT WAS MEANINGLESS. Twice-league-average is not a whole that
+//      anyone is a fraction of, so the empty track said nothing. (Contrast the
+//      Playoff Odds bar, which stays: a probability IS a proportion of a
+//      bounded whole, its complement is the chance you miss, it never clamps,
+//      and its mapping is absolute.)
+//   3. THE REFERENCE MOVED. The denominator is the league average, so a team's
+//      own bar changed length when a DIFFERENT team traded — the per-list
+//      maximum failure `Magnitude`'s contract exists to prevent.
+//
+// What replaces it is what CLAUDE.md's Feature 5 always actually specified:
+// "each shown relative to league average (above average = filled, below average
+// = unfilled)" — a BINARY. The position letter takes its hue when the team is
+// above average there and mutes when below, with the 30-day trend beside it.
+// Honest, unclampable, and a quarter of the height.
+function PositionalRead({ roster, leagueAverages }) {
+  const strength = getPositionalStrength(roster)
+  const trends = getPositionalTrend(roster)
+  return (
+    <div className="flex items-center gap-3">
+      {POSITIONS.map(pos => {
+        const above = strength[pos] >= (leagueAverages?.[pos] ?? Infinity)
+        const trend = trends[pos]
+        // A plain text arrow rotated with CSS, NOT the ↗/↘ codepoints: iOS
+        // gives U+2197/U+2198 default emoji presentation (a colour glyph that
+        // ignores our text colour), while U+2192 stays text.
+        const rotate = trend > 50 ? '-rotate-45' : trend < -50 ? 'rotate-45' : ''
+        const trendColor = trend > 50
+          ? 'text-success'
+          : trend < -50 ? 'text-danger' : 'text-text-tertiary'
+        return (
+          <span key={pos} className="flex items-baseline gap-0.5">
+            <span
+              className={cn(
+                'font-mono text-[10px] font-semibold uppercase tracking-[0.1em]',
+                above ? POS_TEXT[pos] : 'text-text-tertiary opacity-50',
+              )}
+            >
+              {pos}
+            </span>
+            <span className={cn('font-body text-[10px] leading-none inline-block', rotate, trendColor)}>
+              →
+            </span>
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function TeamCard({ roster, rank, divergence, leagueAverages, winWindowTiers, sortMode = 'value', onTap }) {
   const { myRosterId, pickYears } = useLeagueContext()
   // The live three-season pick window (see utils/seasonWindow.js); the constant
@@ -50,240 +108,93 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
     pickCountByYear[yr] = roster.picks.filter(p => p.season === yr).length
   })
 
-  // Grid: pickGrid[round][year] = count
-  const pickGrid = {}
-  ;[1, 2, 3, 4].forEach(r => {
-    pickGrid[r] = {}
-    years.forEach(yr => {
-      pickGrid[r][yr] = roster.picks.filter(p => p.round === r && p.season === yr).length
-    })
-  })
-  const activeRounds = [1, 2, 3, 4].filter(r => years.some(yr => pickGrid[r][yr] > 0))
+  // What the right-hand figure is, by sort mode — the number the list is
+  // currently ordered by, so the ordering is always legible from the rows.
+  const figure = sortMode === 'faab'
+    ? { value: roster.faabRemaining, prefix: '$', label: `spent $${roster.faabSpent} of $${roster.faabBudget}` }
+    : sortMode === 'picks'
+      ? { count: totalPicks, label: totalPicks === 1 ? 'pick' : 'picks' }
+      : sortMode === 'record'
+        ? { text: formatRecord(roster.record), label: `${Math.round(roster.pointsFor).toLocaleString()} PF` }
+        : { value: roster.totalValue, label: 'dynasty pts' }
 
   return (
     <button
       onClick={() => onTap(roster.rosterId)}
-      className={`w-full text-left rounded-none bg-bg-card dark:bg-bg-card border active:opacity-70 transition-opacity overflow-hidden ${
-        isMyTeam ? 'border-brand/60' : 'border-border-default dark:border-border-default'
-      }`}
+      className={cn(
+        'w-full text-left py-3 border-b border-border-default focus-ring',
+        'active:opacity-60 transition-opacity',
+        // Red stays rationed to "you". A row, not a whole card, so the accent
+        // is a left marker on the rank rather than a border around a box.
+        isMyTeam && 'bg-brand/5',
+      )}
     >
-      {/* Score-bug caption bar — the my-team card's cap goes silver */}
-      <div
-        className={`flex items-center gap-2 px-3 py-1.5 ${
-          isMyTeam
-            ? 'bug-silver'
-            : 'bg-black/5 dark:bg-white/5 border-b border-border-default dark:border-border-default'
-        }`}
-      >
+      <div className="flex items-baseline gap-2">
         {rank != null && (
-          <span className={`font-mono text-[11px] font-semibold tabular-nums shrink-0 leading-none ${isMyTeam ? 'text-[#3E444C]' : rankClass(rank)}`}>
+          <span className={cn(
+            'shrink-0 font-mono text-[11px] font-semibold tabular-nums leading-none w-5',
+            isMyTeam ? 'text-brand-bright' : rankClass(rank),
+          )}>
             {String(rank).padStart(2, '0')}
           </span>
         )}
-        <span className={`font-display text-[11px] uppercase tracking-[0.1em] leading-none truncate min-w-0 ${isMyTeam ? '' : 'text-text-primary dark:text-text-primary'}`}>
+        <TeamAvatar owner={roster.owner} size={20} />
+        {/* Not truncated. The team name is the row's identity and the figure
+            column beside it is variable-width, so a long name wraps. */}
+        <span className="flex-1 min-w-0 font-body text-sm font-medium text-text-primary text-balance">
           {teamName}
         </span>
-        {isMyTeam && <Badge tone="brand" className="shrink-0">You</Badge>}
-        <span className={`ml-auto font-mono text-[10px] font-semibold uppercase tracking-wider shrink-0 leading-none ${isMyTeam ? 'text-[#3E444C]' : TIER_TEXT[tier] ?? ''}`}>
-          {tier}
+        {isMyTeam && <Badge tone="brand" className="shrink-0 self-center">You</Badge>}
+        <span className="shrink-0 self-center text-right">
+          {figure.text != null ? (
+            <span className="font-mono text-base font-bold tabular-nums text-text-primary">
+              {figure.text}
+            </span>
+          ) : figure.count != null ? (
+            <span className="font-mono text-base font-bold tabular-nums text-text-primary">
+              {figure.count}
+            </span>
+          ) : (
+            <span className="whitespace-nowrap">
+              {figure.prefix && (
+                <span className="font-mono text-sm font-bold text-text-secondary">{figure.prefix}</span>
+              )}
+              <Magnitude
+                value={figure.value > 0 ? figure.value : null}
+                reference={sortMode === 'faab' ? roster.faabBudget : MAGNITUDE_TEAM_REFERENCE}
+              />
+            </span>
+          )}
         </span>
       </div>
 
-      <div className="px-3 py-3">
-      {/* Header row */}
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <TeamAvatar owner={roster.owner} size={30} />
-        <div className="flex-1 min-w-0">
-          <p className="font-body text-sm font-semibold text-text-primary dark:text-text-primary truncate leading-tight">
-            {teamName}
-          </p>
-          {(username || roster.hasRecord) && (
-            <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary truncate leading-tight mt-0.5">
-              {username ? `@${username}` : ''}
-              {roster.hasRecord && (
-                <span className="font-mono tabular-nums">
-                  {username ? ' · ' : ''}{formatRecord(roster.record)}
-                </span>
-              )}
-            </p>
-          )}
-        </div>
+      <div className="mt-1 pl-7 flex items-center gap-2 flex-wrap">
+        <span className={cn('font-mono text-[9px] font-semibold uppercase tracking-[0.14em]', TIER_TEXT[tier] ?? '')}>
+          {tier}
+        </span>
+        <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-text-tertiary">
+          {username ? `@${username}` : ''}
+          {roster.hasRecord && `${username ? ' · ' : ''}${formatRecord(roster.record)}`}
+          {figure.label && ` · ${figure.label}`}
+        </span>
         {divergenceMeta && (
-          <span className={`shrink-0 font-mono text-[9px] font-semibold uppercase tracking-wider rounded-none px-1.5 py-0.5 ${divergenceMeta.cls}`}>
+          <Mark tone={divergence === 'under' ? 'warning' : 'alt'}
+                className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em]">
             {divergenceMeta.label}
-          </span>
+          </Mark>
         )}
       </div>
 
-      {sortMode === 'picks' ? (
-        <div className="flex flex-col gap-2">
-          {/* Total */}
-          <div className="flex items-baseline gap-1.5">
-            <span className="font-mono text-xl font-semibold text-accent tabular-nums">{totalPicks}</span>
-            <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">picks total</span>
-          </div>
-          {/* Round × Year grid */}
-          <div className="flex flex-col gap-1">
-            {/* Year header row */}
-            <div className="flex items-center">
-              <div className="w-10 shrink-0" />
-              {years.map(yr => (
-                <div key={yr} className="flex-1 text-center">
-                  <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">'{yr.slice(2)}</span>
-                </div>
-              ))}
-            </div>
-            {/* One row per active round */}
-            {activeRounds.map(r => {
-              const badge = ROUND_CLASSES[r] ?? ROUND_CLASSES[4]
-              const text  = ROUND_TEXT[r] ?? ROUND_TEXT[4]
-              return (
-                <div key={r} className="flex items-center">
-                  <div className="w-10 shrink-0">
-                    <span className={`font-body text-[10px] font-bold rounded-none px-1.5 py-0.5 ${badge}`}>
-                      {ROUND_LABELS[r]}
-                    </span>
-                  </div>
-                  {years.map(yr => {
-                    const count = pickGrid[r][yr]
-                    return (
-                      <div key={yr} className="flex-1 text-center">
-                        <span className={`font-mono text-sm font-semibold tabular-nums ${count > 0 ? text : 'text-text-tertiary'}`}>
-                          {count > 0 ? count : '—'}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-              )
-            })}
-          </div>
+      {/* The positional read only earns its line on the value sort — under a
+          FAAB or record ordering it is answering a question nobody asked. */}
+      {sortMode === 'value' && (
+        <div className="mt-1.5 pl-7 flex items-center justify-between gap-3">
+          <PositionalRead roster={roster} leagueAverages={leagueAverages} />
+          <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.14em] text-text-tertiary tabular-nums">
+            {years.map(yr => `${pickCountByYear[yr]}`).join('/')} picks · ${roster.faabRemaining}
+          </span>
         </div>
-      ) : sortMode === 'record' ? (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-baseline gap-1.5">
-            <span className="font-mono text-xl font-semibold text-accent tabular-nums">
-              {roster.hasRecord ? formatRecord(roster.record) : '—'}
-            </span>
-            <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
-              record
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-baseline gap-1">
-              <span className="font-mono text-sm font-medium text-text-secondary dark:text-text-secondary tabular-nums">
-                {Math.round(roster.pointsFor).toLocaleString()}
-              </span>
-              <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">PF</span>
-            </div>
-            <div className="flex items-baseline gap-1">
-              <span className="font-mono text-sm font-medium text-text-secondary dark:text-text-secondary tabular-nums">
-                {Math.round(roster.pointsAgainst).toLocaleString()}
-              </span>
-              <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">PA</span>
-            </div>
-          </div>
-        </div>
-      ) : sortMode === 'faab' ? (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-baseline gap-1.5">
-            <span className="font-mono text-xl font-semibold text-accent tabular-nums">
-              ${roster.faabRemaining}
-            </span>
-            <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
-              FAAB remaining · spent ${roster.faabSpent} of ${roster.faabBudget}
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-baseline gap-1">
-              <span className="font-mono text-sm font-medium text-text-secondary dark:text-text-secondary tabular-nums">
-                {roster.totalValue.toLocaleString()}
-              </span>
-              <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">dynasty pts</span>
-            </div>
-            <div className="flex items-baseline gap-1">
-              <span className="font-mono text-sm font-medium text-text-secondary dark:text-text-secondary tabular-nums">
-                {roster.picks.length}
-              </span>
-              <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">picks</span>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <>
-          <div className="flex items-baseline gap-1.5 mb-2.5">
-            <span className="font-mono text-xl font-semibold text-accent tabular-nums">
-              {roster.totalValue.toLocaleString()}
-            </span>
-            <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
-              dynasty pts
-            </span>
-          </div>
-
-          {/* Positional strength bars */}
-          {(() => {
-            const posTrend = getPositionalTrend(roster)
-            return (
-              <div className="flex gap-2.5 mb-2.5">
-                {POSITIONS.map(pos => {
-                  const strength = getPositionalStrength(roster)
-                  const avg = leagueAverages?.[pos] ?? 1
-                  const fillPct = Math.min(100, Math.round((strength[pos] / (avg * 2)) * 100))
-                  const above = strength[pos] >= avg
-                  const trend = posTrend[pos]
-                  // A plain text → rotated with CSS, NOT the ↗/↘ codepoints:
-                  // iOS gives U+2197/U+2198 default emoji presentation (color
-                  // glyph, ignores our text color), while U+2192 stays text.
-                  const arrowRotate = trend > 50 ? '-rotate-45' : trend < -50 ? 'rotate-45' : ''
-                  const trendColor = trend > 50
-                    ? 'text-success'
-                    : trend < -50
-                      ? (isMyTeam ? 'text-warning' : 'text-danger')
-                      : 'text-text-tertiary'
-                  return (
-                    <div key={pos} className="flex flex-col items-center gap-1">
-                      <div className="relative h-2.5 w-12 rounded-full bg-border-default dark:bg-border-default overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${above ? POS_BAR[pos] : POS_BAR_DIM[pos]}`}
-                          style={{ width: `${fillPct}%` }}
-                        />
-                        {/* league-average marker — the 50% midpoint of the track */}
-                        <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-black/40 dark:bg-white/50" />
-                      </div>
-                      <span className={`font-body text-[10px] font-semibold uppercase tracking-wide ${above ? POS_TEXT[pos] : 'text-text-tertiary dark:text-text-tertiary'}`}>
-                        {pos}
-                      </span>
-                      <span className={`font-body text-[10px] leading-none inline-block ${arrowRotate} ${trendColor}`}>
-                        →
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            )
-          })()}
-
-          {/* Footer: pick counts + FAAB */}
-          <div className="flex items-center justify-between">
-            <div className="flex gap-2">
-              {years.map(yr => (
-                <div key={yr} className="flex items-center gap-0.5">
-                  <span className="font-mono text-xs font-medium text-text-secondary dark:text-text-secondary tabular-nums">
-                    {pickCountByYear[yr]}
-                  </span>
-                  <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary">
-                    '{yr.slice(2)}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <span className="font-mono text-xs font-medium text-text-secondary dark:text-text-secondary tabular-nums">
-              ${roster.faabRemaining}
-            </span>
-          </div>
-        </>
       )}
-      </div>
     </button>
   )
 }
