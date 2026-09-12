@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useSleeperDraft, buildDraftOrder, FALLBACK_DRAFT_SEASON } from '../../hooks/useSleeperDraft'
 import { useSleeperRookies } from '../../hooks/useSleeperRookies'
@@ -52,7 +51,7 @@ function PackageRow({ pkg, actionLabel, onBuild }) {
       </span>
       <button
         onClick={onBuild}
-        className="shrink-0 px-2 py-1 rounded-lg border border-accent/25 bg-accent/5 font-body text-[10px] font-semibold text-accent"
+        className="shrink-0 px-2 py-1 border border-accent/25 bg-accent/5 font-body text-[10px] font-semibold text-accent"
       >
         {actionLabel}
       </button>
@@ -61,7 +60,7 @@ function PackageRow({ pkg, actionLabel, onBuild }) {
 }
 
 function PickHeaderRow({ pick, subtitle, expanded, onTap }) {
-  const Chevron = expanded ? ChevronDown : ChevronRight
+  const chevron = expanded ? '▾' : '▸'
   return (
     <button onClick={onTap} className="w-full flex items-center gap-2 py-2.5 text-left active:opacity-60 transition-opacity">
       <span className={`font-mono text-sm font-bold tabular-nums shrink-0 w-12 ${ROUND_TEXT[pick.round] ?? 'text-text-primary'}`}>
@@ -73,7 +72,7 @@ function PickHeaderRow({ pick, subtitle, expanded, onTap }) {
       <span className="font-mono text-sm text-text-primary dark:text-text-primary shrink-0 tabular-nums">
         {pick.value > 0 ? pick.value.toLocaleString() : '—'}
       </span>
-      <Chevron size={14} strokeWidth={2} className="shrink-0 text-text-tertiary" />
+      <span className="font-mono text-[11px] leading-none text-text-tertiary" aria-hidden="true">{chevron}</span>
     </button>
   )
 }
@@ -214,14 +213,13 @@ export default function PickTradeCalculator() {
 
       {!market.slotLevel && !sleeperDraft.loading && (
         <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary leading-snug mb-2 flex items-start gap-1.5">
-          <RefreshCw size={11} strokeWidth={2} className="shrink-0 mt-0.5" />
           Sleeper hasn't set the {draftSeason} draft order yet — prices use round
           medians and upgrade to exact slots automatically once the order exists.
         </p>
       )}
 
       {/* Mode toggle */}
-      <div className="flex rounded-lg border border-border-default dark:border-border-default overflow-hidden my-3">
+      <div className="flex border border-border-default dark:border-border-default overflow-hidden my-3">
         {MODES.map(m => (
           <button
             key={m.id}

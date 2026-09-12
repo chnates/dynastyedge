@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { ArrowDown, ArrowUp, CheckCircle2, AlertTriangle, Wand2, RotateCcw, ChevronDown, Scale } from 'lucide-react'
-import { Card, Button, Badge, cn } from '../ui'
+import { Card, Button, Badge, Mark, cn } from '../ui'
 import { POS_TEXT } from '../../utils/positionColors'
 import { MIN_MEANINGFUL_GAIN } from '../../utils/lineupConfidence'
 
@@ -9,16 +8,18 @@ import { MIN_MEANINGFUL_GAIN } from '../../utils/lineupConfidence'
 // projected points sitting on your bench. Every move card below it carries its
 // own gain, and those gains sum EXACTLY to the headline (see lineupMoves.js).
 
-function MoveSide({ icon, verb, entry, tone }) {
+// The up/down arrow glyph is gone: SIT and START already state the direction,
+// so the icon was restating the label beside it. The verb takes the tone
+// instead, which is one fewer element carrying the same fact.
+function MoveSide({ verb, entry, tone }) {
   const player = entry?.player
   return (
     <div className="flex items-center gap-2 min-w-0">
-      <span className={cn('shrink-0 flex items-center justify-center w-4', tone)}>{icon}</span>
-      <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-text-tertiary w-7 shrink-0">
+      <span className={cn('font-mono text-[9px] font-semibold uppercase tracking-[0.12em] w-9 shrink-0', tone)}>
         {verb}
       </span>
       <span className={cn(
-        'font-body text-sm font-medium truncate min-w-0',
+        'font-body text-sm font-medium min-w-0 text-balance',
         player ? 'text-text-primary' : 'text-text-tertiary italic',
       )}>
         {player?.name ?? 'nobody'}
@@ -54,8 +55,8 @@ function MoveCard({ move: m }) {
       </div>
 
       <div className="flex flex-col gap-1">
-        <MoveSide icon={<ArrowDown size={13} strokeWidth={2.5} />} verb="Sit" entry={m.out} tone="text-danger" />
-        <MoveSide icon={<ArrowUp size={13} strokeWidth={2.5} />} verb="Start" entry={m.in} tone="text-success" />
+        <MoveSide verb="Sit" entry={m.out} tone="text-danger" />
+        <MoveSide verb="Start" entry={m.in} tone="text-success" />
       </div>
 
       {m.confidence != null && (
@@ -106,10 +107,12 @@ export default function LineupMovesCard({
         <div className="ink-field px-4 pt-3 pb-3.5">
           {optimal ? (
             <div className="flex items-center gap-2.5">
-              <CheckCircle2 size={26} strokeWidth={1.75} className="text-success shrink-0" />
               <div className="min-w-0">
+                {/* A success-green tick cannot live on an ink field — the field
+                    inverts and no single green clears AA against both versions
+                    of it. The state is carried by a second reversal instead. */}
                 <p className="font-body text-sm font-semibold text-bg-primary leading-snug">
-                  Lineup is optimal — no changes needed.
+                  Lineup is <Mark tone="ground">optimal</Mark> — no changes needed.
                 </p>
                 <p className="font-body text-xs text-bg-primary/60 leading-snug mt-0.5">
                   Nothing on your bench outprojects a starter.
@@ -154,27 +157,18 @@ export default function LineupMovesCard({
 
               <div className="flex items-center gap-3 mt-3 pt-3 border-t border-bg-primary/20">
                 {mustFixCount > 0 && (
-                  <span className="flex items-center gap-1.5">
-                    <AlertTriangle size={13} strokeWidth={2.25} className="text-danger shrink-0" />
-                    <span className="font-body text-xs text-bg-primary/80">
-                      {mustFixCount} must fix
-                    </span>
+                  <span className="font-body text-xs text-bg-primary/80">
+                    <span className="font-mono font-semibold tabular-nums">{mustFixCount}</span> must fix
                   </span>
                 )}
                 {upgradeCount > 0 && (
-                  <span className="flex items-center gap-1.5">
-                    <ArrowUp size={13} strokeWidth={2.5} className="text-warning shrink-0" />
-                    <span className="font-body text-xs text-bg-primary/80">
-                      {upgradeCount} upgrade{upgradeCount > 1 ? 's' : ''}
-                    </span>
+                  <span className="font-body text-xs text-bg-primary/80">
+                    <span className="font-mono font-semibold tabular-nums">{upgradeCount}</span> upgrade{upgradeCount > 1 ? 's' : ''}
                   </span>
                 )}
                 {coinFlipCount > 0 && (
-                  <span className="flex items-center gap-1.5">
-                    <Scale size={13} strokeWidth={2.25} className="text-bg-primary/60 shrink-0" />
-                    <span className="font-body text-xs text-bg-primary/60">
-                      {coinFlipCount} coin flip{coinFlipCount > 1 ? 's' : ''}
-                    </span>
+                  <span className="font-body text-xs text-bg-primary/60">
+                    <span className="font-mono font-semibold tabular-nums">{coinFlipCount}</span> coin flip{coinFlipCount > 1 ? 's' : ''}
                   </span>
                 )}
               </div>
@@ -191,7 +185,6 @@ export default function LineupMovesCard({
               variant="primary"
               size="sm"
               fullWidth
-              icon={<Wand2 size={14} strokeWidth={2.25} />}
               onClick={onApplyAll}
             >
               Apply {moves.length} move{moves.length > 1 ? 's' : ''}
@@ -202,7 +195,6 @@ export default function LineupMovesCard({
               variant="secondary"
               size="sm"
               fullWidth={moves.length === 0}
-              icon={<RotateCcw size={14} strokeWidth={2.25} />}
               onClick={onReset}
             >
               Reset
@@ -235,17 +227,9 @@ export default function LineupMovesCard({
             variant="ghost"
             size="sm"
             fullWidth
-            icon={
-              <ChevronDown
-                size={14}
-                strokeWidth={2.25}
-                className={cn('transition-transform', showCoinFlips && 'rotate-180')}
-              />
-            }
-            iconRight
             onClick={() => setShowCoinFlips(v => !v)}
           >
-            {coinFlips.length} swap{coinFlips.length > 1 ? 's' : ''} with no meaningful edge
+            {showCoinFlips ? 'Hide' : 'Show'} {coinFlips.length} swap{coinFlips.length > 1 ? 's' : ''} with no meaningful edge
           </Button>
           <p className="font-body text-[11px] text-text-tertiary leading-snug mt-1.5">
             Under {MIN_MEANINGFUL_GAIN} projected point. Across 124,433 measured pairs the

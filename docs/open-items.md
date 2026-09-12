@@ -5,7 +5,11 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-09-11 (UX/IA + visual review — `docs/design/review-2026-09/`.
+**Last reviewed:** 2026-09-12 (DESIGN-1 **step 4** — the components rolled
+through the screens; law 5's three block registers, B2's inversion on Trade
+Targets, law 2's bar test, lucide removed entirely, all three Blackout artefacts
+cleared. The app now fails **0 of 12** slop markers; only motion, step 5,
+remains. Previously 2026-09-11: UX/IA + visual review — `docs/design/review-2026-09/`.
 The owner approved a replacement visual direction ("Matchday") and the Phase 3
 "Primetime Blackout" law is superseded; the audit also turned up four
 independent, ready-now bugs. New: **DESIGN-1**, **DESIGN-2**, **DESIGN-3**.
@@ -405,15 +409,66 @@ curl -s 'https://api.sleeper.app/v1/league/1313933520715907072/drafts' | grep -c
 start in a fresh session.** Not started in the review: it was scoped as
 diagnosis + mocks only, and the app was deliberately left untouched.
 
-**STATUS: steps 1–3 of 5 have landed. This item stays OPEN until step 5.**
+**STATUS: steps 1–4 of 5 have landed. This item stays OPEN until step 5.**
 
 | Step | What | State |
 |---|---|---|
 | 1 | The accessibility floor + the truncation bugs (DESIGN-2) | shipped, closed in §3 |
 | 2 | The navigation rebuild — tab bar, contents rail, Index (DESIGN-3) | shipped, closed in §3 |
 | 3 | **Tokens and primitives** | **shipped 2026-09-11** |
-| 4 | Roll the new components through the screens — densest first (My Roster, Trade Targets, League Overview), so density problems surface early | **not started** |
+| 4 | **Roll the components through the screens** | **shipped 2026-09-12** |
 | 5 | Motion — the "press run", custom easing, jittered stagger, and widening the `prefers-reduced-motion` guard from one class to a global rule as its first step | **not started** |
+
+**What step 4 landed.** The three block registers that answer finding **B7** and
+are now **law 5** — `RuledList` (many things you scan), `Lede` (one thing you act
+on), `NavRow` (a way out) — plus `Row`, the tappable member of a list. B7's fix
+turned out to be *deleting the rectangle*, not tuning its padding: Matchday's
+mock has zero bordered boxes in its content area. **B2's unfixed case** (Trade
+Targets) is inverted — the name out of display type, the value into a
+`Magnitude`, the two appeal reads out of 9px badges into marked lines. **Law 2
+gained a measured bar test**: Playoff Odds' bar stays (a real proportion of a
+bounded whole), TeamCard's strength bars are gone (they clamped, their complement
+was meaningless, and their reference moved when a *different* team traded).
+**lucide is entirely removed** — 51 icons, 32 files, dependency uninstalled. The
+radius sweep took 63 consumer uses to 3 (avatar, sheet grabbers, spinners). All
+three inherited Blackout artefacts are cleared: `roundColors` re-cut as an
+ink-density ramp, the logo and generated icons re-cut flat.
+
+**The app now fails 0 of `slop-checklist.md`'s 12 markers** (8 at the review, 3
+entering step 4). The two still technically live are motion's, and they are step
+5's.
+
+**Three lessons worth more than the diff:**
+
+1. **Deleting a primitive does not delete the pattern.** `Card`'s banned left
+   accent rail went in step 3, and a raw `border-l-[3px]` on Trajectory's
+   verdict survived every step-4 sweep because nothing looking for the *prop*
+   could find the *shape*. Audit for the shape.
+2. **An enumeration must never be built from `Lede`s.** The first pass rendered
+   three IR alerts as three near-identical editorial blocks — the exact
+   icon+title+one-liner pattern the direction exists to kill, three times
+   taller. Repeated items of one kind aggregate into one.
+3. **`/design-review`'s nine greps are not the review.** They passed 955 added
+   lines clean while eleven hand-rolled copies of one row had drifted apart on
+   `.focus-ring` — an accessibility-floor gap. Run the judgement pass.
+
+**Carried into step 5, explicitly:**
+
+- **Motion, the whole of it.** Widen the `prefers-reduced-motion` guard from one
+  class to a global rule FIRST; then the press run, custom easing
+  `cubic-bezier(.16,1,.3,1)`, jittered stagger (The Edge's is linear 60ms
+  today), clip/wipe entrances rather than `edge-rise`'s fade-up, `:active` on
+  every pressable, a 3–5 moment budget.
+- **Five pre-existing hand-rolled rows** the step-4 diff deliberately did not
+  widen into: `PlayerSearchSheet` (×2), `TradeBuilder`'s add sheet,
+  `PlayerProfileDrawer`'s news list, `DraftTracker`. Plus **two chip ladders**
+  in `DraftBoard` and `DraftTracker`. All should take `Row` / `Chip`.
+- **Draft Board, Draft Tracker and the profile drawer** still hold hand-rolled
+  `bg-bg-card border` panels inside them. They are the densest remaining
+  screens and were out of step 4's named scope.
+- **Verify the PWA metas and the new app icon on device** — a meta or icon
+  change is silent until the home-screen app is removed and re-added
+  (failure-archaeology §1). `index.html`'s icon `?v=` went to 4.
 
 **What step 3 landed.** The Matchday palette in both themes (warm paper/ink,
 neutrals carrying the ground's hue, `--alt` as a secondary hue 176° from the
@@ -443,13 +498,14 @@ instrument: **40 of 40 pass**.
   a top-of-market snapshot; FantasyCalc's scale is a documented 0–10000
   contract. Under a pixel of difference across the range.
 
-**Carried into step 4, explicitly:** the radius sweep on consumers (~36
+~~**Carried into step 4, explicitly:** the radius sweep on consumers (~36
 `rounded-full` and ~35 `rounded-lg` remain outside the primitives); lucide's
 icon medallions on The Edge's briefing items and the roster shortcuts; the pick
 round colours in `roundColors.js`, which are hardcoded hexes still tuned to the
 Blackout palette and are the largest remaining Blackout artefact; and the logo
 + generated app icons, which still wear the red-ramp gradient and set the
-wordmark in a font the app no longer loads.
+wordmark in a font the app no longer loads.~~ **All four done 2026-09-12** —
+see "What step 4 landed" above.
 
 **Verify on device, and note it is SILENT until then:** the PWA `theme-color`
 metas moved with `--bg-secondary` (light `#E7E9EC` → `#E8E5DC`, dark `#101013`

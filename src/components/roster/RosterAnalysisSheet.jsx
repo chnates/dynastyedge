@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
 import { PEAK_WINDOWS } from '../../utils/peakWindows'
 import { Sheet, SheetHeader, Chip } from '../ui'
 import { POS_SVG as POS_COLORS } from '../../utils/positionColors'
@@ -154,7 +153,7 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
                   key={pos}
                   active={posFilter === pos}
                   onClick={() => handlePosFilter(pos)}
-                  className="rounded-lg tracking-wide"
+                  className="tracking-wide"
                 >
                   {pos}
                 </Chip>
@@ -269,9 +268,9 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
 
               {/* Selected player detail */}
               {selectedPlayer && (
-                <div className="mt-2 mx-1 px-3 py-2 rounded-lg bg-bg-secondary border border-border-default flex items-center gap-2">
+                <div className="mt-2 mx-1 px-3 py-2 bg-bg-secondary border border-border-default flex items-center gap-2">
                   <span
-                    className="block w-2.5 h-2.5 rounded-full flex-shrink-0"
+                    className="block w-2.5 h-2.5 flex-shrink-0"
                     style={{ backgroundColor: POS_COLORS[selectedPlayer.position] }}
                   />
                   <div className="flex-1 min-w-0">
@@ -293,7 +292,7 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
                 <div className="flex gap-3">
                   {LANE_ORDER.map(pos => (
                     <div key={pos} className="flex items-center gap-1">
-                      <span className="block w-2 h-2 rounded-full" style={{ backgroundColor: POS_COLORS[pos] }} />
+                      <span className="block w-2 h-2" style={{ backgroundColor: POS_COLORS[pos] }} />
                       <span className="font-body text-[9px] font-semibold uppercase text-text-tertiary tracking-wide">{pos}</span>
                     </div>
                   ))}
@@ -373,8 +372,8 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
                   How to read this
                 </span>
                 {howToOpen
-                  ? <ChevronUp size={15} className="text-text-tertiary" strokeWidth={1.75} />
-                  : <ChevronDown size={15} className="text-text-tertiary" strokeWidth={1.75} />}
+                  ? <span className="font-mono text-[11px] leading-none text-text-tertiary" aria-hidden="true">▴</span>
+                  : <span className="font-mono text-[11px] leading-none text-text-tertiary" aria-hidden="true">▾</span>}
               </button>
               {howToOpen && (
                 <div className="px-3 pb-3 flex flex-col gap-2.5">

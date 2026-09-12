@@ -1,12 +1,11 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Sparkles } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useSleeperRookies } from '../../hooks/useSleeperRookies'
 import { usePlayerDB } from '../../hooks/usePlayerDB'
 import { useWeeklyProjections } from '../../hooks/weeklyProjections'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { recommendFreeAgents } from '../../utils/recommendations'
-import { Card, Chip, SearchInput } from '../ui'
+import { Card, Chip, RuledList, SearchInput } from '../ui'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import SectionHeader from '../shared/SectionHeader'
@@ -59,8 +58,7 @@ function RecommendedPickups({ recs, onSelect }) {
               }`}
             >
               <div className="flex items-center gap-2">
-                <Sparkles size={13} className="text-accent flex-shrink-0" strokeWidth={2} />
-                <span className="font-body text-sm font-medium text-text-primary flex-1 truncate leading-tight">
+                <span className="font-body text-sm font-medium text-text-primary flex-1 min-w-0 text-balance leading-tight">
                   {p.name}
                 </span>
                 <span className={`font-body text-[10px] font-semibold uppercase tracking-wide flex-shrink-0 ${POS_TEXT[p.position] ?? 'text-text-tertiary'}`}>
@@ -329,7 +327,7 @@ export default function FreeAgentsView() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search free agents…"
-            className="rounded-lg"
+            className=""
           />
         </div>
 
@@ -341,7 +339,7 @@ export default function FreeAgentsView() {
               active={posFilter === pos}
               activeClass={POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-bg-primary border border-transparent'}
               onClick={() => setPosFilter(pos)}
-              className="rounded-lg tracking-wide"
+              className="tracking-wide"
             >
               {pos}
             </Chip>
@@ -369,7 +367,7 @@ export default function FreeAgentsView() {
                 active={upgradesOnly}
                 activeClass="bg-success/20 text-success border border-success/30"
                 onClick={() => setUpgradesOnly(o => !o)}
-                className="rounded-lg tracking-wide"
+                className="tracking-wide"
               >
                 Upgrades Only
               </Chip>
@@ -381,7 +379,7 @@ export default function FreeAgentsView() {
                 active={hideRookies}
                 activeClass="bg-warning/20 text-warning border border-warning/30"
                 onClick={() => setHideRookies(h => !h)}
-                className="rounded-lg tracking-wide"
+                className="tracking-wide"
               >
                 Hide Rookies
               </Chip>
@@ -440,7 +438,7 @@ export default function FreeAgentsView() {
             }
           </p>
         ) : (
-          <div className="rounded-none bg-bg-card border border-border-default px-3">
+          <RuledList>
             <div className="flex items-center gap-2 pt-2 pb-1 border-b border-border-default font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">
               <span className="flex-1 min-w-0" />
               {showProj && <span className="w-9 text-right shrink-0">Proj</span>}
@@ -460,7 +458,7 @@ export default function FreeAgentsView() {
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="font-body text-sm font-medium text-text-primary flex-1 truncate leading-tight">
+                    <span className="font-body text-sm font-medium text-text-primary flex-1 min-w-0 text-balance leading-tight">
                       {player.name}
                     </span>
                     {rookie && <RookieBadge />}
@@ -499,7 +497,7 @@ export default function FreeAgentsView() {
                 </button>
               )
             })}
-          </div>
+          </RuledList>
         )}
       </div>
 

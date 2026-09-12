@@ -55,25 +55,6 @@ export const POS_FIELD = {
 // Fill for positional strength bars. Flat, not a gradient — Matchday is flat
 // colour and hard edges, and the only two gradients the app ever had left with
 // Primetime Blackout's score-bugs.
-export const POS_BAR = {
-  QB: 'bg-pos-qb',
-  RB: 'bg-pos-rb',
-  WR: 'bg-pos-wr',
-  TE: 'bg-pos-te',
-  DEF: 'bg-pos-def',
-}
-
-// Dimmed fill for below-average positional strength bars — keeps the position
-// hue (so a weak WR still reads as WR) but muted vs the full above-average bar,
-// instead of collapsing to grey-on-grey.
-export const POS_BAR_DIM = {
-  QB: 'bg-pos-qb/25',
-  RB: 'bg-pos-rb/25',
-  WR: 'bg-pos-wr/25',
-  TE: 'bg-pos-te/25',
-  DEF: 'bg-pos-def/25',
-}
-
 // CSS color values for SVG fill/stroke (resolve via the theme variables).
 export const POS_SVG = {
   QB: 'rgb(var(--pos-qb))',

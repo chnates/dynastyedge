@@ -1,3 +1,4 @@
+import { ROSTER_SLOTS } from '../../constants'
 import { cn } from './cn'
 
 // THE value figure — and the app's answer to finding B2, the finding the whole
@@ -34,6 +35,25 @@ import { cn } from './cn'
 
 // FantasyCalc's documented dynasty-value ceiling (CLAUDE.md -> Data Sources).
 export const MAGNITUDE_REFERENCE = 10000
+
+// THE TEAM-SCALE REFERENCE. A roster total is a SUM of ~26 player values, so it
+// lives on a different scale entirely — live team totals run 58,000-118,000
+// against a player ceiling of 10,000, and passing them the player reference
+// clamps every team in the league to the 30px ceiling. Measured on the live
+// League Overview: all ten teams rendered at exactly the same size, which is
+// finding B2 in the encoding meant to fix it.
+//
+// The second reference is a CONTRACT, like the first, not a snapshot and not a
+// per-list maximum: it is FantasyCalc's player ceiling times the number of
+// starting slots this league fields, i.e. what a lineup of maximum-value
+// players would be worth. Both factors are constants the app already owns, so
+// this cannot go stale as the market moves and cannot change because a
+// different team traded.
+//
+// A quantity with NO contract ceiling does not get a Magnitude at all — the
+// alternative is inventing a reference, which is precisely what the per-list
+// maximum failure above is.
+export const MAGNITUDE_TEAM_REFERENCE = MAGNITUDE_REFERENCE * ROSTER_SLOTS.length
 
 // 14px floor, 30px ceiling. The 0.7 exponent is the mock's: a linear ramp would
 // leave the bottom two thirds of the market — where most of a roster lives —

@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { TrendingUp, AlertTriangle, ChevronRight } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useManagerProfiles } from '../../hooks/useManagerProfiles'
 import { getTeamName } from '../../hooks/useLeague'
@@ -10,7 +9,7 @@ import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
 import SectionHeader from '../shared/SectionHeader'
 import ManagerScoutingSheet from './ManagerScoutingSheet'
-import { Card, Button, Badge } from '../ui'
+import { Badge, Button, Card, PositionBand } from '../ui'
 
 function fmtNet(net) {
   return `${net >= 0 ? '+' : '−'}${Math.abs(Math.round(net)).toLocaleString()}`
@@ -35,7 +34,7 @@ function ReportStat({ label, value, valueClass = 'text-text-primary dark:text-te
   )
 }
 
-function InsightList({ title, items, Icon, colorClass }) {
+function InsightList({ title, items, colorClass }) {
   if (!items.length) return null
   return (
     <div className="mt-3">
@@ -45,7 +44,7 @@ function InsightList({ title, items, Icon, colorClass }) {
       <div className="flex flex-col gap-1.5">
         {items.map((text, i) => (
           <div key={i} className="flex items-start gap-1.5">
-            <Icon size={12} strokeWidth={2} className={`shrink-0 mt-0.5 ${colorClass}`} />
+            <span className={`shrink-0 mt-0.5 font-mono text-[11px] leading-none ${colorClass}`} aria-hidden="true">·</span>
             <span className="font-body text-xs text-text-primary dark:text-text-primary leading-snug">{text}</span>
           </div>
         ))}
@@ -96,8 +95,8 @@ function MyReportCard({ profile, tier, insights, onOpen }) {
         />
       </div>
 
-      <InsightList title="Your Edge" items={insights.strengths} Icon={TrendingUp} colorClass="text-success" />
-      <InsightList title="Work On" items={insights.workOn} Icon={AlertTriangle} colorClass="text-warning" />
+      <InsightList title="Your Edge" items={insights.strengths} colorClass="text-success" />
+      <InsightList title="Work On" items={insights.workOn} colorClass="text-warning" />
 
       <Button variant="tinted" size="lg" fullWidth onClick={onOpen} className="mt-3">
         Full ledger & draft record
@@ -121,7 +120,6 @@ function ManagerCard({ profile, tier, onOpen }) {
           </p>
         </div>
         {tier && <WinWindowBadge tier={tier} />}
-        <ChevronRight size={16} strokeWidth={2} className="text-text-tertiary dark:text-text-tertiary shrink-0" />
       </div>
 
       {profile.tradeCount > 0 ? (
@@ -141,7 +139,7 @@ function ManagerCard({ profile, tier, onOpen }) {
       {profile.tendencies.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {profile.tendencies.map(t => (
-            <span key={t} className="font-body text-[10px] font-semibold rounded-full px-2 py-0.5 bg-accent/10 text-accent">
+            <span key={t} className="font-body text-[10px] font-semibold px-2 py-0.5 bg-accent/10 text-accent">
               {t}
             </span>
           ))}
@@ -203,7 +201,7 @@ export default function ManagersView() {
 
       {my && (
         <>
-          <SectionHeader label="Your Report Card" />
+          <PositionBand label="Your Report Card" className="mt-4" />
           <MyReportCard
             profile={my}
             tier={tiers[my.rosterId]}
@@ -213,7 +211,7 @@ export default function ManagersView() {
         </>
       )}
 
-      <SectionHeader label="Scouting Reports" count={opponents.length} />
+      <PositionBand label="Scouting Reports" count={opponents.length} className="mt-5" />
       <div className="flex flex-col gap-3">
         {opponents.map(p => (
           <ManagerCard

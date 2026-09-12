@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Info, Plus, Scale } from 'lucide-react'
 import TrendArrow from '../shared/TrendArrow'
 import PickBadge from '../roster/PickBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
@@ -101,9 +100,8 @@ function TradeColumn({ label, assets, total, onRemove, onAdd, addLabel, onTapPla
       </div>
       <button
         onClick={onAdd}
-        className="w-full mt-1.5 flex items-center justify-center gap-1 py-2 rounded-lg border border-dashed border-border-default dark:border-border-default text-text-secondary dark:text-text-secondary font-body text-[11px] font-semibold uppercase tracking-wide active:opacity-60 transition-opacity"
+        className="w-full mt-1.5 flex items-center justify-center gap-1 py-2 border border-dashed border-border-default dark:border-border-default text-text-secondary dark:text-text-secondary font-body text-[11px] font-semibold uppercase tracking-wide active:opacity-60 transition-opacity"
       >
-        <Plus size={12} strokeWidth={2.5} />
         {addLabel}
       </button>
     </div>
@@ -153,7 +151,6 @@ function PlayerRow({ player, isSelected, onTap, onInfo, onWhatsFair }) {
           className="shrink-0 px-2 py-2.5 text-text-tertiary dark:text-text-tertiary active:text-warning transition-colors"
           aria-label={`What's fair for ${player.name}?`}
         >
-          <Scale size={14} strokeWidth={1.75} />
         </button>
       )}
 
@@ -163,7 +160,6 @@ function PlayerRow({ player, isSelected, onTap, onInfo, onWhatsFair }) {
         className="shrink-0 px-2 py-2.5 text-text-tertiary dark:text-text-tertiary active:text-text-secondary transition-colors"
         aria-label={`View ${player.name} profile`}
       >
-        <Info size={14} strokeWidth={1.75} />
       </button>
     </div>
   )
@@ -320,7 +316,7 @@ function AddAssetSheet({
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search players…"
-            className="w-full bg-bg-card dark:bg-bg-card rounded-lg px-3 py-1.5 font-body text-sm text-text-primary dark:text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-accent"
+            className="w-full bg-bg-card dark:bg-bg-card px-3 py-1.5 font-body text-sm text-text-primary dark:text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-accent"
           />
         </div>
 

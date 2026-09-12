@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LayoutList, Search } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useFantasyCalc } from '../../hooks/useFantasyCalc'
 import { useLineupData } from '../../hooks/useLineupData'
@@ -51,8 +50,8 @@ function OffseasonPlaceholder({ league }) {
   return (
     <div className="px-4 pb-4">
       <div className="pt-4 pb-3 border-b border-border-default dark:border-border-default flex flex-col items-center text-center gap-2">
-        <LayoutList size={40} strokeWidth={1.5} className="text-accent" />
-        <h2 className="font-display font-extrabold text-2xl uppercase tracking-[-0.025em] font-extrabold tracking-[-0.025em] text-text-primary dark:text-text-primary">
+
+        <h2 className="font-display font-extrabold text-2xl uppercase tracking-[-0.025em] text-text-primary dark:text-text-primary">
           Lineup Optimizer
         </h2>
         <p className="font-body text-sm text-text-secondary dark:text-text-secondary">
@@ -268,7 +267,6 @@ export default function LineupOptimizer() {
                 <Button
                   variant="tinted"
                   size="sm"
-                  icon={<Search size={13} strokeWidth={2.25} />}
                   onClick={() => { setFaSlotIdx(swapArm.idx); setSwapArm(null) }}
                 >
                   Waiver options

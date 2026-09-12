@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { CheckCircle2, RefreshCw, XCircle } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getTeamName } from '../../hooks/useLeague'
 import { analyzeTrade, getTradeVerdict, suggestFairPackage, getCounterSuggestion, adjustVerdictForInjuries, buildTradePitch } from '../../utils/tradeAnalysis'
@@ -58,14 +57,20 @@ function mapPackageToAssets(fairPackage, myRoster) {
   }).filter(Boolean)
 }
 
+// The verdict word IS the verdict — a tick beside "Accept" restates it — so
+// the sticky chip keeps only its colour.
 const VERDICT_CHIP = {
-  Accept:  { Icon: CheckCircle2, cls: 'text-success' },
-  Decline: { Icon: XCircle,      cls: 'text-danger' },
-  Counter: { Icon: RefreshCw,    cls: 'text-warning' },
+  Accept:  { cls: 'text-success' },
+  Decline: { cls: 'text-danger' },
+  Counter: { cls: 'text-warning' },
 }
 
 // Pinned below the sub-tab bar so totals + verdict stay visible while
 // scrolling the builder and verdict panels.
+// OPAQUE, like the masthead. `bg-…/95 backdrop-blur-sm` was the app's last
+// translucent surface — a named marker, and on iOS the blur draws a
+// -webkit-backdrop-filter hairline at the boundary (the reason the header went
+// solid in the first place, rule 16).
 function StickySummary({ giveTotal, getTotal, verdict }) {
   const diff   = getTotal - giveTotal
   const pct    = Math.round(Math.abs(diff) / Math.max(giveTotal, getTotal, 1) * 100)
@@ -73,7 +78,7 @@ function StickySummary({ giveTotal, getTotal, verdict }) {
   const chip   = verdict ? VERDICT_CHIP[verdict.verdict] : null
 
   return (
-    <div className="sticky top-[37px] z-[4] -mx-4 mb-3 px-4 py-2 bg-bg-secondary/95 dark:bg-bg-secondary/95 backdrop-blur-sm border-b border-border-default dark:border-border-default flex items-center gap-2">
+    <div className="sticky top-[37px] z-[4] -mx-4 mb-3 px-4 py-2 bg-bg-secondary border-b-2 border-text-primary flex items-center gap-2">
       <span className="flex-1 font-body text-[11px] text-text-secondary dark:text-text-secondary truncate">
         Give <span className="font-mono text-xs text-text-primary dark:text-text-primary tabular-nums">{giveTotal.toLocaleString()}</span>
         <span className="mx-1 text-text-tertiary">⇄</span>

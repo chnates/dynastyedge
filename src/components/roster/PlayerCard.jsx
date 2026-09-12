@@ -1,5 +1,5 @@
 import TrendArrow from '../shared/TrendArrow'
-import { Magnitude } from '../ui'
+import { Magnitude, Row } from '../ui'
 import { POS_TEXT } from '../../utils/positionColors'
 
 export default function PlayerCard({ player, onClick }) {
@@ -15,19 +15,14 @@ export default function PlayerCard({ player, onClick }) {
     isStarter,
   } = player
 
-  const Wrapper = onClick ? 'button' : 'div'
-  const wrapperProps = onClick
-    ? { onClick, className: 'w-full text-left py-2.5 border-b border-border-default dark:border-border-default last:border-0 active:opacity-60 transition-opacity' }
-    : { className: 'py-2.5 border-b border-border-default dark:border-border-default last:border-0' }
-
   return (
-    <Wrapper {...wrapperProps}>
+    <Row onClick={onClick ?? undefined} padding="sm">
       {/* Main row */}
       <div className="flex items-center gap-2">
         {/* Starter indicator */}
         <span className="w-1.5 shrink-0">
           {isStarter && (
-            <span className="block w-1.5 h-1.5 rounded-full bg-accent" />
+            <span className="block w-1.5 h-1.5 bg-accent" />
           )}
         </span>
 
@@ -83,6 +78,6 @@ export default function PlayerCard({ player, onClick }) {
           </>
         )}
       </div>
-    </Wrapper>
+    </Row>
   )
 }

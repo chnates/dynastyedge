@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, lazy, Suspense } from 'react'
 import { HashRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
-import { Menu, Search } from 'lucide-react'
 import { useLeague } from './hooks/useLeague'
 import { useTheme } from './hooks/useTheme'
 import { useIdentity } from './hooks/useIdentity'
@@ -126,24 +125,32 @@ function AppShell({ leagueData, updateAvailable, onApplyUpdate, buildId, version
         className="fixed top-0 left-0 right-0 z-30 bg-bg-secondary border-b-2 border-text-primary"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
-        <div className="flex items-center h-12 px-1">
+        {/* The masthead. Both controls were lucide glyphs (a hamburger and a
+            magnifier); Matchday's navigation is TEXT, so both are now small mono
+            labels. They keep their full 44px boxes and their aria-labels — only
+            the ink changed. */}
+        <div className="flex items-center h-12 px-2">
           <button
             onClick={() => setDrawerOpen(true)}
             aria-label="Open settings and data"
-            className="w-11 h-11 flex items-center justify-center rounded-lg text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex-shrink-0"
+            className="tap-target focus-ring h-11 flex items-center text-text-primary
+                       font-mono text-[10px] font-semibold uppercase tracking-[0.14em]
+                       hover:opacity-70 transition-opacity flex-shrink-0"
           >
-            <Menu size={22} strokeWidth={1.75} />
+            Menu
           </button>
-          <span className="font-display font-extrabold uppercase text-lg tracking-[-0.02em] text-text-primary ml-1">
+          <span className="font-display font-extrabold uppercase text-lg tracking-[-0.02em] text-text-primary ml-3">
             {getSectionName(location.pathname)}
           </span>
           <span className="flex-1" />
           <button
             onClick={() => setSearchOpen(true)}
             aria-label="Search players"
-            className="w-11 h-11 flex items-center justify-center rounded-lg text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex-shrink-0"
+            className="tap-target focus-ring h-11 flex items-center text-text-primary
+                       font-mono text-[10px] font-semibold uppercase tracking-[0.14em]
+                       hover:opacity-70 transition-opacity flex-shrink-0"
           >
-            <Search size={20} strokeWidth={1.75} />
+            Find
           </button>
         </div>
       </header>

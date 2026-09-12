@@ -8,15 +8,27 @@ import { PEAK_WINDOWS } from '../../utils/peakWindows'
 import { suggestFairPackage } from '../../utils/tradeAnalysis'
 import PartnerContextStrip from './PartnerContextStrip'
 import PartnerSelect, { buildPartnerOptions } from './PartnerSelect'
-import { Badge, Card, Chip, ErrorState, SectionHeader, Spinner, TrendArrow, WinWindowBadge, cn } from '../ui'
-import { POS_CHIP_ACTIVE, POS_TAG as POS_TAGS } from '../../utils/positionColors'
+import {
+  Badge, Chip, ErrorState, Lede, Magnitude, Mark, PositionBand, Row, RuledList,
+  Spinner, TrendArrow, WinWindowBadge, cn,
+} from '../ui'
+import { POS_BG, POS_CHIP_ACTIVE } from '../../utils/positionColors'
 
 const POSITION_FILTERS = ['All', 'QB', 'RB', 'WR', 'TE']
 
 // The appeal read, in the app's status colors: green = a clear reason to say
 // yes, amber = there isn't one. Never brand red — that is reserved for "you"
 // accents. The same scale grades both seats, so one tone map serves both.
-const APPEAL_TONE = { Strong: 'success', Fair: 'neutral', Weak: 'warning' }
+//
+// FAIR IS DELIBERATELY UNMARKED. Finding B2 measured that the two appeal reads
+// — the most decision-relevant fields on the card — were its smallest text,
+// while the player's name (the least decision-relevant: you know who Ja'Marr
+// Chase is) was the loudest. Both are fixed below, but marking all three tiers
+// would put 40 coloured blocks down a 20-row board and scan as noise. `Fair` is
+// the null result; marking only Strong and Weak leaves a readable pattern of
+// "gettable" and "they won't bite" down the list, which is the question this
+// board exists to answer.
+const APPEAL_MARK = { Strong: 'success', Weak: 'warning' }
 
 // Deliberately terser than the fit's own `summary`, which is written for the
 // Analyzer panel and truncates to nothing on a 390px card.
@@ -65,101 +77,121 @@ function saveTeamFilter(rosterId) {
 function CashOutBlock({ board, onTap }) {
   const { asset, targets } = board
   const window = PEAK_WINDOWS[asset.position]
-  const posTag = POS_TAGS[asset.position] ?? 'bg-bg-secondary text-text-secondary'
 
   return (
     <>
-      <SectionHeader label="Cash out the age" accentBar="bg-warning" />
-      <Card tone="bg-warning" padding="p-3" className="flex flex-col gap-1.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className={`shrink-0 text-[9px] font-bold font-body px-1.5 py-0.5 rounded leading-none ${posTag}`}>
-            {asset.position}
-          </span>
-          <span className="flex-1 font-display text-base uppercase tracking-wide text-text-primary dark:text-text-primary truncate min-w-0">
-            {asset.name}
-          </span>
-          <span className="font-mono text-sm font-medium text-accent tabular-nums shrink-0">
-            {(asset.value || 0).toLocaleString()}
-          </span>
-        </div>
-        <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-relaxed">
-          Age {asset.age?.toFixed(1)} — {asset.yearsPastPeak.toFixed(1)} years past the{' '}
-          {asset.position} peak window{window ? ` (${window[0]}–${window[1]})` : ''}. Roughly{' '}
-          <span className="font-mono text-text-primary dark:text-text-primary">
-            {Math.round(asset.valueAtRisk).toLocaleString()}
-          </span>{' '}
-          of his value is exposed to decline over the next three seasons.
-        </p>
-      </Card>
+      {/* The standout move is ONE decision, so it is a <Lede>, not a tinted
+          card: the finding is the value bleeding to age, and the headline
+          marks it. */}
+      <PositionBand label="Cash out the age" className="mt-5" />
+      <Lede
+        eyebrow={`${asset.position} · age ${asset.age?.toFixed(1)}`}
+        headline={
+          <>{asset.name} has <Mark tone="warning">{Math.round(asset.valueAtRisk).toLocaleString()}</Mark> at risk</>
+        }
+      >
+        He is {asset.yearsPastPeak.toFixed(1)} years past the {asset.position} peak
+        window{window ? ` (${window[0]}–${window[1]})` : ''}, so roughly that much of his{' '}
+        {(asset.value || 0).toLocaleString()} is exposed to decline over the next three
+        seasons.
+      </Lede>
 
       {targets.length === 0 ? (
-        <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary mt-2 leading-relaxed">
+        <p className="aside py-3 font-body text-[11px] text-text-tertiary leading-relaxed">
           Nobody younger is available in his price band right now — the board below is the
           better route.
         </p>
       ) : (
-        <div className="flex flex-col gap-2 mt-2">
-          <p className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary leading-relaxed">
+        <>
+          <p className="py-2.5 font-body text-[11px] text-text-tertiary leading-relaxed">
             Younger targets in the band he can reach ({board.band[0].toLocaleString()}–
             {board.band[1].toLocaleString()}) — tap to build the trade.
           </p>
-          {targets.map(t => (
-            <Card key={t.sleeperId} onClick={() => onTap(t)} padding="p-2.5" className="flex flex-col gap-1">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className={`shrink-0 text-[9px] font-bold font-body px-1.5 py-0.5 rounded leading-none ${POS_TAGS[t.position] ?? 'bg-bg-secondary text-text-secondary'}`}>
-                  {t.position}
-                </span>
-                <span className="flex-1 font-display text-sm uppercase tracking-wide text-text-primary dark:text-text-primary truncate min-w-0">
-                  {t.name}
-                </span>
-                <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary shrink-0 tabular-nums">
-                  {t.age?.toFixed(1)}
-                </span>
-                <span className="font-mono text-xs font-medium text-accent tabular-nums shrink-0">
-                  {(t.value || 0).toLocaleString()}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className="font-body text-[10px] text-text-secondary dark:text-text-secondary truncate min-w-0">
-                  {getTeamName(t.owner)}
-                </span>
-                {t.fillsNeed && <Badge tone="danger" soft>Your need</Badge>}
-              </div>
-              <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary leading-relaxed">
-                {t.reasons.join(' · ')}
-              </span>
-            </Card>
-          ))}
-        </div>
+          <RuledList>
+            {targets.map(t => (
+              <Row key={t.sleeperId} onClick={() => onTap(t)}>
+                <div className="flex items-baseline gap-2">
+                  <span
+                    className={cn('shrink-0 w-[7px] h-[7px] self-center', POS_BG[t.position] ?? 'bg-text-tertiary')}
+                    aria-hidden="true"
+                  />
+                  <span className="flex-1 min-w-0 font-body text-sm font-medium text-text-primary text-balance">
+                    {t.name}
+                  </span>
+                  <span className="shrink-0 font-mono text-[10px] text-text-tertiary tabular-nums">
+                    {t.age?.toFixed(1)}
+                  </span>
+                  <span className="shrink-0 self-center">
+                    <Magnitude value={t.value > 0 ? t.value : null} />
+                  </span>
+                </div>
+                <div className="mt-1 pl-[15px] flex items-center gap-2 flex-wrap">
+                  <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-text-tertiary">
+                    {getTeamName(t.owner)}
+                  </span>
+                  {t.fillsNeed && <Badge tone="danger" soft>Your need</Badge>}
+                </div>
+                <p className="mt-1 pl-[15px] font-body text-[10px] text-text-tertiary leading-snug">
+                  {t.reasons.join(' · ')}
+                </p>
+              </Row>
+            ))}
+          </RuledList>
+        </>
       )}
     </>
   )
 }
 
-function TargetCard({ target, fairPackage, packagePending, showNeedTag, onTap }) {
-  const posTag = POS_TAGS[target.position] ?? 'bg-bg-secondary text-text-secondary'
-
+// One line of the appeal read: a label, the tier (marked when it is Strong or
+// Weak), and the sentence. This is what replaced the two soft Badges — a badge
+// set the tier at 9px, which is precisely the inversion B2 measured.
+function AppealLine({ label, tier, children }) {
+  const tone = APPEAL_MARK[tier]
   return (
-    <Card
-      onClick={onTap}
-      padding="p-3"
-      className="flex flex-col gap-2"
-    >
-      {/* Row 1: position + name + team + value + trend */}
-      <div className="flex items-center gap-2 min-w-0">
-        <span className={`shrink-0 text-[9px] font-bold font-body px-1.5 py-0.5 rounded leading-none ${posTag}`}>
-          {target.position}
-        </span>
-        <span className="flex-1 font-display text-base uppercase tracking-wide text-text-primary dark:text-text-primary truncate min-w-0">
+    <p className="mt-1 font-body text-[11px] leading-snug text-text-tertiary">
+      <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-text-tertiary">
+        {label}
+      </span>{' '}
+      {tone
+        ? <Mark tone={tone} className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em]">{tier}</Mark>
+        : <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-text-secondary">{tier}</span>}
+      {' '}<span className="text-text-secondary">{children}</span>
+    </p>
+  )
+}
+
+// A target is a RULED ROW, not a card (law 5): the board is an enumeration of
+// twenty, and twenty bordered rectangles is the shape finding B7 named. The
+// mock's `.md-row` grid is what this is — name and figure on the baseline, a
+// meta line, then full-width caption lines for everything that is a sentence.
+//
+// THE HIERARCHY IS INVERTED FROM WHAT B2 MEASURED. The name drops out of
+// display uppercase into body text (it identifies the row; it is not the
+// decision), the value becomes a <Magnitude> so size carries it, and the two
+// appeal reads come up out of 9px badges into marked lines.
+function TargetRow({ target, fairPackage, packagePending, showNeedTag, onTap }) {
+  return (
+    <Row onClick={onTap}>
+      <div className="flex items-baseline gap-2">
+        {/* The board mixes positions, so its band is neutral ink and the hue
+            rides on the row instead — the mock's `.sw` swatch. */}
+        <span
+          className={cn('shrink-0 w-[7px] h-[7px] self-center', POS_BG[target.position] ?? 'bg-text-tertiary')}
+          aria-hidden="true"
+        />
+        {/* Not truncated: it was `truncate min-w-0`, and the value column beside
+            it is variable-width now, so a long name wraps instead. */}
+        <span className="flex-1 min-w-0 font-body text-sm font-medium text-text-primary text-balance">
           {target.name}
         </span>
-        <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary shrink-0 uppercase tracking-wide">
+        <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.08em] text-text-tertiary">
           {target.team}
         </span>
-        <span className="font-mono text-sm font-medium text-accent tabular-nums shrink-0">
-          {(target.value || 0).toLocaleString()}
+        <span className="shrink-0 self-center">
+          <Magnitude value={target.value > 0 ? target.value : null} />
         </span>
-        <span className="shrink-0">
+        <span className="shrink-0 self-center">
           <TrendArrow trend={target.trend30Day} />
         </span>
       </div>
@@ -168,29 +200,29 @@ function TargetCard({ target, fairPackage, packagePending, showNeedTag, onTap })
           thing you can't infer. Team-scoped: the owner is already in the
           header and selector, so the row carries the one fact that varies —
           does this player fill a deficit, or is he depth? */}
-      <div className="flex items-center gap-2">
-        {showNeedTag
-          ? (target.fillsNeed
-              ? <Badge tone="danger" soft>Your need</Badge>
-              : <Badge tone="neutral" soft>Depth</Badge>)
-          : (
-            <span className="font-body text-[11px] text-text-secondary dark:text-text-secondary truncate min-w-0">
-              {getTeamName(target.owner)}
-            </span>
-          )}
+      <div className="mt-1 pl-[15px] flex items-center gap-2">
+        {showNeedTag ? (
+          target.fillsNeed
+            ? <Badge tone="danger" soft>Your need</Badge>
+            : <Badge tone="neutral" soft>Depth</Badge>
+        ) : (
+          <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-text-tertiary">
+            {getTeamName(target.owner)}
+          </span>
+        )}
       </div>
 
-      {/* Row 3: estimated package cost + why these pieces + how it reads to them.
-          The search runs off the render path (see the effect in WhatsFair), so
+      {/* The search runs off the render path (see the effect in WhatsFair), so
           a card can be on screen before its cost is known — say so rather than
           leaving a hole where the answer will appear. */}
       {packagePending && (
-        <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
+        <p className="mt-1.5 pl-[15px] font-body text-[11px] text-text-tertiary">
           Working out what it would cost…
-        </span>
+        </p>
       )}
+
       {fairPackage && (
-        <div className="flex flex-col gap-0.5 min-w-0">
+        <div className="mt-1.5 pl-[15px]">
           {/* What the trade costs you is the most actionable field on the
               board, so it WRAPS — it must never elide. This was a flex row
               with `truncate` on the value, which cut the package to
@@ -199,75 +231,61 @@ function TargetCard({ target, fairPackage, packagePending, showNeedTag, onTap })
               sentence rather than a flex row because flex items don't wrap
               their own text, and the trailing total has to follow the last
               name rather than float beside the first line. */}
-          <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary min-w-0">
-            Est. cost:{' '}
-            <span className="font-body text-xs text-text-primary dark:text-text-primary">
+          <p className="font-body text-[11px] text-text-tertiary">
+            <span className="font-mono text-[9px] uppercase tracking-[0.16em]">Cost</span>{' '}
+            <span className="font-body text-xs text-text-primary">
               {fairPackage.assets.map(a => a.name).join(' + ')}
             </span>{' '}
-            <span className="font-mono text-[10px] text-text-secondary dark:text-text-secondary tabular-nums whitespace-nowrap">
+            <span className="font-mono text-[10px] text-text-secondary tabular-nums whitespace-nowrap">
               (~{(fairPackage.totalValue || 0).toLocaleString()})
             </span>
           </p>
           {fairPackage.rationale && (
-            <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary min-w-0">
+            <p className="mt-0.5 font-body text-[10px] text-text-tertiary leading-snug">
               {fairPackage.rationale}
-            </span>
+            </p>
           )}
-          {/* The package was chosen for this read, so it belongs on the card:
+
+          {/* The package was chosen for this read, so it belongs on the row:
               the board no longer hands over an offer without saying what it's
-              worth to the team being asked to accept it. A Weak here is real —
-              nothing spare interests them at this price — so it says so rather
-              than being hidden. */}
+              worth to the team being asked to accept it — or to mine. */}
           {fairPackage.myAppeal && (
-            <div className="flex items-center gap-1.5 min-w-0 pt-0.5">
-              <Badge tone={APPEAL_TONE[fairPackage.myAppeal] ?? 'neutral'} soft>
-                {fairPackage.myAppeal} for you
-              </Badge>
+            <AppealLine label="You" tier={fairPackage.myAppeal}>
               {/* A Weak here is almost always the price, not the player: the
                   search's band is [0.9x, 1.15x] while `fairBand` calls fair
                   ±5%, so a suggestion routinely lands a few points over. Say
                   which, because "you'd pay 7% over fair" is a counter you can
                   make and "little here for your roster" is not. */}
-              <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary truncate min-w-0">
-                {fairPackage.myAppeal === 'Weak' && fairPackage.myConcern
-                  ? fairPackage.myConcern.replace(/\.$/, '').replace(/^You'd be /, "you'd be ")
-                  : fairPackage.myStartersDelta > 0
-                    ? `your starters gain ${fairPackage.myStartersDelta.toLocaleString()}`
-                    : MY_APPEAL_LINE[fairPackage.myAppeal]}
-              </span>
-            </div>
+              {fairPackage.myAppeal === 'Weak' && fairPackage.myConcern
+                ? fairPackage.myConcern.replace(/\.$/, '').replace(/^You'd be /, "you'd be ")
+                : fairPackage.myStartersDelta > 0
+                  ? `your starters gain ${fairPackage.myStartersDelta.toLocaleString()}`
+                  : MY_APPEAL_LINE[fairPackage.myAppeal]}
+            </AppealLine>
           )}
           {fairPackage.appeal && (
-            <div className="flex items-center gap-1.5 min-w-0">
-              <Badge tone={APPEAL_TONE[fairPackage.appeal] ?? 'neutral'} soft>
-                {fairPackage.appeal} for them
-              </Badge>
-              <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary truncate min-w-0">
-                {APPEAL_LINE[fairPackage.appeal]}
-              </span>
-            </div>
+            <AppealLine label="Them" tier={fairPackage.appeal}>
+              {APPEAL_LINE[fairPackage.appeal]}
+            </AppealLine>
           )}
+
           {/* The road not taken. The suggestion now weighs their appeal against
               what the package costs ME, so the option worth naming is the one
               they'd like MORE that it declined to pay for — the reverse of when
               appeal won outright. The read the search exists to produce is
-              still on the card; it just no longer picks the offer by itself. */}
+              still on the row; it just no longer picks the offer by itself. */}
           {fairPackage.alternative && (
-            <div className="flex items-baseline gap-1.5 min-w-0">
-              <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary shrink-0">
-                Costs more:
-              </span>
-              <span className="font-body text-[10px] text-text-secondary dark:text-text-secondary truncate min-w-0">
+            <p className="mt-1 font-body text-[10px] text-text-tertiary leading-snug">
+              <span className="font-mono text-[9px] uppercase tracking-[0.16em]">Costs more</span>{' '}
+              <span className="text-text-secondary">
                 {fairPackage.alternative.assets.map(a => a.name).join(' + ')}
-              </span>
-              <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary shrink-0">
-                — {fairPackage.alternative.appeal?.toLowerCase()} for them
-              </span>
-            </div>
+              </span>{' '}
+              — {fairPackage.alternative.appeal?.toLowerCase()} for them
+            </p>
           )}
         </div>
       )}
-    </Card>
+    </Row>
   )
 }
 
@@ -452,7 +470,7 @@ export default function WhatsFair() {
       {/* Honest read on what the scoped list actually contains: their board is
           shown whole, need-matched first, so the mode never renders empty. */}
       {activeTeam && filteredTargets.length > 0 && (
-        <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary mb-3 leading-relaxed">
+        <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary pb-2 leading-relaxed">
           {needCount === 0
             ? `Nothing on ${scopedTeamName} fills a positional deficit — these are their most valuable movable pieces.`
             : `${needCount} of ${filteredTargets.length} fill a positional deficit; the rest are their most valuable pieces.`}
@@ -460,7 +478,7 @@ export default function WhatsFair() {
       )}
 
       {packagesLeft > 0 && (
-        <p className="font-body text-[11px] text-accent mb-2 leading-relaxed" aria-live="polite">
+        <p className="font-body text-[11px] text-accent pb-2 leading-relaxed" aria-live="polite">
           Pricing every package the {filteredTargets.length === 1 ? 'target' : 'targets'} could
           cost you — {packagesLeft} to go.
         </p>
@@ -479,25 +497,33 @@ export default function WhatsFair() {
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {filteredTargets.map(target => (
-            <TargetCard
-              key={target.sleeperId}
-              target={target}
-              fairPackage={fairPackages[target.sleeperId]}
-              packagePending={!(target.sleeperId in fairPackages)}
-              showNeedTag={!!activeTeam}
-              onTap={() =>
-                navigate('/trade/analyze', {
-                  state: {
-                    opponentRosterId: target.ownerRosterId,
-                    whatsFairTarget:  target,
-                  },
-                })
-              }
-            />
-          ))}
-        </div>
+        <>
+          {/* The board mixes positions, so the band is NEUTRAL ink — picking a
+              hue to make it colourful would lie about what is in it. */}
+          <PositionBand
+            label={scopedTeamName ? `${scopedTeamName} · movable` : 'Your targets'}
+            count={filteredTargets.length}
+          />
+          <RuledList>
+            {filteredTargets.map(target => (
+              <TargetRow
+                key={target.sleeperId}
+                target={target}
+                fairPackage={fairPackages[target.sleeperId]}
+                packagePending={!(target.sleeperId in fairPackages)}
+                showNeedTag={!!activeTeam}
+                onTap={() =>
+                  navigate('/trade/analyze', {
+                    state: {
+                      opponentRosterId: target.ownerRosterId,
+                      whatsFairTarget:  target,
+                    },
+                  })
+                }
+              />
+            ))}
+          </RuledList>
+        </>
       )}
     </div>
   )

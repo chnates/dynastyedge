@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react'
-import { ChevronRight, ShieldCheck } from 'lucide-react'
 import { SLEEPER_BASE } from '../../constants'
 import { fetchJSON } from '../../utils/fetchJSON'
 import { useIdentity } from '../../hooks/useIdentity'
@@ -121,7 +120,7 @@ export default function LoginScreen() {
                   disabled={busy || !username.trim()}
                   className="shrink-0 px-5 gap-1 text-[14px] font-bold"
                 >
-                  {busy ? '…' : <>Go <ChevronRight size={16} strokeWidth={2.5} /></>}
+                  {busy ? '…' : 'Go'}
                 </Button>
               </div>
               {err && (
@@ -157,13 +156,15 @@ export default function LoginScreen() {
                       </span>
                     )}
                   </span>
-                  <ChevronRight size={18} strokeWidth={2} className="text-accent shrink-0" />
+                  <span className="shrink-0 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-text-tertiary">
+                    Pick
+                  </span>
                 </button>
               ))}
             </div>
 
             <div className="flex items-center justify-center gap-1.5 mt-5 px-4">
-              <ShieldCheck size={14} strokeWidth={1.75} className="text-success shrink-0" />
+
               <p className="font-body text-[12px] text-text-tertiary text-center">
                 Read-only. We never post to or change your Sleeper account.
               </p>

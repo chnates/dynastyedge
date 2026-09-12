@@ -570,25 +570,39 @@ across future seasons.
   color-coded by round (see color system below)
 - Each pick shows original owner if different from current owner
 - Total roster value score at top (sum of all player values + pick values)
-- **Action Items** (`RosterActionItems`, shared with The Edge — see Feature 12):
-  generated roster alerts, each with an urgency tone and an optional deep-link
-  action. Four types, all derived from live data:
-  1. **Taxi deadline** (red) — any taxi player with `years_exp >= 2` must be
+- **Action Items** (`RosterActionItems`, shared with The Edge — see Feature 12),
+  under an **"Action Items"** neutral band — deliberately *not* "On your desk",
+  which The Edge's generated GM line already uses for a different count
+  (briefing items), and two counts under one phrase on one screen read as a bug: generated roster alerts, each a
+  **`Lede`** — eyebrow, a headline with the finding in a `Mark`, the sentence,
+  and a real CTA. Four types, all derived from live data:
+  1. **Taxi deadline** — any taxi player with `years_exp >= 2` must be
      activated before the regular season (see League Context taxi rules).
-  2. **Bloated QB room** (amber) — 4+ rostered QBs. Names the most expendable
+  2. **Bloated QB room** — 4+ rostered QBs. Names the most expendable
      QB (lowest dynasty value) and, via `suggestSellMove`, a concrete partner
      and return; the action deep-links into the Analyzer with `preloadTrade`
      already filling both sides.
-  3. **IR slot opportunity** (blue) — an active player whose `injury_status`
+  3. **IR slot opportunity** — an active player whose `injury_status`
      is `Out` or `PUP` and who isn't on IR yet.
-  4. **Missing future 1st** (red) — no 1st-round pick in a `PICK_YEARS` season
+  4. **Missing future 1st** — no 1st-round pick in a `pickYears` season
      later than the current one; deep-links to Trade Partners.
+
+  **Types 1, 3 and 4 aggregate — one item per type, never one per player.**
+  A `Lede` is the open density register, for *one* decision; three stacked
+  entries reading "X can go on IR" with identical prose is the
+  icon+title+one-liner pattern wearing editorial clothes, and it was what the
+  first Matchday pass produced (measured on screen, 2026-09-12: three
+  near-identical blocks where the old tinted rectangles had at least been
+  short). An aggregated item names every player it covers in its prose.
 
   Items are **dismissible**, persisted in `dynastyedge_action_dismissals`
   against a `conditionSnapshot` — a dismissal only holds while the condition
   is unchanged, so a re-bloated QB room or a newly injured player re-surfaces
-  rather than staying silently hidden forever.
-- **Roster Analysis button** (below Action Items) → bottom sheet
+  rather than staying silently hidden forever. **An aggregated item snapshots
+  the SET, not the count** (sorted sleeper ids, joined): one player aging off
+  taxi while another ages on would leave the count unchanged, and a dismissal
+  must not survive that swap.
+- **Roster Analysis** — a `NavRow` beside Dynasty Trajectory → bottom sheet
   (`RosterAnalysisSheet`): age chart with one lane per position (QB/RB/WR/TE),
   each lane shaded with its position-specific peak window (RB 23–26, WR 24–28,
   TE 25–29, QB 26–33); dots are tappable (detail row below the chart) and a
@@ -1317,9 +1331,24 @@ Counter or Decline.** The app proposed and then argued with itself.
       measured what the lexicographic rule was costing. The earlier ruling is
       superseded, not forgotten — if the trade-off is ever revisited, the
       original objection is the thing to answer.
-- Each target card carries **both** reads — `{appeal} for you` above
-  `{appeal} for them`, each a `Badge` (`Strong` green / `Fair` neutral / `Weak`
-  amber, never brand red) plus one short line. The board no longer hands over an
+- Each target is a **ruled row, not a card** (law 5): the board is an
+  enumeration of twenty, and twenty bordered rectangles is exactly the shape
+  finding B7 named. It sits under a **neutral ink band** — the board mixes
+  positions, so the hue rides on a 7px swatch per row instead.
+  **The hierarchy is inverted from what finding B2 measured.** B2: "the loudest
+  element on every one is the player's *name* … the least decision-relevant
+  field on the card (you know who Ja'Marr Chase is). The most decision-relevant
+  fields, the two appeal reads, are the smallest text on the card." So the name
+  drops out of display uppercase into body text, the value becomes a
+  **`Magnitude`** (size is the quantity), and the appeals come up out of 9px
+  badges into labelled `YOU` / `THEM` lines.
+- Each target row carries **both** reads — `YOU {appeal}` above
+  `THEM {appeal}` plus one short line. **Only `Strong` and `Weak` are
+  `Mark`ed** (success / warning): `Fair` is the null result, and marking all
+  three would put forty coloured blocks down a twenty-row board and scan as
+  noise. Marking the two decisive tiers leaves a readable pattern of "gettable"
+  and "they won't bite" down the list, which is the question the board answers.
+  Never brand red — that is reserved for "you" accents. The board no longer hands over an
   offer without saying what it is worth to the team being asked to accept it —
   or to mine. `myAppeal` / `mySummary` / `myStartersDelta` / `myConcern` are
   computed **once, for the winning package, after phase 2 has chosen it**, so
@@ -1599,8 +1628,11 @@ talented roster, bad record — a frustrated owner is a buy window) or
 - Team name + owner username
 - Win window tier badge (Contending / Middle / Rebuilding)
 - Total roster value
-- Positional strength bars: QB · RB · WR · TE — each shown relative to league average
-  (above average = filled, below average = unfilled)
+- Positional read: QB · RB · WR · TE — each letter **lit in its position hue
+  when the team is above league average there, muted when below**, with the
+  30-day trend arrow beside it. This replaced a fill bar that clamped at twice
+  league average (see law 2's bar test); the binary is what this line always
+  meant.
 - Pick capital: 2026 / 2027 / 2028 — show count of picks owned per year
 - FAAB remaining (from Sleeper roster data, format as `$XXX`)
 - Win/loss record next to the owner username (when the season has records)
@@ -1958,11 +1990,23 @@ logic lives in `utils/edgeBriefing.js`.
   Value taps to My Roster; rank/window cells tap to League.
 - **Action Items:** the shared `RosterActionItems` component, reused as-is
   (dismissals included).
-- **Roster Analysis shortcut:** a one-tap card (accent edge bar + `ScanSearch`
-  medallion) that opens the same `RosterAnalysisSheet` as My Roster — surfaced
-  here so the age-curve / win-window tool is discoverable from the home screen.
-- **Your Briefing:** up to 5 prioritized items from `buildBriefing`, each
-  deep-linking somewhere: live/paused rookie draft → Tracker; trade deadline
+- **Roster Analysis shortcut:** a `NavRow` opening the same
+  `RosterAnalysisSheet` as My Roster — surfaced here so the age-curve /
+  win-window tool is discoverable from the home screen.
+- **Your Briefing:** up to 5 prioritized items from `buildBriefing`, each a
+  **`Lede`** — eyebrow, a display headline with the finding in a `Mark`, prose,
+  and a solid ink CTA. Each was a tinted lucide medallion beside a title and a
+  one-liner, which is **two of the twelve slop markers in one component**
+  ("lucide icons throughout" and "identical cards in the icon + title +
+  one-line-description pattern"). The eyebrow does the medallion's job better
+  because it can *say* the thing: a downward arrow gestures at "something fell";
+  "Buy low" is the instruction. Items carry two optional presentational fields
+  for this, `mark` (the substring of `title` to reverse out) and `cta` — they
+  live in `edgeBriefing.js` for the same reason `icon` and `tone` always have,
+  that only the builder knows which fact each item turned on. `markedHeadline`
+  degrades to a plain headline when a `mark` no longer occurs in its title, so
+  copy can change without breaking one. Each item still
+  deep-links somewhere: live/paused rookie draft → Tracker; trade deadline
   ≤ 2 weeks → Trade; `pre_draft` rookie draft → Board; N league moves since
   last visit → Activity; best buy-low (falling player at my deficit position,
   rebuilding-owner note) → Analyzer pre-filled as a What's Fair target; best
@@ -2323,8 +2367,13 @@ the screen answered it.
   `peakStatusShort`.
 
 **UI (`components/roster/TrajectoryView.jsx`):**
-- **Window verdict card** (tone-colored edge bar) — "Window peaks {year}" + a
-  one-sentence buy/hold/sell read.
+- **Window verdict** — a `Lede`: "Window peaks {year}" as the eyebrow, then
+  "Value *climbing* / *sliding* / *holding* through {year}" with the direction
+  `Mark`ed, then the one-sentence buy/hold/sell read. It was a card with a 3px
+  tone-coloured rail down its left edge — the banned rail, which survived step
+  4's sweeps because it was a raw `border-l-[3px]` rather than `Card`'s deleted
+  `accent` prop (see the Design System status block; audit for the shape, not
+  the API).
 - **Forward value chart** — inline SVG line of the team's current→+3 value with
   a gradient area fill, peak year ringed + labeled, and a dashed
   **league-average** line for context (built across all rosters).
@@ -3019,15 +3068,26 @@ Scouting did) — note any route-only moves explicitly.
 
 ## Design System
 
-> **Status: "Matchday" is the live direction, and it is being built in five
-> steps.** Steps 1–3 have landed: the accessibility floor (DESIGN-2), the
-> navigation rebuild (DESIGN-3), and the token + primitive layer below. Step 4
-> rolls the new components through the screens (densest first: My Roster, Trade
-> Targets, League Overview) and step 5 is motion. **Until step 4 lands, screens
-> this document does not describe still carry Primetime Blackout's shapes** —
-> rounded pills, lucide icon medallions, gradient strength bars — repainted in
-> Matchday's colours. That is expected, not drift; the alternative was migrating
-> twice.
+> **Status: "Matchday" is the live direction. Steps 1–4 of 5 have landed;
+> only motion (step 5) remains.** Step 1 was the accessibility floor
+> (DESIGN-2), step 2 the navigation rebuild (DESIGN-3), step 3 the token +
+> primitive layer, and **step 4 (2026-09-12) rolled the components through the
+> screens**: the three block registers of law 5, the B2 hierarchy inversion on
+> Trade Targets, the bar ruling in law 2, **lucide removed entirely** (51 icons,
+> 32 files, dependency uninstalled), the radius sweep (63 consumer uses → 3),
+> and all three inherited Blackout artefacts — `roundColors`, the logo, the
+> generated icons.
+>
+> **The app now fails 0 of `slop-checklist.md`'s 12 markers** — 8 at the
+> review, 3 entering step 4. The two still technically live are motion's
+> (fade-up entrance, linear stagger); they are **step 5's first task**, with
+> widening the `prefers-reduced-motion` guard from one class to a global rule.
+>
+> **Step 4's most useful lesson: deleting a primitive does not delete the
+> pattern.** `Card`'s banned left accent rail was removed in step 3, and a raw
+> `border-l-[3px]` on Trajectory's verdict card survived every sweep of step 4
+> because nothing looking for the *prop* could find the *shape*. Audit for the
+> shape.
 >
 > It replaced **"Primetime Blackout"** (Phase 3, 2026-07-20), which shipped
 > competently and was then rejected on review. The reason is worth keeping,
@@ -3048,7 +3108,7 @@ Scouting did) — note any route-only moves explicitly.
 colour, hard edges, no shadows, no icon set in navigation, and the five position
 hues promoted from 9px tags to **full-bleed section bands**.
 
-### The four laws
+### The five laws
 
 1. **Colour is a FIELD, not a rail.** Ink and the position hues are painted as
    solid blocks with the type reversed out — the masthead, the hero poster, the
@@ -3062,6 +3122,40 @@ hues promoted from 9px tags to **full-bleed section bands**.
    chosen. A figure is sized from its own value (`<Magnitude>`); the band above
    the group carries the group total. Size reads shape *within* a position, the
    total reads weight *across* positions.
+
+   **A bar survives only where the number is a genuine proportion of a bounded
+   whole** — decided 2026-09-12, and argued from what each number *is* rather
+   than from consistency. The test has three parts, all three required:
+   a **real complement** (the empty track means something), **no clamp**, and
+   an **absolute mapping** (a fixed reference, not one that moves).
+   - **League › Playoffs' odds bar passes and STAYS.** A probability is a
+     proportion of 100%; the empty track is the chance you miss; `width:
+     playoffPct * 100%` never clamps and 100% genuinely means certainty. B2
+     called it "by a distance the most scannable screen in the app" and it is.
+   - **TeamCard's positional strength bars FAILED all three and are gone.**
+     They computed `min(100, strength / (leagueAvg * 2) * 100)`, so: they
+     **clamped** — anything at twice league average pinned at 100%, and the two
+     strongest QB rooms rendered identically while differing by thousands
+     (finding B2 re-created inside the encoding meant to fix it, visible on the
+     live board); the **complement was meaningless**, since twice-league-average
+     is not a whole anyone is a fraction of; and the **reference moved**, so a
+     team's own bar changed length when a *different* team traded. What replaced
+     them is what Feature 5 always actually specified — "above average = filled,
+     below average = unfilled", a **binary**: the position letter takes its hue
+     when the team is above average there and mutes when below, with the 30-day
+     trend beside it.
+
+   **`Magnitude` needs a contract reference, and a quantity without one does not
+   get sized.** The player scale is FantasyCalc's documented 0–10000. A **team
+   total is a different quantity** — a sum of ~26 players, live range
+   58,000–118,000 — and passing it the player reference clamped all ten teams to
+   the 30px ceiling. `MAGNITUDE_TEAM_REFERENCE` is the second contract:
+   `MAGNITUDE_REFERENCE × ROSTER_SLOTS.length` (110,000), i.e. a lineup of
+   maximum-value players, both factors constants the app already owns. A
+   positional sum likewise takes `MAGNITUDE_REFERENCE × POSITION_DEPTH[pos]`,
+   derived from the same depth `getPositionalStrength` sums over. **Where no
+   contract ceiling exists, use a plain figure** — inventing a reference is the
+   per-list-maximum failure the primitive exists to prevent.
 3. **Separation is a rule, never a shadow and never a radius.** Panels are
    square with a 1px hairline (`--border-default`) or a 2px masthead rule
    (`--border-strong`, or ink for the strongest). **Sheets, modals and the side
@@ -3071,6 +3165,28 @@ hues promoted from 9px tags to **full-bleed section bands**.
    navigation may borrow neither.** An editorial highlight takes a semantic
    colour or plain ink — never a position hue, or "down 12%" reads as a
    position. Navigation carries no colour, no swatch and no icon at all.
+5. **A block is a RULED ROW, a LEDE, or a DOOR — a rectangle is the last
+   resort.** This is the answer to finding **B7**, and it is not a padding
+   scale. B7 measured that "every screen is a vertical stack of full-width,
+   evenly-spaced, 1px-bordered rectangles… an Action Item you must act on today
+   and a Market Radar row you'll never tap have the same padding, the same
+   border and the same width." Matchday's mock contains **zero bordered boxes
+   in its content area**, so the second density register is reached by deleting
+   the rectangle, not by tuning it:
+
+   | Register | For | Shape |
+   |---|---|---|
+   | **`RuledList`** of rows | many things you SCAN — 26 players, 10 teams, 20 targets | a shared column, hairline separators, no box, ~10px rhythm; the `PositionBand` above carries the group |
+   | **`Lede`** | ONE thing you ACT ON | eyebrow · display headline with a `Mark` · prose · ink CTA; no box; ~3× a row's height |
+   | **`NavRow`** | a way OUT of this screen | display title · detail · hairline; no icon, no chevron |
+
+   **The register is chosen by cardinality and consequence, never by taste.**
+   The corollary is the load-bearing half: an enumeration must never be built
+   from `Lede`s. Three IR alerts rendered as three `Lede`s reproduce the exact
+   icon+title+one-liner pattern the direction exists to kill — so repeated items
+   of one kind **aggregate into a single `Lede`** (Feature 1's action items).
+   `Card` survives only for a genuinely standalone panel that is none of the
+   three: a chart, an explainer, a form.
 
 ### Design System Component Library
 
@@ -3094,6 +3210,10 @@ Import everything from the one barrel: `import { Button, Card, Sheet } from '../
 |**`Mark`**|THE editorial highlight — a word set in reverse out of a solid block ("Five **quarterbacks**, one dead weight"). The real replacement for `Card`'s rail: colour moves off the container and onto the word that carries the finding. Tones `ink` (default) · `ground` (a second reversal, for use **inside** an ink field) · `alt` · `brand` · status. **Never a position hue.**|
 |**`PositionBand`**|THE section band — a position hue at **full bleed** with the page ground reversed out, carrying the group's count and **total**. The direction's signature. A board that mixes positions takes the neutral ink band (`position` omitted) — picking a hue to make a mixed list colourful would lie about what is in it. Cancels the 16px page gutter by default (`bleed`).|
 |**`Magnitude`**|THE value figure, sized from its own value. See law 2 and the note below on the reference. `null` renders `—` at the base size (rule 7).|
+|**`RuledList`**|THE DENSE register — many things you SCAN. Rows on the page's own ground, separated by a hairline, **no box and no per-row background**; it draws the closing rule and strips the last row's. Identity comes from the `PositionBand` above, not from a border around each row. `flush` cancels the page gutter.|
+|**`Lede`**|THE OPEN register — one thing you ACT ON. Eyebrow · headline (with a `Mark` on the word carrying the finding) · prose · a solid ink CTA. No box. A pressable `Lede` is a `<button>`, so `action` takes a **string** there; an entry needing real controls leaves `onClick` unset and passes nodes to `action` / `aside` (the dismiss slot on the eyebrow line).|
+|**`Row`**|THE member of a `RuledList` — the tappable row itself. **Always carries `.focus-ring`**; renders a `<button>` for `onClick`, a `<Link>` for `to`, a plain `<div>` for neither (a row that is not tappable must not announce itself as a control). Paddings `sm`/`md`/`lg`. Extracted after `/design-review`'s judgement pass caught **eleven hand-rolled copies that had drifted apart on the focus ring** — an accessibility-floor gap the nine mechanical detectors could not see.|
+|**`NavRow`**|THE DOOR — a row that takes you somewhere. Display-type title, small detail, optional mono hint, hairline, **no icon and no chevron**. Extracted from the Index's row so shortcuts stop being `Card`s with a lucide medallion.|
 |`Sheet` + `SheetHeader`|THE bottom sheet. Owns the whole sheet contract (`useScrollLock`, `useSheetDrag` swipe-to-dismiss, `overscroll-contain`, safe-area bottom pad, Escape + overlay-tap close, drag handle); `zIndex` is a Tailwind z class so sheets stack. **Exception:** a *keyboard-aware* sheet driven by `window.visualViewport` (PlayerSearchSheet, TradeBuilder's add sheet) can't use `Sheet` (which is sized to the layout viewport) — those two are the sanctioned hand-rolled overlays.|
 |`Modal`|THE centered dialog — confirm prompts and small forms. Owns overlay, `useScrollLock`, Escape + overlay-tap close. The bottom-docked counterpart is `Sheet`.|
 |`Chip`|THE filter chip — square, mono uppercase. Inactive is quiet; `active` defaults to the **ink field**; pass `activeClass={POS_CHIP_ACTIVE[pos]}` for position-tinted active states.|
@@ -3156,11 +3276,22 @@ the call site, so no screen can opt out.
   a 40px chip would let neighbours steal each other's taps — the fix would cause
   the bug. It also carries `touch-action: manipulation`.
 
-**Truncation is not a layout strategy for a load-bearing value.** Three fixed so
+**Truncation is not a layout strategy for a load-bearing value.** Five fixed so
 far: Trade › Targets' `Est. cost` (eliding the package on 5 of 11 live cards),
 `LineupRow`'s player name ("TreVeyon He…" on the row whose whole job is telling
-you who to start), and `PlayerCard`'s name, which lost `truncate` when the value
-column became variable-width. All wrap instead.
+you who to start), `PlayerCard`'s name (which lost `truncate` when the value
+column became variable-width), Market Movers' owner + reason line
+("Aaronreg… · Rebuilding owner — prime tar…", where the *reason* is the point of
+the row), and a free agent's name clipping by 3px. All wrap instead.
+
+**The rule now has an instrument, because five recurrences means it needs one:**
+`node scripts/dev/screenshot-app.mjs --route <path> --overflow` reports every
+element actually being clipped, measured geometrically
+(`scrollWidth > clientWidth`) against live data. Neither of the obvious
+alternatives works — `--text` reads `innerText`, which returns the element's
+FULL string because a CSS ellipsis is painted and never in the DOM, and a tall
+capture downscales past it. Sweep every route with it before claiming a screen
+is clean; the last full sweep found exactly one clip across 18 routes.
 
 ### Theme
 
@@ -3261,7 +3392,7 @@ Every position has its own identity colour — under Matchday this is the app's
 colour world, not a decorative tag. Tokens live in `index.css` (`--pos-*`), are
 exposed via Tailwind (`text-pos-qb`, `bg-pos-rb/15`, …), and all class maps live
 in `src/utils/positionColors.js` (`POS_TEXT`, `POS_BG`, **`POS_FIELD`**,
-`POS_TAG`, `POS_CHIP_ACTIVE`, `POS_BAR`, `POS_BAR_DIM`, `POS_SVG`). **Never
+`POS_TAG`, `POS_CHIP_ACTIVE`, `POS_SVG`). **Never
 hand-roll position colours locally, and never reuse status colours
 (success/warning/danger) to mean a position.**
 
@@ -3287,9 +3418,8 @@ Where they apply:
 - Position labels and position rank (`#3 WR`) on player rows and in drawers
 - Active position filter chips (`POS_CHIP_ACTIVE`, the tinted identity style);
   All / Picks chips keep the ink field
-- Positional strength bars on TeamCard (`POS_BAR` — **flat, not a gradient**;
-  the gradient bars were the last gradients in the app after the score-bugs
-  left)
+- The positional read on a League row — the position letter itself, lit or
+  muted (`POS_TEXT`). `POS_BAR` / `POS_BAR_DIM` are **gone with the bars**
 - Roster Analysis age-chart lanes (`POS_SVG` for SVG fill/stroke)
 - Position tags in the trade builder / What's Fair / lineup FA drawer (`POS_TAG`)
 
@@ -3298,17 +3428,25 @@ Where they apply:
 Class maps live in `src/utils/roundColors.js` (`ROUND_CLASSES`, `ROUND_TEXT`,
 `ROUND_LABELS`) — shared by PickBadge and TeamCard, never redefined locally.
 
-> **Outstanding, step 4:** these are hardcoded hexes tuned to the Blackout
-> palette (1st is silver-on-charcoal, chosen when Contending went silver) and
-> have not been repainted for warm paper/ink. They are the largest remaining
-> Blackout artefact in the token layer.
+**A round is ORDINAL, so the encoding is an INK-DENSITY RAMP** (re-cut in step
+4). Blackout gave the four rounds four *unrelated hues* — silver-on-charcoal,
+blue, violet, grey, eight hardcoded hexes tuned to a palette the app no longer
+has. Two things were wrong beyond the stale values: four unrelated hues encode
+four *kinds* of thing, so the one fact the badge exists to carry (a 1st is worth
+more than a 4th) had to be read off the label; and hardcoded hexes cannot invert
+with the theme.
 
-|Round|Dark bg  |Dark text|Light bg    |Light text  |
-|-----|---------|---------|------------|------------|
-|1st  |`#26262C`|`#C9CDD1`|`#E4E6EA`   |`#3E444C`   |
-|2nd  |`#10263C`|`#5FA8E8`|`blue-100`  |`blue-800`  |
-|3rd  |`#252047`|`#8F9BF2`|`violet-100`|`violet-800`|
-|4th  |`#1A1A1E`|`#8A9096`|`gray-100`  |`gray-700`  |
+|Round|Treatment                                    |
+|-----|---------------------------------------------|
+|1st  |solid ink field, ground reversed out         |
+|2nd  |2px ink rule, transparent                    |
+|3rd  |1px `--border-strong`, `--text-secondary`    |
+|4th  |1px `--border-default`, `--text-tertiary`    |
+
+Built entirely from existing tokens, so it inverts by construction and inherits
+the contrast the accessibility floor already measures — it needs no audit row of
+its own. It also spends **no hue at all**, which keeps the five position colours
+the only colour world on a roster screen (law 4).
 
 ### Status / verdict colors (consistent throughout)
 
@@ -3347,7 +3485,11 @@ everywhere teams appear (team cards, position rankings, the League team list,
 matchups, roster hero header). Sources, in order: custom team avatar URL
 (`user.metadata.avatar`), Sleeper CDN thumb
 (`https://sleepercdn.com/avatars/thumbs/{user.avatar}`), then a deterministic
-gradient initial circle (hash of team name). Static `<img>` tags only — this is
+**flat** initial circle (hash of team name), drawn from the app's own position
+hues plus `--alt`, `--brand` and ink, with the page ground reversed out. It was
+eight two-stop Tailwind gradients — the last gradient anywhere in the app, and
+Matchday has none; flat also fixed a `text-white` sitting over a mid-weight ramp.
+Static `<img>` tags only — this is
 not an API call, so it doesn't go through `fetchJSON`. Always render the
 fallback on image error; never let a broken avatar break a card.
 
@@ -3411,15 +3553,18 @@ ink field, and its active marker is ink in the bar's own colour.
 
 ### Logo — the Crown Crest
 
-The mark is a crown built from analytics: three ascending rounded bars (a rising
-chart) as the crown's prongs, a jewel dot floating above each tip, and a
-detached base band as the circlet.
+The mark is a crown built from analytics: three ascending bars (a rising chart)
+as the crown's prongs, a jewel above each tip, and a detached base band as the
+circlet. **Re-cut flat in step 4** — it wore a red-ramp gradient over a silver
+crown with rounded bars, and its wordmark was set in Anton, a family the app
+stopped loading in step 3 (so the in-app lockup had been falling back to a
+system font).
 
-> **Outstanding, step 4:** the logo and the generated app icons still wear
-> Blackout's red-ramp gradient over silver. Matchday has no gradients, and the
-> wordmark is still set in Anton, which the app no longer loads — so the in-app
-> lockup currently falls back. Re-cutting the mark flat, and regenerating the
-> icons, is queued with the screen roll-through.
+It is now **two flat colours and one reversal**: a solid crimson field with the
+crown reversed out in warm paper — the same move the hero, the band and the tab
+bar make, in the brand spot rather than in ink — and the wordmark in the `Mark`
+idiom, "DYNASTY" in plain ink with "EDGE" reversed out of a crimson block. Every
+rect is square; the jewels were circles and the bars carried `rx="5"`.
 
 - **In-app lockup:** `src/components/shared/DynastyEdgeLogo.jsx` — crown +
   "DYNASTY**EDGE**" wordmark.
@@ -3553,7 +3698,7 @@ dynastyedge/
 │   ├── snapshot-trade-values.mjs ← permanent trade-time value archiver (runs in Actions)
 │   ├── snapshot-rookie-intel.mjs ← daily nflverse → Sleeper rookie intel feed (runs in Actions)
 │   └── dev/
-│       ├── screenshot-app.mjs  ← headless-Chromium screenshotter for the running app (390px UI verification; --route, --player, --drawer, --seed-session, --click, --text — see the dynastyedge-visual-capture skill). `--text` dumps the RENDERED text: for "does this value render in full?" it beats pixels, because a tall view must be captured at a big --height and downscales to illegibility on read-back — and an ellipsis is exactly what vanishes when it does.
+│       ├── screenshot-app.mjs  ← headless-Chromium screenshotter for the running app (390px UI verification; --route, --player, --drawer, --seed-session, --click, --text, --overflow — see the dynastyedge-visual-capture skill). `--text` dumps the RENDERED text, which beats pixels for "does this value render?" because a tall view downscales to illegibility. `--overflow` is THE truncation instrument: it reports every element actually being clipped (scrollWidth > clientWidth) — `--text` cannot see a CSS ellipsis, because the ellipsis is painted and never in the DOM.
 │       ├── replay-live.mjs     ← drives the running app against a SYNTHETIC draft / regular season, so the two once-a-year surfaces can be rehearsed on demand
 │       ├── faab-corpus.mjs     ← analysis-only: pulls the league's full FAAB bid corpus (see docs/analysis/faab-bid-corpus-2026-08.md); nothing imports it
 │       ├── rookie-signal-backtest.mjs ← analysis-only: grades the SHIPPED rookie model against 2021–2025 (imports src/utils/rookieResearch.js so it cannot drift)
@@ -3576,7 +3721,11 @@ dynastyedge/
 │   │   │   ├── Card.jsx             ← THE surface container (+ optional `tone` kicker rule; the left accent RAIL is banned)
 │   │   │   ├── Mark.jsx             ← THE editorial highlight — a word reversed out of a block; what REPLACED Card's accent rail. Never a position hue.
 │   │   │   ├── PositionBand.jsx     ← THE full-bleed position field + group total — Matchday's signature
-│   │   │   ├── Magnitude.jsx        ← THE value figure: type SIZE is the quantity (finding B2). Reference PINNED to FantasyCalc's 0–10000 contract, never derived per list.
+│   │   │   ├── Magnitude.jsx        ← THE value figure: type SIZE is the quantity (finding B2). Reference PINNED to FantasyCalc's 0–10000 contract (and MAGNITUDE_TEAM_REFERENCE for roster sums), never derived per list.
+│   │   │   ├── RuledList.jsx        ← THE DENSE register (finding B7): rows on the page's ground, hairline separators, NO box
+│   │   │   ├── Row.jsx              ← THE member of a RuledList — always carries .focus-ring. Extracted after /design-review caught eleven hand-rolled copies that had drifted apart on it.
+│   │   │   ├── Lede.jsx             ← THE OPEN register: eyebrow · marked headline · prose · ink CTA. What replaced The Edge's icon+title+one-liner briefing cards.
+│   │   │   ├── NavRow.jsx           ← THE DOOR — a row that takes you somewhere; no icon, no chevron
 │   │   │   ├── Sheet.jsx            ← THE bottom sheet + SheetHeader (owns scroll-lock/drag/safe-area)
 │   │   │   ├── Modal.jsx            ← THE centered dialog (confirms / small forms)
 │   │   │   ├── Chip.jsx             ← THE filter chip (toggle pill, position-tinted active)
@@ -4205,16 +4354,27 @@ Two things the roll must not break, both pinned by tests:
    all read.
 1. **Design System library:** All new UI comes from `src/components/ui`
    (`Button`, `IconButton`, `Card`, `Mark`, `PositionBand`, `Magnitude`,
-   `Sheet`/`SheetHeader`, `Modal`, `Chip`, `Badge`, `Input`/`SearchInput`,
-   `Select`, `cn`, plus the re-exported shared primitives) — import from the
+   `RuledList`, `Row`, `Lede`, `NavRow`, `Sheet`/`SheetHeader`, `Modal`, `Chip`,
+   `Badge`, `Input`/`SearchInput`, `Select`, `cn`, plus the re-exported shared
+   primitives) — import from the
    `'../ui'` barrel. Never reintroduce a hand-rolled button, card, bottom
-   sheet, filter chip, badge, band, value figure, or input inline; extend a
-   primitive instead. Three Matchday laws bind here specifically: **colour is a
+   sheet, filter chip, badge, band, value figure, row list, or input inline;
+   extend a primitive instead. Four Matchday laws bind here specifically:
+   **colour is a
    field, never a left-edge rail** (that is what `Card`'s deleted `accent` prop
-   was); **magnitude is type size, never a progress bar** (`Magnitude`); and a
-   `Mark` **never takes a position hue**. Run `/design-review` on the CONSUMERS
+   was); **magnitude is type size, never a progress bar** (`Magnitude`); a
+   `Mark` **never takes a position hue**; and **a block is a ruled row, a
+   `Lede`, or a `NavRow` before it is a `Card`** (law 5 — a stack of identical
+   bordered rectangles is the failure, and an enumeration built from `Lede`s is
+   the same failure inverted). Run `/design-review` on the CONSUMERS
    before committing component work — not on `src/components/ui` while the
    primitives themselves are being edited.
+   **Run its judgement pass, not only its nine greps.** On the step-4 diff the
+   detectors passed 955 added lines clean while eleven hand-rolled copies of one
+   row had drifted apart on `.focus-ring`. And **audit for the SHAPE, not the
+   API**: `Card`'s banned accent rail was deleted in step 3, yet a raw
+   `border-l-[3px]` survived every step-4 sweep because nothing looking for the
+   prop could find the pattern.
 1. **Lint gate:** `npm run lint` (ESLint 9 flat config: recommended +
    react-hooks rules at error severity, scoped to `src/` + `scripts/`) must
    exit 0 before any commit, alongside `npm test` and `npm run build`. CI

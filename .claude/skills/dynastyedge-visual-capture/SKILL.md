@@ -48,7 +48,25 @@ sheet) · `--url BASE` · `--wait MS` · `--stub SUBSTRING=FILE` (serve a local
 file for any external URL containing SUBSTRING; repeatable) ·
 `--seed-session KEY=VALUE` (seed sessionStorage before boot; repeatable) ·
 `--click TEXT` (click the first button/link whose accessible name matches,
-then shoot; **repeatable**, applied in order).
+then shoot; **repeatable**, applied in order) ·
+`--overflow` (report every element currently being CLIPPED by
+`text-overflow: ellipsis`).
+
+**`--overflow` is THE truncation instrument.** Truncation of a load-bearing
+value has recurred five times in this repo and CLAUDE.md carries a standing rule
+against it, but the rule had no detector until step 4. Neither obvious approach
+works: `--text` reads `innerText`, which returns the element's FULL string
+because a CSS ellipsis is *painted* and never in the DOM; and a tall capture
+downscales past it (gotcha 4). The only reliable test is geometric —
+`scrollWidth > clientWidth` — which is what this does, against live data:
+
+```bash
+# sweep every route; print only the ones that clip
+for r in /edge /my-team /trade/whats-fair /league /league/movers; do
+  node scripts/dev/screenshot-app.mjs --route "$r" --height 3000 --overflow \
+    --out /tmp/o.png 2>/dev/null | sed -n '/clipped/,/end/p'
+done
+```
 
 **`--seed-session` and `--click` reach UI state the URL can't address.** Some
 state lives only behind a control the user taps or in a storage key, so a

@@ -4,12 +4,13 @@ import { usePlayerDB } from '../../hooks/usePlayerDB'
 import { useLineupHistory } from '../../hooks/useLineupHistory'
 import { computeOptimalPoints } from '../../utils/lineupHistory'
 import SectionHeader from '../shared/SectionHeader'
+import { RuledList } from '../ui'
 
 function Page({ children }) {
   return (
     <div className="px-4 pb-6">
       <div className="pt-4 pb-3 border-b border-border-default dark:border-border-default mb-1">
-        <h1 className="font-display font-extrabold text-2xl uppercase tracking-[-0.025em] font-extrabold tracking-[-0.025em] text-text-primary dark:text-text-primary leading-tight">
+        <h1 className="font-display font-extrabold text-2xl uppercase tracking-[-0.025em] text-text-primary dark:text-text-primary leading-tight">
           Season Review
         </h1>
         <p className="font-body text-xs text-text-secondary dark:text-text-secondary mt-0.5">
@@ -106,7 +107,7 @@ export default function LineupEfficiency() {
           </p>
         </div>
 
-        <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+        <RuledList>
           {rows.map(({ week, actual, optimal, delta }) => {
             const deltaColor = delta < 1 ? 'text-success' : delta < 10 ? 'text-warning' : 'text-danger'
             return (
@@ -132,7 +133,7 @@ export default function LineupEfficiency() {
               </div>
             )
           })}
-        </div>
+        </RuledList>
       </section>
     </Page>
   )

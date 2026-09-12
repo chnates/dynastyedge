@@ -1,4 +1,3 @@
-import { ExternalLink, User } from 'lucide-react'
 import { relativeTime } from '../../hooks/usePlayerIntel'
 import { POS_TEXT } from '../../utils/positionColors'
 import { Sheet, SheetHeader, Button } from '../ui'
@@ -56,14 +55,14 @@ export default function NewsArticleSheet({ article, onClose, onViewPlayer = null
 
         {article.link && (
           <Button as="a" href={article.link} target="_blank" rel="noopener noreferrer"
-            size="lg" fullWidth icon={<ExternalLink size={15} strokeWidth={2} />} iconRight>
+            size="lg" fullWidth>
             Read full article{article.source ? ` at ${article.source}` : ''}
           </Button>
         )}
 
         {onViewPlayer && player && (
           <Button variant="secondary" size="lg" fullWidth onClick={() => onViewPlayer(player)}
-            icon={<User size={15} strokeWidth={2} />}>
+            >
             View {player.name}'s profile
           </Button>
         )}

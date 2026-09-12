@@ -118,6 +118,7 @@ const sessionSeeds = process.argv.reduce((acc, a, i) => {
 // to click at all:
 //   --click "Swap Kansas City Chiefs" --click "Waiver options"
 const dumpText = process.argv.includes('--text')
+const dumpOverflow = process.argv.includes('--overflow')
 
 const clicks = process.argv.reduce((acc, a, i) => {
   if (a === '--click' && process.argv[i + 1]) acc.push(process.argv[i + 1])
@@ -259,6 +260,43 @@ if (dumpText) {
   const target = shotTarget === page ? page.locator('main') : shotTarget
   console.log('--- text ---')
   console.log(await target.innerText())
+  console.log('--- end ---')
+}
+
+// --overflow reports every element that is ACTUALLY being clipped by
+// `text-overflow: ellipsis` right now, against live data.
+//
+// Why this and not --text: `innerText` returns the element's full string, so a
+// CSS ellipsis is invisible to it — the ellipsis is painted, never in the DOM.
+// And a tall capture downscales to illegibility, so pixels miss it too. The
+// only reliable test is the geometric one, `scrollWidth > clientWidth`.
+//
+// This exists because truncation of a load-bearing value has now recurred FOUR
+// times here (Trade Targets' Est. cost, LineupRow's player name, PlayerCard's
+// name, Movers' owner + reason line), and CLAUDE.md carries a standing rule
+// against it. A rule with no instrument behind it is a rule that gets broken
+// again — so this is the instrument.
+if (dumpOverflow) {
+  /* eslint-disable no-undef */ // runs in the page, not in Node
+  const clipped = await page.evaluate(() => {
+    const out = []
+    for (const el of document.querySelectorAll('main *')) {
+      const st = getComputedStyle(el)
+      if (st.textOverflow !== 'ellipsis' && !el.className?.toString?.().includes('line-clamp')) continue
+      if (el.scrollWidth > el.clientWidth + 1) {
+        out.push({
+          text: (el.textContent || '').trim().slice(0, 90),
+          over: el.scrollWidth - el.clientWidth,
+          cls: (el.className?.toString?.() || '').slice(0, 70),
+        })
+      }
+    }
+    return out
+  })
+  /* eslint-enable no-undef */
+  console.log('--- clipped ---')
+  if (!clipped.length) console.log('(none)')
+  for (const c of clipped) console.log(`+${c.over}px  "${c.text}"\n        ${c.cls}`)
   console.log('--- end ---')
 }
 

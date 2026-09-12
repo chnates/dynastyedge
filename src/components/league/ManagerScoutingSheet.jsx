@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { X } from 'lucide-react'
 import { useTradeTimeValues } from '../../hooks/useTradeTimeValues'
 import { STEAL_DELTA } from '../../utils/managerAnalysis'
 import { getTeamName } from '../../hooks/useLeague'
@@ -213,7 +212,6 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
               </div>
               {tier && <WinWindowBadge tier={tier} />}
               <IconButton label="Close" onClick={onClose}>
-                <X size={18} strokeWidth={2} />
               </IconButton>
             </div>
 
@@ -242,7 +240,7 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
             {profile.tendencies.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-3">
                 {profile.tendencies.map(t => (
-                  <span key={t} className="font-body text-[11px] font-semibold rounded-full px-2.5 py-1 bg-accent/10 text-accent">
+                  <span key={t} className="font-body text-[11px] font-semibold px-2.5 py-1 bg-accent/10 text-accent">
                     {t}
                   </span>
                 ))}

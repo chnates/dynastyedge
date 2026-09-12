@@ -1,17 +1,15 @@
 import { useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ChevronRight, ScanSearch, TrendingUp } from 'lucide-react'
 import { getTeamName } from '../../hooks/useLeague'
 import { useLeagueContext } from '../../context/LeagueContext'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
-import SectionHeader from '../shared/SectionHeader'
 import PlayerCard from './PlayerCard'
 import PickBadge from './PickBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import RosterAnalysisSheet from './RosterAnalysisSheet'
 import RosterActionItems from './RosterActionItems'
-import { Card, PositionBand } from '../ui'
+import { PositionBand, RuledList, NavRow } from '../ui'
 import TeamAvatar from '../shared/TeamAvatar'
 
 const POSITION_ORDER = ['QB', 'RB', 'WR', 'TE', 'DEF']
@@ -94,7 +92,7 @@ export default function RosterView() {
         <div className="ink-field px-4 pt-3 pb-3">
           <div className="flex items-center gap-2.5">
             <TeamAvatar owner={displayRoster.owner} size={36} />
-            <h1 className="font-display font-extrabold text-2xl uppercase tracking-[-0.025em] font-extrabold tracking-[-0.025em] text-bg-primary leading-tight min-w-0 truncate">
+            <h1 className="font-display font-extrabold text-2xl uppercase tracking-[-0.025em] text-bg-primary leading-tight min-w-0 text-balance">
               {teamName}
             </h1>
           </div>
@@ -107,7 +105,7 @@ export default function RosterView() {
             </span>
           </div>
           <div className="flex items-center gap-1 mt-1.5">
-            <span className="block w-1.5 h-1.5 rounded-full bg-bg-primary/80 shrink-0" />
+            <span className="block w-1.5 h-1.5 bg-bg-primary/80 shrink-0" />
             <span className="font-body text-[10px] text-bg-primary/60">
               = starting lineup · — = no market value yet
             </span>
@@ -115,65 +113,39 @@ export default function RosterView() {
         </div>
       </div>
 
-      {/* ── Dynasty trajectory ──
-          Rendered for BOTH seats. It used to be gated on `selectedRosterId`, so
-          the card existed only when scouting somebody else and my OWN
-          trajectory — the app's one forward-looking view — had zero
-          content-level inbound links anywhere (findings.md A1/A7: "is this
-          roster aging out?" is the obvious next question from the roster you're
-          looking at, and nothing on the screen answered it). */}
-      <Card
-        tone="bg-accent"
-        padding="px-3 py-3"
-        onClick={() => navigate(selectedRosterId ? `/league/trajectory/${selectedRosterId}` : '/my-team/trajectory')}
-        className="mt-4 mb-1"
-      >
-        <div className="flex items-center gap-2.5">
-          <span className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-accent/15">
-            <TrendingUp size={15} strokeWidth={2} className="text-accent" />
-          </span>
-          <div className="flex-1 text-left">
-            <p className="font-body text-sm font-semibold text-text-primary leading-tight">
-              Dynasty Trajectory
-            </p>
-            <p className="font-body text-[10px] text-text-tertiary mt-0.5">
-              {selectedRosterId
-                ? "Where this team's value is headed · when their window closes"
-                : 'Where your value is headed · when your window peaks'}
-            </p>
-          </div>
-          <ChevronRight size={16} strokeWidth={1.75} className="text-text-tertiary flex-shrink-0" />
-        </div>
-      </Card>
+      {/* ── The two doors off this screen ──
+          Both were `Card`s carrying a tinted lucide medallion, a title, a
+          one-line description and a right chevron — the identical
+          icon+title+one-liner pattern the slop research names, twice over
+          (slop-checklist.md -> Components). They are now <NavRow>s: the same
+          shape the Index uses, in display type, with no icon at all.
+
+          Trajectory renders for BOTH seats. It used to be gated on
+          `selectedRosterId`, so my OWN trajectory — the app's one
+          forward-looking view — had zero content-level inbound links anywhere
+          (findings.md A1/A7). */}
+      <RuledList className="mt-5">
+        <NavRow
+          size="sm"
+          to={selectedRosterId ? `/league/trajectory/${selectedRosterId}` : '/my-team/trajectory'}
+          title="Dynasty Trajectory"
+          detail={selectedRosterId
+            ? "Where this team's value is headed · when their window closes"
+            : 'Where your value is headed · when your window peaks'}
+        />
+        {!selectedRosterId && (
+          <NavRow
+            size="sm"
+            onClick={() => setAnalysisOpen(true)}
+            title="Roster Analysis"
+            detail="Age curve · win window · position breakdown"
+          />
+        )}
+      </RuledList>
 
       {/* ── Action Items banner (own roster only) ── */}
       {!selectedRosterId && (
         <RosterActionItems myRoster={league.myRoster} nflState={nflState} allRosters={league.allRosters} pickYears={league.pickYears} />
-      )}
-
-      {/* ── Roster Analysis (own roster only) ── */}
-      {!selectedRosterId && (
-        <Card
-          tone="bg-accent"
-          padding="px-3 py-3"
-          onClick={() => setAnalysisOpen(true)}
-          className="mt-4 mb-1"
-        >
-          <div className="flex items-center gap-2.5">
-            <span className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-accent/15">
-              <ScanSearch size={15} strokeWidth={2} className="text-accent" />
-            </span>
-            <div className="flex-1 text-left">
-              <p className="font-body text-sm font-semibold text-text-primary leading-tight">
-                Roster Analysis
-              </p>
-              <p className="font-body text-[10px] text-text-tertiary mt-0.5">
-                Age curve · win window · position breakdown
-              </p>
-            </div>
-            <ChevronRight size={16} strokeWidth={1.75} className="text-text-tertiary flex-shrink-0" />
-          </div>
-        </Card>
       )}
 
       {/* ── Position groups ── */}
@@ -191,11 +163,15 @@ export default function RosterView() {
               total={group.reduce((a, p) => a + (p.value > 0 ? p.value : 0), 0)}
               className="mt-5"
             />
-            <div className="bg-bg-card dark:bg-bg-card border-x border-b border-border-default dark:border-border-default px-3">
+            {/* The dense register (finding B7): rows on the page's own ground,
+                separated by a hairline. The box that used to wrap them made
+                every group another 1px-bordered rectangle — the band above is
+                what carries this group's identity now. */}
+            <RuledList>
               {group.map(player => (
                 <PlayerCard key={player.sleeperId} player={player} onClick={() => setSelectedPlayer(player)} />
               ))}
-            </div>
+            </RuledList>
           </section>
         )
       })}
@@ -203,34 +179,51 @@ export default function RosterView() {
       {/* ── Taxi Squad ── */}
       {taxi.length > 0 && (
         <section>
-          <SectionHeader label="Taxi Squad" count={taxi.length} />
-          <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+          {/* Taxi and IR mix positions, so they take the NEUTRAL ink band —
+              picking a hue to make a mixed list colourful would lie about
+              what is in it (PositionBand's contract). */}
+          <PositionBand
+            label="Taxi Squad"
+            count={taxi.length}
+            total={taxi.reduce((a, p) => a + (p.value > 0 ? p.value : 0), 0)}
+            className="mt-5"
+          />
+          <RuledList>
             {taxi
               .sort((a, b) => b.value - a.value)
               .map(player => (
                 <PlayerCard key={player.sleeperId} player={player} onClick={() => setSelectedPlayer(player)} />
               ))}
-          </div>
+          </RuledList>
         </section>
       )}
 
       {/* ── IR ── */}
       {ir.length > 0 && (
         <section>
-          <SectionHeader label="IR" count={ir.length} />
-          <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+          <PositionBand
+            label="Injured Reserve"
+            count={ir.length}
+            total={ir.reduce((a, p) => a + (p.value > 0 ? p.value : 0), 0)}
+            className="mt-5"
+          />
+          <RuledList>
             {ir
               .sort((a, b) => b.value - a.value)
               .map(player => (
                 <PlayerCard key={player.sleeperId} player={player} onClick={() => setSelectedPlayer(player)} />
               ))}
-          </div>
+          </RuledList>
         </section>
       )}
 
       {/* ── Pick Capital ── */}
       <section>
-        <SectionHeader label="Pick Capital" />
+        <PositionBand
+          label="Pick Capital"
+          count={Object.values(picksByYear).reduce((a, v) => a + v.length, 0) || null}
+          className="mt-5 mb-3"
+        />
         {Object.keys(picksByYear).length === 0 ? (
           <p className="text-text-tertiary dark:text-text-tertiary font-body text-sm py-2">
             No future picks

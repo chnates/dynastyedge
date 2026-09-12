@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Newspaper } from 'lucide-react'
 import { useNewsFeed } from '../../hooks/useNewsFeed'
 import { useWatchlist } from '../../hooks/useWatchlist'
 import { relativeTime } from '../../hooks/usePlayerIntel'
 import { POS_TEXT } from '../../utils/positionColors'
-import { Badge, SearchInput, cn } from '../ui'
+import { Badge, Chip, PositionBand, Row, RuledList, SearchInput } from '../ui'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import SectionHeader from '../shared/SectionHeader'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
@@ -36,10 +35,7 @@ function bucketOf(iso) {
 
 function NewsRow({ item, onOpen }) {
   return (
-    <button
-      onClick={onOpen}
-      className="w-full py-2.5 border-b border-border-default dark:border-border-default last:border-0 text-left active:opacity-60 transition-opacity"
-    >
+    <Row onClick={onOpen} padding="sm">
       <div className="flex items-center gap-1.5">
         {item.player ? (
           <>
@@ -77,7 +73,7 @@ function NewsRow({ item, onOpen }) {
           {item.story}
         </p>
       )}
-    </button>
+    </Row>
   )
 }
 
@@ -135,24 +131,19 @@ export default function NewsView() {
 
       <div className="flex gap-2 mt-3">
         {FILTERS.map(f => (
-          <button
+          <Chip
             key={f.id}
+            active={filter === f.id}
             onClick={() => setFilter(f.id)}
-            className={cn(
-              'flex-1 py-2 rounded-none font-mono text-[11px] font-semibold uppercase tracking-wider transition-colors',
-              filter === f.id
-                ? 'bg-accent text-bg-primary'
-                : 'bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default text-text-secondary dark:text-text-secondary',
-            )}
+            className="flex-1 justify-center py-2"
           >
             {f.label}
-          </button>
+          </Chip>
         ))}
       </div>
 
       {groups.length === 0 ? (
         <div className="flex flex-col items-center justify-center text-center py-16 px-6">
-          <Newspaper size={32} strokeWidth={1.5} className="text-text-tertiary mb-3" />
           <p className="font-body text-sm text-text-secondary dark:text-text-secondary">
             {items.length === 0
               ? 'No news right now — check back later.'
@@ -162,8 +153,8 @@ export default function NewsView() {
       ) : (
         groups.map(group => (
           <section key={group.label}>
-            <SectionHeader label={group.label} count={group.items.length} />
-            <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+            <PositionBand label={group.label} count={group.items.length} className="mt-5" />
+            <RuledList>
               {group.items.map((n, i) => (
                 <NewsRow
                   key={`${group.label}-${i}-${n.headline}`}
@@ -171,7 +162,7 @@ export default function NewsView() {
                   onOpen={() => setOpenArticle(n)}
                 />
               ))}
-            </div>
+            </RuledList>
           </section>
         ))
       )}
