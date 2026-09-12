@@ -42,8 +42,8 @@ function ActionCard({ item, onDismiss, onAction }) {
       aside={
         <button
           onClick={() => onDismiss(item.key, item.conditionSnapshot)}
-          className="tap-target focus-ring font-mono text-[10px] uppercase tracking-[0.14em]
-                     text-text-tertiary hover:text-text-secondary transition-colors"
+          className="tap-target focus-ring press font-mono text-[10px] uppercase tracking-[0.14em]
+                     text-text-tertiary hover:text-text-secondary"
           aria-label="Dismiss"
         >
           Dismiss

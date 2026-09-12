@@ -338,7 +338,7 @@ export default function TrajectoryView() {
             <button
               key={player.sleeperId}
               onClick={() => setSelectedPlayer(player)}
-              className={`w-full flex items-center gap-2.5 py-2.5 text-left active:opacity-60 transition-opacity ${
+              className={`w-full flex items-center gap-2.5 py-2.5 text-left press ${
                 i < players.length - 1 ? 'border-b border-border-default' : ''
               }`}
             >
@@ -374,7 +374,7 @@ export default function TrajectoryView() {
 
       {/* How this works */}
       <div className="rounded-none bg-bg-card border border-border-default mt-4">
-        <button onClick={() => setHowToOpen(o => !o)} className="w-full flex items-center justify-between px-3 py-3">
+        <button onClick={() => setHowToOpen(o => !o)} className="focus-ring press w-full flex items-center justify-between px-3 py-3">
           <span className="font-body text-xs font-semibold uppercase tracking-[0.08em] text-text-secondary">
             How this works
           </span>

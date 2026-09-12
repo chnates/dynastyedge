@@ -366,7 +366,7 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
             <div className="rounded-none bg-bg-card border border-border-default">
               <button
                 onClick={() => setHowToOpen(o => !o)}
-                className="w-full flex items-center justify-between px-3 py-3"
+                className="focus-ring press w-full flex items-center justify-between px-3 py-3"
               >
                 <span className="font-body text-xs font-semibold uppercase tracking-[0.08em] text-text-secondary">
                   How to read this

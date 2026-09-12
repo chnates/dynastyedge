@@ -68,7 +68,7 @@ function PlayerNewsCard({ intel, onTap }) {
             <button
               onClick={onTap}
               aria-label={`View ${intel.playerName} profile`}
-              className="text-text-primary dark:text-text-primary underline decoration-dotted decoration-text-tertiary/60 underline-offset-2 active:opacity-60 transition-opacity"
+              className="text-text-primary dark:text-text-primary underline decoration-dotted decoration-text-tertiary/60 underline-offset-2 press"
             >
               {intel.playerName}
             </button>

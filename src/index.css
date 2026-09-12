@@ -400,6 +400,58 @@ body {
   outline-color: rgb(var(--bg-primary));
 }
 
+/* ── The press: one definition of "this control answers a finger" ── */
+/* Third sibling of `.focus-ring` and `.tap-target`, and it exists for the same
+   reason both of those do: a control-level contract belongs in ONE place, not
+   at forty call sites.
+
+   The audit that produced it: 41 `active:` opacity states across 20 files, at
+   THREE different values for one gesture — `Button` dipped to 70%, `Card` to
+   80%, everything else to 60% — plus five consumers restating `Button`'s own
+   `active:opacity-70` on a `Button`, and roughly a dozen real pressables (the
+   app header's Menu and Find, the Playoff Odds and Roster Analysis explainer
+   toggles, the action-item Dismiss, the roster Back link, the Index rows, four
+   drawer rows, the tab bar) with no press state at all. That is precisely the
+   shape of the `.focus-ring` drift `/design-review`'s nine greps sailed past in
+   step 4 — eleven hand-rolled rows that had quietly stopped agreeing.
+
+   90ms, because a press must read as instantaneous: the finger is already down,
+   so this is confirmation, not animation. On `--ez` like everything else.
+
+   THE DIP IS `filter: opacity()`, NOT `opacity`, AND THAT IS THE WHOLE REASON
+   ONE RULE CAN COVER THE APP. A flat `opacity: 0.6` is ABSOLUTE, so it is wrong
+   on any control whose RESTING opacity already means something — and the app
+   has two: a tab-bar item sits at 55% when inactive, and a drafted prospect row
+   sits at 50%. Pressing either would have moved it to 60%, i.e. BRIGHTER, which
+   reads as the opposite of a press. `filter` composes instead: 1 x 0.6 = 0.6 on
+   an ordinary control, 0.55 x 0.6 = 0.33 on the faded tab. Both dip by the same
+   proportion, which is what "pressed" should mean, so neither needs an
+   exception.
+
+   IT OWNS THE WHOLE TRANSITION, deliberately. A Tailwind `transition-colors` on
+   the same element would sit in the utilities layer and replace this rule's
+   `transition` shorthand outright, silently dropping the dip from it — so
+   `.press` declares the colour properties too and an element carrying it needs
+   no `transition-*` utility. Anything genuinely different keeps its own state
+   and does not take this class: the trade builder's remove controls flash
+   `danger` rather than dipping, the login team rows tint their background, a
+   drag handle swaps its cursor.
+
+   `:not(:disabled)` so a disabled control does not answer at all. Without it a
+   disabled Button would still dip under the finger, which reads as "it
+   worked". */
+.press {
+  transition:
+    opacity 90ms var(--ez),
+    filter 90ms var(--ez),
+    color 150ms var(--ez),
+    background-color 150ms var(--ez),
+    border-color 150ms var(--ez);
+}
+.press:not(:disabled):active {
+  filter: opacity(0.6);
+}
+
 /* ── Touch targets: hit area ≥ 44px, with no layout cost ──────── */
 /* Apple's 44pt minimum applies to the TAP AREA, not the ink. Rather than
    inflating every control (which would blow up the density of a 26-row

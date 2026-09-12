@@ -245,8 +245,8 @@ export default function SideDrawer({
           {updateAvailable && (
             <button
               onClick={onApplyUpdate}
-              className="focus-ring flex items-center gap-3 w-full px-3 py-2.5 text-brand-bright
-                         hover:bg-brand/10 transition-colors"
+              className="focus-ring press flex items-center gap-3 w-full px-3 py-2.5 text-brand-bright
+                         hover:bg-brand/10"
             >
               <span className="font-body font-medium text-[14px]">Update available — Reload</span>
             </button>
@@ -255,9 +255,9 @@ export default function SideDrawer({
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="focus-ring flex items-center gap-3 w-full px-3 py-2.5 text-text-secondary
+            className="focus-ring press flex items-center gap-3 w-full px-3 py-2.5 text-text-secondary
                        hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5
-                       transition-colors disabled:opacity-60"
+                       disabled:opacity-60"
           >
             {/* The spinning glyph is gone; the label already carried the state
                 in words, which is the whole argument for dropping the icon. */}
@@ -337,8 +337,8 @@ export default function SideDrawer({
 
           <button
             onClick={onToggleTheme}
-            className="focus-ring flex items-center gap-3 w-full px-3 py-3 text-text-secondary
-                       hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            className="focus-ring press flex items-center gap-3 w-full px-3 py-3 text-text-secondary
+                       hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5"
           >
             <span className="font-body font-medium text-[14px]">
               {isDark ? 'Light mode' : 'Dark mode'}
@@ -347,8 +347,8 @@ export default function SideDrawer({
 
           <button
             onClick={() => { onClose(); clearIdentity() }}
-            className="focus-ring flex items-center gap-3 w-full px-3 py-3 text-text-secondary
-                       hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            className="focus-ring press flex items-center gap-3 w-full px-3 py-3 text-text-secondary
+                       hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5"
           >
             <span className="font-body font-medium text-[14px]">
               {myTeamName ? 'Switch team' : 'Sign out'}

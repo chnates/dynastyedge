@@ -85,7 +85,7 @@ function StatusBar({ status, fetchedAt, refreshing, syncError, onRefresh }) {
         <button
           onClick={onRefresh}
           disabled={refreshing}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-bg-card border border-border-default text-text-secondary active:opacity-60 transition-opacity flex-shrink-0"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-bg-card border border-border-default text-text-secondary press flex-shrink-0"
         >
           <span className="font-body text-[11px] font-semibold uppercase tracking-wide">Refresh</span>
         </button>
@@ -182,7 +182,7 @@ function BestAvailableCard({ rows, onSelect }) {
         <button
           key={player.sleeperId}
           onClick={() => onSelect(player)}
-          className="w-full flex items-center gap-2 py-1.5 text-left active:opacity-60 transition-opacity"
+          className="w-full flex items-center gap-2 py-1.5 text-left press"
         >
           <span className="font-body text-[10px] text-text-tertiary w-24 flex-shrink-0 truncate">{tag}</span>
           <span className="font-body text-sm font-medium text-text-primary flex-1 truncate">{player.name}</span>
@@ -281,7 +281,7 @@ function ProspectList({
               <button
                 key={player.sleeperId}
                 onClick={() => onSelect(player)}
-                className={`w-full text-left py-2.5 flex items-center gap-2 active:opacity-60 transition-opacity ${
+                className={`w-full text-left py-2.5 flex items-center gap-2 press ${
                   i < list.length - 1 ? 'border-b border-border-default' : ''
                 }`}
               >
@@ -349,7 +349,7 @@ function PickRow({ player, teamName, isMine, label, delta, isLast, onSelect }) {
     isMine ? 'bg-brand/5 -mx-3 px-3' : ''
   }`
   return onSelect ? (
-    <button onClick={onSelect} className={`${cls} active:opacity-60 transition-opacity`}>{Inner}</button>
+    <button onClick={onSelect} className={`${cls} press`}>{Inner}</button>
   ) : (
     <div className={cls}>{Inner}</div>
   )
@@ -884,7 +884,7 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
             <button
               onClick={onCheckAgain}
               disabled={checking}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-bg-secondary border border-border-default text-text-secondary active:opacity-60 transition-opacity flex-shrink-0"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-bg-secondary border border-border-default text-text-secondary press flex-shrink-0"
             >
               <span className="font-body text-[10px] font-semibold uppercase tracking-wide">Check</span>
             </button>
@@ -916,7 +916,7 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
                 <button
                   key={player.sleeperId}
                   onClick={() => setLogModal(player)}
-                  className={`w-full text-left py-2.5 flex items-center gap-2 active:opacity-60 transition-opacity ${
+                  className={`w-full text-left py-2.5 flex items-center gap-2 press ${
                     i < undrafted.length - 1 ? 'border-b border-border-default' : ''
                   }`}
                 >
@@ -968,7 +968,7 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
                     <button
                       key={pick.sleeperId}
                       onClick={() => setEditModal({ pick, player })}
-                      className={`w-full text-left py-2.5 flex items-center gap-2 active:opacity-60 transition-opacity ${
+                      className={`w-full text-left py-2.5 flex items-center gap-2 press ${
                         i < draftedSorted.length - 1 ? 'border-b border-border-default' : ''
                       }`}
                     >

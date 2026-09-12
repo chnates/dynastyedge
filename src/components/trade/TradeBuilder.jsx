@@ -52,7 +52,7 @@ function AssetChip({ asset, onRemove, onTap }) {
         <button
           onClick={onTap}
           aria-label={`View ${asset.name} profile`}
-          className="flex-1 flex items-center gap-1 min-w-0 text-left active:opacity-60 transition-opacity"
+          className="flex-1 flex items-center gap-1 min-w-0 text-left press"
         >
           {inner}
         </button>
@@ -100,7 +100,7 @@ function TradeColumn({ label, assets, total, onRemove, onAdd, addLabel, onTapPla
       </div>
       <button
         onClick={onAdd}
-        className="w-full mt-1.5 flex items-center justify-center gap-1 py-2 border border-dashed border-border-default dark:border-border-default text-text-secondary dark:text-text-secondary font-body text-[11px] font-semibold uppercase tracking-wide active:opacity-60 transition-opacity"
+        className="w-full mt-1.5 flex items-center justify-center gap-1 py-2 border border-dashed border-border-default dark:border-border-default text-text-secondary dark:text-text-secondary font-body text-[11px] font-semibold uppercase tracking-wide press"
       >
         {addLabel}
       </button>
@@ -116,7 +116,7 @@ function PlayerRow({ player, isSelected, onTap, onInfo, onWhatsFair }) {
     >
       <button
         onClick={onTap}
-        className="flex-1 flex items-center gap-1.5 py-2.5 transition-opacity active:opacity-60 text-left min-w-0"
+        className="flex-1 flex items-center gap-1.5 py-2.5 press text-left min-w-0"
       >
         {/* Selection indicator */}
         <span className="w-3.5 shrink-0 flex justify-center text-[10px]">
@@ -169,7 +169,7 @@ function PickRow({ pick, isSelected, onTap }) {
   return (
     <button
       onClick={onTap}
-      className={`w-full flex items-center gap-3 py-2.5 border-b border-border-default dark:border-border-default last:border-0 transition-opacity active:opacity-60 text-left
+      className={`w-full flex items-center gap-3 py-2.5 border-b border-border-default dark:border-border-default last:border-0 press text-left
         ${isSelected ? 'bg-accent/5' : ''}`}
     >
       <span className="w-3.5 shrink-0 flex justify-center text-[10px]">

@@ -284,7 +284,7 @@ function SortablePlayerRow({
 
       <button
         onClick={onSelect}
-        className={`flex-1 text-left py-2.5 flex items-center gap-2 active:opacity-60 transition-opacity min-w-0 ${drafted ? 'opacity-50' : ''}`}
+        className={`flex-1 text-left py-2.5 flex items-center gap-2 press min-w-0 ${drafted ? 'opacity-50' : ''}`}
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center flex-wrap gap-x-1">
@@ -828,7 +828,7 @@ export default function DraftBoard() {
                 <button
                   onClick={sleeperDraft.refresh}
                   aria-label="Refresh draft"
-                  className="text-text-tertiary active:opacity-60 transition-opacity"
+                  className="text-text-tertiary press"
                 >
                 </button>
               )}
@@ -935,7 +935,7 @@ export default function DraftBoard() {
             size="lg"
             fullWidth
             onClick={() => navigate('/draft/research')}
-            className="mt-4 py-2.5 text-xs active:opacity-70"
+            className="mt-4 py-2.5 text-xs"
           >
             Value prices consensus. Who gets the job? Open Rookie Research →
           </Button>

@@ -58,7 +58,10 @@ export default function TabBar() {
             className={cn(
               'tap-target focus-ring flex-1 min-w-0 flex flex-col items-center justify-center',
               'font-display font-extrabold text-[10px] uppercase tracking-[0.1em] leading-none whitespace-nowrap',
-              'transition-opacity duration-mark',
+              // `.press` composes with the resting opacity below rather than
+              // replacing it — see the filter note in index.css. That is what
+              // lets a tab that is already at 55% still dip under a finger.
+              'press',
               isCurrent ? 'opacity-100' : 'opacity-55 hover:opacity-80',
             )}
             style={{ height: TAB_BAR_HEIGHT }}

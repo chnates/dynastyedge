@@ -76,7 +76,7 @@ function MoverRow({ player, ownerLabel, note, series, onClick, onBuildTrade }) {
           <button
             onClick={e => { e.stopPropagation(); onBuildTrade() }}
             aria-label="Build trade"
-            className="shrink-0 ml-1 flex items-center gap-1 rounded-none border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-accent active:opacity-60 transition-opacity"
+            className="shrink-0 ml-1 flex items-center gap-1 rounded-none border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-accent press"
           >
             <span className="font-body text-[10px] font-semibold">Trade</span>
           </button>

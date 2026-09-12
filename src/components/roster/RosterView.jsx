@@ -76,7 +76,7 @@ export default function RosterView() {
       {selectedRosterId && (
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center gap-1 pt-4 pb-1 text-accent font-body text-sm"
+          className="focus-ring press flex items-center gap-1 pt-4 pb-1 text-accent font-body text-sm"
         >
           ← Back
         </button>

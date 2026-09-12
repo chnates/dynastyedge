@@ -3269,6 +3269,9 @@ the call site, so no screen can opt out.
   `:focus-visible`, not `:focus`, so a plain tap stays unmarked while keyboard
   focus and text fields render the ring. Inside an `.ink-field` the ring flips
   to the field's own ground, or it disappears into the block.
+- **`.press` is the one press definition** (see Motion) — the third sibling of
+  these two, carried by every primitive so no screen ships a control that
+  doesn't answer a finger.
 - **`.tap-target` guarantees a 44px hit area without moving the ink** — a
   centered pseudo-element sized `max(100%, 44px)`, so it never shrinks a target
   that is already larger and costs no layout. It is deliberately **NOT** on
@@ -3779,6 +3782,50 @@ mock's multiplicative form (`i * base * jitter`) produces 15 / 52 / 123 / 176 /
 later block lands *before* an earlier one. That reads as broken, not irregular.
 The shipped form gives 0 / 57 / 107 / 145 / 189 / 248 / 292 / 348 / 399: gaps of
 38–59ms, no two alike, never out of order.
+
+#### The press — `.press`, the third control-level contract
+
+**`.press` (`index.css`) is the one definition of "this control answers a
+finger": a 90ms dip to 60%, on `--ez`.** It is the sibling of `.focus-ring`
+(focus) and `.tap-target` (hit area), and it exists for the same reason both of
+those do — a control-level contract belongs in one place, not at forty call
+sites. **Every pressable in the app carries it**, and the primitives carry it so
+no screen can miss it.
+
+The audit it came out of: **41 `active:` opacity states across 20 files at three
+different values for one gesture** — `Button` dipped to 70%, `Card` to 80%,
+everything else to 60% — plus five consumers restating `Button`'s own
+`active:opacity-70` on a `Button`, and roughly a dozen real pressables with no
+press state at all (the header's Menu and Find, the Playoff Odds and Roster
+Analysis explainer toggles, the action-item Dismiss, the roster Back link, the
+Index rows, four drawer rows, the tab bar, the contents rail, Pick Trades' mode
+toggle). That is the same drift `/design-review`'s nine greps sailed past on
+`.focus-ring` in step 4.
+
+**The dip is `filter: opacity()`, not `opacity`, and that is what lets one rule
+cover the app.** A flat `opacity: 0.6` is *absolute*, so it is wrong on any
+control whose resting opacity already means something — and there are two: an
+inactive tab-bar item sits at 55%, a drafted prospect row at 50%. Pressing
+either would have moved it to 60%, i.e. **brighter**. `filter` composes:
+1 × 0.6 on an ordinary control, 0.55 × 0.6 = 0.33 on the faded tab. Same
+proportion, no exceptions needed.
+
+**`.press` owns the whole transition**, colour properties included, so an
+element carrying it takes no `transition-*` utility — a Tailwind
+`transition-colors` sits in the utilities layer and would replace the shorthand
+outright, silently dropping the dip. `:not(:disabled)` so a disabled control
+does not answer at all.
+
+**Deliberately not `.press`**, because their press already says something more
+specific: the trade builder's remove controls flash `danger`/`warning`, the
+login team rows tint their background, the draft board's drag handle swaps its
+cursor.
+
+**Verified by probe, not by eye** — every pressable on every route, counted in
+the live DOM: The Edge 42/42, My Team 49/49, Lineup 61/61, Trade Analyzer 15/15,
+Targets 43/43, Managers 15/15, Pick Trades 53/53, League 36/36, Movers 84/84,
+Free Agents 155/155, Playoffs 15/15, Season Review 14/14, Trajectory 44/44,
+Draft Board 486/486, Research 484/484, Tracker 60/60, News 333/333, Index 21/21.
 
 -----
 

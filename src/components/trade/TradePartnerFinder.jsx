@@ -311,7 +311,7 @@ export default function TradePartnerFinder() {
                 size="sm"
                 fullWidth
                 onClick={() => navigate('/trade/whats-fair', { state: { targetsRosterId: partner.rosterId } })}
-                className="-mt-px py-1.5 text-[11px] active:opacity-70"
+                className="-mt-px py-1.5 text-[11px]"
               >
                 See their targets →
               </Button>
@@ -326,7 +326,7 @@ export default function TradePartnerFinder() {
         size="lg"
         fullWidth
         onClick={() => navigate('/trade/pick-trades')}
-        className="mt-3 py-2.5 text-xs active:opacity-70"
+        className="mt-3 py-2.5 text-xs"
       >
         Planning a pick swap? Open the Pick Trade Calculator →
       </Button>
@@ -341,7 +341,7 @@ export default function TradePartnerFinder() {
         size="lg"
         fullWidth
         onClick={() => navigate('/trade/managers')}
-        className="mt-2 py-2.5 text-xs active:opacity-70"
+        className="mt-2 py-2.5 text-xs"
       >
         How has each owner traded before? Open Manager Scouting →
       </Button>

@@ -70,7 +70,7 @@ export default function LineupEfficiency() {
       <Page>
         <p className="font-body text-sm text-text-tertiary dark:text-text-tertiary py-2">
           Couldn't load lineup history.{' '}
-          <button onClick={retry} className="text-accent font-medium">Retry</button>
+          <button onClick={retry} className="focus-ring press text-accent font-medium">Retry</button>
         </p>
       </Page>
     )

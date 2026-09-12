@@ -59,7 +59,7 @@ export default function Button({
   const classes = cn(
     'inline-flex items-center justify-center gap-2 text-balance text-center',
     'font-mono font-semibold uppercase leading-none',
-    'transition-opacity active:opacity-70 disabled:opacity-50 disabled:pointer-events-none',
+    'press disabled:opacity-50 disabled:pointer-events-none',
     'tap-target focus-ring',
     VARIANTS[variant] ?? VARIANTS.primary,
     SIZES[size] ?? SIZES.md,

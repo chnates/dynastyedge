@@ -45,7 +45,7 @@ export default function Row({
       className={cn(
         'block w-full text-left border-b border-border-default',
         PADDINGS[padding] ?? padding,
-        interactive && 'focus-ring active:opacity-60 transition-opacity',
+        interactive && 'focus-ring press',
         className,
       )}
       {...rest}

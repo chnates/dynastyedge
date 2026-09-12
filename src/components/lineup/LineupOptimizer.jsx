@@ -340,7 +340,7 @@ export default function LineupOptimizer() {
         size="lg"
         fullWidth
         onClick={() => navigate('/my-team/season-review')}
-        className="mt-4 py-2.5 text-xs active:opacity-70"
+        className="mt-4 py-2.5 text-xs"
       >
         How often does this cost you? See Season Review →
       </Button>

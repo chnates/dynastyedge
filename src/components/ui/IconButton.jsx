@@ -24,7 +24,7 @@ export default function IconButton({ label, size = 'md', className, children, ..
         // control on a panel.
         'flex-shrink-0 flex items-center justify-center rounded-none',
         'text-text-secondary hover:text-text-primary',
-        'hover:bg-bg-secondary transition-colors',
+        'hover:bg-bg-secondary press',
         'tap-target focus-ring',
         SIZES[size] ?? SIZES.md,
         className,

@@ -78,7 +78,7 @@ export default function Lede({
       onClick={onClick ?? undefined}
       className={cn(
         'block w-full text-left py-4 border-b border-border-default',
-        onClick && 'active:opacity-60 transition-opacity focus-ring',
+        onClick && 'press focus-ring',
         className,
       )}
       {...rest}

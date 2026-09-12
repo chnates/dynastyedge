@@ -183,7 +183,7 @@ export default function PlayerSearchSheet({ onClose }) {
                   <button
                     key={d.to}
                     onClick={() => goTo(d.to)}
-                    className="w-full py-2.5 border-b border-border-default last:border-0 text-left active:opacity-60 transition-opacity flex items-center gap-2.5"
+                    className="w-full py-2.5 border-b border-border-default last:border-0 text-left press flex items-center gap-2.5"
                   >
                     <span className="flex-1 font-body font-medium text-sm text-text-primary truncate min-w-0">
                       {d.label}
@@ -206,7 +206,7 @@ export default function PlayerSearchSheet({ onClose }) {
               <button
                 key={p.sleeperId}
                 onClick={() => setSelected(p)}
-                className="w-full py-2.5 border-b border-border-default last:border-0 text-left active:opacity-60 transition-opacity"
+                className="w-full py-2.5 border-b border-border-default last:border-0 text-left press"
               >
                 <div className="flex items-center gap-2">
                   <span className="flex-1 font-body font-medium text-sm text-text-primary truncate min-w-0">

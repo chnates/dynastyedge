@@ -707,7 +707,7 @@ export default function PlayerProfileDrawer({
                   <button
                     key={i}
                     onClick={() => setOpenArticle(n)}
-                    className={`w-full text-left active:opacity-60 transition-opacity ${i < intel.news.length - 1 ? 'pb-2.5 mb-2.5 border-b border-border-default' : ''}`}
+                    className={`w-full text-left press ${i < intel.news.length - 1 ? 'pb-2.5 mb-2.5 border-b border-border-default' : ''}`}
                   >
                     <div className="flex items-baseline justify-between gap-2">
                       <p className="flex-1 font-body text-sm font-medium text-text-primary leading-snug">

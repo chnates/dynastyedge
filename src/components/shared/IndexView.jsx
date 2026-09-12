@@ -27,8 +27,8 @@ function IndexRow({ to, title, detail, hint, small = false }) {
     <li>
       <Link
         to={to}
-        className="focus-ring flex items-baseline gap-3 px-4 py-4 border-b border-border-default
-                   hover:bg-bg-secondary transition-colors"
+        className="focus-ring press flex items-baseline gap-3 px-4 py-4 border-b border-border-default
+                   hover:bg-bg-secondary"
         style={{ touchAction: 'manipulation' }}
       >
         <span className="min-w-0 flex-1">
@@ -65,7 +65,7 @@ export default function IndexView() {
           sections as well as players (Feature 16). */}
       <button
         onClick={() => setSearchOpen(true)}
-        className="focus-ring w-full flex items-baseline gap-3 px-4 py-4 text-left
+        className="focus-ring press w-full flex items-baseline gap-3 px-4 py-4 text-left
                    border-b-2 border-text-primary"
         style={{ touchAction: 'manipulation' }}
       >

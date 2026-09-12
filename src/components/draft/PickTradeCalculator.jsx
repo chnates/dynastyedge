@@ -62,7 +62,7 @@ function PackageRow({ pkg, actionLabel, onBuild }) {
 function PickHeaderRow({ pick, subtitle, expanded, onTap }) {
   const chevron = expanded ? '▾' : '▸'
   return (
-    <button onClick={onTap} className="w-full flex items-center gap-2 py-2.5 text-left active:opacity-60 transition-opacity">
+    <button onClick={onTap} className="w-full flex items-center gap-2 py-2.5 text-left press">
       <span className={`font-mono text-sm font-bold tabular-nums shrink-0 w-12 ${ROUND_TEXT[pick.round] ?? 'text-text-primary'}`}>
         {pick.slotLabel ?? ROUND_LABELS[pick.round] ?? `R${pick.round}`}
       </span>
@@ -224,7 +224,7 @@ export default function PickTradeCalculator() {
           <button
             key={m.id}
             onClick={() => { setMode(m.id); setExpandedKey(null) }}
-            className={`flex-1 py-2 font-body text-xs font-semibold uppercase tracking-wider transition-colors
+            className={`focus-ring press flex-1 py-2 font-body text-xs font-semibold uppercase tracking-wider
               ${mode === m.id ? 'bg-accent text-bg-primary' : 'text-text-secondary dark:text-text-secondary'}`}
           >
             {m.label}

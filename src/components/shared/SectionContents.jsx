@@ -41,7 +41,7 @@ export default function SectionContents({ sectionKey }) {
               className={({ isActive }) =>
                 cn(
                   'focus-ring flex items-center min-h-[44px] font-display font-extrabold text-[12px]',
-                  'uppercase tracking-[0.08em] whitespace-nowrap transition-colors',
+                  'uppercase tracking-[0.08em] whitespace-nowrap press',
                   isActive ? 'text-text-primary' : 'text-text-secondary hover:text-text-primary',
                 )
               }
