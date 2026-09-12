@@ -4110,6 +4110,25 @@ Screenshots land in `.screenshots/replay-<scenario>/`. It complements the
 `tests/` suite rather than replacing it: the tests pin the pure logic, this
 proves the components actually render it.
 
+**NEITHER LINT NOR BUILD CAN CATCH AN UNDEFINED COMPONENT.** `no-undef` is on
+(via `js.configs.recommended`), but eslint-scope does not resolve a
+**`JSXIdentifier`** as a variable reference — that is what `react/jsx-no-undef`
+exists for, and this repo does not carry eslint-plugin-react. Vite does not
+catch it either: a bad element type is a *runtime* `Element type is invalid`,
+thrown during render. So `<Foo />` with no `Foo` in scope passes lint, passes
+`npm run build`, and white-screens the view — and with no error boundary, the
+whole app tree with it.
+
+**The only proof is rendering every route.** This is not hypothetical: step 4's
+lucide removal emptied `LeagueActivity`'s `TYPE_META` of its `Icon` field and
+left the `<meta.Icon />` render behind, and **League › Activity shipped to
+`main` as a white screen** — found in step 5 by a route sweep, after lint, 275
+tests and a clean build had all passed on it. Sweep with
+`scripts/dev/screenshot-app.mjs`, hash-navigating each route and failing on
+`pageerror`; a crash kills the tree, so **run the suspect route FIRST or reload
+between routes** — otherwise every route after the first failure reports an
+empty page and no error of its own, which reads like a different bug.
+
 **Lint:** `npm run lint` runs ESLint 9 (flat config, `eslint.config.js`) over
 `src/` and `scripts/` — `@eslint/js` recommended rules plus
 `react-hooks/rules-of-hooks` and `react-hooks/exhaustive-deps`, all at error
