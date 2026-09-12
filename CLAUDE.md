@@ -3658,24 +3658,47 @@ them.
 
 ### Motion
 
-> **Step 5 owns this and has not started.** What is here is the pre-Matchday
-> state, kept accurate rather than aspirational.
+> **Step 5 is in progress.** This section describes what has landed, not what is
+> planned. The measured starting point, for reference: **one** `@keyframes`
+> (`.edge-rise`, a fade-up on The Edge), 69 `transition-*` utilities of which
+> **67 animate opacity or colour and one animates `transform`**, and **3**
+> explicit timing values in the whole app — so virtually every transition ran
+> Tailwind's default 150ms `cubic-bezier(.4,0,.2,1)`. There was no easing curve
+> in this app that anyone chose. The app faded and tinted; it never moved.
 
-Measured across the codebase: **one** `@keyframes` (`.edge-rise`, a fade-up on
-The Edge), 78 `transition-*` utilities of which **74 animate opacity or colour
-and only 3 animate `transform`**, and **6** explicit timing values in the whole
-app — so virtually every transition runs Tailwind's default 150ms
-`cubic-bezier(.4,0,.2,1)`. **There is no easing curve in this app that anyone
-chose.** The app fades and tints; it never moves.
+#### The reduced-motion guard is GLOBAL, and it landed first
 
-`prefers-reduced-motion` is honoured, but the guard covers exactly one class.
-**Any direction that adds motion must widen that guard first** — it is not a
-general rule today.
+`index.css` closes with a `@media (prefers-reduced-motion: reduce)` block over
+`*`, `*::before` and `*::after`. It zeroes animation and transition **duration
+and delay**, caps `animation-iteration-count` at 1, and sets `scroll-behavior:
+auto`. `!important` throughout: the point is that no screen and no future
+primitive can opt out.
 
-Step 5's brief: the "press run" — flat colour bands wipe across, then type drops
-in behind them; custom easing `cubic-bezier(.16,1,.3,1)`; **jittered** stagger
-(linear 0/100/200ms is itself a marker); clip/wipe entrances, never fade-up;
-`:active` feedback on every pressable; a 3–5 moment budget.
+**It was written before any motion was added, deliberately.** The old guard
+covered exactly one class (`.edge-rise`) — adequate only while nothing else
+moved, and a trap the moment that stopped being true, because a class-scoped
+guard has to be extended by whoever adds the next animation and the failure is
+silent for everyone who doesn't have the setting on.
+
+Three details are load-bearing:
+
+- **Duration goes to 0.01ms, not 0.** Zero makes some engines skip the animation
+  entirely, which also skips its `end` event; 0.01ms runs it in one frame and
+  still fires.
+- **Delay goes to 0 as well.** Zeroing only the duration of a jittered stagger
+  leaves the delays intact, so the last row of a list would still sit blank for
+  400ms — a *slower* first paint than no motion at all, the exact opposite of
+  what the setting asks for.
+- **CSS cannot reach a programmatic smooth scroll.** `scroll-behavior: auto`
+  does not override a `scrollIntoView({ behavior: 'smooth' })` argument, and a
+  long smooth scroll is a reliable vestibular trigger. The two places that jump
+  the page — THE CALL's act anchors and Rookie Research's board jump — go
+  through **`scrollToTopOf`** in `components/ui/motion.js`, which reads the
+  media query at call time (not cached: the setting can change mid-session).
+
+**`useSheetDrag`'s spring-back is caught by the duration rule and that is
+correct** — a released sheet snaps home instead of easing. The gesture itself is
+direct manipulation rather than animation and is untouched.
 
 -----
 

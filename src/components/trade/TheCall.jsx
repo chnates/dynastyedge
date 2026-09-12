@@ -1,4 +1,4 @@
-import { Card, Button, cn } from '../ui'
+import { Card, Button, cn, scrollToTopOf } from '../ui'
 
 // THE CALL — the Analyzer's hero.
 //
@@ -86,7 +86,7 @@ function SummaryRow({ label, tone, text, onJump }) {
   )
 }
 
-const jump = id => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+const jump = id => scrollToTopOf(document.getElementById(id))
 
 export default function TheCall({ analysis, verdict, bothSides, counterSuggestion, onApplyCounter }) {
   if (!analysis) return null

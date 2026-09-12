@@ -256,9 +256,8 @@ body {
 }
 
 /* ── The Edge: staggered card entrance ───────────────────────── */
-/* Motion is step 5 of the Matchday rebuild and is deliberately untouched here
-   — including this fade-up, which the checklist flags and step 5 replaces with
-   the "press run" band wipe. */
+/* Replaced by the press run in the same step — kept here only until that
+   commit lands, so the guard below can be verified against real motion. */
 
 @keyframes edge-rise {
   from { opacity: 0; transform: translateY(8px); }
@@ -269,8 +268,49 @@ body {
   animation: edge-rise 0.35s ease-out both;
 }
 
+/* ── The reduced-motion guard: GLOBAL, and deliberately first ──── */
+/* This rule is the precondition for every other line of motion in the app, so
+   it landed BEFORE any of it. It used to cover exactly one class (`.edge-rise`)
+   — adequate only because nothing else in the app moved, and a trap the moment
+   that stopped being true: a guard scoped to a class list has to be extended by
+   whoever adds the next animation, and the failure mode is silent for everyone
+   who doesn't have the setting on.
+
+   `*` rather than a list, and `!important` rather than a cascade, because the
+   point is that NO screen and no future primitive can opt out. What it covers:
+
+   - `animation-duration` / `transition-duration` → 0.01ms, not 0. Zero makes
+     some engines skip the animation entirely, which also skips its `end` event;
+     0.01ms runs it in one frame and still fires, so any code awaiting a
+     transition still resolves.
+   - `animation-delay` → 0. Zeroing only the DURATION of a jittered stagger
+     leaves the delay intact, so the last row of a list would still sit blank
+     for 400ms — a slower first paint than no motion at all, which is the exact
+     opposite of what the setting asks for.
+   - `animation-iteration-count` → 1, which stops an indefinite loop. The
+     loading indicator is designed for this: under reduced motion its bar holds
+     still and the mono label alone says the app is working (see `.press-bar`).
+   - `scroll-behavior` → auto. Note the CSS property does NOT override a
+     JS `scrollIntoView({ behavior: 'smooth' })` argument; the two programmatic
+     smooth scrolls in the app (THE CALL's act jumps, Rookie Research's board
+     jump) read the same media query at the call site, via `prefersReducedMotion`
+     in `components/ui/motion.js`.
+
+   Not covered, correctly: `useSheetDrag`'s spring-back sets an inline
+   `transition` and is caught by the duration rule, so a released sheet snaps
+   home instead of easing. That is the right behaviour and it leaves the gesture
+   itself — which is direct manipulation, not animation — untouched. */
 @media (prefers-reduced-motion: reduce) {
-  .edge-rise { animation: none; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ── Focus ring: ONE definition, shared by every control ──────── */

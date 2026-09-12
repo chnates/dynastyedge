@@ -7,6 +7,7 @@ import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import {
   Card, Chip, Badge, SearchInput, SectionHeader, Spinner, ErrorState, Button,
+  scrollToTopOf,
 } from '../ui'
 
 const POS_FILTERS = ['ALL', 'QB', 'RB', 'WR', 'TE']
@@ -274,7 +275,7 @@ export default function RookieResearchView() {
               setSort('fit'); setPos('ALL'); setQuery('')
               // The board it re-ranks is below two full sections — without the
               // scroll the tap changes state the user can't see.
-              boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              scrollToTopOf(boardRef.current)
             }}
           >
             See the whole class ranked for my roster
