@@ -73,7 +73,7 @@ export default function FreeAgentDrawer({ slot, projMap, allRosters, fcPlayerMap
                 className="flex items-center gap-2 py-2.5 border-b border-border-default dark:border-border-default last:border-0"
               >
                 {/* Position badge */}
-                <span className={`shrink-0 rounded-full px-1.5 py-0.5 font-body text-[9px] font-semibold uppercase tracking-wide w-7 text-center ${POS_COLORS[fa.position] ?? 'text-text-secondary'}`}>
+                <span className={`shrink-0 px-1.5 py-0.5 font-body text-[9px] font-semibold uppercase tracking-wide w-7 text-center ${POS_COLORS[fa.position] ?? 'text-text-secondary'}`}>
                   {fa.position}
                 </span>
 

@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { X, ArrowRight, Star, ChevronRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import NewsArticleSheet from './NewsArticleSheet'
 import { usePlayerNews } from '../../hooks/usePlayerNews'
@@ -487,7 +486,7 @@ export default function PlayerProfileDrawer({
               )}
               {!newsLoading && (
                 <span className={`flex items-center gap-1 font-body text-[10px] ${flagStyle.text}`}>
-                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${flagStyle.dot}`} />
+                  <span className={`inline-block w-1.5 h-1.5 ${flagStyle.dot}`} />
                   {flagStyle.label}
                 </span>
               )}
@@ -505,10 +504,18 @@ export default function PlayerProfileDrawer({
               label={watched ? 'Remove from watchlist' : 'Add to watchlist'}
               className={cn('transition-colors', watched && 'text-accent hover:text-accent')}
             >
-              <Star size={18} strokeWidth={1.75} className={watched ? 'fill-accent' : ''} />
+              {/* The star was the app's one filled glyph; the word says the
+                  same thing and says which STATE it is in without a legend. */}
+              <span className={`font-mono text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                watched ? 'text-brand-bright' : ''
+              }`}>
+                {watched ? 'Watching' : 'Watch'}
+              </span>
             </IconButton>
             <IconButton onClick={onClose} label="Close">
-              <X size={18} strokeWidth={1.75} />
+              <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em]">
+                Close
+              </span>
             </IconButton>
           </div>
         </div>
@@ -529,7 +536,7 @@ export default function PlayerProfileDrawer({
               </div>
             ) : (
               <div className="flex items-start gap-3">
-                <span className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 mt-1 ${flagStyle.dot}`} />
+                <span className={`inline-block w-2.5 h-2.5 shrink-0 mt-1 ${flagStyle.dot}`} />
                 <div>
                   <p className={`font-body text-sm font-semibold ${flagStyle.text}`}>
                     {injuryStatus ?? 'Active'}
@@ -721,7 +728,7 @@ export default function PlayerProfileDrawer({
                           {n.story}
                         </p>
                       )}
-                      <ChevronRight size={13} strokeWidth={2} className="shrink-0 text-text-tertiary mb-0.5" />
+
                     </div>
                   </button>
                 ))}
@@ -991,8 +998,7 @@ export default function PlayerProfileDrawer({
 
           {/* Analyze Trade button — not for a defense (see isDefense above) */}
           {!isDefense && (
-            <Button size="lg" fullWidth onClick={handleAnalyzeTrade}
-              icon={<ArrowRight size={16} strokeWidth={2} />} iconRight>
+            <Button size="lg" fullWidth onClick={handleAnalyzeTrade}>
               Analyze Trade
             </Button>
           )}

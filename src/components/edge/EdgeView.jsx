@@ -513,7 +513,7 @@ export default function EdgeView() {
               try { sessionStorage.setItem('dynastyedge_league_tier', tier) } catch { /* private mode */ }
               navigate('/league')
             }}
-            className={`px-2.5 py-1 rounded-full font-body text-xs font-medium border active:opacity-70 transition-opacity ${TIER_BADGE[tier]}`}
+            className={`px-2.5 py-1 font-body text-xs font-medium border active:opacity-70 transition-opacity ${TIER_BADGE[tier]}`}
           >
             {signals.tierCounts[tier]} {tier}
           </button>

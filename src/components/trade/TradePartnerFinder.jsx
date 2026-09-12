@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Target, CheckCircle2, Circle, AlertTriangle, Star, History, TrendingDown, TrendingUp, LineChart } from 'lucide-react'
 import { getTeamName } from '../../hooks/useLeague'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useWatchlist } from '../../hooks/useWatchlist'
@@ -16,10 +15,12 @@ import { POS_CHIP_ACTIVE } from '../../utils/positionColors'
 
 const FILTER_TABS = ['All', 'QB', 'RB', 'WR', 'TE', 'Picks']
 
+// The fit tier was a glyph plus its name; the name alone says it, and the
+// three glyphs (target / tick / empty circle) were a legend nobody had.
 const FIT_BADGE = {
-  'Priority': { Icon: Target,       textClass: 'text-accent' },
-  'Good Fit': { Icon: CheckCircle2, textClass: 'text-success' },
-  'Poor Fit': { Icon: Circle,       textClass: 'text-text-tertiary dark:text-text-tertiary' },
+  'Priority': { textClass: 'text-accent' },
+  'Good Fit': { textClass: 'text-success' },
+  'Poor Fit': { textClass: 'text-text-tertiary dark:text-text-tertiary' },
 }
 
 const PICK_CAP_STYLES = {
@@ -41,7 +42,6 @@ function ScoutingLine({ profile }) {
   if (profile.tradeCount === 0) {
     return (
       <div className="flex items-center gap-1.5">
-        <History size={12} strokeWidth={2} className="text-text-tertiary dark:text-text-tertiary shrink-0" />
         <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
           Hasn't completed a trade — cold call
         </span>
@@ -52,7 +52,6 @@ function ScoutingLine({ profile }) {
   const netClass = net > 0 ? 'text-success' : net < 0 ? 'text-danger' : 'text-text-secondary dark:text-text-secondary'
   return (
     <div className="flex items-center gap-1.5 min-w-0">
-      <History size={12} strokeWidth={2} className="text-text-tertiary dark:text-text-tertiary shrink-0" />
       <span className="font-body text-[11px] text-text-secondary dark:text-text-secondary truncate">
         {profile.tradeCount} trade{profile.tradeCount === 1 ? '' : 's'} · {profile.tradeWins}W-{profile.tradeLosses}L ·{' '}
         <span className={`font-mono font-semibold tabular-nums ${netClass}`}>
@@ -73,7 +72,6 @@ function OddsSignal({ odds }) {
   if (p < 0.35) {
     return (
       <div className="flex items-center gap-1.5 min-w-0">
-        <TrendingDown size={12} strokeWidth={2} className="text-danger shrink-0" />
         <span className="font-body text-[11px] text-text-secondary dark:text-text-secondary truncate">
           <span className="font-mono font-semibold tabular-nums">{Math.round(p * 100)}%</span> playoff odds — likely seller
         </span>
@@ -83,7 +81,6 @@ function OddsSignal({ odds }) {
   if (p >= 0.7) {
     return (
       <div className="flex items-center gap-1.5 min-w-0">
-        <TrendingUp size={12} strokeWidth={2} className="text-success shrink-0" />
         <span className="font-body text-[11px] text-text-secondary dark:text-text-secondary truncate">
           <span className="font-mono font-semibold tabular-nums">{Math.round(p * 100)}%</span> playoff odds — buying win-now
         </span>
@@ -105,7 +102,6 @@ function TrajectorySignal({ read }) {
   if (!read) return null
   return (
     <div className="flex items-center gap-1.5 min-w-0">
-      <LineChart size={12} strokeWidth={2} className={`shrink-0 ${TRAJ_STYLES[read.direction]}`} />
       <span className="font-body text-[11px] text-text-secondary dark:text-text-secondary truncate">
         {read.label}
       </span>
@@ -161,7 +157,7 @@ function TradePartnerCard({ partner, watchedNames, profile, odds, trajectoryRead
       {/* Row 4: pick capital */}
       <div className="flex items-center gap-2">
         <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">Picks:</span>
-        <span className={`font-body text-[11px] font-semibold rounded-full px-2 py-0.5 ${PICK_CAP_STYLES[pickCapStatus]}`}>
+        <span className={`font-body text-[11px] font-semibold px-2 py-0.5 ${PICK_CAP_STYLES[pickCapStatus]}`}>
           {pickCapStatus}
         </span>
       </div>
@@ -178,7 +174,7 @@ function TradePartnerCard({ partner, watchedNames, profile, odds, trajectoryRead
       {/* Watched players on this roster */}
       {watchedNames?.length > 0 && (
         <div className="flex items-start gap-1.5">
-          <Star size={12} strokeWidth={2} className="text-accent shrink-0 mt-0.5 fill-accent" />
+          <span className="shrink-0 mt-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-brand-bright">Watching</span>
           <span className="font-body text-[11px] text-accent leading-tight">
             Watching: {watchedNames.join(', ')}
           </span>
@@ -188,7 +184,6 @@ function TradePartnerCard({ partner, watchedNames, profile, odds, trajectoryRead
       {/* Row 5: win window mismatch warning */}
       {mismatchWarning && (
         <div className="flex items-start gap-1.5">
-          <AlertTriangle size={12} strokeWidth={2} className="text-warning shrink-0 mt-0.5" />
           <span className="font-body text-[11px] text-warning leading-tight">{mismatchWarning}</span>
         </div>
       )}

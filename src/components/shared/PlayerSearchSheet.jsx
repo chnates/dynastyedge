@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { X } from 'lucide-react'
 import { useScrollLock } from '../../hooks/useScrollLock'
 import { useSheetDrag } from '../../hooks/useSheetDrag'
 import { useLeagueContext } from '../../context/LeagueContext'
@@ -153,7 +152,9 @@ export default function PlayerSearchSheet({ onClose }) {
             />
           </div>
           <IconButton onClick={onClose} label="Close search">
-            <X size={20} strokeWidth={1.75} />
+            <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em]">
+              Close
+            </span>
           </IconButton>
         </div>
 

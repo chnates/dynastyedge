@@ -1,7 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import {
-  RefreshCw, Sun, Moon, LogOut, Check, X, Loader2, ArrowDownToLine,
-} from 'lucide-react'
 import DynastyEdgeLogo from './DynastyEdgeLogo'
 import TeamAvatar from './TeamAvatar'
 import { cn } from '../ui'
@@ -248,9 +245,9 @@ export default function SideDrawer({
           {updateAvailable && (
             <button
               onClick={onApplyUpdate}
-              className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-accent hover:bg-accent/10 transition-colors"
+              className="focus-ring flex items-center gap-3 w-full px-3 py-2.5 text-brand-bright
+                         hover:bg-brand/10 transition-colors"
             >
-              <ArrowDownToLine size={18} strokeWidth={2} />
               <span className="font-body font-medium text-[14px]">Update available — Reload</span>
             </button>
           )}
@@ -258,13 +255,12 @@ export default function SideDrawer({
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:opacity-60"
+            className="focus-ring flex items-center gap-3 w-full px-3 py-2.5 text-text-secondary
+                       hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5
+                       transition-colors disabled:opacity-60"
           >
-            {justRefreshed ? (
-              <Check size={18} strokeWidth={2} className="text-success" />
-            ) : (
-              <RefreshCw size={18} strokeWidth={1.75} className={refreshing ? 'animate-spin' : ''} />
-            )}
+            {/* The spinning glyph is gone; the label already carried the state
+                in words, which is the whole argument for dropping the icon. */}
             <span className={cn('font-body font-medium text-[14px]', justRefreshed && 'text-success')}>
               {refreshing ? 'Refreshing…' : justRefreshed ? 'Updated ✓' : 'Refresh data'}
             </span>
@@ -280,16 +276,17 @@ export default function SideDrawer({
               const st = phase !== 'idle' ? (sources[key] ?? 'loading') : null
               return (
                 <div key={key} className="flex items-center gap-2 text-[11px] font-body">
-                  <span className="w-3 shrink-0 flex items-center justify-center">
-                    {st === 'done' ? (
-                      <Check size={11} strokeWidth={2.5} className="text-success" />
-                    ) : st === 'error' ? (
-                      <X size={11} strokeWidth={2.5} className="text-danger" />
-                    ) : st === 'loading' ? (
-                      <Loader2 size={11} strokeWidth={2.5} className="animate-spin text-text-secondary" />
-                    ) : (
-                      <span className="w-1 h-1 rounded-full bg-text-tertiary/50" />
-                    )}
+                  {/* Typographic marks, not an icon set: a check, a cross, an
+                      ellipsis and a middot are all characters, and they read at
+                      11px where a 11px stroked glyph does not. */}
+                  <span className={cn(
+                    'w-3 shrink-0 text-center font-mono text-[11px] leading-none',
+                    st === 'done' ? 'text-success'
+                      : st === 'error' ? 'text-danger'
+                      : st === 'loading' ? 'text-text-secondary'
+                      : 'text-text-tertiary/50',
+                  )}>
+                    {st === 'done' ? '✓' : st === 'error' ? '✕' : st === 'loading' ? '…' : '·'}
                   </span>
                   <span className="text-text-secondary">{label}</span>
                   <span className="ml-auto text-text-tertiary tabular-nums">
@@ -319,7 +316,7 @@ export default function SideDrawer({
               <div className="h-px bg-border-default/60 mb-1.5" />
               <div className="flex items-center gap-2 text-[11px] font-body">
                 <span className="w-3 shrink-0 flex items-center justify-center">
-                  <span className={cn('w-1 h-1 rounded-full',
+                  <span className={cn('w-1 h-1 ',
                     versionState === 'current' ? 'bg-success'
                       : versionState === 'stale' ? 'bg-warning'
                         : 'bg-text-tertiary/50')} />
@@ -340,9 +337,9 @@ export default function SideDrawer({
 
           <button
             onClick={onToggleTheme}
-            className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            className="focus-ring flex items-center gap-3 w-full px-3 py-3 text-text-secondary
+                       hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
           >
-            {isDark ? <Sun size={18} strokeWidth={1.75} /> : <Moon size={18} strokeWidth={1.75} />}
             <span className="font-body font-medium text-[14px]">
               {isDark ? 'Light mode' : 'Dark mode'}
             </span>
@@ -350,9 +347,9 @@ export default function SideDrawer({
 
           <button
             onClick={() => { onClose(); clearIdentity() }}
-            className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            className="focus-ring flex items-center gap-3 w-full px-3 py-3 text-text-secondary
+                       hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
           >
-            <LogOut size={18} strokeWidth={1.75} />
             <span className="font-body font-medium text-[14px]">
               {myTeamName ? 'Switch team' : 'Sign out'}
             </span>

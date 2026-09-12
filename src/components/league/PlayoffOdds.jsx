@@ -1,16 +1,14 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
 import { usePlayoffOdds } from '../../hooks/usePlayoffOdds'
 import { getDeadlineVerdict } from '../../utils/playoffOdds'
 import { assignWinWindowTiers } from '../../utils/rosterAnalysis'
 import { getTeamName } from '../../hooks/useLeague'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
-import SectionHeader from '../shared/SectionHeader'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import TeamAvatar from '../shared/TeamAvatar'
 import { rankClass } from '../../utils/rankColors'
-import { Badge } from '../ui'
+import { Badge, PositionBand, RuledList } from '../ui'
 
 const VERDICT_TONE = {
   success: 'text-success',
@@ -60,7 +58,7 @@ function TeamOddsRow({ rank, roster, result, tier, isMine }) {
         <TeamAvatar owner={roster.owner} size={24} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            <p className="font-body text-sm font-semibold text-text-primary truncate">{teamName}</p>
+            <p className="font-body text-sm font-semibold text-text-primary min-w-0 text-balance">{teamName}</p>
             {isMine && <Badge tone="brand" className="shrink-0">You</Badge>}
           </div>
           <p className="font-body text-[10px] text-text-tertiary">
@@ -78,9 +76,9 @@ function TeamOddsRow({ rank, roster, result, tier, isMine }) {
       </div>
       {/* Odds bar — full width = certain to make it; the marker shows the cut line */}
       <div className="mt-2 flex items-center gap-2">
-        <div className="flex-1 h-1.5 rounded-full bg-bg-secondary overflow-hidden">
+        <div className="flex-1 h-1.5 bg-bg-secondary overflow-hidden">
           <div
-            className={`h-full rounded-full ${oddsBarClass(result.playoffPct)}`}
+            className={`h-full ${oddsBarClass(result.playoffPct)}`}
             style={{ width: `${Math.max(2, result.playoffPct * 100)}%` }}
           />
         </div>
@@ -94,8 +92,8 @@ function StrengthPreviewRow({ row, isMine }) {
   const teamName = getTeamName(row.owner)
   return (
     <div
-      className={`rounded-none bg-bg-card border px-3 py-2.5 flex items-center gap-2 ${
-        isMine ? 'border-brand/60' : 'border-border-default'
+      className={`py-2.5 flex items-center gap-2 border-b border-border-default ${
+        isMine ? 'bg-brand/5' : ''
       }`}
     >
       <span className={`font-mono text-base font-bold tabular-nums w-5 shrink-0 ${rankClass(row.projSeed)}`}>
@@ -103,11 +101,11 @@ function StrengthPreviewRow({ row, isMine }) {
       </span>
       <TeamAvatar owner={row.owner} size={24} />
       <div className="flex-1 min-w-0 flex items-center gap-1.5">
-        <p className="font-body text-sm font-semibold text-text-primary truncate">{teamName}</p>
+        <p className="font-body text-sm font-semibold text-text-primary min-w-0 text-balance">{teamName}</p>
         {isMine && <Badge tone="brand" className="shrink-0">You</Badge>}
       </div>
       <span
-        className={`shrink-0 font-body text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 border ${
+        className={`shrink-0 font-body text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 border ${
           row.projectedIn
             ? 'text-success bg-success/10 border-success/30'
             : 'text-text-tertiary bg-bg-secondary border-border-default'
@@ -128,8 +126,8 @@ function HowToRead({ playoffTeams }) {
           How this works
         </span>
         {open
-          ? <ChevronUp size={15} className="text-text-tertiary" strokeWidth={1.75} />
-          : <ChevronDown size={15} className="text-text-tertiary" strokeWidth={1.75} />}
+          ? <span className="font-mono text-[11px] leading-none text-text-tertiary" aria-hidden="true">▴</span>
+          : <span className="font-mono text-[11px] leading-none text-text-tertiary" aria-hidden="true">▾</span>}
       </button>
       {open && (
         <div className="px-3 pb-3 flex flex-col gap-2.5">
@@ -217,12 +215,12 @@ export default function PlayoffOdds() {
           </p>
         </div>
 
-        <SectionHeader label="Preseason projection · by roster strength" />
+        <PositionBand label="Preseason projection · by roster strength" className="mt-4" />
         <p className="font-body text-xs text-text-secondary leading-relaxed pb-2">
           Until games are played, here's the projected seeding ranked purely by each team's best-lineup
           dynasty value — a strength preview, not real odds.
         </p>
-        <div className="flex flex-col gap-2">
+        <RuledList>
           {(strengthPreview ?? []).map(row => (
             <StrengthPreviewRow
               key={row.rosterId}
@@ -230,7 +228,7 @@ export default function PlayoffOdds() {
               isMine={row.rosterId === myRosterId}
             />
           ))}
-        </div>
+        </RuledList>
 
         <HowToRead playoffTeams={playoffTeams} />
       </div>
@@ -291,8 +289,8 @@ export default function PlayoffOdds() {
           : `Based on ${completedWeeks} completed ${completedWeeks === 1 ? 'week' : 'weeks'} + ${remainingGames} remaining ${remainingGames === 1 ? 'game' : 'games'} over ${remainingWeeks} ${remainingWeeks === 1 ? 'week' : 'weeks'}. Playoffs begin Week ${firstPlayoffWeek}.`}
       </p>
 
-      <SectionHeader label={`Every team · top ${playoffTeams} make it`} />
-      <div className="flex flex-col gap-2">
+      <PositionBand label={`Every team · top ${playoffTeams} make it`} count={ranked.length} className="mt-5" />
+      <RuledList>
         {ranked.map((result, i) => {
           const roster = rosterById[result.rosterId]
           if (!roster) return null
@@ -307,7 +305,7 @@ export default function PlayoffOdds() {
             />
           )
         })}
-      </div>
+      </RuledList>
 
       <HowToRead playoffTeams={playoffTeams} />
     </div>

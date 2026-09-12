@@ -1,4 +1,3 @@
-import { ArrowLeftRight, X, Check } from 'lucide-react'
 import { IconButton, Badge, cn } from '../ui'
 import { POS_TEXT } from '../../utils/positionColors'
 
@@ -128,10 +127,12 @@ export default function LineupRow({
           </Badge>
         )}
 
-        {/* Optimal tick */}
+        {/* Optimal tick. The lucide glyph became the tick CHARACTER — a
+            typographic mark rather than an icon set, and legible at 12px where
+            a stroked glyph is not. */}
         <span className="shrink-0 w-4 flex items-center justify-center">
           {isOptimal && !blocked && player && (
-            <Check size={13} strokeWidth={2.5} className="text-success/70" aria-label="Optimal" />
+            <span className="font-mono text-[12px] leading-none text-success/70" aria-label="Optimal">✓</span>
           )}
         </span>
       </button>
@@ -140,11 +141,11 @@ export default function LineupRow({
       <span className="shrink-0 pr-1">
         {isArmed ? (
           <IconButton size="sm" label="Cancel swap" onClick={onCancel}>
-            <X size={15} strokeWidth={2.25} className="text-brand-bright" />
+            <span className="font-mono text-[13px] leading-none text-brand-bright">✕</span>
           </IconButton>
         ) : state === 'idle' && player ? (
           <IconButton size="sm" label={`Swap ${player.name}`} onClick={onArm}>
-            <ArrowLeftRight size={15} strokeWidth={2} className="text-text-tertiary" />
+            <span className="font-mono text-[13px] leading-none text-text-tertiary">⇄</span>
           </IconButton>
         ) : (
           <span className="block w-8" />

@@ -1,5 +1,4 @@
 import { Outlet } from 'react-router-dom'
-import { CalendarClock } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import SectionContents from '../shared/SectionContents'
 
@@ -13,7 +12,6 @@ function DeadlineBanner() {
   if (weeksLeft < 0) {
     return (
       <div className="flex items-center gap-2 px-4 py-2 bg-bg-secondary dark:bg-bg-secondary border-b border-border-default dark:border-border-default">
-        <CalendarClock size={14} strokeWidth={2} className="text-text-tertiary shrink-0" />
         <span className="font-body text-xs text-text-tertiary dark:text-text-tertiary">
           Trade deadline passed (Week {tradeDeadline}) — trades resume next season
         </span>
@@ -28,7 +26,6 @@ function DeadlineBanner() {
 
   return (
     <div className={`flex items-center gap-2 px-4 py-2 border-b border-border-default dark:border-border-default ${urgent ? 'bg-warning/10' : 'bg-bg-secondary dark:bg-bg-secondary'}`}>
-      <CalendarClock size={14} strokeWidth={2} className={`shrink-0 ${urgent ? 'text-warning' : 'text-text-secondary'}`} />
       <span className={`font-body text-xs font-medium ${urgent ? 'text-warning' : 'text-text-secondary dark:text-text-secondary'}`}>
         {label}
       </span>

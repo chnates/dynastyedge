@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react'
-import { X } from 'lucide-react'
 import { useScrollLock } from '../../hooks/useScrollLock'
 import { useSheetDrag } from '../../hooks/useSheetDrag'
 import IconButton from './IconButton'
@@ -98,7 +97,11 @@ export function SheetHeader({ title, eyebrow, subtitle, onClose, closeLabel = 'C
       </div>
       {onClose && (
         <IconButton label={closeLabel} onClick={onClose}>
-          <X size={18} strokeWidth={1.75} />
+          {/* The word, not a glyph — Matchday carries no icon set, and "Close"
+              is the one label that never needs a legend. */}
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em]">
+            Close
+          </span>
         </IconButton>
       )}
     </div>

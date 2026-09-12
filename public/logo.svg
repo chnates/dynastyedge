@@ -1,22 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
-  <defs>
-  <linearGradient id="g" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
-    <stop offset="0" stop-color="#C8102E"/>
-    <stop offset="1" stop-color="#7E0E22"/>
-  </linearGradient>
-  <linearGradient id="crown" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
-    <stop offset="0" stop-color="#E9EBED"/>
-    <stop offset="1" stop-color="#C9CDD1"/>
-  </linearGradient></defs>
-  <rect width="96" height="96" rx="22" fill="url(#g)"/>
+  <rect width="96" height="96" fill="#C8102E"/>
   
-  <g fill="url(#crown)">
-    <circle cx="28" cy="39" r="4.5"/>
-    <circle cx="48" cy="27" r="4.5"/>
-    <circle cx="68" cy="15" r="4.5"/>
-    <rect x="22" y="48" width="12" height="12" rx="5"/>
-    <rect x="42" y="36" width="12" height="24" rx="5"/>
-    <rect x="62" y="24" width="12" height="36" rx="5"/>
-    <rect x="20" y="66" width="56" height="10" rx="5"/>
+  <g fill="#F4F2EC">
+    <rect x="23.5" y="34.5" width="9" height="9"/>
+    <rect x="43.5" y="22.5" width="9" height="9"/>
+    <rect x="63.5" y="10.5" width="9" height="9"/>
+    <rect x="22" y="48" width="12" height="12"/>
+    <rect x="42" y="36" width="12" height="24"/>
+    <rect x="62" y="24" width="12" height="36"/>
+    <rect x="20" y="66" width="56" height="10"/>
   </g>
 </svg>

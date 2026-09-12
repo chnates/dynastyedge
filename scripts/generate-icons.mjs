@@ -14,45 +14,42 @@ import pngToIco from 'png-to-ico'
 
 const PUBLIC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public')
 
-// Primetime Blackout: brand-red ground, silver crown (the two sanctioned
-// gradient families — see docs/design/phase3-design-brief.md).
-const GRADIENT = `
-  <linearGradient id="g" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
-    <stop offset="0" stop-color="#C8102E"/>
-    <stop offset="1" stop-color="#7E0E22"/>
-  </linearGradient>
-  <linearGradient id="crown" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
-    <stop offset="0" stop-color="#E9EBED"/>
-    <stop offset="1" stop-color="#C9CDD1"/>
-  </linearGradient>`
+// MATCHDAY RE-CUT (step 4). Blackout used two gradient families (a red ramp
+// ground, a silver crown) and rounded bars. Matchday has no gradients and no
+// radius anywhere, so the icon is TWO FLAT COLOURS: a solid crimson field with
+// the crown reversed out of it in warm paper — the same reversal the in-app
+// lockup, the hero and the tab bar all make.
+const BRAND = '#C8102E'   // --brand, the Falcons crimson spot
+const PAPER = '#F4F2EC'   // --bg-primary (light), the warm paper ground
 
-// Crown Crest: three ascending bars (rising chart) as crown prongs, a jewel
-// dot floating above each tip, and a detached base band (the circlet).
-// Geometry spans x 20–76, y 13–76 in a 96×96 viewBox.
+// Crown Crest: three ascending bars (a rising chart) as crown prongs, a jewel
+// above each tip, and a detached base band (the circlet). Geometry spans
+// x 20–76, y 10–76 in a 96×96 viewBox. Square throughout — the jewels were
+// circles and the bars carried rx="5"; both are now hard-edged, and the jewels
+// are 9×9 squares centred on the old circle centres.
 const CROWN = (fill) => `
   <g fill="${fill}">
-    <circle cx="28" cy="39" r="4.5"/>
-    <circle cx="48" cy="27" r="4.5"/>
-    <circle cx="68" cy="15" r="4.5"/>
-    <rect x="22" y="48" width="12" height="12" rx="5"/>
-    <rect x="42" y="36" width="12" height="24" rx="5"/>
-    <rect x="62" y="24" width="12" height="36" rx="5"/>
-    <rect x="20" y="66" width="56" height="10" rx="5"/>
+    <rect x="23.5" y="34.5" width="9" height="9"/>
+    <rect x="43.5" y="22.5" width="9" height="9"/>
+    <rect x="63.5" y="10.5" width="9" height="9"/>
+    <rect x="22" y="48" width="12" height="12"/>
+    <rect x="42" y="36" width="12" height="24"/>
+    <rect x="62" y="24" width="12" height="36"/>
+    <rect x="20" y="66" width="56" height="10"/>
   </g>`
 
-// App icon: full-bleed red gradient, silver crown, no border, no pre-rounding.
+// App icon: full-bleed flat crimson, paper crown, no border, no pre-rounding
+// (iOS applies its own mask).
 const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
-  <defs>${GRADIENT}</defs>
-  <rect width="96" height="96" fill="url(#g)"/>
-  ${CROWN('url(#crown)')}
+  <rect width="96" height="96" fill="${BRAND}"/>
+  ${CROWN(PAPER)}
 </svg>`
 
-// Favicon / browser tab: rounded gradient square so it looks right
-// in square favicon slots.
+// Favicon / browser tab. It used to carry rx="22"; Matchday is hard edges, and
+// a square favicon reads correctly in every square favicon slot anyway.
 const faviconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
-  <defs>${GRADIENT}</defs>
-  <rect width="96" height="96" rx="22" fill="url(#g)"/>
-  ${CROWN('url(#crown)')}
+  <rect width="96" height="96" fill="${BRAND}"/>
+  ${CROWN(PAPER)}
 </svg>`
 
 async function png(svg, size) {

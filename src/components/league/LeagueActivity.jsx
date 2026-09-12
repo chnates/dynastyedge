@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { ArrowLeftRight, DollarSign, UserPlus, Gavel } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useTransactions } from '../../hooks/useTransactions'
 import { usePlayerDB } from '../../hooks/usePlayerDB'
@@ -14,11 +13,13 @@ import { Chip, Badge, Button, cn } from '../ui'
 const PAGE_SIZE = 25
 const ROUND_SUFFIXES = ['', '1st', '2nd', '3rd', '4th', '5th']
 
+// Each move type carried a lucide glyph AND its label. The label already said
+// it, so only the label and its colour survive.
 const TYPE_META = {
-  trade:        { label: 'Trade',      Icon: ArrowLeftRight, color: 'text-accent' },
-  waiver:       { label: 'Waiver',     Icon: DollarSign,     color: 'text-warning' },
-  free_agent:   { label: 'Free Agent', Icon: UserPlus,       color: 'text-success' },
-  commissioner: { label: 'Commish',    Icon: Gavel,          color: 'text-text-secondary' },
+  trade:        { label: 'Trade',      color: 'text-alt' },
+  waiver:       { label: 'Waiver',     color: 'text-warning' },
+  free_agent:   { label: 'Free Agent', color: 'text-success' },
+  commissioner: { label: 'Commish',    color: 'text-text-tertiary' },
 }
 
 const FILTERS = [

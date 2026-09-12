@@ -1,5 +1,4 @@
 import { forwardRef } from 'react'
-import { Search } from 'lucide-react'
 import { cn } from './cn'
 
 // THE text input + the search-box variant. Consistent field styling across the
@@ -34,13 +33,17 @@ export const Input = forwardRef(function Input({ className, ...rest }, ref) {
 
 export const SearchInput = forwardRef(function SearchInput({ className, ...rest }, ref) {
   return (
-    <div className="relative">
-      <Search
-        size={15}
-        strokeWidth={2}
-        className="absolute left-0 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none"
-      />
-      <Input ref={ref} className={cn('pl-6', className)} {...rest} />
+    // The magnifier glyph is replaced by the mock's `.md-srch` label: a small
+    // mono "FIND" sitting on the field's baseline. It reads as a form label
+    // rather than as decoration, and it carries no icon set.
+    <div className="flex items-baseline gap-2.5">
+      <span
+        className="shrink-0 font-mono text-[9px] font-medium uppercase tracking-[0.18em] text-text-tertiary"
+        aria-hidden="true"
+      >
+        Find
+      </span>
+      <Input ref={ref} className={cn('flex-1 min-w-0', className)} {...rest} />
     </div>
   )
 })

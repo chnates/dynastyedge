@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, XCircle as XCircleSmall, Circle, AlertTriangle, LineChart, Target, User, Users, Copy, Check, ArrowRight, Layers, CalendarClock, Scale, History } from 'lucide-react'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import SectionHeader from '../shared/SectionHeader'
 import TheCall from './TheCall'
@@ -81,7 +80,7 @@ function PlayerNewsCard({ intel, onTap }) {
           </span>
         </p>
         <span className={`flex items-center gap-1 font-body text-[11px] shrink-0 ml-2 ${FLAG_TEXT[flag]}`}>
-          <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${FLAG_DOT[flag]}`} />
+          <span className={`inline-block w-2 h-2 shrink-0 ${FLAG_DOT[flag]}`} />
           {FLAG_LABEL[flag]}
         </span>
       </div>
@@ -215,7 +214,7 @@ function LandingRow({ spot, possessive }) {
   return (
     <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-snug">
       <span className="font-semibold text-text-primary dark:text-text-primary">{spot.name}</span>
-      <ArrowRight size={10} strokeWidth={2.5} className="inline mx-1 -mt-px text-text-tertiary" />
+      <span className="mx-1 text-text-tertiary" aria-hidden="true">→</span>
       {possessive}{' '}
       <span className={`font-mono font-semibold ${POS_TEXT[spot.position] ?? 'text-text-secondary'}`}>
         {spot.position}{spot.posRank}
@@ -248,7 +247,6 @@ function YourSideBlock({ myFit }) {
   return (
     <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
       <div className="flex items-center gap-2 mb-2">
-        <User size={12} strokeWidth={2} className="text-text-tertiary shrink-0" />
         <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary">
           Is it good for you?
         </p>
@@ -256,7 +254,7 @@ function YourSideBlock({ myFit }) {
       </div>
 
       <p className={`font-body text-xs leading-relaxed flex items-center gap-1.5 ${st.text}`}>
-        <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${st.dot}`} />
+        <span className={`inline-block w-2 h-2 shrink-0 ${st.dot}`} />
         {myFit.summary}
       </p>
 
@@ -269,7 +267,7 @@ function YourSideBlock({ myFit }) {
       <ul className="flex flex-col gap-1 mt-2">
         {myFit.reasons.map(r => (
           <li key={r} className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-snug flex items-start gap-1.5">
-            <Circle size={9} strokeWidth={2} className="shrink-0 mt-1" />
+            <span className="shrink-0 mt-0.5 font-mono text-[11px] leading-none text-text-tertiary" aria-hidden="true">·</span>
             <span>{r}</span>
           </li>
         ))}
@@ -292,7 +290,6 @@ function TheirSideBlock({ partnerFit, partnerName }) {
   return (
     <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
       <div className="flex items-center gap-2 mb-2">
-        <Users size={12} strokeWidth={2} className="text-text-tertiary shrink-0" />
         <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary">
           Would they want it?
         </p>
@@ -300,7 +297,7 @@ function TheirSideBlock({ partnerFit, partnerName }) {
       </div>
 
       <p className={`font-body text-xs leading-relaxed flex items-center gap-1.5 mb-2 ${st.text}`}>
-        <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${st.dot}`} />
+        <span className={`inline-block w-2 h-2 shrink-0 ${st.dot}`} />
         {partnerFit.summary}
       </p>
 
@@ -337,7 +334,7 @@ function TheirSideBlock({ partnerFit, partnerName }) {
       <ul className="flex flex-col gap-1">
         {partnerFit.reasons.map(r => (
           <li key={r} className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-snug flex items-start gap-1.5">
-            <Circle size={9} strokeWidth={2} className="shrink-0 mt-1" />
+            <span className="shrink-0 mt-0.5 font-mono text-[11px] leading-none text-text-tertiary" aria-hidden="true">·</span>
             <span>{r}</span>
           </li>
         ))}
@@ -379,7 +376,6 @@ function PitchCard({ pitch }) {
           size="sm"
           variant={copied === 'ok' ? 'tinted' : 'secondary'}
           onClick={copy}
-          icon={copied === 'ok' ? <Check size={12} strokeWidth={2.5} /> : <Copy size={12} strokeWidth={2} />}
           className="shrink-0 px-2.5 py-1 text-[11px]"
         >
           {copied === 'ok' ? 'Copied' : 'Copy'}
@@ -407,13 +403,12 @@ function PitchCard({ pitch }) {
 // of ten teams were at or over it the week after the rookie draft — so this
 // never says "illegal". It says how many active slots move, who is owed drops,
 // and when a trade pays that debt down (which is a selling point, not a cost).
-function RosterSpaceBlock({ space, who, icon: Icon = Layers }) {
+function RosterSpaceBlock({ space, who }) {
   if (!space) return null
   const arrow = space.net === 0 ? 'no change' : `${space.net > 0 ? '+' : ''}${space.net}`
   return (
     <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
       <div className="flex items-center gap-2 mb-1.5">
-        <Icon size={12} strokeWidth={2} className="text-text-tertiary shrink-0" />
         <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary">
           Roster space
         </p>
@@ -472,7 +467,6 @@ function PartnerActivityBlock({ activity }) {
   return (
     <div className="px-4 py-3 border-b border-border-default dark:border-border-default">
       <div className="flex items-center gap-2 mb-1.5">
-        <History size={12} strokeWidth={2} className="text-text-tertiary shrink-0" />
         <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary">
           Recent moves
         </p>
@@ -582,7 +576,6 @@ export default function TradeVerdict({
           <div className="px-4 py-3">
             {injuredWarnings.map(p => (
               <div key={p.playerName} className="flex items-start gap-2 mb-1 last:mb-0">
-                <AlertTriangle size={13} className="text-danger shrink-0 mt-0.5" strokeWidth={2} />
                 <p className="font-body text-xs text-danger leading-relaxed">
                   {p.playerName} is currently injured — verify status before accepting
                 </p>
@@ -610,7 +603,6 @@ export default function TradeVerdict({
                 headline so the pitch quotes something they can look up. */}
             {scarcity && (
               <p className="font-body text-[11px] leading-relaxed mt-2 pt-2 border-t border-border-default dark:border-border-default flex items-start gap-1.5 text-text-secondary dark:text-text-secondary">
-                <Scale size={12} strokeWidth={2} className={`shrink-0 mt-0.5 ${ODDS_TONE_TEXT[scarcity.tone] ?? 'text-text-tertiary'}`} />
                 <span>{scarcity.note}</span>
               </p>
             )}
@@ -623,20 +615,17 @@ export default function TradeVerdict({
             </p>
             {filledNeeds.length === 0 && hurtStrengths.length === 0 ? (
               <p className="font-body text-xs text-text-secondary dark:text-text-secondary flex items-center gap-1.5">
-                <Circle size={10} strokeWidth={2} className="text-text-tertiary" />
                 Neutral positional impact
               </p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {filledNeeds.map(pos => (
-                  <span key={`need-${pos}`} className="inline-flex items-center gap-1 font-body text-xs text-success bg-success/10 rounded-md px-2 py-0.5">
-                    <CheckCircle2 size={10} strokeWidth={2.5} />
+                  <span key={`need-${pos}`} className="inline-flex items-center gap-1 font-body text-xs text-success bg-success/10 px-2 py-0.5">
                     Fills {pos} need
                   </span>
                 ))}
                 {hurtStrengths.map(pos => (
-                  <span key={`hurt-${pos}`} className="inline-flex items-center gap-1 font-body text-xs text-danger bg-danger/10 rounded-md px-2 py-0.5">
-                    <XCircleSmall size={10} strokeWidth={2.5} />
+                  <span key={`hurt-${pos}`} className="inline-flex items-center gap-1 font-body text-xs text-danger bg-danger/10 px-2 py-0.5">
                     Weakens {pos} depth
                   </span>
                 ))}
@@ -644,13 +633,11 @@ export default function TradeVerdict({
             )}
             {benchNote && (
               <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary leading-relaxed mt-2 flex items-start gap-1.5">
-                <Circle size={10} strokeWidth={2} className="text-text-tertiary shrink-0 mt-0.5" />
                 <span>{benchNote}</span>
               </p>
             )}
             {starterLossNote && (
               <p className="font-body text-[11px] text-warning leading-relaxed mt-1.5 flex items-start gap-1.5">
-                <AlertTriangle size={11} strokeWidth={2} className="shrink-0 mt-0.5" />
                 <span>{starterLossNote}</span>
               </p>
             )}
@@ -667,7 +654,6 @@ export default function TradeVerdict({
             {weeklyImpact && (
               <div className="mt-2 pt-2 border-t border-border-default dark:border-border-default">
                 <div className="flex items-center gap-1.5 mb-1">
-                  <CalendarClock size={11} strokeWidth={2} className="text-text-tertiary shrink-0" />
                   <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-text-tertiary dark:text-text-tertiary">
                     Week {weeklyImpact.week} lineup
                   </p>
@@ -712,7 +698,7 @@ export default function TradeVerdict({
                 : windowScore < 0 ? 'text-warning'
                 : 'text-text-secondary dark:text-text-secondary'
             }`}>
-              <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${
+              <span className={`inline-block w-2 h-2 shrink-0 ${
                 windowScore > 0 ? 'bg-success' : windowScore < 0 ? 'bg-warning' : 'bg-text-tertiary'
               }`} />
               {windowNote}
@@ -739,16 +725,24 @@ export default function TradeVerdict({
                 No live playoff odds — scored on your roster tier. Odds take over whenever the season is running.
               </p>
             )}
+            {/* The tone used to live on a lucide glyph beside this note. It moves
+                  onto the words instead (law 1) — dropping it would have lost the
+                  read, since a buy window and a caution are the same sentence. */}
             {myTrajectoryNote && (
-              <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-relaxed mt-1.5 flex items-start gap-1.5">
-                <LineChart size={12} strokeWidth={2} className={`shrink-0 mt-0.5 ${ODDS_TONE_TEXT[myTrajectoryTone] ?? 'text-text-tertiary'}`} />
-                <span>{myTrajectoryNote}</span>
+              <p className={`font-body text-[11px] leading-relaxed mt-1.5 ${
+                ODDS_TONE_TEXT[myTrajectoryTone] ?? 'text-text-secondary'
+              }`}>
+                {myTrajectoryNote}
               </p>
             )}
+            {/* The tone used to live on a lucide glyph beside this note. It moves
+                  onto the words instead (law 1) — dropping it would have lost the
+                  read, since a buy window and a caution are the same sentence. */}
             {draftNote && (
-              <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-relaxed mt-1.5 flex items-start gap-1.5">
-                <Target size={12} strokeWidth={2} className={`shrink-0 mt-0.5 ${ODDS_TONE_TEXT[draftTone] ?? 'text-text-tertiary'}`} />
-                <span>{draftNote}</span>
+              <p className={`font-body text-[11px] leading-relaxed mt-1.5 ${
+                ODDS_TONE_TEXT[draftTone] ?? 'text-text-secondary'
+              }`}>
+                {draftNote}
               </p>
             )}
           </div>
@@ -770,7 +764,6 @@ export default function TradeVerdict({
                 {weeklyImpact && (
                   <>
                     <div className="flex items-center gap-1.5 mb-1">
-                      <CalendarClock size={11} strokeWidth={2} className="text-text-tertiary shrink-0" />
                       <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-text-tertiary dark:text-text-tertiary">
                         Week {weeklyImpact.week} lineup
                       </p>
@@ -779,9 +772,10 @@ export default function TradeVerdict({
                   </>
                 )}
                 {partnerTrajectoryNote && (
-                  <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary leading-relaxed mt-1.5 flex items-start gap-1.5">
-                    <LineChart size={12} strokeWidth={2} className={`shrink-0 mt-0.5 ${ODDS_TONE_TEXT[partnerTrajectoryTone] ?? 'text-text-tertiary'}`} />
-                    <span>{partnerTrajectoryNote}</span>
+                  <p className={`font-body text-[11px] leading-relaxed mt-1.5 ${
+                    ODDS_TONE_TEXT[partnerTrajectoryTone] ?? 'text-text-secondary'
+                  }`}>
+                    {partnerTrajectoryNote}
                   </p>
                 )}
               </div>
@@ -812,7 +806,7 @@ export default function TradeVerdict({
                 <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary">
                   Live Intelligence
                 </p>
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                <span className="inline-block w-1.5 h-1.5 bg-success animate-pulse" />
               </div>
               {liveIntelligence.map(intel => (
                 <PlayerNewsCard

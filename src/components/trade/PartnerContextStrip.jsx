@@ -1,4 +1,3 @@
-import { AlertTriangle } from 'lucide-react'
 import { Card, Badge, WinWindowBadge, cn } from '../ui'
 
 // THE partner intelligence strip — the one-line read on a selected opponent
@@ -47,7 +46,6 @@ export default function PartnerContextStrip({ partner, className }) {
       </div>
       {partner.mismatchWarning && (
         <div className="flex items-start gap-1.5">
-          <AlertTriangle size={11} strokeWidth={2} className="text-warning shrink-0 mt-0.5" />
           <span className="font-body text-[10px] text-warning leading-tight">{partner.mismatchWarning}</span>
         </div>
       )}

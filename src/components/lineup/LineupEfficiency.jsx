@@ -4,6 +4,7 @@ import { usePlayerDB } from '../../hooks/usePlayerDB'
 import { useLineupHistory } from '../../hooks/useLineupHistory'
 import { computeOptimalPoints } from '../../utils/lineupHistory'
 import SectionHeader from '../shared/SectionHeader'
+import { RuledList } from '../ui'
 
 function Page({ children }) {
   return (
@@ -106,7 +107,7 @@ export default function LineupEfficiency() {
           </p>
         </div>
 
-        <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+        <RuledList>
           {rows.map(({ week, actual, optimal, delta }) => {
             const deltaColor = delta < 1 ? 'text-success' : delta < 10 ? 'text-warning' : 'text-danger'
             return (
@@ -132,7 +133,7 @@ export default function LineupEfficiency() {
               </div>
             )
           })}
-        </div>
+        </RuledList>
       </section>
     </Page>
   )

@@ -1,4 +1,3 @@
-import { CheckCircle2, XCircle, RefreshCw, ChevronRight } from 'lucide-react'
 import { Card, Button, cn } from '../ui'
 
 // THE CALL — the Analyzer's hero.
@@ -13,10 +12,12 @@ import { Card, Button, cn } from '../ui'
 // below carry the evidence. Nothing is hidden; the summaries just tell you
 // whether you need to scroll.
 
+// The verdict carried a lucide glyph beside its word. The word IS the verdict —
+// "Accept" needs no tick to explain it — so the map keeps only the colour.
 const VERDICT_STYLES = {
-  Accept:  { Icon: CheckCircle2, color: 'text-success', bg: 'bg-success/10' },
-  Decline: { Icon: XCircle,      color: 'text-danger',  bg: 'bg-danger/10' },
-  Counter: { Icon: RefreshCw,    color: 'text-warning', bg: 'bg-warning/10' },
+  Accept:  { color: 'text-success', bg: 'bg-success/10' },
+  Decline: { color: 'text-danger',  bg: 'bg-danger/10' },
+  Counter: { color: 'text-warning', bg: 'bg-warning/10' },
 }
 
 // The fair band rendered as a track: the ±5% window you're aiming at, and where
@@ -80,7 +81,7 @@ function SummaryRow({ label, tone, text, onJump }) {
         {label}
       </span>
       <span className={cn('flex-1 font-body text-[11px] leading-snug', tone)}>{text}</span>
-      <ChevronRight size={13} strokeWidth={2} className="text-text-tertiary shrink-0" />
+      <span className="shrink-0 font-mono text-[11px] leading-none text-text-tertiary" aria-hidden="true">→</span>
     </button>
   )
 }

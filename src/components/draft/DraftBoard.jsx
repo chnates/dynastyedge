@@ -1,10 +1,6 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Upload, Save, ChevronUp, ChevronDown,
-  FileText, GripVertical, RotateCcw, Trash2, Search, RefreshCw,
-} from 'lucide-react'
-import {
   DndContext, PointerSensor, TouchSensor, KeyboardSensor,
   useSensor, useSensors, closestCenter,
 } from '@dnd-kit/core'
@@ -160,7 +156,7 @@ function SortHeader({ col, sortCol, sortDir, onSort, extra = '' }) {
       } ${extra}`}
     >
       {COL_LABELS[col]}
-      {active && (sortDir === 'asc' ? <ChevronUp size={10} /> : <ChevronDown size={10} />)}
+      {active && (sortDir === 'asc' ? <span className="font-mono text-[9px] leading-none" aria-hidden="true">▴</span> : <span className="font-mono text-[9px] leading-none" aria-hidden="true">▾</span>)}
     </button>
   )
 }
@@ -274,7 +270,6 @@ function SortablePlayerRow({
           className="pr-2 py-2.5 text-text-tertiary touch-none cursor-grab active:cursor-grabbing flex-shrink-0"
           aria-label="Drag to reorder"
         >
-          <GripVertical size={14} strokeWidth={1.75} />
         </div>
       )}
 
@@ -294,7 +289,7 @@ function SortablePlayerRow({
         <div className="flex-1 min-w-0">
           <div className="flex items-center flex-wrap gap-x-1">
             <span className={`font-body text-sm font-medium leading-tight truncate ${drafted ? 'text-text-tertiary line-through' : 'text-text-primary'}`}>{player.name}</span>
-            {hasNote && <FileText size={11} className="text-accent flex-shrink-0" strokeWidth={1.75} />}
+            {hasNote && <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.14em] text-brand-bright">Noted</span>}
             {drafted && <DraftedChip />}
             {!drafted && fillsNeed && <FillsNeedBadge />}
             {!drafted && targetLabel && <TargetBadge label={targetLabel} />}
@@ -759,7 +754,6 @@ export default function DraftBoard() {
               onClick={() => setShowResetConfirm(true)}
               className="flex items-center gap-1 text-text-tertiary hover:text-danger transition-colors"
             >
-              <RotateCcw size={13} strokeWidth={1.75} />
               <span className="font-body text-[11px]">Reset to FC</span>
             </button>
           )}
@@ -777,7 +771,7 @@ export default function DraftBoard() {
               <button
                 key={pos}
                 onClick={() => setPosFilter(pos)}
-                className={`flex-shrink-0 px-3 py-1.5 rounded-lg font-body text-xs font-semibold uppercase tracking-wide transition-colors ${
+                className={`flex-shrink-0 px-3 py-1.5 font-body text-xs font-semibold uppercase tracking-wide transition-colors ${
                   posFilter === pos
                     ? POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-bg-primary'
                     : 'bg-bg-card border border-border-default text-text-secondary'
@@ -791,18 +785,16 @@ export default function DraftBoard() {
             <button
               onClick={() => fileInputRef.current?.click()}
               title="Upload CSV rankings"
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-bg-card border border-border-default text-text-secondary hover:text-text-primary transition-colors"
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-bg-card border border-border-default text-text-secondary hover:text-text-primary transition-colors"
             >
-              <Upload size={13} strokeWidth={1.75} />
               <span className="font-body text-[11px] font-semibold uppercase tracking-wide">CSV</span>
             </button>
             {csvColumns.length > 0 && (
               <button
                 onClick={saveRankings}
                 title="Download rankings.json"
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-bg-card border border-border-default text-text-secondary hover:text-text-primary transition-colors"
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-bg-card border border-border-default text-text-secondary hover:text-text-primary transition-colors"
               >
-                <Save size={13} strokeWidth={1.75} />
                 <span className="font-body text-[11px] font-semibold uppercase tracking-wide">Save</span>
               </button>
             )}
@@ -813,20 +805,19 @@ export default function DraftBoard() {
         {/* ── Search ── */}
         <div className="px-4 pb-3">
           <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" strokeWidth={1.75} />
             <input
               type="search"
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search prospects"
-              className="w-full pl-9 pr-3 py-2 rounded-lg bg-bg-card border border-border-default font-body text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent"
+              className="w-full pl-9 pr-3 py-2 bg-bg-card border border-border-default font-body text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent"
             />
           </div>
         </div>
 
         {/* ── My picks callout (real slots from the synced Sleeper draft) ── */}
         {draftSync && draftSync.myRemaining.length > 0 && (
-          <div className="mx-4 mb-3 px-3 py-2 rounded-lg bg-warning/10 border border-warning/30">
+          <div className="mx-4 mb-3 px-3 py-2 bg-warning/10 border border-warning/30">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-body text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Your picks</span>
               {draftSync.myRemaining.map(p => (
@@ -839,7 +830,6 @@ export default function DraftBoard() {
                   aria-label="Refresh draft"
                   className="text-text-tertiary active:opacity-60 transition-opacity"
                 >
-                  <RefreshCw size={13} strokeWidth={1.75} className={sleeperDraft.refreshing ? 'animate-spin' : ''} />
                 </button>
               )}
             </div>
@@ -861,7 +851,6 @@ export default function DraftBoard() {
                     className="text-text-tertiary hover:text-danger transition-colors ml-0.5 leading-none"
                     aria-label={`Remove ${col.name}`}
                   >
-                    <Trash2 size={11} strokeWidth={1.75} />
                   </button>
                 </div>
               ))}
@@ -883,7 +872,7 @@ export default function DraftBoard() {
               }`}
             >
               Rank
-              {sortCol === 'myOrder' && <ChevronUp size={10} />}
+              {sortCol === 'myOrder' && <span className="font-mono text-[9px] leading-none" aria-hidden="true">▴</span>}
             </button>
           )}
           {allColumns.map(col =>
@@ -897,7 +886,7 @@ export default function DraftBoard() {
                 }`}
               >
                 {col.shortName ?? col.name}
-                {sortCol === col.sortKey && (sortDir === 'asc' ? <ChevronUp size={10} /> : <ChevronDown size={10} />)}
+                {sortCol === col.sortKey && (sortDir === 'asc' ? <span className="font-mono text-[9px] leading-none" aria-hidden="true">▴</span> : <span className="font-mono text-[9px] leading-none" aria-hidden="true">▾</span>)}
               </button>
             ) : (
               <span key={col.name} title={col.name} className="font-body text-[10px] font-semibold uppercase tracking-wider text-text-tertiary w-12 text-right truncate">

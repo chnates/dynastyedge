@@ -27,7 +27,7 @@ export default function PlayerCard({ player, onClick }) {
         {/* Starter indicator */}
         <span className="w-1.5 shrink-0">
           {isStarter && (
-            <span className="block w-1.5 h-1.5 rounded-full bg-accent" />
+            <span className="block w-1.5 h-1.5 bg-accent" />
           )}
         </span>
 

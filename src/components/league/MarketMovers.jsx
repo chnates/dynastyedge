@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeftRight } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getTeamName } from '../../hooks/useLeague'
 import {
@@ -11,13 +10,12 @@ import {
 import { POSITIONS } from '../../constants'
 import { useWatchlist } from '../../hooks/useWatchlist'
 import { useValueHistory } from '../../hooks/useValueHistory'
-import { POS_TEXT } from '../../utils/positionColors'
+import { POS_BG } from '../../utils/positionColors'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
-import SectionHeader from '../shared/SectionHeader'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import Sparkline from '../shared/Sparkline'
-import { Card } from '../ui'
+import { Magnitude, PositionBand, RuledList } from '../ui'
 
 // Ignore deep free agents whose tiny values produce noisy trend swings.
 const MIN_FA_VALUE = 500
@@ -58,28 +56,26 @@ function MoverRow({ player, ownerLabel, note, series, onClick, onBuildTrade }) {
       onKeyDown={e => { if (e.key === 'Enter') onClick() }}
       className="w-full text-left py-2.5 border-b border-border-default dark:border-border-default last:border-0 active:opacity-60 transition-opacity cursor-pointer"
     >
-      <div className="flex items-center gap-2">
-        <span className="flex-1 font-body font-medium text-sm text-text-primary dark:text-text-primary truncate min-w-0">
+      <div className="flex items-baseline gap-2">
+        <span className={`shrink-0 w-[7px] h-[7px] self-center ${POS_BG[player.position] ?? 'bg-text-tertiary'}`} aria-hidden="true" />
+        <span className="flex-1 min-w-0 font-body font-medium text-sm text-text-primary text-balance">
           {player.name}
         </span>
-        <span className={`font-body text-[10px] font-semibold shrink-0 uppercase ${POS_TEXT[player.position] ?? 'text-text-tertiary dark:text-text-tertiary'}`}>
-          {player.position}
-        </span>
-        <span className="font-mono text-sm font-medium text-text-primary dark:text-text-primary shrink-0 w-14 text-right tabular-nums">
-          {player.value.toLocaleString()}
+        <span className="shrink-0 self-center">
+          <Magnitude value={player.value > 0 ? player.value : null} />
         </span>
         <TrendChip trend={player.trend30Day} value={player.value} />
       </div>
-      <div className="flex items-center gap-1 mt-0.5">
-        <span className="text-[10px] text-text-tertiary dark:text-text-tertiary font-body truncate">
+      <div className="flex items-center gap-1 mt-1 pl-[15px]">
+        {/* Neither elides. This exact line was the truncation finding B3's
+            sweep turned up last: "Aaronreg… · Rebuilding owner — prime tar…"
+            on the Ja'Marr Chase row, where the NOTE is the whole point of the
+            row (CLAUDE.md: truncation is not a layout strategy for a
+            load-bearing value). */}
+        <span className="min-w-0 font-mono text-[9px] uppercase tracking-[0.14em] text-text-tertiary">
           {ownerLabel}
+          {note && <span className="text-warning"> · {note}</span>}
         </span>
-        {note && (
-          <>
-            <span className="text-[10px] text-text-tertiary dark:text-text-tertiary shrink-0">·</span>
-            <span className="text-[10px] text-warning font-body truncate">{note}</span>
-          </>
-        )}
         <span className="flex-1" />
         {series && <Sparkline data={series} />}
         {onBuildTrade && (
@@ -88,7 +84,6 @@ function MoverRow({ player, ownerLabel, note, series, onClick, onBuildTrade }) {
             aria-label="Build trade"
             className="shrink-0 ml-1 flex items-center gap-1 rounded-none border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-accent active:opacity-60 transition-opacity"
           >
-            <ArrowLeftRight size={11} strokeWidth={2.25} />
             <span className="font-body text-[10px] font-semibold">Trade</span>
           </button>
         )}
@@ -101,13 +96,13 @@ function MoverSection({ label, players, emptyHint, getOwnerLabel, getNote, getSe
   if (!players.length && !emptyHint) return null
   return (
     <section>
-      <SectionHeader label={label} count={players.length || undefined} />
+      <PositionBand label={label} count={players.length || null} className="mt-5" />
       {players.length === 0 ? (
         <p className="font-body text-xs text-text-tertiary dark:text-text-tertiary px-1 pb-2">
           {emptyHint}
         </p>
       ) : (
-        <Card padding="px-3">
+        <RuledList>
           {players.map(p => (
             <MoverRow
               key={p.sleeperId}
@@ -119,7 +114,7 @@ function MoverSection({ label, players, emptyHint, getOwnerLabel, getNote, getSe
               onBuildTrade={onBuildTrade && p.ownerRoster ? () => onBuildTrade(p) : null}
             />
           ))}
-        </Card>
+        </RuledList>
       )}
     </section>
   )

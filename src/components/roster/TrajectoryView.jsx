@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ChevronDown, ChevronUp, TrendingUp } from 'lucide-react'
 import { getTeamName } from '../../hooks/useLeague'
 import { useLeagueContext } from '../../context/LeagueContext'
 import LoadingSpinner from '../shared/LoadingSpinner'
@@ -10,6 +9,7 @@ import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import Sparkline from '../shared/Sparkline'
 import TeamAvatar from '../shared/TeamAvatar'
 import { POS_TEXT, POS_SVG } from '../../utils/positionColors'
+import { PositionBand, RuledList } from '../ui'
 import {
   buildAgeCurves,
   buildRosterTrajectory,
@@ -236,7 +236,6 @@ export default function TrajectoryView() {
         verdict.tone === 'ascending' ? 'border-l-success' : verdict.tone === 'declining' ? 'border-l-danger' : 'border-l-warning'
       }`}>
         <div className="flex items-center gap-1.5 mb-1">
-          <TrendingUp size={13} strokeWidth={2} className={TONE_TEXT[verdict.tone]} />
           <span className={`font-mono text-[10px] font-semibold uppercase tracking-[0.12em] ${TONE_TEXT[verdict.tone]}`}>
             Window peaks {verdict.peakSeason}
           </span>
@@ -258,7 +257,7 @@ export default function TrajectoryView() {
         <div className="mt-2 mx-1 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
-              <span className="block w-3 h-0.5 rounded-full bg-accent" />
+              <span className="block w-3 h-0.5 bg-accent" />
               <span className="font-body text-[9px] font-semibold uppercase tracking-wide text-text-tertiary">This team</span>
             </span>
             <span className="flex items-center gap-1">
@@ -287,8 +286,8 @@ export default function TrajectoryView() {
       </div>
 
       {/* Per-position trajectory */}
-      <SectionHeader label="By Position" />
-      <div className="rounded-none bg-bg-card border border-border-default px-3">
+      <PositionBand label="By Position" className="mt-5" />
+      <RuledList>
         {POSITIONS.map((pos, i) => {
           const series = trajectory.byPosition[pos]
           if (!series[0]) return null
@@ -316,7 +315,7 @@ export default function TrajectoryView() {
             </div>
           )
         })}
-      </div>
+      </RuledList>
 
       {/* Per-player projections */}
       <SectionHeader label="Player Projections" count={players.length} />
@@ -333,7 +332,7 @@ export default function TrajectoryView() {
                 i < players.length - 1 ? 'border-b border-border-default' : ''
               }`}
             >
-              <span className="block w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: POS_SVG[player.position] }} />
+              <span className="block w-2 h-2 flex-shrink-0" style={{ backgroundColor: POS_SVG[player.position] }} />
               <div className="flex-1 min-w-0">
                 <p className="font-body text-sm font-medium text-text-primary truncate leading-tight">
                   {player.name}
@@ -370,8 +369,8 @@ export default function TrajectoryView() {
             How this works
           </span>
           {howToOpen
-            ? <ChevronUp size={15} className="text-text-tertiary" strokeWidth={1.75} />
-            : <ChevronDown size={15} className="text-text-tertiary" strokeWidth={1.75} />}
+            ? <span className="font-mono text-[11px] leading-none text-text-tertiary" aria-hidden="true">▴</span>
+            : <span className="font-mono text-[11px] leading-none text-text-tertiary" aria-hidden="true">▾</span>}
         </button>
         {howToOpen && (
           <div className="px-3 pb-3 flex flex-col gap-2.5">

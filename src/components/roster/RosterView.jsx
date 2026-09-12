@@ -105,7 +105,7 @@ export default function RosterView() {
             </span>
           </div>
           <div className="flex items-center gap-1 mt-1.5">
-            <span className="block w-1.5 h-1.5 rounded-full bg-bg-primary/80 shrink-0" />
+            <span className="block w-1.5 h-1.5 bg-bg-primary/80 shrink-0" />
             <span className="font-body text-[10px] text-bg-primary/60">
               = starting lineup · — = no market value yet
             </span>

@@ -1,8 +1,4 @@
 import { useMemo, useState, useEffect, useCallback } from 'react'
-import {
-  RotateCcw, RefreshCw, ChevronDown, ChevronRight,
-  Search, FileText,
-} from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useRookieADP } from '../../hooks/useRookieADP'
 import { buildRookieProspects } from '../../utils/rookieAdp'
@@ -89,9 +85,8 @@ function StatusBar({ status, fetchedAt, refreshing, syncError, onRefresh }) {
         <button
           onClick={onRefresh}
           disabled={refreshing}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-bg-card border border-border-default text-text-secondary active:opacity-60 transition-opacity flex-shrink-0"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-bg-card border border-border-default text-text-secondary active:opacity-60 transition-opacity flex-shrink-0"
         >
-          <RefreshCw size={13} strokeWidth={1.75} className={refreshing ? 'animate-spin' : ''} />
           <span className="font-body text-[11px] font-semibold uppercase tracking-wide">Refresh</span>
         </button>
       </div>
@@ -125,7 +120,7 @@ function DraftCapitalCard({ capital, taxiUsed, taxiSlots, draftSeason }) {
           {capital.map(c => (
             <span
               key={c.key}
-              className={`flex items-baseline gap-1.5 px-2 py-1 rounded-lg border ${
+              className={`flex items-baseline gap-1.5 px-2 py-1 border ${
                 c.used
                   ? 'border-border-default bg-bg-secondary opacity-50'
                   : 'border-accent/30 bg-accent/10'
@@ -149,7 +144,7 @@ function DraftCapitalCard({ capital, taxiUsed, taxiSlots, draftSeason }) {
 
 function OnTheClockBanner({ slotStr }) {
   return (
-    <div className="mx-4 mt-3 px-3 py-3 rounded-xl bg-accent/10 border border-accent/30 text-center">
+    <div className="mx-4 mt-3 px-3 py-3 bg-accent/10 border border-accent/30 text-center">
       <p className="font-body text-[11px] font-semibold uppercase tracking-wider text-accent mb-0.5">
         You're on the clock
       </p>
@@ -247,13 +242,12 @@ function ProspectList({
       </div>
 
       <div className="relative mb-2">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" strokeWidth={1.75} />
         <input
           type="search"
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search prospects"
-          className="w-full pl-9 pr-3 py-2 rounded-lg bg-bg-card border border-border-default font-body text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent"
+          className="w-full pl-9 pr-3 py-2 bg-bg-card border border-border-default font-body text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent"
         />
       </div>
 
@@ -262,7 +256,7 @@ function ProspectList({
           <button
             key={pos}
             onClick={() => setPosFilter(pos)}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-lg font-body text-xs font-semibold uppercase tracking-wide transition-colors ${
+            className={`flex-shrink-0 px-3 py-1.5 font-body text-xs font-semibold uppercase tracking-wide transition-colors ${
               posFilter === pos
                 ? POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-bg-primary'
                 : 'bg-bg-card border border-border-default text-text-secondary'
@@ -299,8 +293,12 @@ function ProspectList({
                     <span className="font-body text-sm font-medium text-text-primary leading-tight truncate">
                       {player.name}
                     </span>
+                    {/* "You wrote a note on him" was a lucide document glyph;
+                        the word is unambiguous and needs no legend. */}
                     {!!notes[player.sleeperId] && (
-                      <FileText size={11} className="text-accent flex-shrink-0" strokeWidth={1.75} />
+                      <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.14em] text-text-tertiary">
+                        Noted
+                      </span>
                     )}
                     {needPositions.includes(player.position) && <NeedBadge />}
                   </div>
@@ -659,8 +657,8 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects, my
                   className="flex items-center gap-2 w-full mb-2"
                 >
                   {allPicksOpen
-                    ? <ChevronDown size={14} className="text-text-tertiary" />
-                    : <ChevronRight size={14} className="text-text-tertiary" />}
+                    ? <span className="font-mono text-[11px] leading-none text-text-tertiary" aria-hidden="true">▾</span>
+                    : <span className="font-mono text-[11px] leading-none text-text-tertiary" aria-hidden="true">▸</span>}
                   <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary">
                     Drafted — {sortedPicks.length} of {totalPicks}
                   </p>
@@ -762,7 +760,7 @@ function LogPickModal({ player, nextPickInfo, userMap, onSave, onClose, myRoster
         </h3>
         <p className="font-body text-sm text-text-secondary mt-0.5 mb-4">{player.name}</p>
 
-        <div className="rounded-lg bg-bg-card border border-border-default px-3 py-2.5 flex items-center gap-3">
+        <div className="bg-bg-card border border-border-default px-3 py-2.5 flex items-center gap-3">
           <span className="font-mono text-xl font-bold text-accent tabular-nums">
             {nextPickInfo?.slotStr}
           </span>
@@ -795,7 +793,7 @@ function EditPickModal({ pick, player, userMap, onDelete, onClose, myRosterId })
         </h3>
         <p className="font-body text-sm text-text-secondary mt-0.5 mb-4">{player?.name}</p>
 
-        <div className="rounded-lg bg-bg-card border border-border-default px-3 py-2.5 flex items-center gap-3 mb-4">
+        <div className="bg-bg-card border border-border-default px-3 py-2.5 flex items-center gap-3 mb-4">
           <span className="font-mono text-xl font-bold text-text-primary tabular-nums">
             {pick.slot}
           </span>
@@ -876,7 +874,7 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
     <>
       <div className="pb-4">
         {/* No-draft banner with on-demand re-check */}
-        <div className={`mx-4 mt-4 px-3 py-2.5 rounded-xl border ${syncError ? 'bg-danger/10 border-danger/30' : 'bg-bg-card border-border-default'}`}>
+        <div className={`mx-4 mt-4 px-3 py-2.5 border ${syncError ? 'bg-danger/10 border-danger/30' : 'bg-bg-card border-border-default'}`}>
           <div className="flex items-start gap-2">
             <p className="font-body text-xs text-text-secondary flex-1">
               {syncError
@@ -886,9 +884,8 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
             <button
               onClick={onCheckAgain}
               disabled={checking}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-bg-secondary border border-border-default text-text-secondary active:opacity-60 transition-opacity flex-shrink-0"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-bg-secondary border border-border-default text-text-secondary active:opacity-60 transition-opacity flex-shrink-0"
             >
-              <RefreshCw size={12} strokeWidth={1.75} className={checking ? 'animate-spin' : ''} />
               <span className="font-body text-[10px] font-semibold uppercase tracking-wide">Check</span>
             </button>
           </div>
@@ -955,8 +952,8 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
               className="flex items-center gap-2 w-full mb-2"
             >
               {draftedOpen
-                ? <ChevronDown size={14} className="text-text-tertiary" />
-                : <ChevronRight size={14} className="text-text-tertiary" />}
+                ? <span className="font-mono text-[11px] leading-none text-text-tertiary" aria-hidden="true">▾</span>
+                : <span className="font-mono text-[11px] leading-none text-text-tertiary" aria-hidden="true">▸</span>}
               <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary">
                 Drafted — {draftedSorted.length}
               </p>
@@ -1000,7 +997,6 @@ function ManualTracker({ league, values, prospects, syncError, onCheckAgain, che
             onClick={() => setShowReset(true)}
             className="flex items-center gap-1.5 text-text-tertiary hover:text-danger transition-colors"
           >
-            <RotateCcw size={14} strokeWidth={1.75} />
             <span className="font-body text-xs">Reset tracker</span>
           </button>
         </div>

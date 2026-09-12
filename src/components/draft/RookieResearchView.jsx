@@ -1,5 +1,4 @@
 import { useMemo, useRef, useState } from 'react'
-import { ChevronDown, TrendingUp, TrendingDown, Info, Target } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useRookieResearch } from '../../hooks/useRookieResearch'
 import { topTargets, splitDivergence } from '../../utils/rookieResearch'
@@ -37,12 +36,10 @@ const pct = score => (score == null ? '—' : String(Math.round(score * 100)))
 function MoveChip({ move }) {
   if (!move) return null
   const up = move.direction === 'up'
-  const Icon = up ? TrendingUp : TrendingDown
   return (
     <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${
       up ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'
     }`}>
-      <Icon size={11} aria-hidden="true" />
       {Math.abs(move.delta)} {Math.abs(move.delta) === 1 ? 'spot' : 'spots'}
     </span>
   )
@@ -279,7 +276,6 @@ export default function RookieResearchView() {
               // scroll the tap changes state the user can't see.
               boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
             }}
-            icon={<Target size={13} aria-hidden="true" />}
           >
             See the whole class ranked for my roster
           </Button>
@@ -387,14 +383,8 @@ export default function RookieResearchView() {
         onClick={() => setShowHow(v => !v)}
         aria-expanded={showHow}
         className="justify-start gap-1.5 px-0 mt-5 font-mono text-[10px] uppercase tracking-wider"
-        icon={<Info size={13} aria-hidden="true" />}
       >
         How this works
-        <ChevronDown
-          size={13}
-          className={`transition-transform ${showHow ? 'rotate-180' : ''}`}
-          aria-hidden="true"
-        />
       </Button>
       {showHow && (
         <Card padding="sm" className="space-y-2.5 text-xs leading-relaxed text-text-secondary dark:text-text-secondary">

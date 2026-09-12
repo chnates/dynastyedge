@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Newspaper } from 'lucide-react'
 import { useNewsFeed } from '../../hooks/useNewsFeed'
 import { useWatchlist } from '../../hooks/useWatchlist'
 import { relativeTime } from '../../hooks/usePlayerIntel'
 import { POS_TEXT } from '../../utils/positionColors'
-import { Badge, SearchInput, cn } from '../ui'
+import { Badge, PositionBand, RuledList, SearchInput, cn } from '../ui'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import SectionHeader from '../shared/SectionHeader'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
@@ -152,7 +151,6 @@ export default function NewsView() {
 
       {groups.length === 0 ? (
         <div className="flex flex-col items-center justify-center text-center py-16 px-6">
-          <Newspaper size={32} strokeWidth={1.5} className="text-text-tertiary mb-3" />
           <p className="font-body text-sm text-text-secondary dark:text-text-secondary">
             {items.length === 0
               ? 'No news right now — check back later.'
@@ -162,8 +160,8 @@ export default function NewsView() {
       ) : (
         groups.map(group => (
           <section key={group.label}>
-            <SectionHeader label={group.label} count={group.items.length} />
-            <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+            <PositionBand label={group.label} count={group.items.length} className="mt-5" />
+            <RuledList>
               {group.items.map((n, i) => (
                 <NewsRow
                   key={`${group.label}-${i}-${n.headline}`}
@@ -171,7 +169,7 @@ export default function NewsView() {
                   onOpen={() => setOpenArticle(n)}
                 />
               ))}
-            </div>
+            </RuledList>
           </section>
         ))
       )}

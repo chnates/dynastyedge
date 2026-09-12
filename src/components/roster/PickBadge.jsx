@@ -8,8 +8,8 @@ export default function PickBadge({ pick, originalTeamName }) {
   const label = pick.slotLabel ?? ROUND_LABELS[pick.round] ?? `R${pick.round}`
 
   return (
-    <div className={`inline-flex flex-col items-center rounded-lg px-2.5 py-1.5 shrink-0 ${cls}`}>
-      <span className="text-[11px] font-body font-bold leading-tight">
+    <div className={`inline-flex flex-col items-center px-2.5 py-1.5 shrink-0 ${cls}`}>
+      <span className="font-mono text-[11px] font-bold uppercase tracking-[0.06em] leading-tight tabular-nums">
         {label}
       </span>
       {!isOwn && originalTeamName && (

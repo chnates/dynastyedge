@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { CheckCircle2, RefreshCw, XCircle } from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getTeamName } from '../../hooks/useLeague'
 import { analyzeTrade, getTradeVerdict, suggestFairPackage, getCounterSuggestion, adjustVerdictForInjuries, buildTradePitch } from '../../utils/tradeAnalysis'
@@ -58,10 +57,12 @@ function mapPackageToAssets(fairPackage, myRoster) {
   }).filter(Boolean)
 }
 
+// The verdict word IS the verdict — a tick beside "Accept" restates it — so
+// the sticky chip keeps only its colour.
 const VERDICT_CHIP = {
-  Accept:  { Icon: CheckCircle2, cls: 'text-success' },
-  Decline: { Icon: XCircle,      cls: 'text-danger' },
-  Counter: { Icon: RefreshCw,    cls: 'text-warning' },
+  Accept:  { cls: 'text-success' },
+  Decline: { cls: 'text-danger' },
+  Counter: { cls: 'text-warning' },
 }
 
 // Pinned below the sub-tab bar so totals + verdict stay visible while
