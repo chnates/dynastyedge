@@ -43,7 +43,7 @@ export { default as Select } from './Select'
 export { cn } from './cn'
 // The JS half of the reduced-motion guard — CSS cannot reach a programmatic
 // scrollIntoView({ behavior: 'smooth' }) argument.
-export { prefersReducedMotion, scrollToTopOf } from './motion'
+export { prefersReducedMotion, scrollToTopOf, stagger } from './motion'
 
 // Adopted shared primitives (re-exported so the library is the one surface).
 // Files stay in components/shared/ — import them from here going forward.

@@ -274,23 +274,68 @@ body {
   color: rgb(var(--text-tertiary));
 }
 
-/* ── The Edge: staggered card entrance ───────────────────────── */
-/* Replaced by the press run in the same step — kept here only until that
-   commit lands, so the guard below can be verified against real motion. */
+/* ── The press run — Matchday's signature entrance ─────────────── */
+/* "Flat colour bands wipe across the page, then type drops in behind them.
+   Ink hitting paper." (directions.md, direction 3's MOTION block.)
 
-@keyframes edge-rise {
-  from { opacity: 0; transform: translateY(8px); }
+   It replaced `.edge-rise`, a 0.35s fade-up on Tailwind's default ease. That
+   animation was TWO of the twelve researched slop markers on its own — a
+   fade-up entrance, and (at the call site) a linear 0/60/120/180ms stagger —
+   and it was the only keyframe in the app.
+
+   Three keyframes, in the order they fire on a block:
+
+   1. `.press-band` — a solid field prints left to right. This is the wipe, and
+      it is the app's one motion MATERIAL: the same movement carries the sheet
+      arriving and the loading bar (see `.press-bar`). It is the reason the
+      signature reads app-wide while only ONE screen animates its entrance.
+   2. `.press-ink` — the type lands behind the band it was printed under. A
+      short drop FROM ABOVE with a slight vertical over-scale that settles; the
+      transform origin is the top edge, so it reads as ink striking paper and
+      spreading, not as a card sliding up.
+   3. `.press-set` — a row sets under a downward clip. Rows are the dense
+      register (law 5) and there are a lot of them, so this is the quietest of
+      the three: the clip does the work and the opacity floor is 0.2, never 0,
+      so a row is never fully absent from the page.
+
+   Every property here is compositor-cheap — `clip-path`, `opacity`,
+   `transform`. Nothing animates layout: motion must not cost a paint
+   (failure-archaeology §4e-v is the same lesson from the other direction).
+
+   THE FILL MODE IS `backwards`, AND THE ALTERNATIVES ARE BOTH WRONG.
+   Without any fill a delayed block paints at full opacity through its delay
+   and then jumps to the start of its own animation — a flash, not an entrance.
+   With `both` the block keeps its FINAL keyframe forever, which for a wipe
+   means a permanent `clip-path: inset(0 0 0 0)`: visually identical, and it
+   silently clips `.tap-target`'s 44px hit area back to the element box at the
+   block's own edges, because clip-path clips hit-testing as well as paint.
+   `backwards` gives the from-state during the delay and then reverts to the
+   base value, so there is no flash and no residue. */
+
+@keyframes press-band {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes press-ink {
+  from { opacity: 0; transform: translateY(-9px) scaleY(1.08); }
   to   { opacity: 1; transform: none; }
 }
 
-.edge-rise {
-  animation: edge-rise 0.35s ease-out both;
+@keyframes press-set {
+  from { opacity: 0.2; clip-path: inset(0 0 100% 0); }
+  to   { opacity: 1; clip-path: inset(0 0 0 0); }
 }
+
+.press-band { animation: press-band 0.62s var(--ez) backwards; }
+.press-ink  { animation: press-ink  0.58s var(--ez) backwards; transform-origin: top; }
+.press-set  { animation: press-set  0.44s var(--ez) backwards; }
 
 /* ── The reduced-motion guard: GLOBAL, and deliberately first ──── */
 /* This rule is the precondition for every other line of motion in the app, so
-   it landed BEFORE any of it. It used to cover exactly one class (`.edge-rise`)
-   — adequate only because nothing else in the app moved, and a trap the moment
+   it landed BEFORE any of it. It used to cover exactly one class (`.edge-rise`,
+   the fade-up the press run replaced) — adequate only because nothing else in
+   the app moved, and a trap the moment
    that stopped being true: a guard scoped to a class list has to be extended by
    whoever adds the next animation, and the failure mode is silent for everyone
    who doesn't have the setting on.

@@ -3734,6 +3734,52 @@ sheet-gesture family (failure-archaeology §2, six settled battles), the release
 is the tail of a direct manipulation rather than an entrance, and nothing about
 it is improved by a house curve.
 
+#### The press run — the signature entrance
+
+*"Flat colour bands wipe across the page, then type drops in behind them. Ink
+hitting paper."* Three keyframes in `index.css`, fired in that order:
+
+|class|what|duration|
+|---|---|---|
+|`.press-band`|a solid field prints left to right (`clip-path` inset from the right)|620ms|
+|`.press-ink`|the type lands behind the band — a short drop from above with a slight vertical over-scale, `transform-origin: top`|580ms|
+|`.press-set`|a row sets under a downward clip, opacity floor **0.2**, never 0|440ms|
+
+It replaced **`.edge-rise`**, a 0.35s fade-up on Tailwind's default ease — two of
+the twelve researched slop markers in one animation (a fade-up entrance, and at
+the call site a linear 0/60/120/180ms stagger), and the only keyframe in the app.
+
+Every property is compositor-cheap (`clip-path`, `opacity`, `transform`).
+**Nothing animates layout** — motion must not cost a paint.
+
+**The fill mode is `backwards`, and both alternatives are wrong.** With no fill a
+delayed block paints at full opacity through its delay and then jumps to the
+start of its own animation — a flash. With `both` the block keeps its final
+keyframe forever, which for a wipe is a permanent `clip-path: inset(0 0 0 0)`:
+visually identical, and it silently clips **`.tap-target`'s 44px hit area** back
+to the element box at the block's edges, because clip-path clips hit-testing as
+well as paint.
+
+#### The stagger is jittered, and monotonic by construction
+
+**`stagger(index)`** (`components/ui/motion.js`) is a **cumulative sum of
+independently-drawn gaps**, each within 0.6×–1.45× of a 46ms base, capped at
+420ms. Two properties it needs and the obvious implementations don't have:
+
+- **Pure in the index, not `Math.random()`.** React re-renders; a random delay
+  would hand a block a different number on each pass.
+- **Independent of call ORDER.** The mock advanced one shared LCG per call,
+  which is right for a template rendered top to bottom and wrong here —
+  conditional sections mean block 5 is not always the fifth call. Hashing the
+  index means a block's delay depends only on where it sits.
+
+**Summing gaps rather than scaling a linear base is a measured choice.** The
+mock's multiplicative form (`i * base * jitter`) produces 15 / 52 / 123 / 176 /
+**145** / 270 / 361 / 420 / **398** on nine blocks — two inversions, where a
+later block lands *before* an earlier one. That reads as broken, not irregular.
+The shipped form gives 0 / 57 / 107 / 145 / 189 / 248 / 292 / 348 / 399: gaps of
+38–59ms, no two alike, never out of order.
+
 -----
 
 ## File Structure
