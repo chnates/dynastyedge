@@ -99,7 +99,7 @@ function RookieRow({ row, onOpen }) {
 // the abstract; this one answers "who should I take with my picks?".
 function TargetCard({ row, onOpen }) {
   return (
-    <Card padding="sm" cut accent="bg-pos-qb" interactive onClick={() => onOpen(row)} className="w-full text-left">
+    <Card padding="sm" tone="bg-pos-qb" interactive onClick={() => onOpen(row)} className="w-full text-left">
       <div className="flex items-baseline justify-between gap-2">
         <span className="font-semibold text-sm text-text-primary dark:text-text-primary truncate">{row.name}</span>
         <span className={`font-mono text-xs shrink-0 ${TIER_TEXT[row.tier] ?? 'text-text-tertiary'}`}>
@@ -131,8 +131,7 @@ function DivergenceCard({ row, onOpen, kind }) {
   return (
     <Card
       padding="sm"
-      cut
-      accent={up ? 'bg-success' : 'bg-danger'}
+      tone={up ? 'bg-success' : 'bg-danger'}
       interactive
       onClick={() => onOpen(row)}
       className="w-full text-left"
@@ -213,7 +212,7 @@ export default function RookieResearchView() {
       {/* What this page is, in the fewest words that actually work. It stays
           open: the page's original failure was that nothing on screen said
           what an "opp" number meant or where to start. */}
-      <Card padding="sm" accent="bg-accent" className="mt-4">
+      <Card padding="sm" tone="bg-accent" className="mt-4">
         <div className="text-sm font-semibold text-text-primary dark:text-text-primary">
           Scout the rookie class
         </div>
@@ -240,7 +239,7 @@ export default function RookieResearchView() {
           a missing file is an expected state with an explanation — never an
           ErrorState, which would imply the user can retry into a fix. */}
       {!intel && (
-        <Card padding="sm" accent="bg-warning" className="mt-3">
+        <Card padding="sm" tone="bg-warning" className="mt-3">
           <div className="text-sm font-semibold text-text-primary dark:text-text-primary">
             Rookie intel hasn't published yet
           </div>

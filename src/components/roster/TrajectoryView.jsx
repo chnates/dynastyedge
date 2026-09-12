@@ -222,7 +222,7 @@ export default function TrajectoryView() {
       <div className={`${selectedRosterId ? 'mt-1' : 'mt-4'} flex items-center gap-2.5`}>
         <TeamAvatar owner={roster.owner} size={32} />
         <div className="min-w-0">
-          <h1 className="font-display text-xl uppercase tracking-wide text-text-primary leading-tight truncate">
+          <h1 className="font-display font-extrabold text-xl uppercase tracking-[-0.025em] font-extrabold tracking-[-0.025em] text-text-primary leading-tight truncate">
             {teamName}
           </h1>
           <p className="font-body text-[11px] text-text-secondary">

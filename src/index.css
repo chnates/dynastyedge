@@ -6,80 +6,117 @@
 /* Values are space-separated RGB channels so Tailwind opacity     */
 /* modifiers (e.g. bg-accent/10) continue to work.                 */
 
+/* "MATCHDAY" — a publication about a competition.
+   docs/design/review-2026-09/directions.md (the direction + its revisions) ·
+   slop-checklist.md (the rules any new UI passes) ·
+   mocks/directions-2.html, direction 3 (the authority on palette and type).
+
+   It replaced "Primetime Blackout", whose own brief specified an outcome that
+   reads as machine-generated: a near-black ground with one scarce accent, plus
+   hairline rules at zero radius (findings.md B1). Two token-level consequences
+   follow, and they are the point of this layer rather than a detail of it:
+
+   1. THE GROUND AND THE GREYS CARRY A HUE. Warm paper and warm ink, every
+      neutral tinted toward it (~45-55°). Zero-saturation greys on pure black
+      or pure white are a named marker; "achromatic structure" is also what
+      made the old palette read grey even with five position hues on screen
+      (findings.md B6).
+   2. COLOUR IS A FIELD, NOT A RAIL. Ink and the position hues are painted as
+      solid blocks with the type reversed out — the masthead, the hero poster,
+      the section band, the inline Mark, the tab bar. A thin coloured rail down
+      a container's left edge is the single most-cited tell in the research and
+      was a documented primitive here (`Card`'s `accent` prop).
+
+   Two hues, 176° apart, as the round-2 house rules require: the primary spot
+   is Falcons crimson (~350°) and the secondary is --alt, a slate teal (~174°).
+   The five position hues (165-285°) are the colour world on top of that; the
+   three status colours keep their exclusive meanings and never swap with
+   either. */
+
 /* CONTRAST IS A CONTRACT, NOT A PREFERENCE. --text-tertiary carries real
    content — the meta line on every player row, timestamps, the reason lines
    under trade targets (525 uses) — so it must clear WCAG AA body text
-   (4.5:1). It failed in both themes until 2026-09-11: dark #54565C was
-   2.51:1 and light #8A9096 was 3.23:1. The ratios noted on each token are
-   measured against the WORST-CASE ground of that theme, which is NOT the
-   same surface in each: in dark the lightest ground (--bg-card #141417)
-   gives the least contrast, in light the darkest (--bg-secondary #E7E9EC)
-   does. AA puts a floor under the bottom step of the ramp, so tertiary
-   necessarily sits closer to secondary than it used to — that compression is
-   the cost of legibility, not a mistake to "fix" by darkening it back.
-   ANY CHANGE TO A GROUND COLOR MUST RE-CHECK BOTH TOKENS AGAINST BOTH
-   THEMES. */
+   (4.5:1). The ratio noted on each token is measured against the WORST-CASE
+   ground of that theme, which is NOT the same surface in each: in dark the
+   lightest ground (--bg-card) gives the least contrast, in light the darkest
+   (--bg-secondary) does.
 
-/* "Primetime Blackout" (Phase 3, docs/design/phase3-design-brief.md):
-   silver is structure, Falcons brand red is rationed (hero score-bug, "you"
-   treatments, active sub-tab underline only). Brand red (--brand family) and
-   trend/status red (--danger) are deliberately different values and must
-   never swap roles. */
+   ANY CHANGE TO A GROUND COLOR MUST RE-CHECK BOTH TEXT TOKENS AGAINST BOTH
+   THEMES. The Matchday repaint moved every ground, which invalidated the
+   ratios the accessibility floor had been set against, and four tokens failed
+   when re-measured against the new grounds: dark --brand-bright, light
+   --success, and the paper-on-hue reversal of light --pos-rb / --pos-te (the
+   band labels). All four were darkened or lightened along their own hue until
+   they cleared, which is why they are not the mock's literal values.
+   Re-measure with: node scripts/dev/contrast-audit.mjs */
 
 :root {
-  --bg-primary:    240 241 243;   /* #F0F1F3 */
-  --bg-secondary:  231 233 236;   /* #E7E9EC */
-  --bg-card:       255 255 255;   /* #FFFFFF */
-  --border-default:217 220 225;   /* #D9DCE1 */
-  --text-primary:  16 16 19;      /* #101013 */
-  --text-secondary:84 86 92;      /* #54565C — 6.03:1 on the darkest ground */
-  --text-tertiary: 103 105 111;   /* #67696F — 4.51:1 on the darkest ground */
-  --accent:        92 100 112;    /* #5C6470 — "silver" reads as slate on white */
-  --brand:         167 25 48;     /* #A71930 — Falcons red, deepened for white bg */
-  --brand-deep:    113 16 34;     /* #711022 — score-bug gradient partner */
-  --brand-bright:  167 25 48;     /* red-as-text on light = same deepened red */
-  --success:       31 157 92;     /* #1F9D5C */
-  --warning:       245 158 11;    /* #F59E0B */
-  --danger:        216 56 63;     /* #D8383F */
+  /* Paper. The light ramp runs secondary (darkest) < primary < card, so the
+     WORST-CASE ground for text in this theme is --bg-secondary. */
+  --bg-primary:    244 242 236;   /* #F4F2EC — paper */
+  --bg-secondary:  232 229 220;   /* #E8E5DC — header, rails, sunken rows */
+  --bg-card:       251 250 246;   /* #FBFAF6 — a panel lifts off paper by tone, never by shadow */
+  --border-default:205 201 189;   /* #CDC9BD — the hairline */
+  --border-strong: 134 130 116;   /* #868274 — the masthead / table-head rule, 3.05:1 on its worst ground */
+  --text-primary:  17 17 16;      /* #111110 — ink. 15.00:1 on the darkest ground */
+  --text-secondary: 76 73 65;     /* #4C4941 — 7.14:1 on the darkest ground */
+  --text-tertiary:  104 100 86;   /* #686456 — 4.70:1 on the darkest ground */
+  --accent:         46 44 39;     /* #2E2C27 — structural near-ink (was achromatic slate) */
+  --alt:            44 103 96;    /* #2C6760 — slate teal, the secondary hue (~174°) */
+  --brand:         167 25 48;     /* #A71930 — Falcons crimson, the primary spot (~350°) */
+  --brand-deep:    113 16 34;     /* #711022 — deep crimson for a second field */
+  --brand-bright:  165 24 43;     /* #A5182B — crimson as text on paper */
+  --success:        20 114 71;    /* #147247 — 4.73:1 on the darkest ground */
+  --warning:       122 86 6;      /* #7A5606 — 5.27:1 on the darkest ground */
+  --danger:        171 56 49;     /* #AB3831 — 4.99:1 on the darkest ground */
 
-  /* Win-window tier identity */
-  --tier-contend:  74 85 96;      /* #4A5560 */
-  --tier-middle:   14 124 158;    /* #0E7C9E */
-  --tier-rebuild:  85 96 206;     /* #5560CE */
+  /* Win-window tier identity. Contending takes the ink family — under Matchday
+     the structural colour is ink, not a metal. */
+  --tier-contend:   46 44 39;     /* #2E2C27 */
+  --tier-middle:    14 110 140;   /* #0E6E8C */
+  --tier-rebuild:   74 85 190;    /* #4A55BE */
 
-  /* Position identity colors — darker shades for light backgrounds */
-  --pos-qb:        196 51 90;     /* #C4335A pink */
-  --pos-rb:        15 138 102;    /* #0F8A66 teal */
-  --pos-wr:        31 111 192;    /* #1F6FC0 sky */
-  --pos-te:        192 95 26;     /* #C05F1A orange */
-  --pos-def:       90 100 200;    /* #5A64C8 violet */
+  /* Position identity — the app's five hues, unchanged in intent and promoted
+     from 9px tags to full-bleed bands. RB and TE are deepened from the mock's
+     values so PAPER TYPE REVERSED OUT of the band clears AA (#0F8A66 gave
+     3.87:1, #C05F1A gave 3.83:1). */
+  --pos-qb:        196 51 90;     /* #C4335A pink  — 4.73:1 under paper type */
+  --pos-rb:         13 122 90;    /* #0D7A5A teal  — 4.75:1 under paper type */
+  --pos-wr:         31 111 192;   /* #1F6FC0 sky   — 4.58:1 under paper type */
+  --pos-te:        170 84 23;     /* #AA5417 orange— 4.70:1 under paper type */
+  --pos-def:        90 100 200;   /* #5A64C8 violet— 4.58:1 under paper type */
 }
 
 .dark {
-  --bg-primary:    11 11 13;      /* #0B0B0D */
-  --bg-secondary:  16 16 19;      /* #101013 */
-  --bg-card:       20 20 23;      /* #141417 */
-  --border-default:40 40 46;      /* #28282E */
-  --text-primary:  244 245 247;   /* #F4F5F7 */
-  --text-secondary:138 144 150;   /* #8A9096 — 5.70:1 on the lightest ground */
-  --text-tertiary: 124 126 132;   /* #7C7E84 — 4.53:1 on the lightest ground */
-  --accent:        201 205 209;   /* #C9CDD1 — silver: the structural color */
-  --brand:         200 16 46;     /* #C8102E — Falcons red, rationed */
-  --brand-deep:    126 14 34;     /* #7E0E22 — score-bug gradient partner */
-  --brand-bright:  216 30 60;     /* #D81E3C — red-as-text on dark */
-  --success:       55 200 120;    /* #37C878 */
-  --warning:       245 158 11;    /* #F59E0B */
-  --danger:        255 92 92;     /* #FF5C5C — trend/status salmon, never brand */
+  /* Ink. The dark ramp runs primary (darkest) < secondary < card, so the
+     WORST-CASE ground for text in this theme is --bg-card. */
+  --bg-primary:     14 14 13;     /* #0E0E0D — warm near-black, not #000 */
+  --bg-secondary:   20 20 19;     /* #141413 — header, rails, sunken rows */
+  --bg-card:        23 23 22;     /* #171716 */
+  --border-default: 48 47 44;     /* #302F2C */
+  --border-strong: 103 101 93;    /* #67655D — 3.07:1 on its worst ground (the mock's #514F49 read 2.36) */
+  --text-primary:  246 244 238;   /* #F6F4EE — 16.31:1 on the lightest ground */
+  --text-secondary:168 164 154;   /* #A8A49A — 7.21:1 on the lightest ground */
+  --text-tertiary: 136 131 119;   /* #888377 — 4.75:1 on the lightest ground */
+  --accent:        228 224 214;   /* #E4E0D6 — structural near-ink (was silver) */
+  --alt:           111 179 172;   /* #6FB3AC — slate teal, the secondary hue (~174°) */
+  --brand:         200 16 46;     /* #C8102E — Falcons crimson, the primary spot */
+  --brand-deep:    126 14 34;     /* #7E0E22 */
+  --brand-bright:  234 70 91;     /* #EA465B — crimson as text on ink, 4.72:1 */
+  --success:        92 201 140;   /* #5CC98C — 8.70:1 */
+  --warning:       227 170 66;    /* #E3AA42 — 8.62:1 */
+  --danger:        238 122 114;   /* #EE7A72 — 6.55:1 */
 
   /* Win-window tier identity */
-  --tier-contend:  201 205 209;   /* #C9CDD1 silver (gold left the system) */
-  --tier-middle:   87 196 232;    /* #57C4E8 */
-  --tier-rebuild:  143 155 242;   /* #8F9BF2 */
+  --tier-contend:  228 224 214;   /* #E4E0D6 */
+  --tier-middle:    87 196 232;   /* #57C4E8 */
+  --tier-rebuild:  154 163 238;   /* #9AA3EE */
 
-  /* Position identity colors — brighter shades for dark backgrounds */
+  /* Position identity — brighter on ink; near-black type reverses out of each
+     band at 7.1:1 or better, so no adjustment was needed on this side. */
   --pos-qb:        242 117 143;   /* #F2758F pink */
-  --pos-rb:        58 208 164;    /* #3AD0A4 teal */
-  --pos-wr:        87 169 242;    /* #57A9F2 sky */
+  --pos-rb:         58 208 164;   /* #3AD0A4 teal */
+  --pos-wr:         87 169 242;   /* #57A9F2 sky */
   --pos-te:        240 150 78;    /* #F0964E orange */
   --pos-def:       154 163 238;   /* #9AA3EE violet */
 }
@@ -88,14 +125,21 @@ body {
   background-color: rgb(var(--bg-primary));
 }
 
+/* Styled ::selection — the ink field applied to a drag. An unstyled selection
+   (the browser's blue) is on the marker list, and the default blue is a hue
+   this palette does not contain. */
+::selection {
+  background-color: rgb(var(--text-primary));
+  color: rgb(var(--bg-primary));
+}
+
 /* The app's only scroller is <main> (App.jsx, position:fixed). Lock the     */
 /* document to the viewport so a drag the fixed scroller doesn't fully claim  */
-/* can't scroll/rubber-band the body — which would slide the .app-bg          */
-/* gradient layer while the content stays put.                                */
+/* can't scroll/rubber-band the body.                                         */
 /* iOS quirk: overflow:hidden on the ROOT elements (html/#root) clips         */
 /* position:fixed descendants above the bottom safe-area inset, leaving a     */
 /* black bar over the home indicator. So lock scrolling on <body> only and    */
-/* leave html/#root unclipped — the fixed header/main/drawer then reach the   */
+/* leave html/#root unclipped — the fixed header/main/tab bar then reach the  */
 /* physical bottom edge. overscroll-behavior:none everywhere kills rubber-band.*/
 html, body, #root {
   height: 100%;
@@ -105,83 +149,116 @@ body {
   overflow: hidden;
 }
 
-/* ── App background: flat (Primetime Blackout) ─────────────────── */
-/* Applied to the app shell div (App.jsx), not <body> — the shell     */
-/* paints over the body. The old blue/violet ambient radials are      */
-/* removed per the Phase 3 brief: flat black; the ONE sanctioned      */
-/* ambient device is a faint red conic sweep behind the hero area     */
-/* (see .hero-sweep, applied only where a score-bug hero renders).    */
+/* ── App background: flat paper / flat ink ───────────────────────── */
+/* Applied to the app shell div (App.jsx), not <body> — the shell paints over  */
+/* the body. Matchday is flat colour with hard edges: there is no ambient      */
+/* device at all. The Phase 3 red conic sweep (.hero-sweep) left with the      */
+/* repaint — the hero is now an ink FIELD, which needs no atmosphere behind it */
+/* and reads as deliberate in both themes (findings.md B4).                    */
 
-.app-bg {
-  background-color: rgb(var(--bg-primary));
-}
-
-/* Dark only — against light backgrounds even a .06 red wash reads as a
-   pink cast over the whole screen, not an ambient hint. */
-.dark .hero-sweep {
-  background-image:
-    conic-gradient(from 210deg at 70% -10%, rgba(216, 30, 60, 0.06), transparent 28%, transparent 72%, rgba(216, 30, 60, 0.06));
-  background-repeat: no-repeat;
-}
-
-/* ── Score-bugs + angled cuts (Primetime Blackout's ONE flourish) ── */
-/* The two sanctioned gradients (phase3-design-brief.md). Silver bugs  */
-/* carry near-black text in both themes; red bugs carry white text and */
-/* deepen to #A71930 in light mode for contrast on white surfaces.     */
-
-.bug-silver {
-  background-image: linear-gradient(90deg, #C9CDD1, #8F949B);
-  color: #101013;
-}
-
-.bug-red {
-  background-image: linear-gradient(90deg, #A71930, #711022);
-  color: #FFFFFF;
-}
-.dark .bug-red {
-  background-image: linear-gradient(90deg, #C8102E, #7E0E22);
-}
-
-/* Lower-third: hard 8px angled trailing cut (section headers). */
-.lower-third {
-  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
-}
-
-/* Action cards cut the bottom-left corner (10px). */
-.corner-cut {
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 10px 100%, 0 calc(100% - 10px));
-}
-
-/* ── Login screen: flat blackout, same sanctioned red sweep as the app ── */
+.app-bg,
 .login-bg {
   background-color: rgb(var(--bg-primary));
 }
-.dark .login-bg {
-  background-image:
-    conic-gradient(from 210deg at 70% -10%, rgba(216, 30, 60, 0.06), transparent 28%, transparent 72%, rgba(216, 30, 60, 0.06));
-  background-repeat: no-repeat;
+
+/* ── The ink field — Matchday's one structural device ──────────── */
+/* A solid block of the ink colour with the type reversed out. It INVERTS WITH
+   THE THEME by construction (`--text-primary` over `--bg-primary`), so in dark
+   it is a cream poster on a black page and in light an ink poster on paper.
+   That is the resolution to finding B4: the old hero was hardcoded
+   `#101013` in BOTH themes, which left a near-black slab at the top of a white
+   page belonging to nothing else on it. An ink field belongs to everything —
+   the masthead rule, the section band, the inline Mark, the CTA and the tab
+   bar are all made of it.
+
+   Content inside an ink field addresses the field, not the page: text is
+   `text-bg-primary`, fills are `bg-bg-primary/10`, rules are
+   `border-bg-primary/20`. Never `text-white` — on a cream field that is
+   invisible.
+
+   THE ALPHA FLOOR ON A FIELD IS /60. Measured: the page ground composited over
+   the ink at 60% gives 4.92:1 in dark and 6.54:1 in light; at 55% it is 4.19:1
+   in dark and fails. The old hero's `text-white/45` micro-labels were under
+   that floor and got away with it only because the panel was hardcoded dark.
+
+   A STATUS OR TIER HUE CANNOT LIVE ON A FIELD. The field inverts, so no single
+   green/amber/cyan clears AA against both the cream and the ink version of it.
+   On a field, direction and rank are carried by weight, by the sign, or by a
+   SECOND reversal (a block of `bg-bg-primary` with `text-text-primary` on it,
+   which is the page's own colours and therefore always legible). */
+.ink-field {
+  background-color: rgb(var(--text-primary));
+  color: rgb(var(--bg-primary));
 }
 
-/* ── Score-bug hero (Primetime Blackout) ─────────────────────── */
-/* The one loud moment per screen: a near-black broadcast panel —  */
-/* deliberately dark in BOTH themes, as the old gradient hero was  */
-/* its own dark surface in light mode too — capped by a .bug-red   */
-/* score-bug bar in the consumer. No glows, no gradients beyond    */
-/* the two sanctioned score-bugs.                                  */
-
-.hero-card {
-  background-color: #101013;
-  border: 1px solid #34343B;
+/* The poster's cap strip: the same field, closed by a hairline in its own ink
+   so cap and body read as one block rather than two stacked panels. */
+.ink-field-cap {
+  background-color: rgb(var(--text-primary));
+  color: rgb(var(--bg-primary));
+  border-bottom: 1px solid rgb(var(--bg-primary) / 0.18);
 }
 
-.dark .hero-card {
-  border-color: #2C2C33;
+/* The brand field — the rationed crimson one. Reserved for "you" treatments
+   and nothing else; white-on-crimson clears AA in both themes (5.35 / 6.64). */
+.brand-field {
+  background-color: rgb(var(--brand));
+  color: #FFFFFF;
 }
+
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* ── Display type: Bricolage Grotesque, on the axis it actually has ── */
+/* MEASURED CORRECTION TO THE SPEC. directions.md revision 1 change 7 says to
+   push Bricolage to `wdth 125` because "at wdth 104 with default optical size
+   it lands on a neutral grotesk". Google Fonts' Bricolage Grotesque has NO
+   SUCH SETTING: its axes are opsz 12-96 (default 14), wdth 75-**100**
+   (default 100) and wght 200-800 (default 400). Probed 2026-09-11 —
+   `css2?family=Bricolage+Grotesque:wdth@75..125` returns HTTP 400 and
+   `...@75..100` returns 200. So 100 is both the maximum AND the default: the
+   mock's declaration was a no-op, and "it still reads fairly neutral even
+   pushed onto its axes" is explained — it was never pushed. `font-stretch:125%`
+   here would clamp to 100% and mislead the next reader, so it is not set.
+
+   The axes that ARE real do the work instead:
+   - `opsz` runs 12-96 and is where the face's display character lives. It is
+     driven AUTOMATICALLY from font-size (`font-optical-sizing: auto`, the
+     initial value, restated here so nobody later adds a
+     `font-variation-settings` that silently resets it), which is exactly right
+     given the 1.25 ladder now spans 9px to 67px.
+   - `wght` runs to 800, against Anton's single 400. The display default is 700
+     — declared in the COMPONENTS layer, not utilities, so a `font-bold` /
+     `font-extrabold` at the call site still overrides it.
+
+   Letter-spacing is deliberately NOT set here — it would beat the `tracking-*`
+   utility at the call site (same layer, later source order), and the small
+   uppercase labels want positive tracking while the poster figures want
+   negative. The negative tracking at display sizes lives on the type scale
+   itself (tailwind.config.js). */
+@layer components {
+  .font-display {
+    font-weight: 700;
+    font-optical-sizing: auto;
+  }
+}
+
+/* ── The aside voice: italic ──────────────────────────────────── */
+/* Italic is on the marker list precisely because generated UI never reaches
+   for it. It earns its place here as one specific voice — the app's honest
+   caveat: "values are at today's prices", "this is a local preview", the
+   reason a section is empty. Never decoration, never emphasis (emphasis is a
+   Mark). */
+.aside {
+  font-style: italic;
+  color: rgb(var(--text-tertiary));
+}
+
 /* ── The Edge: staggered card entrance ───────────────────────── */
+/* Motion is step 5 of the Matchday rebuild and is deliberately untouched here
+   — including this fade-up, which the checklist flags and step 5 replaces with
+   the "press run" band wipe. */
 
 @keyframes edge-rise {
   from { opacity: 0; transform: translateY(8px); }
@@ -210,6 +287,13 @@ body {
 .focus-ring:focus-visible {
   outline: 2px solid rgb(var(--accent));
   outline-offset: 2px;
+}
+
+/* On an ink field the page's accent is the field's own colour, so the ring has
+   to flip with it or it disappears into the block. */
+.ink-field .focus-ring:focus-visible,
+.ink-field-cap .focus-ring:focus-visible {
+  outline-color: rgb(var(--bg-primary));
 }
 
 /* ── Touch targets: hit area ≥ 44px, with no layout cost ──────── */
@@ -243,11 +327,11 @@ body {
 /* ── iOS focus-zoom guard ────────────────────────────────────── */
 /* Mobile Safari zooms the whole page when a focused form control's    */
 /* font-size is under 16px. Every input/select/textarea in the app     */
-/* renders at text-sm (14px), so tapping any of them — universal       */
-/* search, free agents, draft, trade, news — triggers the zoom. Force  */
-/* 16px on touch devices to kill the focus-zoom while leaving          */
-/* pinch-zoom intact (we never set maximum-scale). Desktop keeps the   */
-/* designed 14px. !important is required to win over the utility class. */
+/* renders at text-sm (13px on the Matchday scale), so tapping any of  */
+/* them — universal search, free agents, draft, trade, news — triggers */
+/* the zoom. Force 16px on touch devices to kill the focus-zoom while  */
+/* leaving pinch-zoom intact (we never set maximum-scale). Desktop     */
+/* keeps the designed size. !important wins over the utility class.    */
 @media (pointer: coarse) {
   input,
   select,

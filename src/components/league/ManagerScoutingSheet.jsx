@@ -203,7 +203,7 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
             <div className="flex items-center gap-2.5 py-2">
               <TeamAvatar owner={profile.user} size={36} />
               <div className="min-w-0 flex-1">
-                <p className="font-display text-lg uppercase tracking-wide text-text-primary dark:text-text-primary truncate leading-tight">
+                <p className="font-display font-extrabold text-lg uppercase tracking-[-0.025em] font-extrabold tracking-[-0.025em] text-text-primary dark:text-text-primary truncate leading-tight">
                   {getTeamName(profile.user)}
                 </p>
                 <p className="font-body text-[11px] text-text-secondary dark:text-text-secondary">

@@ -520,7 +520,7 @@ function SyncedTracker({ sleeperDraft, league, leagueInfo, values, prospects, my
 
         {isComplete && recap ? (
           <div className="px-4 pt-4">
-            <h2 className="font-display text-lg uppercase text-text-primary mb-2">Draft Recap</h2>
+            <h2 className="font-display font-extrabold text-lg uppercase tracking-[-0.025em] text-text-primary mb-2">Draft Recap</h2>
 
             <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary mb-1">
               {recap.graded ? 'Value Over Expected' : 'Value Drafted by Team'}
@@ -757,7 +757,7 @@ function LogPickModal({ player, nextPickInfo, userMap, onSave, onClose, myRoster
   return (
     <Sheet onClose={onClose} label="Log pick">
       <div className="px-4 pt-2 pb-8">
-        <h3 className="font-display text-lg uppercase text-text-primary leading-tight">
+        <h3 className="font-display font-extrabold text-lg uppercase tracking-[-0.025em] text-text-primary leading-tight">
           Log Pick
         </h3>
         <p className="font-body text-sm text-text-secondary mt-0.5 mb-4">{player.name}</p>
@@ -790,7 +790,7 @@ function EditPickModal({ pick, player, userMap, onDelete, onClose, myRosterId })
   return (
     <Sheet onClose={onClose} label="Edit pick">
       <div className="px-4 pt-2 pb-8">
-        <h3 className="font-display text-lg uppercase text-text-primary leading-tight">
+        <h3 className="font-display font-extrabold text-lg uppercase tracking-[-0.025em] text-text-primary leading-tight">
           Edit Pick
         </h3>
         <p className="font-body text-sm text-text-secondary mt-0.5 mb-4">{player?.name}</p>
@@ -821,7 +821,7 @@ function EditPickModal({ pick, player, userMap, onDelete, onClose, myRosterId })
 function ResetConfirm({ onConfirm, onCancel }) {
   return (
     <Modal onClose={onCancel} label="Reset tracker" className="p-5 text-center">
-      <h3 className="font-display text-lg uppercase text-text-primary mb-2">Reset tracker?</h3>
+      <h3 className="font-display font-extrabold text-lg uppercase tracking-[-0.025em] text-text-primary mb-2">Reset tracker?</h3>
       <p className="font-body text-sm text-text-secondary mb-5">This clears all logged picks and cannot be undone.</p>
       <div className="flex gap-2">
         <Button variant="secondary" fullWidth className="py-2.5" onClick={onCancel}>Cancel</Button>

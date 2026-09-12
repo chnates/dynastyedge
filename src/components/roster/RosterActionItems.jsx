@@ -28,7 +28,7 @@ function ActionCard({ item, onDismiss, onAction }) {
   const u = URGENCY[item.urgency]
   const Icon = item.urgency === 'blue' ? Info : AlertTriangle
   return (
-    <div className={`px-3 py-2.5 rounded-none corner-cut border ${u.bg} ${u.border}`}>
+    <div className={`px-3 py-2.5 rounded-none border ${u.bg} ${u.border}`}>
       <div className="flex items-start gap-2.5">
         <Icon size={14} strokeWidth={2} className={`mt-0.5 flex-shrink-0 ${u.icon}`} />
         <span className="flex-1 font-body text-xs text-text-primary leading-snug">{item.message}</span>

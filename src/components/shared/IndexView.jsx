@@ -33,8 +33,9 @@ function IndexRow({ to, title, detail, hint, small = false }) {
       >
         <span className="min-w-0 flex-1">
           <span
-            className={`block font-display uppercase tracking-[0.02em] text-text-primary leading-none
-                        ${small ? 'text-[17px]' : 'text-[23px]'}`}
+            className={`block font-display font-extrabold uppercase tracking-[-0.03em]
+                        text-text-primary leading-none text-balance
+                        ${small ? 'text-lg' : 'text-xl'}`}
           >
             {title}
           </span>
@@ -71,7 +72,7 @@ export default function IndexView() {
         <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-text-tertiary">
           Find
         </span>
-        <span className="font-display text-[19px] uppercase tracking-[0.02em] text-text-tertiary">
+        <span className="font-display font-extrabold text-lg uppercase tracking-[-0.03em] text-text-tertiary">
           Anyone, anywhere
         </span>
       </button>

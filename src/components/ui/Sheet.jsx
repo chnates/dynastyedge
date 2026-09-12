@@ -87,7 +87,7 @@ export function SheetHeader({ title, eyebrow, subtitle, onClose, closeLabel = 'C
           </p>
         )}
         {title && (
-          <h2 className="font-display text-xl uppercase tracking-wide text-text-primary mt-1 leading-tight">
+          <h2 className="font-display text-xl uppercase tracking-[0.01em] text-balance text-text-primary mt-1 leading-tight">
             {title}
           </h2>
         )}

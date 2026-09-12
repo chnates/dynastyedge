@@ -539,7 +539,7 @@ export default function TradeVerdict({
     <div>
       {/* What's Fair callout */}
       {whatsFairTarget && fairPackage && (
-        <div className="mb-4 rounded-none corner-cut bg-warning/10 border border-warning/30 px-4 py-3 relative">
+        <div className="mb-4 rounded-none bg-warning/10 border border-warning/30 px-4 py-3 relative">
           <button
             onClick={onClearWhatsFair}
             className="absolute top-2 right-3 text-warning text-base font-bold leading-none"

@@ -1,27 +1,33 @@
 import { cn } from './cn'
 
-// THE small status/label badge — the solid "New"/"You" accent badges, plus
-// tinted tone variants (success/warning/danger/accent) and a neutral outline.
-// For win-window tiers use the dedicated WinWindowBadge; for position tags use
-// POS_TAG. This covers everything else.
+// THE small status/label badge — the solid "New"/"You" badges, plus tinted tone
+// variants and a neutral outline. For win-window tiers use WinWindowBadge; for
+// position tags use POS_TAG; for an emphasis inside a sentence use <Mark>.
 //
-//   <Badge>New</Badge>                       // solid accent, white text
+//   <Badge>New</Badge>                       // solid ink
 //   <Badge tone="success" soft>Hit</Badge>   // tinted fill
 //   <Badge tone="neutral" soft>NFL</Badge>
+//
+// `accent` is the INK field — under Matchday the structural colour is ink, not
+// a metal, so a "New" badge is the same block as the band and the CTA.
+// `brand` stays the rationed crimson, reserved for "you" treatments.
+//
+// `pill` is retained for callers that still pass it, but square is the default
+// and the direction: `rounded-full` on every small label is a named marker.
 
 const SOLID = {
-  // Solid silver carries near-black text (silver score-bug rule). `brand` is
-  // the rationed Falcons red — reserved for "you" treatments (You-chip).
-  accent:  'bg-accent text-bg-primary',
+  accent:  'bg-text-primary text-bg-primary',
   brand:   'bg-brand text-white',
-  success: 'bg-success text-white',
-  warning: 'bg-warning text-white',
-  danger:  'bg-danger text-white',
+  alt:     'bg-alt text-bg-primary',
+  success: 'bg-success text-bg-primary',
+  warning: 'bg-warning text-bg-primary',
+  danger:  'bg-danger text-bg-primary',
 }
 
 const SOFT = {
-  accent:  'bg-accent/15 text-accent',
+  accent:  'bg-accent/15 text-text-primary',
   brand:   'bg-brand/15 text-brand-bright',
+  alt:     'bg-alt/15 text-alt',
   success: 'bg-success/15 text-success',
   warning: 'bg-warning/15 text-warning',
   danger:  'bg-danger/15 text-danger',
@@ -33,7 +39,7 @@ export default function Badge({ tone = 'accent', soft = false, pill = false, cla
   return (
     <span
       className={cn(
-        'inline-flex items-center shrink-0 font-mono text-[9px] font-semibold uppercase tracking-wider px-1 py-0.5',
+        'inline-flex items-center shrink-0 font-mono text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5',
         pill ? 'rounded-full' : 'rounded-none',
         palette,
         className,

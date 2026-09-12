@@ -20,9 +20,11 @@ export default function IconButton({ label, size = 'md', className, children, ..
     <button
       aria-label={label}
       className={cn(
-        'flex-shrink-0 flex items-center justify-center rounded-lg',
+        // Square: radius is for sheets, modals and the drawer, never for a
+        // control on a panel.
+        'flex-shrink-0 flex items-center justify-center rounded-none',
         'text-text-secondary hover:text-text-primary',
-        'hover:bg-black/5 dark:hover:bg-white/5 transition-colors',
+        'hover:bg-bg-secondary transition-colors',
         'tap-target focus-ring',
         SIZES[size] ?? SIZES.md,
         className,

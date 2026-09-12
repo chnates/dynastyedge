@@ -30,7 +30,7 @@ export default function SectionContents({ sectionKey }) {
   return (
     <nav
       aria-label={`${section.label} contents`}
-      className="sticky top-0 z-[5] bg-bg-secondary border-b border-border-default px-4"
+      className="sticky top-0 z-[5] bg-bg-secondary border-b-2 border-text-primary px-4"
     >
       <ul className="flex flex-wrap items-center gap-x-4">
         {section.views.map(({ label, to, end }) => (
@@ -40,7 +40,7 @@ export default function SectionContents({ sectionKey }) {
               end={end}
               className={({ isActive }) =>
                 cn(
-                  'focus-ring flex items-center min-h-[44px] font-display text-[12px]',
+                  'focus-ring flex items-center min-h-[44px] font-display font-extrabold text-[12px]',
                   'uppercase tracking-[0.08em] whitespace-nowrap transition-colors',
                   isActive ? 'text-text-primary' : 'text-text-secondary hover:text-text-primary',
                 )
