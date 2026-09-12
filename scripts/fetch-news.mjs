@@ -30,16 +30,40 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 
+import { retainDiverse } from './newsRetention.mjs'
+
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15'
 const MAX_STORY = 600
 
 // Retention. Player items are the product, so they get a long window and the
 // lion's share of the cap; general items are context and age out in two days.
-// 320 items lands around 130KB — the app pulls this once per session.
-const PLAYER_MAX = 240
+//
+// SIZE: 480 items lands ~55KB ON THE WIRE. raw.githubusercontent serves the
+// feed gzipped and gzip is what the phone pays — measured 2026-09-12, 320
+// items were 141KB raw but 37KB gzipped (~114 B/item). Earlier notes sized
+// this feed by its raw bytes and so over-priced the cap by ~4x.
+const PLAYER_MAX = 400
 const PLAYER_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 const GENERAL_MAX = 80
 const GENERAL_MAX_AGE_MS = 48 * 60 * 60 * 1000
+
+// Diversity-aware eviction: the most items any ONE player may hold in the
+// retained window.
+//
+// WHY THIS EXISTS. Eviction used to be recency-only, so the item cap bound
+// long before the 7-day window ever did and the window silently collapsed to
+// ~30 hours (measured 2026-09-12: `playerItems` pinned at exactly the 240 cap,
+// oldest retained item 29.7h old, player items arriving at 8.1/h — a true 7
+// days would need ~1357 items). The acceptance metric counts DISTINCT players
+// resolved, and those 240 items resolved to only 97 players: 3.14 items each,
+// one player carrying 23. At k=3 the same 97 players cost 152 items, freeing
+// 37% of the cap at zero cost in breadth — and those freed slots buy back
+// exactly the time depth that collapsed.
+//
+// 3 rather than 1: a player's drawer should still show a short history, and
+// k=1..4 all preserve full breadth, so this is the cheap end of a flat range
+// rather than a tuned constant. See docs/analysis/news-retention-2026-09.md.
+const PER_PLAYER_MAX = 3
 
 // Written by the workflow from the news-data branch before this runs. Absent
 // on the very first run (or if the checkout failed) — we just start fresh.
@@ -329,7 +353,19 @@ const all = [...merged.values()]
 const players = all.filter(i => i.isPlayerNews && ageOf(i) <= PLAYER_MAX_AGE_MS).sort(byRecency)
 const general = all.filter(i => !i.isPlayerNews && ageOf(i) <= GENERAL_MAX_AGE_MS).sort(byRecency)
 
-const items = [...players.slice(0, PLAYER_MAX), ...general.slice(0, GENERAL_MAX)].sort(byRecency)
+// Diversity-aware retention. Newest first, admit an item while ANY player it
+// names still has room — so a 24th headline about the most newsworthy player
+// in the league is dropped BEFORE an older item about a player nobody else
+// covered. This is what keeps the cap buying breadth (and therefore time
+// depth) instead of redundancy; see PER_PLAYER_MAX.
+//
+// An item resolving to no Sleeper id rides on recency exactly as before: it
+// is player news by ESPN athlete id alone (3 of 240 on the live feed), and
+// there is no player to count it against. Quota is charged to every player an
+// item names, so a roundup pays for all of them.
+
+const keptPlayers = retainDiverse(players, PER_PLAYER_MAX, PLAYER_MAX)
+const items = [...keptPlayers, ...general.slice(0, GENERAL_MAX)].sort(byRecency)
 
 if (items.length === 0) {
   console.error('No items from any source and nothing retained — keeping previous feed')
@@ -339,9 +375,15 @@ if (items.length === 0) {
 // Feed health, published so the app's data-status block can show it and so
 // the next measurement of this pipeline has a baseline to compare against.
 const times = items.map(i => Date.parse(i.published ?? '')).filter(t => !Number.isNaN(t))
+// `distinctPlayers` is the number the acceptance metric actually depends on,
+// and `playerCap`/`playerItems` together say whether eviction is still binding
+// on the cap rather than on the time window — the exact failure that collapsed
+// this feed to 30 hours while `playerItems` sat at its cap looking healthy.
 const coverage = {
   total: items.length,
   playerItems: items.filter(i => i.isPlayerNews).length,
+  playerCap: PLAYER_MAX,
+  distinctPlayers: new Set(items.flatMap(i => i.playerIds ?? [])).size,
   withPlayerIds: items.filter(i => (i.playerIds ?? []).length > 0).length,
   withAthleteIds: items.filter(i => (i.athleteIds ?? []).length > 0).length,
   spanHours: times.length ? Math.round((Math.max(...times) - Math.min(...times)) / 36e5) : 0,
@@ -351,5 +393,12 @@ const coverage = {
 writeFileSync(OUT_FILE, JSON.stringify({ updatedAt: new Date().toISOString(), coverage, items }))
 console.log(
   `Wrote ${OUT_FILE}: ${items.length} items ` +
-  `(${coverage.playerItems} player, ${coverage.withPlayerIds} resolved to players, ${coverage.spanHours}h span)`,
+  `(${coverage.playerItems}/${PLAYER_MAX} player, ${coverage.distinctPlayers} distinct players, ` +
+  `${coverage.withPlayerIds} resolved, ${coverage.spanHours}h span)`,
+)
+console.log(
+  players.length > keptPlayers.length
+    ? `Retention: dropped ${players.length - keptPlayers.length} redundant player items ` +
+      `(over ${PER_PLAYER_MAX}/player); ${PLAYER_MAX - keptPlayers.length} cap slots spare`
+    : `Retention: window is time-bound, not cap-bound (${PLAYER_MAX - keptPlayers.length} cap slots spare)`,
 )

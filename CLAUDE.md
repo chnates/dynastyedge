@@ -274,14 +274,48 @@ architecture:
 - **The feed ACCUMULATES.** It used to be a snapshot of one fetch capped at
   100 items, which spanned ~20 hours because 100 general-interest items
   flushed the player news out. Each run now merges into the last run's output,
-  retaining **player items 7 days (240 max)** and **general items 48 hours
-  (80 max)** — around 100KB, pulled once per session. This is what makes a
+  retaining **player items 7 days (400 max, and at most 3 per player)** and
+  **general items 48 hours (80 max)**. This is what makes a
   source like RotoWire (25 player items per pull) compound across 48 runs a
   day. The workflow therefore reads the previous `news.json` off the
   `news-data` branch **via git, not the raw.githubusercontent CDN** (which
   caches ~5 minutes and would hand a run back its own grandparent); a branch
   that exists but won't yield the file fails the job **before** the publish
   step, so the accumulated window is never force-pushed away.
+- **Eviction is DIVERSITY-AWARE, not recency-only — the cap must never be
+  allowed to bind before the time window does.** Newest-first, an item is
+  admitted while **any** player it names is still under `PER_PLAYER_MAX` (3),
+  so a 24th headline about the most newsworthy player in the league is dropped
+  *before* an older item about a player nobody else covered. An item resolving
+  to no Sleeper id rides on recency (it is player news by ESPN athlete id
+  alone). The policy is pure and lives in `scripts/newsRetention.mjs` so
+  `tests/newsRetention.test.mjs` can pin it — **do not inline it back into the
+  fetch script, and do not "simplify" it to a `slice`.**
+  **Why:** with recency-only eviction the 240-item cap bound at ~30 hours and
+  the documented 7-day window had never once bound. Measured 2026-09-12:
+  `playerItems` pinned at exactly 240, oldest retained item 29.7h, player
+  items arriving at 8.1/h (7 days would need ~1357). Depth had silently
+  collapsed 159h → 27.5h and coverage regressed 10/26 → 6/30. The cap was
+  being spent on redundancy rather than breadth — those 240 items resolved to
+  just **97 distinct players**, 3.14 each, one carrying 23 — so capping per
+  player holds the same 97 in 152 items and frees 37% of the cap for depth.
+  One run of the fix moved span **27.5h → 76h** and unpinned the cap
+  (165/400). See `docs/analysis/news-retention-2026-09.md`.
+- **Size the feed by its WIRE bytes, not its raw bytes.**
+  `raw.githubusercontent.com` serves the feed gzipped: measured 2026-09-12,
+  320 items were 141KB raw but **37KB on the wire** (~114 B/item). The 400+80
+  cap is ~55KB gzipped. Earlier notes priced this feed at "~100KB, pulled once
+  per session" from its raw size and so over-priced the cap by ~4×.
+- **Two per-source density traps.** The percentages in
+  `docs/analysis/news-sources-2026-09.md` were measured in the **preseason on
+  headlines only**, and they do not survive contact with the season: Yahoo,
+  recorded there at 8%, measured **57%** on the live feed and is the single
+  largest contributor of player items (62) *and* of players **no other source
+  covers** (16). Dropping a source for a stale density number would lose
+  coverage outright. And a high-volume general source **cannot** crowd out a
+  player source — the player and general buckets have independent caps, so an
+  item can only consume the player window by actually being player news.
+  Re-measure density against the live feed before acting on it.
 - **Later copies win on content, but the FIRST publish time we recorded
   stands** — retained items are seeded before the current pull and sources run
   most-precise-first, so an item can neither float back to the top by being
@@ -305,16 +339,23 @@ architecture:
   player the headline isn't about — by design (we'd rather show the buried
   blurb than miss it). The article sheet flags this case explicitly, reading
   whichever of `playerIds` / `athleteIds` is longer.
-- **`coverage` block.** The feed carries `{ total, playerItems, withPlayerIds,
-  withAthleteIds, spanHours, sources }` next to `updatedAt`, so feed health is
+- **`coverage` block.** The feed carries `{ total, playerItems, playerCap,
+  distinctPlayers, withPlayerIds, withAthleteIds, spanHours, sources }` next to
+  `updatedAt`, so feed health is
   inspectable and the next measurement of this pipeline has a baseline.
   `node scripts/dev/news-coverage.mjs` reports it against the live feed (or a
   local file) along with how many of the owner's rostered players the app
   actually resolves — that is the pipeline's acceptance metric.
+  **`spanHours` and `distinctPlayers` are the two numbers that diagnose a
+  degraded window, and `playerItems` is the one that hides it.** The 2026-09
+  collapse ran for days with `playerItems` sitting at exactly its cap, which
+  reads as a full, healthy feed; span was what told the story, and distinct
+  players was what the cap was failing to buy. `playerCap` ships alongside
+  `playerItems` so "is the cap binding?" is answerable from the feed alone
+  rather than by reading the script.
   **The drawer's data-status block does not read it yet** — publish age already
-  surfaces a *dead* pipeline; this block would surface a *degraded* one (a run
-  that publishes on time with `playerItems` quietly collapsed). Open item
-  `NEWS-2`.
+  surfaces a *dead* pipeline; this block would surface a *degraded* one. Open
+  item `NEWS-2`, which must surface **span**, not `playerItems`.
 - **News items are tappable everywhere they appear** (profile drawer
   "Latest News", The Edge "Headlines") → `NewsArticleSheet`, a bottom sheet
   (z-60, layers above the profile drawer) with the full stored story, a
@@ -3944,6 +3985,7 @@ dynastyedge/
 │       └── rookie-intel.yml   ← daily rookie depth-chart + draft-capital feed → rookie-intel branch; `mode` input also runs the two CFBD analyses (probe · college-backtest), which publish nothing
 ├── scripts/
 │   ├── fetch-news.mjs          ← multi-source news fetcher (runs in Actions)
+│   ├── newsRetention.mjs       ← THE feed's retention policy, pure + tested: diversity-aware eviction, so the item cap can never again bind before the 7-day time window (which is what silently collapsed the feed to 30h)
 │   ├── snapshot-values.mjs     ← daily FantasyCalc snapshot appender (runs in Actions)
 │   ├── snapshot-values-archive.mjs ← permanent MONTHLY values archive for trajectory back-testing (app never fetches it)
 │   ├── snapshot-trade-values.mjs ← permanent trade-time value archiver (runs in Actions)
@@ -4148,6 +4190,7 @@ dynastyedge/
 │   ├── matchupWeeks.test.mjs        ← mocked-fetch: one fetch/week across both consumers, all-fail rejection
 │   ├── rookieResearch.test.mjs      ← opportunity blend, shared points scale (the backup-TE trap), within-position divergence, roster-fit re-ranking (need/window bonuses, score untouched), drawer hand-off fields, best-effort feed degradation, and the measurables NULL (age/combine can never move a score)
 │   ├── recommendations.test.mjs     ← suggestSellMove's two-sided partner pick (a concrete return beats a needier team with nothing, the neediest-team fallback, startsForThem, nav-ready shape); pick keep-scores by round (strict ordering under every tier, nothing auto-excluded, unknown round falls back); the past-peak age tilt (decline-only, per-position, saturating, never positive, cliff protection survives it); and the cash-out board (value-at-risk selection, the reach/premium labels, and the pin that its gap equals buildFairBand's)
+│   ├── newsRetention.test.mjs       ← the news window's retention policy: newest-N-per-player, a redundant item losing to an OLDER item about an uncovered player, breadth preserved at every k, roundups charging every player they name, and an id-less item never dropped by quota
 │   └── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
 ├── index.html
 ├── eslint.config.js             ← ESLint 9 flat config (recommended + react-hooks, src/ + scripts/)
@@ -4159,22 +4202,24 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 152 / # pass 145 /
+honestly:** instead of "cannot find module" it prints `# tests 161 / # pass 154 /
 # fail 7`, which reads like a code regression. The files that fail are the ones
 transitively importing `react` (`tradeAnalysis.js` → `recommendations.js` →
 `useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
 `draftLive` loading their hooks) — the file fails to load, so its tests never
-run and the count silently drops from **275** to 152. `npm run build` in the
-same state fails with `sh: 1: vite: not found`. **If the test count isn't 275,
-run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-07
+run and the count silently drops from **284** to 161. `npm run build` in the
+same state fails with `sh: 1: vite: not found`. **If the test count isn't 284,
+run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-12
 by renaming `node_modules` aside; re-measure them whenever the suite grows —
-the pair had drifted four times before this, 178/130, 177/115, 219/136 and
-242/136. The **7 failing files** have been the constant across every
+the pair had drifted five times before this, 178/130, 177/115, 219/136,
+242/136 and 275/152. The **7 failing files** have been the constant across every
 re-measurement. Note the two counts do **not** always move together: the
 2026-09-07 trade-engine work added 6 tests to `tradeAnalysis.test.mjs`, which
 is already one of the 7 files that cannot load without `node_modules`, so the
-full count went 258 → 264 → 269 → **275** while the broken-state count stayed at **152**. Only
-tests added to a file outside those 7 move the second number.)
+full count went 258 → 264 → 269 → 275 while the broken-state count stayed at 152.
+The 2026-09-12 news-retention work moved **both** (275/152 → **284/161**),
+because `newsRetention.test.mjs` imports only a zero-dependency pure module.
+Only tests added to a file outside those 7 move the second number.)
 
 **Tests:** `npm test` runs the `tests/` suite — plain `.mjs` scripts on Node's
 built-in `node:test` runner with `node:assert/strict`, zero new dependencies
@@ -4224,7 +4269,7 @@ whole app tree with it.
 **The only proof is rendering every route.** This is not hypothetical: step 4's
 lucide removal emptied `LeagueActivity`'s `TYPE_META` of its `Icon` field and
 left the `<meta.Icon />` render behind, and **League › Activity shipped to
-`main` as a white screen** — found in step 5 by a route sweep, after lint, 275
+`main` as a white screen** — found in step 5 by a route sweep, after lint, 284
 tests and a clean build had all passed on it. Sweep with
 `scripts/dev/screenshot-app.mjs`, hash-navigating each route and failing on
 `pageerror`; a crash kills the tree, so **run the suspect route FIRST or reload
