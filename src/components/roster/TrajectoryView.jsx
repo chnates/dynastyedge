@@ -9,7 +9,10 @@ import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import Sparkline from '../shared/Sparkline'
 import TeamAvatar from '../shared/TeamAvatar'
 import { POS_TEXT, POS_SVG } from '../../utils/positionColors'
-import { PositionBand, RuledList } from '../ui'
+import { Lede, Mark, PositionBand, RuledList } from '../ui'
+
+// The verdict's tone, as a Mark tone. Never a position hue (law 4).
+const VERDICT_MARK = { ascending: 'success', declining: 'warning', balanced: 'ink' }
 import {
   buildAgeCurves,
   buildRosterTrajectory,
@@ -231,19 +234,26 @@ export default function TrajectoryView() {
         </div>
       </div>
 
-      {/* Verdict */}
-      <div className={`mt-3 rounded-none bg-bg-card border border-border-default border-l-[3px] px-3 py-3 ${
-        verdict.tone === 'ascending' ? 'border-l-success' : verdict.tone === 'declining' ? 'border-l-danger' : 'border-l-warning'
-      }`}>
-        <div className="flex items-center gap-1.5 mb-1">
-          <span className={`font-mono text-[10px] font-semibold uppercase tracking-[0.12em] ${TONE_TEXT[verdict.tone]}`}>
-            Window peaks {verdict.peakSeason}
-          </span>
-        </div>
-        <p className="font-body text-sm text-text-primary leading-snug">
-          {verdict.headline}
-        </p>
-      </div>
+      {/* The window verdict. This carried a 3px coloured rail down its left
+          edge — the single most-cited tell in the slop research and the thing
+          law 1 bans by name. It survived step 4's sweep because it was written
+          as a raw `border-l-[3px]` rather than through `Card`'s deleted
+          `accent` prop, so nothing that looked for the prop could find it.
+          It is a <Lede> now: the colour moves onto the word carrying the
+          finding, which is the verdict's own tone. */}
+      <Lede
+        eyebrow={`Window peaks ${verdict.peakSeason}`}
+        headline={
+          <>Value{' '}
+            <Mark tone={VERDICT_MARK[verdict.tone] ?? 'ink'}>
+              {verdict.tone === 'ascending' ? 'climbing' : verdict.tone === 'declining' ? 'sliding' : 'holding'}
+            </Mark>{' '}
+            through {lastSeason}
+          </>
+        }
+      >
+        {verdict.headline}
+      </Lede>
 
       {/* Forward value chart */}
       <SectionHeader label="Projected Team Value" />

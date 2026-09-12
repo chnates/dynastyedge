@@ -6,15 +6,21 @@ import { getTeamName } from '../../hooks/useLeague'
 // Sleeper CDN thumb (user.avatar id), gradient initial circle.
 // Static <img> only — no fetch, so the fetchJSON rule doesn't apply.
 
-const FALLBACK_GRADIENTS = [
-  'from-pink-500 to-rose-400',
-  'from-sky-500 to-cyan-400',
-  'from-violet-500 to-purple-400',
-  'from-amber-500 to-orange-400',
-  'from-teal-500 to-emerald-400',
-  'from-blue-500 to-indigo-400',
-  'from-fuchsia-500 to-pink-400',
-  'from-lime-500 to-green-400',
+// The initial-circle fallback, FLAT. It was eight two-stop gradients — the last
+// gradient anywhere in the app after step 4, and Matchday has none. Flat colour
+// also fixes something the gradient hid: the tint was `text-white` over a
+// mid-weight ramp, which is the one colour rule an ink field forbids. These are
+// the app's own position hues at full strength with the page ground reversed
+// out, so the swatch belongs to the palette instead of importing eight more.
+const FALLBACK_FIELDS = [
+  'bg-pos-qb',
+  'bg-pos-wr',
+  'bg-pos-def',
+  'bg-pos-te',
+  'bg-pos-rb',
+  'bg-alt',
+  'bg-brand',
+  'bg-text-primary',
 ]
 
 function hashString(str) {
@@ -46,11 +52,11 @@ export default function TeamAvatar({ owner, size = 28, className = '' }) {
     )
   }
 
-  const grad = FALLBACK_GRADIENTS[hashString(name) % FALLBACK_GRADIENTS.length]
+  const field = FALLBACK_FIELDS[hashString(name) % FALLBACK_FIELDS.length]
   return (
     <span
       aria-hidden="true"
-      className={`rounded-full shrink-0 bg-gradient-to-br ${grad} flex items-center justify-center text-white font-display uppercase select-none ${className}`}
+      className={`rounded-full shrink-0 ${field} flex items-center justify-center text-bg-primary font-display font-extrabold uppercase select-none ${className}`}
       style={{ width: size, height: size, fontSize: Math.round(size * 0.45) }}
     >
       {name.trim().charAt(0) || '?'}
