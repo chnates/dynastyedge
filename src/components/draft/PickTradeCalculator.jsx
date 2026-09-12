@@ -254,7 +254,12 @@ export default function PickTradeCalculator() {
                   onTap={() => setExpandedKey(expanded ? null : key)}
                 />
                 {expanded && (
-                  <div className="pb-2.5 pl-2 border-l-2 border-accent/30 ml-1 mb-2">
+                  // Indent alone ties the expansion to its row. This carried a
+                  // `border-l-2 border-accent/30` — the banned left rail (law 1),
+                  // and the second time step 4's lesson has bitten: nothing
+                  // looking for `Card`'s deleted `accent` prop finds a raw
+                  // border-l. Audit for the shape.
+                  <div className="pb-2.5 pl-3 mb-2">
                     {packages.length === 0 ? (
                       <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary py-1">
                         No pick package from your inventory gets close — add a
@@ -309,7 +314,7 @@ export default function PickTradeCalculator() {
                   onTap={() => setExpandedKey(expanded ? null : key)}
                 />
                 {expanded && (
-                  <div className="pb-2.5 pl-2 border-l-2 border-accent/30 ml-1 mb-2">
+                  <div className="pb-2.5 pl-3 mb-2">
                     {offers.length === 0 ? (
                       <p className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary py-1">
                         No team's pick inventory adds up to fair value for this

@@ -287,7 +287,12 @@ function SortablePlayerRow({
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center flex-wrap gap-x-1">
-            <span className={`font-body text-sm font-medium leading-tight truncate ${drafted ? 'text-text-tertiary line-through' : 'text-text-primary'}`}>{player.name}</span>
+            {/* Wraps, never elides. The overflow sweep caught "Montana
+                Lemonious-Craig" clipped by 4px here — a player's NAME on the
+                board whose whole job is telling you who he is. Sixth
+                recurrence of the truncation rule; the row already wraps
+                (`flex-wrap`), so the name only needed to stop opting out. */}
+            <span className={`font-body text-sm font-medium leading-tight text-balance ${drafted ? 'text-text-tertiary line-through' : 'text-text-primary'}`}>{player.name}</span>
             {hasNote && <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.14em] text-brand-bright">Noted</span>}
             {drafted && <DraftedChip />}
             {!drafted && fillsNeed && <FillsNeedBadge />}
