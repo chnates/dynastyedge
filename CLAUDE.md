@@ -3068,26 +3068,27 @@ Scouting did) — note any route-only moves explicitly.
 
 ## Design System
 
-> **Status: "Matchday" is the live direction. Steps 1–4 of 5 have landed;
-> only motion (step 5) remains.** Step 1 was the accessibility floor
-> (DESIGN-2), step 2 the navigation rebuild (DESIGN-3), step 3 the token +
-> primitive layer, and **step 4 (2026-09-12) rolled the components through the
-> screens**: the three block registers of law 5, the B2 hierarchy inversion on
-> Trade Targets, the bar ruling in law 2, **lucide removed entirely** (51 icons,
-> 32 files, dependency uninstalled), the radius sweep (63 consumer uses → 3),
-> and all three inherited Blackout artefacts — `roundColors`, the logo, the
-> generated icons.
+> **Status: "Matchday" is the live direction, and all five steps have landed
+> (2026-09-12).** Step 1 was the accessibility floor (DESIGN-2), step 2 the
+> navigation rebuild (DESIGN-3), step 3 the token + primitive layer, step 4 the
+> component roll-through (law 5's three block registers, B2's inversion on Trade
+> Targets, law 2's bar ruling, **lucide removed entirely** — 51 icons, 32 files,
+> dependency uninstalled — the radius sweep, and all three inherited Blackout
+> artefacts), and **step 5 the motion layer** (see the Motion section: the global
+> reduced-motion guard, one easing curve, the press run, `.press`, the press bar,
+> the sheet entrance, and a four-moment budget).
 >
-> **The app now fails 0 of `slop-checklist.md`'s 12 markers** — 8 at the
-> review, 3 entering step 4. The two still technically live are motion's
-> (fade-up entrance, linear stagger); they are **step 5's first task**, with
-> widening the `prefers-reduced-motion` guard from one class to a global rule.
+> **The app fails 0 of `slop-checklist.md`'s 12 markers** — 8 at the review, 3
+> entering step 4, 2 entering step 5.
 >
-> **Step 4's most useful lesson: deleting a primitive does not delete the
-> pattern.** `Card`'s banned left accent rail was removed in step 3, and a raw
-> `border-l-[3px]` on Trajectory's verdict card survived every sweep of step 4
-> because nothing looking for the *prop* could find the *shape*. Audit for the
-> shape.
+> **The same lesson has now bitten three times, so read it as a rule: deleting a
+> primitive does not delete the pattern, and a grep for an API cannot find a
+> shape.** `Card`'s banned left accent rail was removed in step 3. A raw
+> `border-l-[3px]` on Trajectory's verdict survived every sweep of step 4. Two
+> more raw `border-l-2` rails in Pick Trades survived step 4 *and* step 5's own
+> component work, and were caught only by re-scoring the checklist from scratch
+> at the end. **Audit for the shape, and re-score rather than inheriting a
+> score.**
 >
 > It replaced **"Primetime Blackout"** (Phase 3, 2026-07-20), which shipped
 > competently and was then rejected on review. The reason is worth keeping,
@@ -3662,8 +3663,8 @@ them.
 
 ### Motion
 
-> **Step 5 is in progress.** This section describes what has landed, not what is
-> planned. The measured starting point, for reference: **one** `@keyframes`
+> **Step 5 shipped 2026-09-12 and this section is the live truth.** The measured
+> starting point, for reference: **one** `@keyframes`
 > (`.edge-rise`, a fade-up on The Edge), 69 `transition-*` utilities of which
 > **67 animate opacity or colour and one animates `transform`**, and **3**
 > explicit timing values in the whole app — so virtually every transition ran
@@ -4046,8 +4047,8 @@ dynastyedge/
 │   │       ├── WinWindowBadge.jsx
 │   │       ├── TrendArrow.jsx
 │   │       ├── DynastyEdgeLogo.jsx
-│   │       ├── TeamAvatar.jsx       ← Sleeper avatar + gradient-initial fallback
-│   │       ├── Sparkline.jsx        ← tiny SVG trend line for value history
+│   │       ├── TeamAvatar.jsx       ← Sleeper avatar + FLAT initial fallback (the gradient went in step 4)
+│   │       └── Sparkline.jsx        ← tiny SVG trend line for value history
 │   ├── hooks/
 │   │   ├── useSleeper.js        ← league/rosters/users/picks/state fetch
 │   │   ├── useFantasyCalc.js    ← FantasyCalc fetch + module cache
