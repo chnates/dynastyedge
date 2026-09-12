@@ -194,7 +194,7 @@ export default function RosterActionItems({ myRoster, nflState, allRosters, pick
 
   return (
     <div>
-      <PositionBand label="On your desk" count={visible.length} className="mt-5" />
+      <PositionBand label="Action Items" count={visible.length} className="mt-5" />
       <RuledList>
         {visible.map(item => (
           <ActionCard key={item.key} item={item} onDismiss={dismiss} onAction={runAction} />

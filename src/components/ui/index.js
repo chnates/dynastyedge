@@ -27,7 +27,7 @@ export {
 // cardinality and consequence: many things you scan -> RuledList; one thing you
 // act on -> Lede. Neither draws a rectangle; that is the point.
 export { default as RuledList } from './RuledList'
-export { default as Lede } from './Lede'
+export { default as Lede, markedHeadline } from './Lede'
 // The third block shape: a door out of this screen. Extracted from the Index's
 // row in step 4 so shortcuts stop being Cards with a lucide medallion.
 export { default as NavRow } from './NavRow'

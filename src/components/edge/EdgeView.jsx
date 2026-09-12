@@ -1,10 +1,5 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  ClipboardList, CalendarClock, ArrowLeftRight, TrendingDown, TrendingUp,
-  Star, Users, ChevronRight, DollarSign, UserPlus, Gavel, Trophy, ScanSearch, LineChart,
-  Sparkles,
-} from 'lucide-react'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useTransactions } from '../../hooks/useTransactions'
 import { useWatchlist } from '../../hooks/useWatchlist'
@@ -19,45 +14,59 @@ import { getTeamName } from '../../hooks/useLeague'
 import {
   computeEdgeSignals, buildBriefing, buildGmLine, buildTeamValueSeries, trendPct,
 } from '../../utils/edgeBriefing'
-import { POS_TEXT } from '../../utils/positionColors'
+import { POS_BG, POS_TEXT } from '../../utils/positionColors'
 import { TIER_BADGE, TIER_TEXT } from '../../utils/tierColors'
-import { Button, Card, Badge, Mark } from '../ui'
+import {
+  Badge, Lede, Magnitude, MAGNITUDE_TEAM_REFERENCE, Mark, NavRow,
+  PositionBand, RuledList, markedHeadline,
+} from '../ui'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ErrorState from '../shared/ErrorState'
-import SectionHeader from '../shared/SectionHeader'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import NewsArticleSheet from '../shared/NewsArticleSheet'
 import Sparkline from '../shared/Sparkline'
 import RosterActionItems from '../roster/RosterActionItems'
 import RosterAnalysisSheet from '../roster/RosterAnalysisSheet'
 
-const BRIEFING_ICONS = {
-  draft: ClipboardList,
-  deadline: CalendarClock,
-  activity: ArrowLeftRight,
-  buy: TrendingDown,
-  sell: TrendingUp,
-  pickup: Sparkles,
-  watch: Star,
-  team: Users,
-  playoffs: Trophy,
-  trajectory: LineChart,
+// The eyebrow that replaced the icon medallion. A briefing item was a tinted
+// lucide glyph in a rounded square beside a title and a one-line description —
+// two of the twelve slop markers in one component ("lucide icons throughout"
+// and "identical cards in the icon + title + one-line-description pattern",
+// slop-checklist.md -> Components), and two of the three the shipped app still
+// failed.
+//
+// The eyebrow does the medallion's job better because it can SAY the thing. A
+// downward-trending arrow gestures at "something fell"; "Buy low" is the actual
+// instruction, and it is readable at 9px where a 15px glyph was not.
+const BRIEFING_EYEBROW = {
+  draft:      'Draft',
+  deadline:   'Deadline',
+  activity:   'League',
+  buy:        'Buy low',
+  sell:       'Sell high',
+  pickup:     'Waiver wire',
+  watch:      'Watchlist',
+  team:       'Scouting',
+  playoffs:   'Standings',
+  trajectory: 'Window',
 }
 
-const BRIEFING_TONES = {
-  accent:  { icon: 'text-accent',  bg: 'bg-accent/15',  bar: 'bg-accent' },
-  success: { icon: 'text-success', bg: 'bg-success/15', bar: 'bg-success' },
-  warning: { icon: 'text-warning', bg: 'bg-warning/15', bar: 'bg-warning' },
-}
+// The Mark's tone, from the item's own tone. `accent` maps to plain ink: it is
+// the default, and reserving colour for the two items that actually mean
+// something keeps the briefing scannable.
+const BRIEFING_MARK_TONE = { accent: 'ink', success: 'success', warning: 'warning' }
 
 // Win-window tier dot colors for the hero stat strip. The hero panel is dark
 // in BOTH themes, so these are the dark-theme tier identity literals — the
 // theme-tracking --tier-* tokens would go near-invisible in light mode.
-const TX_ICONS = {
-  trade:        { Icon: ArrowLeftRight, color: 'text-accent' },
-  waiver:       { Icon: DollarSign,     color: 'text-warning' },
-  free_agent:   { Icon: UserPlus,       color: 'text-success' },
-  commissioner: { Icon: Gavel,          color: 'text-text-secondary' },
+// The move type, as a word. It was four lucide glyphs; a two-letter mono tag
+// fits the same 14px, says which kind of move it was without a legend, and
+// carries no icon set.
+const TX_KIND = {
+  trade:        { label: 'TRD', color: 'text-alt' },
+  waiver:       { label: 'WVR', color: 'text-warning' },
+  free_agent:   { label: 'FA',  color: 'text-success' },
+  commissioner: { label: 'CMR', color: 'text-text-tertiary' },
 }
 
 const TIERS = ['Contending', 'Middle', 'Rebuilding']
@@ -322,71 +331,44 @@ export default function EdgeView() {
       </div>
 
       {/* ── Roster Analysis shortcut (opens the same sheet as My Roster) ── */}
-      <Card
-        {...rise()}
-        onClick={() => setAnalysisOpen(true)}
-        tone="bg-text-primary"
-        padding="px-3 py-3"
-        className="active:opacity-60"
-      >
-        <div className="flex items-center gap-2.5">
-          <span className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-accent/15">
-            <ScanSearch size={15} strokeWidth={2} className="text-accent" />
-          </span>
-          <div className="flex-1 text-left">
-            <p className="font-body text-sm font-semibold text-text-primary dark:text-text-primary leading-tight">
-              Roster Analysis
-            </p>
-            <p className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary mt-0.5">
-              Age curve · win window · position breakdown
-            </p>
-          </div>
-          <ChevronRight size={16} strokeWidth={1.75} className="text-text-tertiary flex-shrink-0" />
-        </div>
-      </Card>
+      <div {...rise()}>
+        <NavRow
+          size="sm"
+          onClick={() => setAnalysisOpen(true)}
+          title="Roster Analysis"
+          detail="Age curve · win window · position breakdown"
+        />
+      </div>
 
       {/* ── Your Briefing — prioritized, every row goes somewhere ── */}
       {briefing.length > 0 && (
         <section {...rise()}>
-          <SectionHeader label="Your Briefing" count={briefing.length} />
-          <div className="flex flex-col gap-2">
-            {briefing.map(item => {
-              const Icon = BRIEFING_ICONS[item.icon] ?? ArrowLeftRight
-              const tone = BRIEFING_TONES[item.tone] ?? BRIEFING_TONES.accent
-              return (
-                <Card
-                  key={item.id}
-                  onClick={() => runAction(item.action)}
-                  tone={tone.bar}
-                  padding="px-3 py-3"
-                  className="active:opacity-60"
-                >
-                  <div className="flex items-start gap-2.5 text-left">
-                    <span className={`shrink-0 mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center ${tone.bg}`}>
-                      <Icon size={15} strokeWidth={2} className={tone.icon} />
-                    </span>
-                    <span className="flex-1 min-w-0">
-                      <span className="block font-body text-sm font-semibold text-text-primary dark:text-text-primary leading-snug">
-                        {item.title}
-                      </span>
-                      <span className="block font-body text-xs text-text-secondary dark:text-text-secondary leading-snug mt-0.5">
-                        {item.body}
-                      </span>
-                    </span>
-                    <ChevronRight size={15} strokeWidth={2} className="shrink-0 mt-1 text-text-tertiary" />
-                  </div>
-                </Card>
-              )
-            })}
-          </div>
+          <PositionBand label="Your Briefing" count={briefing.length} className="mt-5" />
+          <RuledList>
+            {briefing.map(item => (
+              <Lede
+                key={item.id}
+                eyebrow={BRIEFING_EYEBROW[item.icon] ?? 'Briefing'}
+                headline={markedHeadline(
+                  item.title,
+                  item.mark,
+                  BRIEFING_MARK_TONE[item.tone] ?? 'ink',
+                )}
+                action={item.cta}
+                onClick={() => runAction(item.action)}
+              >
+                {item.body}
+              </Lede>
+            ))}
+          </RuledList>
         </section>
       )}
 
       {/* ── Headlines on my players + watchlist ── */}
       {newsItems.length > 0 && (
         <section {...rise()}>
-          <SectionHeader label="Headlines" count={newsItems.length} />
-          <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+          <PositionBand label="Headlines" count={newsItems.length} className="mt-5" />
+          <RuledList>
             {newsItems.map((n, i) => {
               const isFresh = lastVisit && n.published &&
                 new Date(n.published).getTime() > lastVisit
@@ -420,22 +402,14 @@ export default function EdgeView() {
                 </button>
               )
             })}
-          </div>
-          <Button
-            variant="tinted"
-            size="lg"
-            fullWidth
-            onClick={() => navigate('/news')}
-            className="mt-2 py-2 text-xs"
-          >
-            All headlines →
-          </Button>
+          </RuledList>
+          <NavRow size="sm" to="/news" title="All headlines" hint="News" />
         </section>
       )}
 
       {/* ── Market radar: watchlist + my roster movers ── */}
       <section {...rise()}>
-        <SectionHeader label="Market Radar" count={radar.length || undefined} />
+        <PositionBand label="Market Radar" count={radar.length || null} className="mt-5" />
         {radar.length === 0 ? (
           <p className="font-body text-xs text-text-tertiary dark:text-text-tertiary px-1 pb-1">
             {watchlist.length === 0
@@ -443,29 +417,32 @@ export default function EdgeView() {
               : 'No meaningful value moves on your players or watchlist right now.'}
           </p>
         ) : (
-          <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+          <RuledList>
             {radar.map(p => (
               <button
                 key={p.sleeperId}
                 onClick={() => setSelectedPlayer(p)}
-                className="w-full py-2.5 border-b border-border-default dark:border-border-default last:border-0 text-left active:opacity-60 transition-opacity"
+                className="w-full py-2.5 border-b border-border-default text-left
+                           active:opacity-60 transition-opacity focus-ring"
               >
-                <div className="flex items-center gap-2">
-                  <span className="flex-1 font-body font-medium text-sm text-text-primary dark:text-text-primary truncate min-w-0">
+                <div className="flex items-baseline gap-2">
+                  <span className={`shrink-0 w-[7px] h-[7px] self-center ${POS_BG[p.position] ?? 'bg-text-tertiary'}`} aria-hidden="true" />
+                  <span className="flex-1 min-w-0 font-body font-medium text-sm text-text-primary text-balance">
                     {p.name}
                   </span>
-                  <span className={`font-body text-[10px] font-semibold shrink-0 uppercase ${POS_TEXT[p.position] ?? 'text-text-tertiary'}`}>
-                    {p.position}
-                  </span>
-                  <span className="font-mono text-sm font-medium text-text-primary dark:text-text-primary shrink-0 tabular-nums">
-                    {(p.value ?? 0).toLocaleString()}
+                  <span className="shrink-0 self-center">
+                    <Magnitude value={p.value > 0 ? p.value : null} />
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="mt-1 pl-[15px] flex items-center gap-1.5">
+                  {/* The watch marker was a filled lucide star; it is now the
+                      word, which needs no legend. */}
                   {p.isWatched && (
-                    <Star size={10} strokeWidth={2} className="shrink-0 text-accent fill-accent" />
+                    <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.14em] text-brand-bright">
+                      Watching
+                    </span>
                   )}
-                  <span className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary truncate">
+                  <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-text-tertiary truncate">
                     {p.isMine ? 'Your roster' : p.ownerRoster ? getTeamName(p.ownerRoster.owner) : 'Free agent'}
                   </span>
                   <span className="flex-1" />
@@ -474,29 +451,22 @@ export default function EdgeView() {
                 </div>
               </button>
             ))}
-          </div>
+          </RuledList>
         )}
-        <Button
-          variant="tinted"
-          size="lg"
-          fullWidth
-          onClick={() => navigate('/league/movers')}
-          className="mt-2 py-2 text-xs"
-        >
-          All market movers →
-        </Button>
+        <NavRow size="sm" to="/league/movers" title="All market movers" hint="Movers" />
       </section>
 
       {/* ── Around the league: latest moves ── */}
       {recentTx.length > 0 && (
         <section {...rise()}>
-          <SectionHeader
+          <PositionBand
             label="Around the League"
-            count={freshTx.length > 0 ? `${freshTx.length} new` : undefined}
+            count={freshTx.length > 0 ? `${freshTx.length} new` : recentTx.length}
+            className="mt-5"
           />
-          <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3">
+          <RuledList>
             {recentTx.map(tx => {
-              const { Icon, color } = TX_ICONS[tx.type] ?? TX_ICONS.commissioner
+              const { label: kind, color } = TX_KIND[tx.type] ?? TX_KIND.commissioner
               const { title, detail } = txSummary(tx, teamName, resolveName)
               const involvesMe = (tx.roster_ids ?? []).includes(myRosterId)
               const isFresh = lastVisit && (tx.status_updated ?? 0) > lastVisit
@@ -506,7 +476,9 @@ export default function EdgeView() {
                   onClick={() => navigate('/league/activity')}
                   className="w-full flex items-center gap-2.5 py-2.5 border-b border-border-default dark:border-border-default last:border-0 text-left active:opacity-60 transition-opacity"
                 >
-                  <Icon size={14} strokeWidth={2} className={`shrink-0 ${color}`} />
+                  <span className={`shrink-0 w-8 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] ${color}`}>
+                    {kind}
+                  </span>
                   <span className="flex-1 min-w-0">
                     <span className="flex items-center gap-1.5">
                       <span className="font-body text-xs font-medium text-text-primary dark:text-text-primary truncate">
@@ -527,16 +499,8 @@ export default function EdgeView() {
                 </button>
               )
             })}
-          </div>
-          <Button
-            variant="tinted"
-            size="lg"
-            fullWidth
-            onClick={() => navigate('/league/activity')}
-            className="mt-2 py-2 text-xs"
-          >
-            Full activity feed →
-          </Button>
+          </RuledList>
+          <NavRow size="sm" to="/league/activity" title="Full activity feed" hint="League" />
         </section>
       )}
 

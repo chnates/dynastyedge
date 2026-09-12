@@ -571,7 +571,9 @@ across future seasons.
 - Each pick shows original owner if different from current owner
 - Total roster value score at top (sum of all player values + pick values)
 - **Action Items** (`RosterActionItems`, shared with The Edge — see Feature 12),
-  under an **"On your desk"** neutral band: generated roster alerts, each a
+  under an **"Action Items"** neutral band — deliberately *not* "On your desk",
+  which The Edge's generated GM line already uses for a different count
+  (briefing items), and two counts under one phrase on one screen read as a bug: generated roster alerts, each a
   **`Lede`** — eyebrow, a headline with the finding in a `Mark`, the sentence,
   and a real CTA. Four types, all derived from live data:
   1. **Taxi deadline** — any taxi player with `years_exp >= 2` must be

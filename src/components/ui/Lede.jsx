@@ -1,3 +1,4 @@
+import Mark from './Mark'
 import { cn } from './cn'
 
 // THE OPEN REGISTER — the other half of the answer to finding B7, and the
@@ -42,6 +43,24 @@ import { cn } from './cn'
 // as a nested <span> styled like the CTA. An entry that needs real controls
 // (a dismiss, a Button that navigates elsewhere) leaves `onClick` unset and
 // passes them as nodes to `action` / `aside`.
+
+// Build a headline node from a plain title and the substring to mark. Kept
+// here rather than at each call site because the "mark not found" path is the
+// one that matters: a builder that changes its copy without changing its
+// `mark` must degrade to a plain headline, never to a crash or a blank.
+export function markedHeadline(title, mark, tone = 'ink') {
+  if (!title) return null
+  if (!mark) return title
+  const at = title.indexOf(mark)
+  if (at === -1) return title
+  return (
+    <>
+      {title.slice(0, at)}
+      <Mark tone={tone}>{mark}</Mark>
+      {title.slice(at + mark.length)}
+    </>
+  )
+}
 
 export default function Lede({
   eyebrow = null,

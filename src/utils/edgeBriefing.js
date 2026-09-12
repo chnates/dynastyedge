@@ -174,9 +174,20 @@ export function computeEdgeSignals({ league, values, watchlist, nflState, myRost
 }
 
 // ── Briefing items ───────────────────────────────────────────────────────────
-// Each item: { id, icon, tone, title, body, action }
+// Each item: { id, icon, tone, title, mark?, cta?, body, action }
 //   action: { type: 'route', to, state? } | { type: 'player', player }
 //   tone:   'accent' | 'success' | 'warning'
+//
+// `mark` and `cta` are PRESENTATIONAL, and they live here for the same reason
+// `icon` and `tone` always have: only the builder knows which fact each item
+// turned on. The Edge renders every item as a <Lede> (the mock's `.md-e`), and
+// a Lede's headline carries a <Mark> on the word bearing the finding —
+// "Five QUARTERBACKS, one dead weight", not a highlight chosen at random.
+//
+//   mark — a substring of `title`. The renderer splits the title on it and
+//          reverses that fragment out of a block. Absent, or not found in the
+//          title, the headline simply renders plain: no caller can break it.
+//   cta  — the label on the ink button, saying where the tap lands.
 
 export function buildBriefing({
   signals, transactions, lastVisit, draft,
@@ -196,6 +207,8 @@ export function buildBriefing({
       icon: 'draft',
       tone: 'warning',
       title: draftStatus === 'paused' ? 'Rookie draft is paused' : 'Rookie draft is LIVE',
+      mark: draftStatus === 'paused' ? 'paused' : 'LIVE',
+      cta: 'Open the tracker',
       body: 'Open the tracker for the live pick feed and best-available board.',
       action: { type: 'route', to: '/draft/tracker' },
     })
@@ -212,6 +225,8 @@ export function buildBriefing({
         title: weeksLeft === 0
           ? 'Trade deadline is THIS WEEK'
           : `Trade deadline in ${weeksLeft} week${weeksLeft === 1 ? '' : 's'}`,
+        mark: weeksLeft === 0 ? 'THIS WEEK' : `${weeksLeft} week${weeksLeft === 1 ? '' : 's'}`,
+        cta: 'Open the trade desk',
         body: 'Last call to fix roster gaps before the market closes.',
         action: { type: 'route', to: '/trade' },
       })
@@ -227,6 +242,8 @@ export function buildBriefing({
       icon: 'playoffs',
       tone: ODDS_BRIEFING_TONE[dv.stance] ?? 'accent',
       title: `Playoff odds: ${Math.round(myPlayoffPct * 100)}% · ${dv.stance}`,
+      mark: `${Math.round(myPlayoffPct * 100)}%`,
+      cta: 'See the full simulation',
       body: dv.text,
       action: { type: 'route', to: '/league/playoffs' },
     })
@@ -239,6 +256,8 @@ export function buildBriefing({
       icon: 'draft',
       tone: 'accent',
       title: `${draft.season} rookie draft is coming up`,
+      mark: String(draft.season),
+      cta: 'Review your board',
       body: 'Review your board and pick strategy before the clock starts.',
       action: { type: 'route', to: '/draft/board' },
     })
@@ -249,6 +268,8 @@ export function buildBriefing({
       icon: 'draft',
       tone: 'accent',
       title: `${draft.season} rookie draft is complete`,
+      mark: String(draft.season),
+      cta: 'See the recap',
       body: 'See the recap — value drafted, biggest steals, and full results.',
       action: { type: 'route', to: '/draft/tracker' },
     })
@@ -267,6 +288,8 @@ export function buildBriefing({
         icon: 'activity',
         tone: 'accent',
         title: `${fresh.length} move${fresh.length === 1 ? '' : 's'} since your last visit`,
+        mark: `${fresh.length} move${fresh.length === 1 ? '' : 's'}`,
+        cta: 'Open league activity',
         body: tradePart
           ? `Including ${tradePart} — see who's buying and who's selling.`
           : 'Waiver and free-agent churn around the league.',
@@ -285,6 +308,8 @@ export function buildBriefing({
       icon: 'buy',
       tone: 'success',
       title: `Buy-low window: ${p.name}`,
+      mark: p.name,
+      cta: 'Build this trade',
       body: `Down ${Math.abs(Math.round(p.trend30Day))}${pct != null ? ` (${pct}%)` : ''} in 30 days and fills your ${p.position} gap` +
         (rebuilding ? ' — rebuilding owner, prime target.' : '.'),
       action: p.ownerRoster
@@ -306,6 +331,8 @@ export function buildBriefing({
       icon: 'sell',
       tone: 'success',
       title: `Sell-high candidate: ${p.name}`,
+      mark: p.name,
+      cta: 'Build this trade',
       body: `Up +${Math.round(p.trend30Day)}${pct != null ? ` (+${pct}%)` : ''} at a position of surplus — shop them while the market's hot.`,
       action: {
         type: 'route',
@@ -323,6 +350,8 @@ export function buildBriefing({
       icon: 'pickup',
       tone: 'success',
       title: `Free-agent target: ${player.name}`,
+      mark: player.name,
+      cta: 'Open free agents',
       body: `${reasons.slice(0, 2).join(' · ')}. Available on the wire now.`,
       action: { type: 'route', to: '/league/free-agents' },
     })
@@ -340,6 +369,8 @@ export function buildBriefing({
       icon: 'watch',
       tone: 'accent',
       title: `Watchlist: ${watchMover.name} is ${rising ? 'rising' : 'falling'}`,
+      mark: rising ? 'rising' : 'falling',
+      cta: 'View profile',
       body: `${rising ? '+' : ''}${Math.round(watchMover.trend30Day)}${pct != null ? ` (${pct > 0 ? '+' : ''}${pct}%)` : ''} over the last 30 days.`,
       action: { type: 'player', player: watchMover },
     })
@@ -353,6 +384,8 @@ export function buildBriefing({
       icon: 'team',
       tone: 'accent',
       title: `${getTeamName(r.owner)} is underperforming`,
+      mark: 'underperforming',
+      cta: 'Scout their roster',
       body: `Their record trails their roster talent (${r.record.wins}-${r.record.losses}) — a frustrated owner is a buy window.`,
       action: { type: 'route', to: `/league/teams/${r.rosterId}` },
     })
@@ -367,6 +400,8 @@ export function buildBriefing({
       icon: 'trajectory',
       tone: 'accent',
       title: `${getTeamName(roster.owner)}'s window is closing`,
+      mark: 'closing',
+      cta: 'See their trajectory',
       body: `Their projected value peaks now and slides through ${read.lastSeason} — they may move win-now talent for picks or youth. Good time to call.`,
       action: { type: 'route', to: `/league/trajectory/${roster.rosterId}` },
     })
