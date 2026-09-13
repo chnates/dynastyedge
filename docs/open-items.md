@@ -951,6 +951,19 @@ the target should move rather than the sources — is now measured, twice over.
   is not executable (the axis tops out at 100). If the face doesn't earn its
   keep on a real phone, the recorded swap candidate is Big Shoulders Display.
 
+**Handoff status (2026-09-13).** The three code items above are closed by the
+Matchday-cleanup PRs: the 21 panels (**27** in the end — `DraftTracker` and
+`LoginScreen` carried six the audit had missed), `MarketMovers`' nested button,
+and the two-line contents rail, plus the `Textarea` primitive the PR #49 record
+above had left as a recurrence risk. **The two device items — the PWA metas /
+app icon, and Bricolage on glass — remain open and are the owner's to run**;
+neither is checkable in headless Chromium. The cleanup also found what the
+handoff could not: `<badge.Icon />` and two siblings left behind by step 4's
+lucide removal, which had **`/trade` white-screening on `main`** exactly as
+`LeagueActivity` had. Lesson 1 held, and its corollary is new — a route sweep
+whose data never loads is not a route sweep: every view short-circuits to
+`ErrorState` before it can reach the crashing component.
+
 **Three lessons worth more than the diff, all of them about verification:**
 
 1. **Neither lint nor build can catch an undefined component.** eslint-scope
@@ -1208,9 +1221,14 @@ Evidence: `docs/design/review-2026-09/findings.md` §X1–X3, B3.
    prospect search) replaced it with a border or ring tint rather than the
    shared ring.
    **Closed by routing three through `Input`/`SearchInput` and giving the
-   textarea `.focus-ring` directly** — there is no `Textarea` primitive, which
-   is why that one field cannot be fixed structurally and is the standing
-   recurrence risk. Two incidental wins: the two prospect searches carried
+   textarea `.focus-ring` directly** — there was no `Textarea` primitive, which
+   is why that one field could not be fixed structurally and was left as the
+   standing recurrence risk.
+   **That risk is now closed too (2026-09-13): `src/components/ui/Textarea.jsx`
+   ships as `Input`'s sibling and the scout note routes through it**, so the
+   floor is held by the primitive rather than by a class pasted on one call
+   site. The app has exactly one `<textarea>` and it is now inside the
+   library — `grep -rn '<textarea' src` returns only `Textarea.jsx`. Two incidental wins: the two prospect searches carried
    `relative` + `pl-9` wrappers reserving space for magnifier icons that left
    with lucide in step 4, and `DraftBoard` had been importing `Input` without
    using it for its own search box. `grep focus:outline-none src` is now 0.
