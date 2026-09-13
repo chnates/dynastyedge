@@ -1028,6 +1028,36 @@ the target should move rather than the sources — is now measured, twice over.
   Nine tall partner cards can afford a full-width footer button; ~30 dense rows
   across six sections cannot — it turns a list you SCAN into a wall of buttons
   whose CTA out-shouts the value and the trend. Verified in both themes.
+- ~~**The contents rail spends a second row on most screens**~~ — **DONE
+  2026-09-13.** Not in the step-5 handoff list, but reopened alongside it.
+  The rail was wrapping on **three** of the four multi-view sections (Squad,
+  Trade AND League — the review had it as two), costing 44px on ~16 of the
+  app's 18 content routes and putting 140px of chrome above the content.
+  Tightened gap (16 → 10px) + tracking (0.08 → 0.055em) and shortened the two
+  labels that were over on their own — "Pick Trades" → "Picks" and
+  "Free Agents" → "FA". **All four sections now fit on one line**, header 140px
+  → 96px. Measured at 390px against 358px available — Squad 344 (14 spare) ·
+  Trade 352 (6) · League 306 (52) · Draft 196 (162).
+  - **Owner chose this (option d) over retiring the layer**, because moving the
+    views onto the section landing screen would have cost the Analyzer ↔
+    Targets round trip a tap, and that is the Trade section's most-used loop.
+  - **The rename landed as `railLabel`, not as a change to `label`.** `label`
+    also feeds the **Index**, whose whole job is discoverability, and "Overview
+    · FA · Activity · Movers · Playoffs" is a worse map than the full names.
+    `SectionContents` reads `railLabel ?? label`, so **only the width-
+    constrained consumer shortens**; the Index and global search still say
+    "Free Agents". Same precedent as `searchLabel`. Add one only when a section
+    is measurably over budget. `FA` is not a coinage — League › Activity's
+    filter chips already read *All / Trades / Waivers / FA / My Moves*.
+  - **Trade is the tight one at 6px spare.** A sixth Trade view, or a longer
+    label on any of its five, puts that section back on two rows — which is the
+    honest failure mode, and why `flex-wrap` stayed.
+  - **Method note worth keeping.** The first cut used `flex-nowrap` and
+    appeared to fit all three sections. It didn't: nowrap does not *fit* an
+    over-long rail, it **hides** the overflow — the A4 clipping failure
+    `SectionContents` exists to fix. Reverting to `flex-wrap` is what exposed
+    that League had never fitted. **A layout that "fits" under nowrap has not
+    been measured, it has been silenced.**
 - **Verify the PWA metas and the app icon on device.** Carried from step 4 and
   still not done — a meta or icon change is silent until the home-screen app is
   removed and re-added (failure-archaeology §1). `index.html`'s icon `?v=` is

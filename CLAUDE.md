@@ -2863,14 +2863,17 @@ while you are in one.
 |---|------|---------|-----------|---------------------------------------------|
 |1  |Today |`/edge`  |The Edge   |Daily briefing home screen (default route)   |
 |2  |Squad |`/my-team`|My Team   |My Roster · Lineup · Season Review · Trajectory|
-|3  |Trade |`/trade` |Trade      |Partners · Analyzer · Targets · Managers · Pick Trades (+ deadline banner)|
+|3  |Trade |`/trade` |Trade      |Partners · Analyzer · Targets · Managers · Picks (+ deadline banner)|
 |4  |League|`/league`|League     |Overview · Free Agents · Activity · Movers · Playoffs|
 |5  |Index |`/index` |—          |The complete map — every section, plus the four consulted views|
 
 **The nav labels and the feature names are deliberately different.** "The Edge"
 and "My Team" are what the *features* are called throughout this document and
 in the product; **Today** and **Squad** are what *navigation* calls them, in
-Matchday's voice. Routes are unchanged (`/edge`, `/my-team`), so no deep-link,
+Matchday's voice. **"Picks" joined them 2026-09-13** — the feature is still the
+**Pick Trade Calculator** at `/trade/pick-trades` (Feature 13), and global
+search still finds it by that name via `searchLabel`; only the rail's label
+shortened, so the Trade rail fits on one line. Routes are unchanged (`/edge`, `/my-team`), so no deep-link,
 briefing item or redirect is affected. The app header names the section using
 the nav label, read from the same map, so the header and the bar can never
 disagree.
@@ -2900,6 +2903,39 @@ replaced `SubTabBar`, and the two differences are the point:
    touch target; `.tap-target` is deliberately not used, because on a row that
    wraps its oversized hit area would let vertically adjacent items steal each
    other's taps — the same reason `index.css` keeps it off `Chip`.
+3. **It fits on ONE line in every section, and it still wraps if it ever
+   can't** (2026-09-13). It was spending a second 44px row on **three of the
+   four** multi-view sections — Squad, Trade *and* League, i.e. ~16 of the
+   app's 18 content routes — putting **140px** of fixed chrome (50px masthead +
+   90px rail) above the content on an 844px screen. Three changes bring every
+   section to **96px**: the gap (16px → 10px), the tracking
+   (0.08em → 0.055em), and shortening the two labels that were over on their
+   own — **"Pick Trades" → "Picks"** and **"Free Agents" → "FA"**.
+   - **`flex-nowrap` is NOT the mechanism and was reverted.** A first cut used
+     it and appeared to fit all three; nowrap does not *fit* an over-long rail,
+     it **hides** the overflow — reintroducing the exact A4 failure this
+     component was built to fix. Switching back to `flex-wrap` is what exposed
+     that League had never actually fitted. **A layout that "fits" under nowrap
+     has not been measured, it has been silenced.**
+   - **Measured headroom at 390px** (358px available inside the gutter), so the
+     next person adding a view knows the budget: **Squad 344** (14 spare) ·
+     **Trade 352** (6 spare) · **League 306** (52 spare) · **Draft 196**
+     (162 spare). The numbers live in the component too. **Trade is the tight
+     one** — a sixth view there, or a longer label on any of its five, puts it
+     back on two rows, which is the honest failure mode `flex-wrap` preserves.
+   - **`railLabel` is the shortening mechanism, and it is rail-only.** "FREE
+     AGENTS" was 90px, the widest label in the app, and League was over by
+     exactly 21px — no tightening closes that while staying legible. But
+     `label` also feeds the **Index**, whose whole job is discoverability, and
+     "Overview · FA · Activity · Movers · Playoffs" is a worse map. So
+     `SectionContents` reads `railLabel ?? label` and **only the rail
+     shortens**; the Index and global search still say "Free Agents". Same
+     precedent as `searchLabel` — one consumer with a different constraint gets
+     its own string, rather than every consumer inheriting the tightest one.
+     Add a `railLabel` only when a section is measurably over budget.
+   - **`FA` is not a coinage** — it is already this app's own vocabulary:
+     League › Activity's filter chips read *All / Trades / Waivers / FA / My
+     Moves*.
 
 **Every navigable destination lives in ONE place: `src/navigation.js`.** The
 tab bar, the contents rails, the Index and global search all read from it, so a
