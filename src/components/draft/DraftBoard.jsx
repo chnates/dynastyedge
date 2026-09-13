@@ -150,7 +150,7 @@ function SortHeader({ col, sortCol, sortDir, onSort, extra = '' }) {
   return (
     <button
       onClick={() => onSort(col)}
-      className={`flex items-center gap-0.5 font-body text-[10px] font-semibold uppercase tracking-wider select-none ${
+      className={`focus-ring flex items-center gap-0.5 font-body text-[10px] font-semibold uppercase tracking-wider select-none ${
         active ? 'text-accent' : 'text-text-tertiary'
       } ${extra}`}
     >
@@ -283,7 +283,7 @@ function SortablePlayerRow({
 
       <button
         onClick={onSelect}
-        className={`flex-1 text-left py-2.5 flex items-center gap-2 press min-w-0 ${drafted ? 'opacity-50' : ''}`}
+        className={`focus-ring flex-1 text-left py-2.5 flex items-center gap-2 press min-w-0 ${drafted ? 'opacity-50' : ''}`}
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center flex-wrap gap-x-1">
@@ -754,7 +754,7 @@ export default function DraftBoard() {
           {boardMode === 'My Board' && (
             <button
               onClick={() => setShowResetConfirm(true)}
-              className="flex items-center gap-1 text-text-tertiary hover:text-danger transition-colors"
+              className="focus-ring flex items-center gap-1 text-text-tertiary hover:text-danger transition-colors"
             >
               <span className="font-body text-[11px]">Reset to FC</span>
             </button>
@@ -773,7 +773,7 @@ export default function DraftBoard() {
               <button
                 key={pos}
                 onClick={() => setPosFilter(pos)}
-                className={`flex-shrink-0 px-3 py-1.5 font-body text-xs font-semibold uppercase tracking-wide transition-colors ${
+                className={`focus-ring flex-shrink-0 px-3 py-1.5 font-body text-xs font-semibold uppercase tracking-wide transition-colors ${
                   posFilter === pos
                     ? POS_CHIP_ACTIVE[pos] ?? 'bg-accent text-bg-primary'
                     : 'bg-bg-card border border-border-default text-text-secondary'
@@ -787,7 +787,7 @@ export default function DraftBoard() {
             <button
               onClick={() => fileInputRef.current?.click()}
               title="Upload CSV rankings"
-              className="flex items-center gap-1 px-2.5 py-1.5 bg-bg-card border border-border-default text-text-secondary hover:text-text-primary transition-colors"
+              className="focus-ring flex items-center gap-1 px-2.5 py-1.5 bg-bg-card border border-border-default text-text-secondary hover:text-text-primary transition-colors"
             >
               <span className="font-body text-[11px] font-semibold uppercase tracking-wide">CSV</span>
             </button>
@@ -795,7 +795,7 @@ export default function DraftBoard() {
               <button
                 onClick={saveRankings}
                 title="Download rankings.json"
-                className="flex items-center gap-1 px-2.5 py-1.5 bg-bg-card border border-border-default text-text-secondary hover:text-text-primary transition-colors"
+                className="focus-ring flex items-center gap-1 px-2.5 py-1.5 bg-bg-card border border-border-default text-text-secondary hover:text-text-primary transition-colors"
               >
                 <span className="font-body text-[11px] font-semibold uppercase tracking-wide">Save</span>
               </button>
@@ -827,7 +827,7 @@ export default function DraftBoard() {
                 <button
                   onClick={sleeperDraft.refresh}
                   aria-label="Refresh draft"
-                  className="text-text-tertiary press"
+                  className="focus-ring text-text-tertiary press"
                 >
                 </button>
               )}
@@ -847,7 +847,7 @@ export default function DraftBoard() {
                   <span className="font-body text-[10px] text-text-secondary">{col.name}</span>
                   <button
                     onClick={() => removeColumn(col.name)}
-                    className="text-text-tertiary hover:text-danger transition-colors ml-0.5 leading-none"
+                    className="focus-ring text-text-tertiary hover:text-danger transition-colors ml-0.5 leading-none"
                     aria-label={`Remove ${col.name}`}
                   >
                   </button>
@@ -866,7 +866,7 @@ export default function DraftBoard() {
           {boardMode === 'My Board' && (
             <button
               onClick={() => { setSortCol('myOrder'); setSortDir('asc') }}
-              className={`flex items-center gap-0.5 font-body text-[10px] font-semibold uppercase tracking-wider select-none w-10 justify-end ${
+              className={`focus-ring flex items-center gap-0.5 font-body text-[10px] font-semibold uppercase tracking-wider select-none w-10 justify-end ${
                 sortCol === 'myOrder' ? 'text-accent' : 'text-text-tertiary'
               }`}
             >
@@ -880,7 +880,7 @@ export default function DraftBoard() {
                 key={col.name}
                 onClick={() => handleSort(col.sortKey)}
                 title={col.name}
-                className={`flex items-center gap-0.5 font-body text-[10px] font-semibold uppercase tracking-wider select-none w-12 justify-end ${
+                className={`focus-ring flex items-center gap-0.5 font-body text-[10px] font-semibold uppercase tracking-wider select-none w-12 justify-end ${
                   sortCol === col.sortKey ? 'text-accent' : 'text-text-tertiary'
                 }`}
               >

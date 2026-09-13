@@ -274,7 +274,7 @@ export default function EdgeView() {
 
           <button
             onClick={() => navigate('/my-team')}
-            className="w-full flex items-end justify-between gap-3 mt-3 text-left press"
+            className="focus-ring w-full flex items-end justify-between gap-3 mt-3 text-left press"
           >
             <div>
               <div className="flex items-baseline gap-2">
@@ -297,7 +297,7 @@ export default function EdgeView() {
           <div className="flex mt-3 pt-2.5 border-t border-bg-primary/20 divide-x divide-bg-primary/20">
             <button
               onClick={() => navigate('/league')}
-              className="text-left pr-3 press"
+              className="focus-ring text-left pr-3 press"
             >
               <p className="font-mono text-base font-semibold tabular-nums leading-none text-bg-primary">
                 {/* Top 3 reverses a second time — the page ground with the
@@ -320,7 +320,7 @@ export default function EdgeView() {
             )}
             <button
               onClick={() => navigate('/league')}
-              className="text-left px-3 press"
+              className="focus-ring text-left px-3 press"
             >
               <p className="font-display text-[14px] uppercase tracking-[0.02em] leading-none text-bg-primary">
                 {signals.myTier}
@@ -517,7 +517,7 @@ export default function EdgeView() {
               try { sessionStorage.setItem('dynastyedge_league_tier', tier) } catch { /* private mode */ }
               navigate('/league')
             }}
-            className={`px-2.5 py-1 font-body text-xs font-medium border press ${TIER_BADGE[tier]}`}
+            className={`focus-ring px-2.5 py-1 font-body text-xs font-medium border press ${TIER_BADGE[tier]}`}
           >
             {signals.tierCounts[tier]} {tier}
           </button>

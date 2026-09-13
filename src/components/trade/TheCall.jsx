@@ -75,7 +75,7 @@ function SummaryRow({ label, tone, text, onJump }) {
   return (
     <button
       onClick={onJump}
-      className="w-full flex items-center gap-2 px-4 py-2.5 text-left border-t border-border-default dark:border-border-default active:bg-bg-secondary/60 transition-colors"
+      className="focus-ring w-full flex items-center gap-2 px-4 py-2.5 text-left border-t border-border-default dark:border-border-default active:bg-bg-secondary/60 transition-colors"
     >
       <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary w-[68px] shrink-0">
         {label}

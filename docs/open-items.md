@@ -943,6 +943,31 @@ the target should move rather than the sources — is now measured, twice over.
   nested inside its `<button>`"). Reproduces identically on clean `main`, so it
   predates this work. Not fixed in step 5 because the fix restructures the row's
   layout and needs its own decision about where the Trade button goes.
+- ~~**Controls that bypass the primitives have no focus ring**~~ — **DONE
+  2026-09-13.** Not in the step-5 handoff either; found while doing the panel
+  conversion, because PR #49 had just fixed four fields with exactly this bug
+  and the handoff predicted more of the same class. A static probe over every
+  `<button>` / `<input>` / `<select>` / `<textarea>` in `src` found **46
+  controls with no `.focus-ring`**, fixed across three PRs (8 in the panel PR,
+  1 in the Movers PR, **37 here**).
+  **The source count badly understates it.** Most of those sites sit on a
+  *repeated row*, so 46 source sites were **~700 unfocusable controls in the
+  live DOM** — measured per route: Draft Board **470**, Free Agents **128**,
+  Draft Research, Pick Trades 36, Movers 33, Trajectory 29, Lineup 23, The Edge
+  6. **Run the probe; do not eyeball the diff.** One missed row component is
+  two orders of magnitude of real controls.
+  - Distribution, which is where the next gap will be: `DraftBoard` 10 ·
+    `DraftTracker` 10 · `TradeBuilder` 7 · `EdgeView` 4 · `FreeAgentsView` 2 ·
+    `TradeVerdict` 2 · `LineupRow` 1 · `TheCall` 1 (this PR), plus the 9 the
+    other two PRs own.
+  - **One deliberate omission:** `DraftBoard`'s hidden `<input type="file">` —
+    `className="hidden"` is `display:none`, so it is not focusable at all, and
+    its visible trigger button carries the ring.
+  - **Follow-up, not done here:** several of these are hand-rolled controls
+    that should really *be* `Button` or `Row`, which would make the floor
+    structural instead of per-site. That is a much larger, riskier diff than
+    adding the class, and it was kept out so this one stays mechanical and
+    reviewable. Same reasoning as the panel conversion.
 - **Verify the PWA metas and the app icon on device.** Carried from step 4 and
   still not done — a meta or icon change is silent until the home-screen app is
   removed and re-added (failure-archaeology §1). `index.html`'s icon `?v=` is

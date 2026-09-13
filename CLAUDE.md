@@ -3323,10 +3323,21 @@ the call site, so no screen can opt out.
   and it covers the two reversal cases a text-on-ground audit misses (paper type
   on a position band; type on an ink field). **40 of 40 pass.**
 - **`.focus-ring` is the one focus definition** (`index.css`), carried by
-  `Button`, `IconButton`, `Chip`, interactive `Card`, `Input` and `Select`.
-  `:focus-visible`, not `:focus`, so a plain tap stays unmarked while keyboard
-  focus and text fields render the ring. Inside an `.ink-field` the ring flips
-  to the field's own ground, or it disappears into the block.
+  `Button`, `IconButton`, `Chip`, interactive `Card`, `Row`, `Input` and
+  `Select`. `:focus-visible`, not `:focus`, so a plain tap stays unmarked while
+  keyboard focus and text fields render the ring. Inside an `.ink-field` the
+  ring flips to the field's own ground, or it disappears into the block.
+  **A control that bypasses the primitives must carry it explicitly, and 46 of
+  them weren't** (measured 2026-09-13 by a static probe over every `<button>`,
+  `<input>`, `<select>` and `<textarea>` in `src`; all fixed across three PRs).
+  The distribution is the lesson: `DraftBoard` 10 · `DraftTracker` 10 ·
+  `TradeBuilder` 7 · `EdgeView` 4, and because most sit on a **repeated row**,
+  those 46 source sites were **~700 unfocusable controls in the live DOM** —
+  470 on the Draft Board alone. **Run the probe, not a reading of the diff:**
+  a single missed row component is two orders of magnitude of real controls.
+  The only deliberate omission is `DraftBoard`'s hidden `<input type="file">`
+  (`className="hidden"` ⇒ `display:none` ⇒ not focusable); its visible trigger
+  carries the ring.
 - **`.press` is the one press definition** (see Motion) — the third sibling of
   these two, carried by every primitive so no screen ships a control that
   doesn't answer a finger.
