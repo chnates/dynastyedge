@@ -71,7 +71,7 @@ export const SECTIONS = [
         searchLabel: 'Manager Scouting', consulted: true,
         blurb: 'How every owner trades',
       },
-      { label: 'Pick Trades', to: '/trade/pick-trades', searchLabel: 'Pick Trade Calculator' },
+      { label: 'Picks', to: '/trade/pick-trades', searchLabel: 'Pick Trade Calculator' },
     ],
   },
   {

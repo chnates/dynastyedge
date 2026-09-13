@@ -19,6 +19,29 @@ import { cn } from '../ui'
 //    second line and stays readable. Items are not `flex-1` here, which is what
 //    made the old row wrap badly before it was made to clip instead.
 //
+// IT STAYS `flex-wrap`, AND THE TIGHTENING BELOW IS NOT LICENCE TO DROP IT.
+// The 2026-09-13 pass shrank the gap (16px → 10px) and the tracking
+// (0.08em → 0.055em) so the rail fits on ONE line where it can — it was
+// spending a second 44px row on three of the four multi-view sections, i.e.
+// ~16 of the app's 18 content routes, for 140px of chrome before any content.
+// A first cut also set `flex-nowrap`, which is wrong and was reverted: nowrap
+// does not FIT an over-long rail, it HIDES the overflow — reintroducing exactly
+// the A4 failure this component exists to fix. Wrapping is the honest fallback,
+// so a future label that doesn't fit costs a row instead of vanishing.
+//
+// Measured headroom at 390px (358px available inside the gutter), so the next
+// person adding a view knows the budget rather than guessing:
+//
+//   Squad    344px — fits, 14px spare
+//   Trade    352px — fits,  6px spare   (after "Pick Trades" → "Picks")
+//   League   379px — STILL WRAPS, over by 21px
+//   Draft    196px — fits, 162px spare
+//
+// League is over because "FREE AGENTS" (90px) is the widest label in the app;
+// no further gap/tracking tightening closes 21px without going illegible, so
+// shortening that label is the only way to get it onto one line. That is a
+// second rename and it is the owner's call — deliberately NOT taken here.
+//
 // Each item is a real 44px touch target (findings.md X3). `.tap-target` is
 // deliberately NOT used: it grows the hit area beyond the ink, and on a row that
 // WRAPS that would let vertically adjacent items steal each other's taps — the
@@ -32,7 +55,7 @@ export default function SectionContents({ sectionKey }) {
       aria-label={`${section.label} contents`}
       className="sticky top-0 z-[5] bg-bg-secondary border-b-2 border-text-primary px-4"
     >
-      <ul className="flex flex-wrap items-center gap-x-4">
+      <ul className="flex flex-wrap items-center gap-x-2.5">
         {section.views.map(({ label, to, end }) => (
           <li key={to}>
             <NavLink
@@ -41,7 +64,7 @@ export default function SectionContents({ sectionKey }) {
               className={({ isActive }) =>
                 cn(
                   'focus-ring flex items-center min-h-[44px] font-display font-extrabold text-[12px]',
-                  'uppercase tracking-[0.08em] whitespace-nowrap press',
+                  'uppercase tracking-[0.055em] whitespace-nowrap press',
                   isActive ? 'text-text-primary' : 'text-text-secondary hover:text-text-primary',
                 )
               }

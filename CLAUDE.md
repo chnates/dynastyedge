@@ -2847,14 +2847,17 @@ while you are in one.
 |---|------|---------|-----------|---------------------------------------------|
 |1  |Today |`/edge`  |The Edge   |Daily briefing home screen (default route)   |
 |2  |Squad |`/my-team`|My Team   |My Roster · Lineup · Season Review · Trajectory|
-|3  |Trade |`/trade` |Trade      |Partners · Analyzer · Targets · Managers · Pick Trades (+ deadline banner)|
+|3  |Trade |`/trade` |Trade      |Partners · Analyzer · Targets · Managers · Picks (+ deadline banner)|
 |4  |League|`/league`|League     |Overview · Free Agents · Activity · Movers · Playoffs|
 |5  |Index |`/index` |—          |The complete map — every section, plus the four consulted views|
 
 **The nav labels and the feature names are deliberately different.** "The Edge"
 and "My Team" are what the *features* are called throughout this document and
 in the product; **Today** and **Squad** are what *navigation* calls them, in
-Matchday's voice. Routes are unchanged (`/edge`, `/my-team`), so no deep-link,
+Matchday's voice. **"Picks" joined them 2026-09-13** — the feature is still the
+**Pick Trade Calculator** at `/trade/pick-trades` (Feature 13), and global
+search still finds it by that name via `searchLabel`; only the rail's label
+shortened, so the Trade rail fits on one line. Routes are unchanged (`/edge`, `/my-team`), so no deep-link,
 briefing item or redirect is affected. The app header names the section using
 the nav label, read from the same map, so the header and the bar can never
 disagree.
@@ -2884,6 +2887,28 @@ replaced `SubTabBar`, and the two differences are the point:
    touch target; `.tap-target` is deliberately not used, because on a row that
    wraps its oversized hit area would let vertically adjacent items steal each
    other's taps — the same reason `index.css` keeps it off `Chip`.
+3. **It is tuned to fit on ONE line where it can, and it still wraps when it
+   can't** (2026-09-13). It was spending a second 44px row on **three of the
+   four** multi-view sections — Squad, Trade *and* League, i.e. ~16 of the
+   app's 18 content routes — putting **140px** of fixed chrome (50px masthead +
+   90px rail) above the content on an 844px screen. Tightening the gap
+   (16px → 10px) and the tracking (0.08em → 0.055em), plus renaming the one
+   label that was over on its own (**"Pick Trades" → "Picks"**; the route and
+   its `searchLabel` are untouched), brings Squad and Trade onto one line and
+   the header down to **96px**.
+   - **`flex-nowrap` is NOT the mechanism and was reverted.** A first cut used
+     it and appeared to fit all three; nowrap does not *fit* an over-long rail,
+     it **hides** the overflow — reintroducing the exact A4 failure this
+     component was built to fix. Switching back to `flex-wrap` is what exposed
+     that League had never actually fitted.
+   - **Measured headroom at 390px** (358px available inside the gutter), so the
+     next person adding a view knows the budget: **Squad 344** (14 spare) ·
+     **Trade 352** (6 spare) · **League 379 — still wraps, over by 21** ·
+     **Draft 196** (162 spare). The numbers live in the component too.
+   - League is over because **"FREE AGENTS" is the widest label in the app**
+     (90px), and no further tightening closes 21px while staying legible. The
+     only remaining lever is shortening that label — a second rename, and an
+     owner call that was deliberately **not** taken with this change.
 
 **Every navigable destination lives in ONE place: `src/navigation.js`.** The
 tab bar, the contents rails, the Index and global search all read from it, so a
