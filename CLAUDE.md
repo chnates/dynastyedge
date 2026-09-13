@@ -2887,28 +2887,39 @@ replaced `SubTabBar`, and the two differences are the point:
    touch target; `.tap-target` is deliberately not used, because on a row that
    wraps its oversized hit area would let vertically adjacent items steal each
    other's taps — the same reason `index.css` keeps it off `Chip`.
-3. **It is tuned to fit on ONE line where it can, and it still wraps when it
+3. **It fits on ONE line in every section, and it still wraps if it ever
    can't** (2026-09-13). It was spending a second 44px row on **three of the
    four** multi-view sections — Squad, Trade *and* League, i.e. ~16 of the
    app's 18 content routes — putting **140px** of fixed chrome (50px masthead +
-   90px rail) above the content on an 844px screen. Tightening the gap
-   (16px → 10px) and the tracking (0.08em → 0.055em), plus renaming the one
-   label that was over on its own (**"Pick Trades" → "Picks"**; the route and
-   its `searchLabel` are untouched), brings Squad and Trade onto one line and
-   the header down to **96px**.
+   90px rail) above the content on an 844px screen. Three changes bring every
+   section to **96px**: the gap (16px → 10px), the tracking
+   (0.08em → 0.055em), and shortening the two labels that were over on their
+   own — **"Pick Trades" → "Picks"** and **"Free Agents" → "FA"**.
    - **`flex-nowrap` is NOT the mechanism and was reverted.** A first cut used
      it and appeared to fit all three; nowrap does not *fit* an over-long rail,
      it **hides** the overflow — reintroducing the exact A4 failure this
      component was built to fix. Switching back to `flex-wrap` is what exposed
-     that League had never actually fitted.
+     that League had never actually fitted. **A layout that "fits" under nowrap
+     has not been measured, it has been silenced.**
    - **Measured headroom at 390px** (358px available inside the gutter), so the
      next person adding a view knows the budget: **Squad 344** (14 spare) ·
-     **Trade 352** (6 spare) · **League 379 — still wraps, over by 21** ·
-     **Draft 196** (162 spare). The numbers live in the component too.
-   - League is over because **"FREE AGENTS" is the widest label in the app**
-     (90px), and no further tightening closes 21px while staying legible. The
-     only remaining lever is shortening that label — a second rename, and an
-     owner call that was deliberately **not** taken with this change.
+     **Trade 352** (6 spare) · **League 306** (52 spare) · **Draft 196**
+     (162 spare). The numbers live in the component too. **Trade is the tight
+     one** — a sixth view there, or a longer label on any of its five, puts it
+     back on two rows, which is the honest failure mode `flex-wrap` preserves.
+   - **`railLabel` is the shortening mechanism, and it is rail-only.** "FREE
+     AGENTS" was 90px, the widest label in the app, and League was over by
+     exactly 21px — no tightening closes that while staying legible. But
+     `label` also feeds the **Index**, whose whole job is discoverability, and
+     "Overview · FA · Activity · Movers · Playoffs" is a worse map. So
+     `SectionContents` reads `railLabel ?? label` and **only the rail
+     shortens**; the Index and global search still say "Free Agents". Same
+     precedent as `searchLabel` — one consumer with a different constraint gets
+     its own string, rather than every consumer inheriting the tightest one.
+     Add a `railLabel` only when a section is measurably over budget.
+   - **`FA` is not a coinage** — it is already this app's own vocabulary:
+     League › Activity's filter chips read *All / Trades / Waivers / FA / My
+     Moves*.
 
 **Every navigable destination lives in ONE place: `src/navigation.js`.** The
 tab bar, the contents rails, the Index and global search all read from it, so a
