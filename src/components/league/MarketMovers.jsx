@@ -46,41 +46,67 @@ function TrendChip({ trend, value }) {
   )
 }
 
+// The Trade action is a SIBLING of the row's tappable area, not a child of it.
+// It used to sit inside `Row`'s own <button> with a `stopPropagation` — a
+// <button> nested in a <button>, which is invalid HTML and which React warns
+// about on every render of this page. It predates the Matchday rebuild.
+//
+// CLAUDE.md already records the fix used on the Partners card: "a sibling BELOW
+// the card, never nested inside its <button>". That answer is right there and
+// wrong HERE, and the difference is cardinality. Partners is nine tall cards,
+// so a full-width footer button costs one row of height on each. Movers is up
+// to ~30 dense rows across six sections; the same treatment was built and
+// measured at 390px, and it turns a list you SCAN into a wall of buttons —
+// every row grows from ~50px to ~82px and the CTA out-shouts the value and the
+// trend, which are what the row exists to show (law 5: the register is chosen
+// by cardinality and consequence).
+//
+// So the row splits instead: `Row` renders a plain <div> when it has no
+// `onClick`, and holds two real sibling buttons — the content (opens the
+// profile) and the action. Density is unchanged, both targets keep
+// `.focus-ring` and `.press`, and the HTML is valid.
 function MoverRow({ player, ownerLabel, note, series, onClick, onBuildTrade }) {
   return (
-    <Row onClick={onClick} padding="sm">
-      <div className="flex items-baseline gap-2">
-        <span className={`shrink-0 w-[7px] h-[7px] self-center ${POS_BG[player.position] ?? 'bg-text-tertiary'}`} aria-hidden="true" />
-        <span className="flex-1 min-w-0 font-body font-medium text-sm text-text-primary text-balance">
-          {player.name}
-        </span>
-        <span className="shrink-0 self-center">
-          <Magnitude value={player.value > 0 ? player.value : null} />
-        </span>
-        <TrendChip trend={player.trend30Day} value={player.value} />
-      </div>
-      <div className="flex items-center gap-1 mt-1 pl-[15px]">
-        {/* Neither elides. This exact line was the truncation finding B3's
-            sweep turned up last: "Aaronreg… · Rebuilding owner — prime tar…"
-            on the Ja'Marr Chase row, where the NOTE is the whole point of the
-            row (CLAUDE.md: truncation is not a layout strategy for a
-            load-bearing value). */}
-        <span className="min-w-0 font-mono text-[9px] uppercase tracking-[0.14em] text-text-tertiary">
-          {ownerLabel}
-          {note && <span className="text-warning"> · {note}</span>}
-        </span>
-        <span className="flex-1" />
-        {series && <Sparkline data={series} />}
-        {onBuildTrade && (
-          <button
-            onClick={e => { e.stopPropagation(); onBuildTrade() }}
-            aria-label="Build trade"
-            className="shrink-0 ml-1 flex items-center gap-1 rounded-none border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-accent press"
-          >
-            <span className="font-body text-[10px] font-semibold">Trade</span>
-          </button>
-        )}
-      </div>
+    <Row padding="sm" className="flex items-stretch gap-2">
+      <button
+        type="button"
+        onClick={onClick}
+        className="focus-ring press flex-1 min-w-0 text-left"
+      >
+        <div className="flex items-baseline gap-2">
+          <span className={`shrink-0 w-[7px] h-[7px] self-center ${POS_BG[player.position] ?? 'bg-text-tertiary'}`} aria-hidden="true" />
+          <span className="flex-1 min-w-0 font-body font-medium text-sm text-text-primary text-balance">
+            {player.name}
+          </span>
+          <span className="shrink-0 self-center">
+            <Magnitude value={player.value > 0 ? player.value : null} />
+          </span>
+          <TrendChip trend={player.trend30Day} value={player.value} />
+        </div>
+        <div className="flex items-center gap-1 mt-1 pl-[15px]">
+          {/* Neither elides. This exact line was the truncation finding B3's
+              sweep turned up last: "Aaronreg… · Rebuilding owner — prime tar…"
+              on the Ja'Marr Chase row, where the NOTE is the whole point of the
+              row (CLAUDE.md: truncation is not a layout strategy for a
+              load-bearing value). */}
+          <span className="min-w-0 font-mono text-[9px] uppercase tracking-[0.14em] text-text-tertiary">
+            {ownerLabel}
+            {note && <span className="text-warning"> · {note}</span>}
+          </span>
+          <span className="flex-1" />
+          {series && <Sparkline data={series} />}
+        </div>
+      </button>
+      {onBuildTrade && (
+        <button
+          type="button"
+          onClick={onBuildTrade}
+          aria-label={`Build a trade for ${player.name}`}
+          className="focus-ring press shrink-0 self-center flex items-center rounded-none border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-accent"
+        >
+          <span className="font-body text-[10px] font-semibold">Trade</span>
+        </button>
+      )}
     </Row>
   )
 }
