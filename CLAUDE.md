@@ -1763,6 +1763,22 @@ and free-agent moves, newest first.
   Trade Analyzer: an opponent's player arrives as a What's Fair target
   (opponent + fair package pre-filled); my own player arrives pre-loaded in
   You Give. Free agents get no button.
+- **The row SPLITS around that button — it is a sibling, never a child.** The
+  Trade action used to sit inside `Row`'s own `<button>` with a
+  `stopPropagation`, i.e. a `<button>` nested in a `<button>`: invalid HTML,
+  and React warned on every render of the page. `MoverRow` now renders `Row`
+  as a plain `<div>` (which is what `Row` does with no `onClick`) holding two
+  real sibling buttons — the content, which opens the profile, and the action.
+  **This deliberately does NOT follow the Partners-card precedent** ("a sibling
+  *below* the card"), and the difference is **cardinality**, which is law 5's
+  own test. Partners is nine tall cards, so a full-width footer button costs
+  one row of height each. Movers is up to ~30 dense rows across six sections;
+  the footer treatment was built and measured at 390px and it adds **752px
+  (+24%)**, turning a list you SCAN into a wall of buttons whose CTA out-shouts
+  the value and the trend. The split row costs nothing — measured **3,020px
+  against the nested version's 3,175px**, i.e. 155px *shorter*, with 0 nested
+  interactive elements and 0 React warnings in both themes. Both targets carry
+  `.focus-ring` and `.press`.
 - Rows show a **sparkline** when the values-history feed has ≥ 4 snapshots
   for the player (see Value history pipeline).
 - Tap any row → Player Profile drawer

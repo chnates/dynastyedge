@@ -1012,13 +1012,22 @@ the target should move rather than the sources — is now measured, twice over.
   `DraftTracker` that its own pass missed, and two in `LoginScreen`, which no
   step had ever opened. **27 converted**, and the shape grep now returns zero
   hand-rolled panels app-wide.
-- **`MarketMovers` nests a `<button>` inside a `<button>`** — the Trade action
-  inside the tappable row (`MoverRow`, `src/components/league/MarketMovers.jsx`).
-  Invalid HTML, React warns on it, and it is the exact shape CLAUDE.md already
-  records as fixed on the Partners card ("a sibling *below* the card, never
-  nested inside its `<button>`"). Reproduces identically on clean `main`, so it
-  predates this work. Not fixed in step 5 because the fix restructures the row's
-  layout and needs its own decision about where the Trade button goes.
+- ~~**`MarketMovers` nests a `<button>` inside a `<button>`**~~ — **FIXED
+  2026-09-13.** `MoverRow` now renders `Row` as a plain `<div>` holding two
+  **sibling** buttons: the content (opens the profile) and the Trade action.
+  **It deliberately does not follow the Partners precedent**, and the reason is
+  the one law 5 already names — **cardinality**. Both layouts were built and
+  measured at 390px, and the owner chose the split row:
+
+  | | page height | nested interactives | React warnings |
+  |---|---|---|---|
+  | nested (before) | 3,175px | 33 | 1 |
+  | Partners precedent — footer button per row | 3,927px (**+24%**) | 0 | 0 |
+  | **split row (shipped)** | **3,020px (−155)** | **0** | **0** |
+
+  Nine tall partner cards can afford a full-width footer button; ~30 dense rows
+  across six sections cannot — it turns a list you SCAN into a wall of buttons
+  whose CTA out-shouts the value and the trend. Verified in both themes.
 - **Verify the PWA metas and the app icon on device.** Carried from step 4 and
   still not done — a meta or icon change is silent until the home-screen app is
   removed and re-added (failure-archaeology §1). `index.html`'s icon `?v=` is
