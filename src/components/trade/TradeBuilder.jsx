@@ -4,7 +4,7 @@ import PickBadge from '../roster/PickBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { useScrollLock } from '../../hooks/useScrollLock'
 import { useSheetDrag } from '../../hooks/useSheetDrag'
-import { Button, Chip, Row, cn } from '../ui'
+import { Button, Chip, Input, Row, cn } from '../ui'
 import { POS_CHIP_ACTIVE, POS_TAG as POS_TAGS } from '../../utils/positionColors'
 
 const FILTER_TABS = ['All', 'QB', 'RB', 'WR', 'TE', 'Picks']
@@ -311,12 +311,15 @@ function AddAssetSheet({
 
         {/* Search */}
         <div className="px-4 py-2 border-b border-border-default dark:border-border-default shrink-0">
-          <input
+          {/* The sheet around this input is one of the two sanctioned
+              hand-rolled overlays (failure-archaeology §2e — it is sized to
+              `visualViewport`, which `Sheet` is not). That ruling is about the
+              OVERLAY, not its contents: the field itself is the library's. */}
+          <Input
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search players…"
-            className="w-full bg-bg-card dark:bg-bg-card px-3 py-1.5 font-body text-sm text-text-primary dark:text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-accent"
           />
         </div>
 

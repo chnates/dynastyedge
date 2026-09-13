@@ -14,7 +14,7 @@ import { buildRookieProspects } from '../../utils/rookieAdp'
 import { useSleeperDraft, buildDraftOrder } from '../../hooks/useSleeperDraft'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { BOARD_ORDER_KEY, NOTES_KEY, CSV_KEY } from './boardStorage'
-import { Modal, Button, Card, Chip, Input, Loading } from '../ui'
+import { Modal, Button, Card, Chip, Input, SearchInput, Loading } from '../ui'
 import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
@@ -806,15 +806,12 @@ export default function DraftBoard() {
 
         {/* ── Search ── */}
         <div className="px-4 pb-3">
-          <div className="relative">
-            <input
-              type="search"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search prospects"
-              className="w-full pl-9 pr-3 py-2 bg-bg-card border border-border-default font-body text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent"
-            />
-          </div>
+          <SearchInput
+            type="search"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search prospects"
+          />
         </div>
 
         {/* ── My picks callout (real slots from the synced Sleeper draft) ── */}
