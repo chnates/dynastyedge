@@ -3330,6 +3330,7 @@ Import everything from the one barrel: `import { Button, Card, Sheet } from '../
 |`Badge`|THE small status/label badge — square, mono uppercase; `tone` (accent/brand/alt/success/warning/danger) and `soft` tinted variants. Solid `accent` is the ink field; **`brand` is the rationed crimson, reserved for "you" labels.** (Win-window tiers use `WinWindowBadge`; position tags use `POS_TAG`; an emphasis inside a sentence is a `Mark`.)|
 |`Select`|THE dropdown field — a native `<select>` in the ruled-field voice. Native is deliberate: iOS renders it as the system wheel picker, and `<optgroup>` gives grouped options for free.|
 |`Input` / `SearchInput`|THE text field + search-box variant — **ruled, not boxed** (a line under a label, the print convention). The focus affordance is the rule thickening to ink; `.focus-ring` still fires, because browsers always treat a text field as focus-visible. Keep at `text-sm` (iOS focus-zoom is handled globally).|
+|`Textarea`|THE multi-line field — `Input`'s sibling, same ruled contract (bottom rule thickens to ink on focus, `.focus-ring`, `text-sm`). `resize-none` by default: `<main>` is the app's one scroller and a user-resizable box inside a bottom sheet fights the sheet's drag contract. It exists because the scout-note field was the one control in the app that **could not** route through a primitive — PR #49 found it with `focus:outline-none` and nothing in its place, and fixing it at the call site left the gap structurally open.|
 |`cn`|The one styling primitive — a tiny `className` joiner that drops falsy values. Never pull in a heavier classnames dep.|
 
 **Adopted shared primitives** are re-exported from the same barrel so the
@@ -3375,8 +3376,9 @@ the call site, so no screen can opt out.
   and it covers the two reversal cases a text-on-ground audit misses (paper type
   on a position band; type on an ink field). **40 of 40 pass.**
 - **`.focus-ring` is the one focus definition** (`index.css`), carried by
-  `Button`, `IconButton`, `Chip`, interactive `Card`, `Row`, `Input` and
-  `Select`. `:focus-visible`, not `:focus`, so a plain tap stays unmarked while
+  `Button`, `IconButton`, `Chip`, interactive `Card`, `Row`, `Input`,
+  `Textarea` and `Select`.
+  `:focus-visible`, not `:focus`, so a plain tap stays unmarked while
   keyboard focus and text fields render the ring. Inside an `.ink-field` the
   ring flips to the field's own ground, or it disappears into the block.
   **A control that bypasses the primitives must carry it explicitly, and 46 of
@@ -3390,6 +3392,11 @@ the call site, so no screen can opt out.
   The only deliberate omission is `DraftBoard`'s hidden `<input type="file">`
   (`className="hidden"` ⇒ `display:none` ⇒ not focusable); its visible trigger
   carries the ring.
+  **And a control that carries it at the CALL SITE is not covered — it is one
+  refactor from losing it again.** That is why the scout note became a
+  primitive rather than staying a hand-rolled `<textarea>` with the class
+  pasted on: the floor holds because the primitives hold it, and the eleven
+  divergent copies of `Row` are what the other arrangement looks like.
 - **`.press` is the one press definition** (see Motion) — the third sibling of
   these two, carried by every primitive so no screen ships a control that
   doesn't answer a finger.
@@ -4103,6 +4110,7 @@ dynastyedge/
 │   │   │   ├── Chip.jsx             ← THE filter chip (toggle pill, position-tinted active)
 │   │   │   ├── Badge.jsx            ← THE small status/label badge (New/You, tone/soft)
 │   │   │   ├── Input.jsx            ← THE text field + SearchInput variant
+│   │   │   ├── Textarea.jsx         ← THE multi-line field — Input's sibling; the scout note was the app's ONE control with no primitive to route through
 │   │   │   ├── Select.jsx           ← THE dropdown field (native select + label/hint)
 │   │   │   ├── motion.js            ← the JS half of the reduced-motion guard (`prefersReducedMotion`, `scrollToTopOf`) + `stagger()`, the jittered press-run delays
 │   │   │   └── cn.js                ← tiny className joiner (the one styling primitive)
@@ -4774,7 +4782,7 @@ Two things the roll must not break, both pinned by tests:
 1. **Design System library:** All new UI comes from `src/components/ui`
    (`Button`, `IconButton`, `Card`, `Mark`, `PositionBand`, `Magnitude`,
    `RuledList`, `Row`, `Lede`, `NavRow`, `Sheet`/`SheetHeader`, `Modal`, `Chip`,
-   `Badge`, `Input`/`SearchInput`, `Select`, `cn`, plus the re-exported shared
+   `Badge`, `Input`/`SearchInput`, `Textarea`, `Select`, `cn`, plus the re-exported shared
    primitives) — import from the
    `'../ui'` barrel. Never reintroduce a hand-rolled button, card, bottom
    sheet, filter chip, badge, band, value figure, row list, or input inline;
