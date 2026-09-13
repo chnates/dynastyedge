@@ -11,7 +11,7 @@ import { buildRookieProspects } from '../../utils/rookieAdp'
 import { ROUND_TEXT, ROUND_LABELS } from '../../utils/roundColors'
 import SectionHeader from '../shared/SectionHeader'
 import ErrorState from '../shared/ErrorState'
-import { Loading } from '../ui'
+import { Card, Loading } from '../ui'
 
 const MODES = [
   { id: 'up',   label: 'Move Up' },
@@ -51,7 +51,7 @@ function PackageRow({ pkg, actionLabel, onBuild }) {
       </span>
       <button
         onClick={onBuild}
-        className="shrink-0 px-2 py-1 border border-accent/25 bg-accent/5 font-body text-[10px] font-semibold text-accent"
+        className="focus-ring press shrink-0 px-2 py-1 border border-accent/25 bg-accent/5 font-body text-[10px] font-semibold text-accent"
       >
         {actionLabel}
       </button>
@@ -62,7 +62,7 @@ function PackageRow({ pkg, actionLabel, onBuild }) {
 function PickHeaderRow({ pick, subtitle, expanded, onTap }) {
   const chevron = expanded ? '▾' : '▸'
   return (
-    <button onClick={onTap} className="w-full flex items-center gap-2 py-2.5 text-left press">
+    <button onClick={onTap} className="focus-ring press w-full flex items-center gap-2 py-2.5 text-left">
       <span className={`font-mono text-sm font-bold tabular-nums shrink-0 w-12 ${ROUND_TEXT[pick.round] ?? 'text-text-primary'}`}>
         {pick.slotLabel ?? ROUND_LABELS[pick.round] ?? `R${pick.round}`}
       </span>
@@ -80,7 +80,7 @@ function PickHeaderRow({ pick, subtitle, expanded, onTap }) {
 function PriceBoard({ board, draftSeason }) {
   if (!board.length) return null
   return (
-    <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-2.5 mb-1">
+    <Card padding="sm" className="mb-1">
       <div className="flex items-center gap-2 mb-1.5">
         <p className="flex-1 font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-secondary dark:text-text-secondary">
           {draftSeason} pick prices · by round
@@ -96,7 +96,7 @@ function PriceBoard({ board, draftSeason }) {
           </span>
         </div>
       ))}
-    </div>
+    </Card>
   )
 }
 

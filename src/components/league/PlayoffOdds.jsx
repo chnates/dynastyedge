@@ -7,7 +7,7 @@ import ErrorState from '../shared/ErrorState'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import TeamAvatar from '../shared/TeamAvatar'
 import { rankClass } from '../../utils/rankColors'
-import { Badge, PositionBand, RuledList, Loading } from '../ui'
+import { Badge, Card, PositionBand, RuledList, Loading } from '../ui'
 
 const VERDICT_TONE = {
   success: 'text-success',
@@ -45,11 +45,7 @@ function TeamOddsRow({ rank, roster, result, tier, isMine }) {
   const teamName = getTeamName(roster.owner)
 
   return (
-    <div
-      className={`rounded-none bg-bg-card border px-3 py-2.5 ${
-        isMine ? 'border-brand/60' : 'border-border-default'
-      }`}
-    >
+    <Card padding="sm" className={isMine ? 'border-brand/60' : undefined}>
       <div className="flex items-center gap-2">
         <span className={`font-mono text-base font-bold tabular-nums w-5 shrink-0 ${rankClass(rank)}`}>
           {rank}
@@ -83,7 +79,7 @@ function TeamOddsRow({ rank, roster, result, tier, isMine }) {
         </div>
         <WinWindowBadge tier={tier} />
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -119,7 +115,7 @@ function StrengthPreviewRow({ row, isMine }) {
 function HowToRead({ playoffTeams }) {
   const [open, setOpen] = useState(false)
   return (
-    <div className="rounded-none bg-bg-card border border-border-default mt-4">
+    <Card padding="none" className="mt-4">
       <button onClick={() => setOpen(o => !o)} className="focus-ring press w-full flex items-center justify-between px-3 py-3">
         <span className="font-body text-xs font-semibold uppercase tracking-[0.08em] text-text-secondary">
           How this works
@@ -162,7 +158,7 @@ function HowToRead({ playoffTeams }) {
           </p>
         </div>
       )}
-    </div>
+    </Card>
   )
 }
 

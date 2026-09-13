@@ -91,7 +91,6 @@ function StickySummary({ giveTotal, getTotal, verdict }) {
       </span>
       {chip && (
         <span className={`flex items-center gap-1 font-body text-[11px] font-bold uppercase tracking-wide shrink-0 ${chip.cls}`}>
-          <chip.Icon size={13} strokeWidth={2.25} />
           {verdict.verdict}
         </span>
       )}
