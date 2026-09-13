@@ -22,14 +22,14 @@ function netClass(net) {
 
 function ReportStat({ label, value, valueClass = 'text-text-primary dark:text-text-primary' }) {
   return (
-    <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-2.5">
+    <Card padding="sm">
       <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary dark:text-text-tertiary mb-1">
         {label}
       </p>
       <p className={`font-mono text-lg font-semibold tabular-nums leading-none ${valueClass}`}>
         {value}
       </p>
-    </div>
+    </Card>
   )
 }
 
@@ -57,7 +57,7 @@ function MyReportCard({ profile, tier, insights, onOpen }) {
     ? Math.round((profile.tradeWins / profile.tradeCount) * 100)
     : null
   return (
-    <div className="rounded-none bg-bg-card dark:bg-bg-card border border-brand/40 px-3 py-3">
+    <Card padding="sm" className="border-brand/40">
       <div className="flex items-center gap-2.5 mb-3">
         <TeamAvatar owner={profile.user} size={32} />
         <div className="min-w-0 flex-1">
@@ -100,7 +100,7 @@ function MyReportCard({ profile, tier, insights, onOpen }) {
       <Button variant="tinted" size="lg" fullWidth onClick={onOpen} className="mt-3">
         Full ledger & draft record
       </Button>
-    </div>
+    </Card>
   )
 }
 

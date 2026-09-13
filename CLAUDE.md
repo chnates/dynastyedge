@@ -1763,6 +1763,22 @@ and free-agent moves, newest first.
   Trade Analyzer: an opponent's player arrives as a What's Fair target
   (opponent + fair package pre-filled); my own player arrives pre-loaded in
   You Give. Free agents get no button.
+- **The row SPLITS around that button — it is a sibling, never a child.** The
+  Trade action used to sit inside `Row`'s own `<button>` with a
+  `stopPropagation`, i.e. a `<button>` nested in a `<button>`: invalid HTML,
+  and React warned on every render of the page. `MoverRow` now renders `Row`
+  as a plain `<div>` (which is what `Row` does with no `onClick`) holding two
+  real sibling buttons — the content, which opens the profile, and the action.
+  **This deliberately does NOT follow the Partners-card precedent** ("a sibling
+  *below* the card"), and the difference is **cardinality**, which is law 5's
+  own test. Partners is nine tall cards, so a full-width footer button costs
+  one row of height each. Movers is up to ~30 dense rows across six sections;
+  the footer treatment was built and measured at 390px and it adds **752px
+  (+24%)**, turning a list you SCAN into a wall of buttons whose CTA out-shouts
+  the value and the trend. The split row costs nothing — measured **3,020px
+  against the nested version's 3,175px**, i.e. 155px *shorter*, with 0 nested
+  interactive elements and 0 React warnings in both themes. Both targets carry
+  `.focus-ring` and `.press`.
 - Rows show a **sparkline** when the values-history feed has ≥ 4 snapshots
   for the player (see Value history pipeline).
 - Tap any row → Player Profile drawer
@@ -4326,6 +4342,31 @@ tests and a clean build had all passed on it. Sweep with
 `pageerror`; a crash kills the tree, so **run the suspect route FIRST or reload
 between routes** — otherwise every route after the first failure reports an
 empty page and no error of its own, which reads like a different bug.
+
+**`<lowercase.Uppercase />` is the lucide removal's residue, and there were
+FOUR of them, not one.** Step 5 fixed `LeagueActivity` and stopped there. The
+2026-09-13 cleanup swept for the *shape* —
+`grep -rnoE '<[a-z][A-Za-z0-9]*\.[A-Z][A-Za-z0-9]*' src --include=*.jsx` — and
+found three more, all in Trade: `badge.Icon` (`TradePartnerFinder`),
+`chip.Icon` (`TradeAnalyzer`) and `vs.Icon` (`TheCall`). Every one of their maps
+had had its `Icon` field deleted with a comment explaining that the word carries
+the verdict; only the render call was left behind. **`TradePartnerFinder`'s
+crashed unconditionally, so `/trade` — Trade › Partners, the section's landing
+screen — was a white screen on `main` for a day.** Run that grep whenever a
+prop is removed from a lookup map: it costs nothing and it finds the whole
+family, where a route sweep only finds the ones a given data state reaches.
+
+**A ROUTE SWEEP WHOSE DATA NEVER LOADS IS NOT A ROUTE SWEEP — this is why step
+5's sweep missed three of the four.** With the APIs unreachable, a view
+short-circuits to `ErrorState` long before it renders the component that
+crashes, and the sweep records a confident OK. Measured on the same commit: the
+first pass of the 2026-09-13 sweep had a broken curl header parse (with `-L`,
+curl emits one header block PER HOP, so the redirect's headers land at the head
+of the body and every JSON parse dies on `"HTTP/2 200"`), and it passed
+**21 of 22 routes** — `/trade` included. With the parse fixed and real data
+flowing, `/trade` threw on the first render. **Assert the data actually
+arrived** (a route's rendered text length is a cheap proxy) before believing a
+green sweep.
 
 **Lint:** `npm run lint` runs ESLint 9 (flat config, `eslint.config.js`) over
 `src/` and `scripts/` — `@eslint/js` recommended rules plus
