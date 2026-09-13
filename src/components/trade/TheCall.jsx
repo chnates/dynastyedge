@@ -75,7 +75,7 @@ function SummaryRow({ label, tone, text, onJump }) {
   return (
     <button
       onClick={onJump}
-      className="w-full flex items-center gap-2 px-4 py-2.5 text-left border-t border-border-default dark:border-border-default active:bg-bg-secondary/60 transition-colors"
+      className="focus-ring w-full flex items-center gap-2 px-4 py-2.5 text-left border-t border-border-default dark:border-border-default active:bg-bg-secondary/60 transition-colors"
     >
       <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-tertiary dark:text-text-tertiary w-[68px] shrink-0">
         {label}
@@ -146,7 +146,6 @@ export default function TheCall({ analysis, verdict, bothSides, counterSuggestio
     <Card padding="none" className="mb-4">
       <div className={cn('px-4 py-3', vs.bg)}>
         <div className="flex items-center gap-2 mb-1.5">
-          <vs.Icon size={16} strokeWidth={2} className={vs.color} />
           <span className={cn('font-display text-base uppercase tracking-wide', vs.color)}>
             {verdict.verdict}
           </span>

@@ -16,6 +16,12 @@
 // `label`     — what navigation calls it (Matchday's voice: Today, Squad).
 // `searchAka` — older/longer names kept matchable so typing "my team" or
 //               "the edge" still finds the section after the rename.
+// `railLabel` — a SHORT form used ONLY by `SectionContents`, where width is a
+//               hard constraint (the rail has 358px at 390px and wraps to a
+//               second 44px row the moment it doesn't fit). Everywhere with
+//               room — the Index, global search — keeps the full `label`.
+//               Add one only when a section is actually over its budget; the
+//               measured headroom per section is in SectionContents.jsx.
 // `weekly`    — true for the four sections you open in a normal week; only
 //               these get a tab. Draft and News are seasonal/browse and live
 //               under Index (findings.md A5).
@@ -71,7 +77,7 @@ export const SECTIONS = [
         searchLabel: 'Manager Scouting', consulted: true,
         blurb: 'How every owner trades',
       },
-      { label: 'Pick Trades', to: '/trade/pick-trades', searchLabel: 'Pick Trade Calculator' },
+      { label: 'Picks', to: '/trade/pick-trades', searchLabel: 'Pick Trade Calculator' },
     ],
   },
   {
@@ -83,7 +89,7 @@ export const SECTIONS = [
     weekly: true,
     views: [
       { label: 'Overview', to: '/league', end: true, searchLabel: 'League Overview' },
-      { label: 'Free Agents', to: '/league/free-agents', searchLabel: 'Free Agents' },
+      { label: 'Free Agents', railLabel: 'FA', to: '/league/free-agents', searchLabel: 'Free Agents' },
       { label: 'Activity', to: '/league/activity', searchLabel: 'League Activity' },
       { label: 'Movers', to: '/league/movers', searchLabel: 'Market Movers' },
       { label: 'Playoffs', to: '/league/playoffs', searchLabel: 'Playoff Odds' },

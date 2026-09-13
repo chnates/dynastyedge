@@ -830,6 +830,26 @@ verified against the live league.
    threshold is doing less work than its name suggests, and anyone reading
    "protected" should know it means "deficit or cliff", not "starter".
 
+### DESIGN-4 — finish the Matchday cleanup (the debt DESIGN-1 handed on)
+
+**Status:** in progress. **Trigger: fired** — the owner asked for it directly
+after the post-merge review. Four items, landing as separate PRs so the two
+carrying a layout decision stay reviewable.
+
+1. **The hand-rolled panels — DONE 2026-09-13.** 27 converted (the handoff said
+   21; the sweep found six more the note never named). Detail in §3.
+2. **`MarketMovers`' nested `<button>`** — pending; needs a layout call at
+   390px, because the Partners-card precedent (a sibling *below*) costs a row
+   of height and Movers is a dense list of up to ~30 rows across six sections.
+3. **The contents rail wrapping to two lines** — pending; one deliberate
+   decision rather than an inherited default, measured at 390px in both themes.
+4. **A `Textarea` primitive** — pending; only if it stays genuinely small.
+
+**Found while doing (1), and worth more than (1):** see §3's record — three more
+`<lowercase.Uppercase />` lucide leftovers, one of them a live white screen on
+`main`, plus a seventh truncation of a load-bearing value that the crash had
+been hiding.
+
 ### OPEN-5 — Model calibration (open research)
 
 **Status:** open. **Trigger:** live regular-season data — Week 1 starts the
@@ -862,6 +882,64 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 | Frontier Item 2 blocking question (are losing FAAB bids visible?) | 2026-08-08 | Verified yes; see `docs/analysis/faab-bid-corpus-2026-08.md`. Superseded by OPEN-3 |
 | ACTIVE-1 — season-readiness tests (draft day + Week 1) | 2026-08-08 | Three live contract breaks found and fixed (schedule endpoint, draft `slot_to_roster_id`, stats `pos`/`opp`); 35 new tests (72 → 107) + `scripts/dev/replay-live.mjs`. Detail retained in §1 |
 | ACTIVE-2 — Draft › Research: verify the first pipeline run | 2026-08-14 | Pipeline published 2026-08-14 11:12Z; feed shape, Market vs Model output, and the drawer's Rookies row all verified against live data. Detail retained in §1 |
+
+---
+
+### DESIGN-4 item 1 — the record (panels + what the sweep found, 2026-09-13)
+
+**The panels.** 27 hand-rolled `bg-bg-card border …` panels routed through
+`Card`, across eleven files. The step-5 handoff named 21 across nine; the shape
+grep found **six more it had not**: four in `DraftTracker` (a file step 5's own
+Card pass *did* open, and still missed these) and two in `LoginScreen`, which no
+step had ever opened because it renders above the app shell. The grep
+(`bg-bg-card` + `border`) now returns **zero** hand-rolled panels app-wide.
+
+Converted with the same JSX tag balancer step 5 used — the opening is one line
+and its `</div>` is anywhere from 3 to 140 lines below, nested inside other
+divs. Two openings span multiple lines (a conditional `className` on
+`PlayoffOdds`' team row and `LeagueActivity`' transaction card); the balancer
+refuses those rather than guessing, and they were done by hand. Padding was
+normalised (`px-3 py-2.5` and `px-3 py-3` both → `padding="sm"`); four panels
+keep a raw padding because their geometry is load-bearing (two chart gutters, a
+row list whose rows carry their own `py`, and three collapsibles whose toggle
+button owns the padding).
+
+**The accessibility half the handoff predicted was real.** PR #49 fixed four
+fields that had stripped their focus ring by bypassing the primitives; the same
+bug is in these files. A static probe over every `<button>`/`<input>`/`<select>`
+/`<textarea>` in `src` counted **49 controls with no `.focus-ring`**. Eight were
+in files this PR touches and are fixed here. **41 remain**, concentrated in
+`DraftBoard` (11), `DraftTracker` (10), `TradeBuilder` (7) and `EdgeView` (4) —
+recorded as DESIGN-4 item 5 rather than smuggled into a panel diff.
+
+**Three `<lowercase.Uppercase />` lucide leftovers, and one was a live white
+screen.** Step 5 fixed `LeagueActivity`'s `<meta.Icon />` and stopped at the one
+it happened to hit. Grepping for the *shape* found three more, every one in
+Trade, every one with its map's `Icon` field already deleted and a comment
+explaining why the word carries the verdict:
+
+| site | map | reachable when |
+|---|---|---|
+| `TradePartnerFinder:124` `badge.Icon` | `FIT_BADGE` | **always** — `/trade` was a white screen on `main` |
+| `TradeAnalyzer:94` `chip.Icon` | `VERDICT_CHIP` | a trade has a verdict |
+| `TheCall:149` `vs.Icon` | `VERDICT_STYLES` | a trade has a verdict |
+
+**Why step 5's route sweep passed `/trade`:** a sweep whose data never loads is
+not a sweep. Measured on this very commit — the first pass here had a broken
+curl header parse (with `-L`, curl emits a header block per hop, so the
+redirect's headers land at the head of the body and every JSON parse dies on
+`"HTTP/2 200"`) and reported **21 of 22 routes OK, `/trade` included**, because
+every view short-circuited to `ErrorState` before reaching the component that
+throws. With the parse fixed, `/trade` threw on first render. The sweep now
+records each route's rendered text length so "did the data arrive?" is
+answerable from its own output.
+
+**Seventh truncation of a load-bearing value.** With `/trade` rendering for the
+first time, the `--overflow` probe immediately caught the partner card's team
+name clipped by 10px ("Ministry Of Touchdowns") — the single most
+decision-relevant field on a card answering *"who do I call?"*. It wraps now.
+It had been invisible precisely because the crash meant the card never painted:
+**a crashed route hides every other bug on it.**
 
 ---
 
@@ -928,21 +1006,83 @@ the target should move rather than the sources — is now measured, twice over.
 
 **What step 5 hands on:**
 
-- **21 hand-rolled `bg-bg-card border` panels across nine files** —
-  `TrajectoryView` (4), `RosterAnalysisSheet` (4), `ManagerScoutingSheet` (4),
-  `LineupOptimizer` (3), `ManagersView` (2), and one each in
-  `LineupEfficiency`, `PlayoffOdds`, `LeagueActivity`, `PickTradeCalculator`.
-  Step 5 converted the three densest screens named in its scope (the profile
-  drawer, the draft tracker, the draft board — 17 panels). These nine were never
-  in scope for step 4 or step 5; the fix is mechanical (`<Card padding="sm">`,
-  and a tag balancer for the closes), it just needs its own diff.
-- **`MarketMovers` nests a `<button>` inside a `<button>`** — the Trade action
-  inside the tappable row (`MoverRow`, `src/components/league/MarketMovers.jsx`).
-  Invalid HTML, React warns on it, and it is the exact shape CLAUDE.md already
-  records as fixed on the Partners card ("a sibling *below* the card, never
-  nested inside its `<button>`"). Reproduces identically on clean `main`, so it
-  predates this work. Not fixed in step 5 because the fix restructures the row's
-  layout and needs its own decision about where the Trade button goes.
+- ~~**21 hand-rolled `bg-bg-card border` panels across nine files**~~ —
+  **DONE 2026-09-13** (DESIGN-4 below). The count was right and was also low:
+  the same sweep found **six more** the step-5 note never named — four in
+  `DraftTracker` that its own pass missed, and two in `LoginScreen`, which no
+  step had ever opened. **27 converted**, and the shape grep now returns zero
+  hand-rolled panels app-wide.
+- ~~**`MarketMovers` nests a `<button>` inside a `<button>`**~~ — **FIXED
+  2026-09-13.** `MoverRow` now renders `Row` as a plain `<div>` holding two
+  **sibling** buttons: the content (opens the profile) and the Trade action.
+  **It deliberately does not follow the Partners precedent**, and the reason is
+  the one law 5 already names — **cardinality**. Both layouts were built and
+  measured at 390px, and the owner chose the split row:
+
+  | | page height | nested interactives | React warnings |
+  |---|---|---|---|
+  | nested (before) | 3,175px | 33 | 1 |
+  | Partners precedent — footer button per row | 3,927px (**+24%**) | 0 | 0 |
+  | **split row (shipped)** | **3,020px (−155)** | **0** | **0** |
+
+  Nine tall partner cards can afford a full-width footer button; ~30 dense rows
+  across six sections cannot — it turns a list you SCAN into a wall of buttons
+  whose CTA out-shouts the value and the trend. Verified in both themes.
+- ~~**The contents rail spends a second row on most screens**~~ — **DONE
+  2026-09-13.** Not in the step-5 handoff list, but reopened alongside it.
+  The rail was wrapping on **three** of the four multi-view sections (Squad,
+  Trade AND League — the review had it as two), costing 44px on ~16 of the
+  app's 18 content routes and putting 140px of chrome above the content.
+  Tightened gap (16 → 10px) + tracking (0.08 → 0.055em) and shortened the two
+  labels that were over on their own — "Pick Trades" → "Picks" and
+  "Free Agents" → "FA". **All four sections now fit on one line**, header 140px
+  → 96px. Measured at 390px against 358px available — Squad 344 (14 spare) ·
+  Trade 352 (6) · League 306 (52) · Draft 196 (162).
+  - **Owner chose this (option d) over retiring the layer**, because moving the
+    views onto the section landing screen would have cost the Analyzer ↔
+    Targets round trip a tap, and that is the Trade section's most-used loop.
+  - **The rename landed as `railLabel`, not as a change to `label`.** `label`
+    also feeds the **Index**, whose whole job is discoverability, and "Overview
+    · FA · Activity · Movers · Playoffs" is a worse map than the full names.
+    `SectionContents` reads `railLabel ?? label`, so **only the width-
+    constrained consumer shortens**; the Index and global search still say
+    "Free Agents". Same precedent as `searchLabel`. Add one only when a section
+    is measurably over budget. `FA` is not a coinage — League › Activity's
+    filter chips already read *All / Trades / Waivers / FA / My Moves*.
+  - **Trade is the tight one at 6px spare.** A sixth Trade view, or a longer
+    label on any of its five, puts that section back on two rows — which is the
+    honest failure mode, and why `flex-wrap` stayed.
+  - **Method note worth keeping.** The first cut used `flex-nowrap` and
+    appeared to fit all three sections. It didn't: nowrap does not *fit* an
+    over-long rail, it **hides** the overflow — the A4 clipping failure
+    `SectionContents` exists to fix. Reverting to `flex-wrap` is what exposed
+    that League had never fitted. **A layout that "fits" under nowrap has not
+    been measured, it has been silenced.**
+- ~~**Controls that bypass the primitives have no focus ring**~~ — **DONE
+  2026-09-13.** Not in the step-5 handoff either; found while doing the panel
+  conversion, because PR #49 had just fixed four fields with exactly this bug
+  and the handoff predicted more of the same class. A static probe over every
+  `<button>` / `<input>` / `<select>` / `<textarea>` in `src` found **46
+  controls with no `.focus-ring`**, fixed across three PRs (8 in the panel PR,
+  1 in the Movers PR, **37 here**).
+  **The source count badly understates it.** Most of those sites sit on a
+  *repeated row*, so 46 source sites were **~700 unfocusable controls in the
+  live DOM** — measured per route: Draft Board **470**, Free Agents **128**,
+  Draft Research, Pick Trades 36, Movers 33, Trajectory 29, Lineup 23, The Edge
+  6. **Run the probe; do not eyeball the diff.** One missed row component is
+  two orders of magnitude of real controls.
+  - Distribution, which is where the next gap will be: `DraftBoard` 10 ·
+    `DraftTracker` 10 · `TradeBuilder` 7 · `EdgeView` 4 · `FreeAgentsView` 2 ·
+    `TradeVerdict` 2 · `LineupRow` 1 · `TheCall` 1 (this PR), plus the 9 the
+    other two PRs own.
+  - **One deliberate omission:** `DraftBoard`'s hidden `<input type="file">` —
+    `className="hidden"` is `display:none`, so it is not focusable at all, and
+    its visible trigger button carries the ring.
+  - **Follow-up, not done here:** several of these are hand-rolled controls
+    that should really *be* `Button` or `Row`, which would make the floor
+    structural instead of per-site. That is a much larger, riskier diff than
+    adding the class, and it was kept out so this one stays mechanical and
+    reviewable. Same reasoning as the panel conversion.
 - **Verify the PWA metas and the app icon on device.** Carried from step 4 and
   still not done — a meta or icon change is silent until the home-screen app is
   removed and re-added (failure-archaeology §1). `index.html`'s icon `?v=` is
