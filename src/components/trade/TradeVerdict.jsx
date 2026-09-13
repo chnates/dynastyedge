@@ -68,7 +68,7 @@ function PlayerNewsCard({ intel, onTap }) {
             <button
               onClick={onTap}
               aria-label={`View ${intel.playerName} profile`}
-              className="text-text-primary dark:text-text-primary underline decoration-dotted decoration-text-tertiary/60 underline-offset-2 press"
+              className="focus-ring text-text-primary dark:text-text-primary underline decoration-dotted decoration-text-tertiary/60 underline-offset-2 press"
             >
               {intel.playerName}
             </button>
@@ -536,7 +536,7 @@ export default function TradeVerdict({
         <div className="mb-4 rounded-none bg-warning/10 border border-warning/30 px-4 py-3 relative">
           <button
             onClick={onClearWhatsFair}
-            className="absolute top-2 right-3 text-warning text-base font-bold leading-none"
+            className="focus-ring absolute top-2 right-3 text-warning text-base font-bold leading-none"
             aria-label="Dismiss"
           >
             ×

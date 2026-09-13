@@ -52,7 +52,7 @@ function RecommendedPickups({ recs, onSelect }) {
             <button
               key={p.sleeperId}
               onClick={() => onSelect(p)}
-              className={`w-full text-left px-3 py-2.5 flex flex-col gap-1.5 press ${
+              className={`focus-ring w-full text-left px-3 py-2.5 flex flex-col gap-1.5 press ${
                 i < recs.length - 1 ? 'border-b border-border-default' : ''
               }`}
             >
@@ -452,7 +452,7 @@ export default function FreeAgentsView() {
                 <button
                   key={player.sleeperId}
                   onClick={() => setSelected(player)}
-                  className={`w-full text-left py-3 flex flex-col gap-1 press ${
+                  className={`focus-ring w-full text-left py-3 flex flex-col gap-1 press ${
                     i < filtered.length - 1 ? 'border-b border-border-default' : ''
                   }`}
                 >

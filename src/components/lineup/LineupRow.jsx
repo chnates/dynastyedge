@@ -64,7 +64,7 @@ export default function LineupRow({
         type="button"
         onClick={bodyAction}
         disabled={state === 'muted' || (!player && !isTarget && !onArm)}
-        className="flex-1 flex items-center gap-2 py-2.5 min-w-0 text-left press"
+        className="focus-ring flex-1 flex items-center gap-2 py-2.5 min-w-0 text-left press"
       >
         {/* Slot / position lead */}
         <span className={cn('shrink-0 w-10 font-body text-[10px] font-semibold uppercase tracking-wider', leadColor)}>
