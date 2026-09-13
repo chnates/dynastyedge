@@ -4,7 +4,7 @@ import { fetchJSON } from '../../utils/fetchJSON'
 import { useIdentity } from '../../hooks/useIdentity'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getTeamName } from '../../hooks/useLeague'
-import { Input, Button, Loading } from '../ui'
+import { Input, Button, Card, Loading } from '../ui'
 import DynastyEdgeLogo from '../shared/DynastyEdgeLogo'
 import TeamAvatar from '../shared/TeamAvatar'
 import ErrorState from '../shared/ErrorState'
@@ -94,10 +94,7 @@ export default function LoginScreen() {
         ) : (
           <>
             {/* Username sign-in */}
-            <form
-              onSubmit={submitUsername}
-              className="bg-bg-card border border-border-default rounded-none p-4"
-            >
+            <Card as="form" onSubmit={submitUsername}>
               <label htmlFor="sleeper-username" className="block font-display uppercase text-[11px] tracking-[0.08em] text-accent mb-2">
                 Sleeper username
               </label>
@@ -125,7 +122,7 @@ export default function LoginScreen() {
               {err && (
                 <p className="font-body text-[13px] text-danger mt-2">{err}</p>
               )}
-            </form>
+            </Card>
 
             {/* Team picker fallback */}
             <div className="flex items-center gap-3 my-5">
@@ -134,12 +131,12 @@ export default function LoginScreen() {
               <span className="flex-1 h-px bg-border-default" />
             </div>
 
-            <div className="bg-bg-card border border-border-default rounded-none overflow-hidden">
+            <Card padding="none">
               {rosters.map((roster, i) => (
                 <button
                   key={roster.rosterId}
                   onClick={() => pick(roster)}
-                  className={`flex items-center gap-3 w-full px-4 py-3 text-left hover:bg-bg-secondary active:bg-bg-secondary transition-colors ${
+                  className={`focus-ring flex items-center gap-3 w-full px-4 py-3 text-left hover:bg-bg-secondary active:bg-bg-secondary transition-colors ${
                     i > 0 ? 'border-t border-border-default' : ''
                   }`}
                 >
@@ -160,7 +157,7 @@ export default function LoginScreen() {
                   </span>
                 </button>
               ))}
-            </div>
+            </Card>
 
             <div className="flex items-center justify-center gap-1.5 mt-5 px-4">
 

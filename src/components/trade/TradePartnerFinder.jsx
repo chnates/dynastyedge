@@ -118,14 +118,17 @@ function TradePartnerCard({ partner, watchedNames, profile, odds, trajectoryRead
       padding="p-3"
       className="flex flex-col gap-2"
     >
-      {/* Row 1: fit icon + team name + win window badge */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <badge.Icon size={14} strokeWidth={2} className={`shrink-0 ${badge.textClass}`} />
-          <span className="font-display text-base uppercase tracking-wide text-text-primary dark:text-text-primary truncate">
-            {getTeamName(owner)}
-          </span>
-        </div>
+      {/* Row 1: team name + win window badge.
+          The name WRAPS — it does not elide. It was `truncate`, and the
+          --overflow sweep caught "Ministry Of Touchdowns" clipped by 10px: the
+          team name is the whole point of a card answering "who do I call?",
+          which is exactly what CLAUDE.md's standing rule covers (the seventh
+          recurrence). It had been invisible because `badge.Icon` crashed the
+          route before the card ever painted. */}
+      <div className="flex items-start justify-between gap-2">
+        <span className="min-w-0 font-display text-base uppercase tracking-wide text-text-primary dark:text-text-primary text-balance">
+          {getTeamName(owner)}
+        </span>
         <WinWindowBadge tier={winWindowTier} />
       </div>
 

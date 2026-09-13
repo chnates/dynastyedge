@@ -8,7 +8,7 @@ import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import Sparkline from '../shared/Sparkline'
 import TeamAvatar from '../shared/TeamAvatar'
 import { POS_TEXT, POS_SVG } from '../../utils/positionColors'
-import { Lede, Mark, PositionBand, RuledList, Loading } from '../ui'
+import { Card, Lede, Mark, PositionBand, RuledList, Loading } from '../ui'
 
 // The verdict's tone, as a Mark tone. Never a position hue (law 4).
 const VERDICT_MARK = { ascending: 'success', declining: 'warning', balanced: 'ink' }
@@ -132,14 +132,14 @@ function TrajectoryChart({ seasons, team, league, peakIdx }) {
 
 function StatCard({ label, value, valueClass = 'text-text-primary' }) {
   return (
-    <div className="rounded-none bg-bg-card border border-border-default px-3 py-2.5">
+    <Card padding="sm">
       <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-1">
         {label}
       </p>
       <p className={`font-mono text-lg font-semibold tabular-nums leading-none ${valueClass}`}>
         {value}
       </p>
-    </div>
+    </Card>
   )
 }
 
@@ -214,7 +214,7 @@ export default function TrajectoryView() {
       {selectedRosterId && (
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center gap-1 pt-4 pb-1 text-accent font-body text-sm"
+          className="focus-ring press flex items-center gap-1 pt-4 pb-1 text-accent font-body text-sm"
         >
           ← Back
         </button>
@@ -224,7 +224,11 @@ export default function TrajectoryView() {
       <div className={`${selectedRosterId ? 'mt-1' : 'mt-4'} flex items-center gap-2.5`}>
         <TeamAvatar owner={roster.owner} size={32} />
         <div className="min-w-0">
-          <h1 className="font-display font-extrabold text-xl uppercase tracking-[-0.025em] font-extrabold tracking-[-0.025em] text-text-primary leading-tight truncate">
+          {/* WRAPS, never elides — the --overflow sweep caught a scouted team's
+              name clipped by 51px here (CLAUDE.md's standing rule; the eighth
+              recurrence). The duplicated `font-extrabold tracking-[-0.025em]`
+              went with it. */}
+          <h1 className="font-display font-extrabold text-xl uppercase tracking-[-0.025em] text-text-primary leading-tight text-balance">
             {teamName}
           </h1>
           <p className="font-body text-[11px] text-text-secondary">
@@ -256,7 +260,7 @@ export default function TrajectoryView() {
 
       {/* Forward value chart */}
       <SectionHeader label="Projected Team Value" />
-      <div className="rounded-none bg-bg-card border border-border-default px-2 py-3">
+      <Card padding="px-2 py-3">
         <TrajectoryChart
           seasons={trajectory.seasons}
           team={trajectory.totalByYear}
@@ -276,7 +280,7 @@ export default function TrajectoryView() {
           </div>
           <span className="font-body text-[9px] text-text-tertiary">Includes picks maturing in</span>
         </div>
-      </div>
+      </Card>
 
       {/* Summary stat cards */}
       <div className="grid grid-cols-2 gap-2 mt-3">
@@ -328,7 +332,7 @@ export default function TrajectoryView() {
 
       {/* Per-player projections */}
       <SectionHeader label="Player Projections" count={players.length} />
-      <div className="rounded-none bg-bg-card border border-border-default px-3">
+      <Card padding="px-3">
         {players.map(({ player, series }, i) => {
           const pct = deltaPct(series)
           const peak = peakStatusShort(player.position, player.age)
@@ -337,7 +341,7 @@ export default function TrajectoryView() {
             <button
               key={player.sleeperId}
               onClick={() => setSelectedPlayer(player)}
-              className={`w-full flex items-center gap-2.5 py-2.5 text-left press ${
+              className={`focus-ring press w-full flex items-center gap-2.5 py-2.5 text-left ${
                 i < players.length - 1 ? 'border-b border-border-default' : ''
               }`}
             >
@@ -369,10 +373,10 @@ export default function TrajectoryView() {
             No market-valued players to project on this roster.
           </p>
         )}
-      </div>
+      </Card>
 
       {/* How this works */}
-      <div className="rounded-none bg-bg-card border border-border-default mt-4">
+      <Card padding="none" className="mt-4">
         <button onClick={() => setHowToOpen(o => !o)} className="focus-ring press w-full flex items-center justify-between px-3 py-3">
           <span className="font-body text-xs font-semibold uppercase tracking-[0.08em] text-text-secondary">
             How this works
@@ -411,7 +415,7 @@ export default function TrajectoryView() {
             </p>
           </div>
         )}
-      </div>
+      </Card>
 
       {selectedPlayer && (
         <PlayerProfileDrawer player={selectedPlayer} onClose={() => setSelectedPlayer(null)} />

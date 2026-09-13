@@ -6,7 +6,7 @@ import TeamAvatar from '../shared/TeamAvatar'
 import WinWindowBadge from '../shared/WinWindowBadge'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import SectionHeader from '../shared/SectionHeader'
-import { Sheet, IconButton, Button } from '../ui'
+import { Sheet, IconButton, Button, Card } from '../ui'
 
 const LEDGER_PAGE = 10
 
@@ -22,14 +22,14 @@ function fmtNet(net) {
 
 function StatCard({ label, value, valueClass = 'text-text-primary dark:text-text-primary' }) {
   return (
-    <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-2.5">
+    <Card padding="sm">
       <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary dark:text-text-tertiary mb-1">
         {label}
       </p>
       <p className={`font-mono text-lg font-semibold tabular-nums leading-none ${valueClass}`}>
         {value}
       </p>
-    </div>
+    </Card>
   )
 }
 
@@ -41,7 +41,7 @@ function AssetLine({ sign, asset, onSelectPlayer }) {
       {asset.player ? (
         <button
           onClick={() => onSelectPlayer(asset.player)}
-          className="font-body text-xs text-text-primary dark:text-text-primary truncate min-w-0 text-left underline decoration-dotted decoration-text-tertiary underline-offset-2 press"
+          className="focus-ring press font-body text-xs text-text-primary dark:text-text-primary truncate min-w-0 text-left underline decoration-dotted decoration-text-tertiary underline-offset-2"
         >
           {asset.label}
         </button>
@@ -103,7 +103,7 @@ function TradeLedgerCard({ trade, profileName, nameFor, getTradeTimeTotals, onSe
   })
 
   return (
-    <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-3">
+    <Card padding="sm">
       <div className="flex items-center gap-1.5 mb-2">
         <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
           Wk {trade.week} · {trade.season}
@@ -138,7 +138,7 @@ function TradeLedgerCard({ trade, profileName, nameFor, getTradeTimeTotals, onSe
           At trade time: got {thenTotals.gotThen.toLocaleString()} ⇄ gave {thenTotals.gaveThen.toLocaleString()}
         </p>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -156,7 +156,7 @@ function DraftPickRow({ row, onSelectPlayer }) {
       {row.player.player ? (
         <button
           onClick={() => onSelectPlayer(row.player.player)}
-          className="font-body text-xs text-text-primary dark:text-text-primary truncate min-w-0 text-left underline decoration-dotted decoration-text-tertiary underline-offset-2 press"
+          className="focus-ring press font-body text-xs text-text-primary dark:text-text-primary truncate min-w-0 text-left underline decoration-dotted decoration-text-tertiary underline-offset-2"
         >
           {row.player.label}
         </button>
@@ -249,7 +249,7 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
 
             {/* Head-to-head vs me */}
             {profile.vsMe && (
-              <div className="mt-3 rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-2.5">
+              <Card padding="sm" className="mt-3">
                 <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary dark:text-text-tertiary mb-1">
                   Head-to-head vs you
                 </p>
@@ -259,7 +259,7 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
                     you're {profile.vsMe.myNet >= 0 ? 'up' : 'down'} {Math.abs(Math.round(profile.vsMe.myNet)).toLocaleString()}
                   </span>
                 </p>
-              </div>
+              </Card>
             )}
 
             {/* Rookie draft record */}
@@ -269,11 +269,11 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
                   label="Rookie Draft Record"
                   count={`${draft.hits} hit${draft.hits === 1 ? '' : 's'} of ${draft.count}`}
                 />
-                <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-3 py-1">
+                <Card padding="px-3 py-1">
                   {draft.picks.map((row, i) => (
                     <DraftPickRow key={i} row={row} onSelectPlayer={setSelectedPlayer} />
                   ))}
-                </div>
+                </Card>
               </>
             )}
 

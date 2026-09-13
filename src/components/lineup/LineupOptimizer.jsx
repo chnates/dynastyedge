@@ -62,7 +62,7 @@ function OffseasonPlaceholder({ league }) {
       {myRoster && (
         <div className="flex flex-col gap-3 pt-4">
           {topNeed && (
-            <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-4 py-3">
+            <Card padding="md">
               <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary mb-1.5">
                 Heading Into The Season
               </p>
@@ -71,10 +71,10 @@ function OffseasonPlaceholder({ league }) {
                 <span className="font-bold text-warning">{topNeed}</span>
                 {' '}— currently below league average heading into the draft.
               </p>
-            </div>
+            </Card>
           )}
 
-          <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-4 py-3">
+          <Card padding="md">
             <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary mb-2">
               Rookie Draft Capital
             </p>
@@ -90,9 +90,9 @@ function OffseasonPlaceholder({ league }) {
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
 
-          <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-4 py-3">
+          <Card padding="md">
             <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary dark:text-text-secondary mb-2">
               Win Window
             </p>
@@ -105,7 +105,7 @@ function OffseasonPlaceholder({ league }) {
                 dynasty pts
               </span>
             </div>
-          </div>
+          </Card>
         </div>
       )}
     </div>
