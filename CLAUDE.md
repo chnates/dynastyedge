@@ -1763,6 +1763,22 @@ and free-agent moves, newest first.
   Trade Analyzer: an opponent's player arrives as a What's Fair target
   (opponent + fair package pre-filled); my own player arrives pre-loaded in
   You Give. Free agents get no button.
+- **The row SPLITS around that button — it is a sibling, never a child.** The
+  Trade action used to sit inside `Row`'s own `<button>` with a
+  `stopPropagation`, i.e. a `<button>` nested in a `<button>`: invalid HTML,
+  and React warned on every render of the page. `MoverRow` now renders `Row`
+  as a plain `<div>` (which is what `Row` does with no `onClick`) holding two
+  real sibling buttons — the content, which opens the profile, and the action.
+  **This deliberately does NOT follow the Partners-card precedent** ("a sibling
+  *below* the card"), and the difference is **cardinality**, which is law 5's
+  own test. Partners is nine tall cards, so a full-width footer button costs
+  one row of height each. Movers is up to ~30 dense rows across six sections;
+  the footer treatment was built and measured at 390px and it adds **752px
+  (+24%)**, turning a list you SCAN into a wall of buttons whose CTA out-shouts
+  the value and the trend. The split row costs nothing — measured **3,020px
+  against the nested version's 3,175px**, i.e. 155px *shorter*, with 0 nested
+  interactive elements and 0 React warnings in both themes. Both targets carry
+  `.focus-ring` and `.press`.
 - Rows show a **sparkline** when the values-history feed has ≥ 4 snapshots
   for the player (see Value history pipeline).
 - Tap any row → Player Profile drawer
@@ -2847,14 +2863,17 @@ while you are in one.
 |---|------|---------|-----------|---------------------------------------------|
 |1  |Today |`/edge`  |The Edge   |Daily briefing home screen (default route)   |
 |2  |Squad |`/my-team`|My Team   |My Roster · Lineup · Season Review · Trajectory|
-|3  |Trade |`/trade` |Trade      |Partners · Analyzer · Targets · Managers · Pick Trades (+ deadline banner)|
+|3  |Trade |`/trade` |Trade      |Partners · Analyzer · Targets · Managers · Picks (+ deadline banner)|
 |4  |League|`/league`|League     |Overview · Free Agents · Activity · Movers · Playoffs|
 |5  |Index |`/index` |—          |The complete map — every section, plus the four consulted views|
 
 **The nav labels and the feature names are deliberately different.** "The Edge"
 and "My Team" are what the *features* are called throughout this document and
 in the product; **Today** and **Squad** are what *navigation* calls them, in
-Matchday's voice. Routes are unchanged (`/edge`, `/my-team`), so no deep-link,
+Matchday's voice. **"Picks" joined them 2026-09-13** — the feature is still the
+**Pick Trade Calculator** at `/trade/pick-trades` (Feature 13), and global
+search still finds it by that name via `searchLabel`; only the rail's label
+shortened, so the Trade rail fits on one line. Routes are unchanged (`/edge`, `/my-team`), so no deep-link,
 briefing item or redirect is affected. The app header names the section using
 the nav label, read from the same map, so the header and the bar can never
 disagree.
@@ -2884,6 +2903,39 @@ replaced `SubTabBar`, and the two differences are the point:
    touch target; `.tap-target` is deliberately not used, because on a row that
    wraps its oversized hit area would let vertically adjacent items steal each
    other's taps — the same reason `index.css` keeps it off `Chip`.
+3. **It fits on ONE line in every section, and it still wraps if it ever
+   can't** (2026-09-13). It was spending a second 44px row on **three of the
+   four** multi-view sections — Squad, Trade *and* League, i.e. ~16 of the
+   app's 18 content routes — putting **140px** of fixed chrome (50px masthead +
+   90px rail) above the content on an 844px screen. Three changes bring every
+   section to **96px**: the gap (16px → 10px), the tracking
+   (0.08em → 0.055em), and shortening the two labels that were over on their
+   own — **"Pick Trades" → "Picks"** and **"Free Agents" → "FA"**.
+   - **`flex-nowrap` is NOT the mechanism and was reverted.** A first cut used
+     it and appeared to fit all three; nowrap does not *fit* an over-long rail,
+     it **hides** the overflow — reintroducing the exact A4 failure this
+     component was built to fix. Switching back to `flex-wrap` is what exposed
+     that League had never actually fitted. **A layout that "fits" under nowrap
+     has not been measured, it has been silenced.**
+   - **Measured headroom at 390px** (358px available inside the gutter), so the
+     next person adding a view knows the budget: **Squad 344** (14 spare) ·
+     **Trade 352** (6 spare) · **League 306** (52 spare) · **Draft 196**
+     (162 spare). The numbers live in the component too. **Trade is the tight
+     one** — a sixth view there, or a longer label on any of its five, puts it
+     back on two rows, which is the honest failure mode `flex-wrap` preserves.
+   - **`railLabel` is the shortening mechanism, and it is rail-only.** "FREE
+     AGENTS" was 90px, the widest label in the app, and League was over by
+     exactly 21px — no tightening closes that while staying legible. But
+     `label` also feeds the **Index**, whose whole job is discoverability, and
+     "Overview · FA · Activity · Movers · Playoffs" is a worse map. So
+     `SectionContents` reads `railLabel ?? label` and **only the rail
+     shortens**; the Index and global search still say "Free Agents". Same
+     precedent as `searchLabel` — one consumer with a different constraint gets
+     its own string, rather than every consumer inheriting the tightest one.
+     Add a `railLabel` only when a section is measurably over budget.
+   - **`FA` is not a coinage** — it is already this app's own vocabulary:
+     League › Activity's filter chips read *All / Trades / Waivers / FA / My
+     Moves*.
 
 **Every navigable destination lives in ONE place: `src/navigation.js`.** The
 tab bar, the contents rails, the Index and global search all read from it, so a
@@ -4301,6 +4353,31 @@ tests and a clean build had all passed on it. Sweep with
 `pageerror`; a crash kills the tree, so **run the suspect route FIRST or reload
 between routes** — otherwise every route after the first failure reports an
 empty page and no error of its own, which reads like a different bug.
+
+**`<lowercase.Uppercase />` is the lucide removal's residue, and there were
+FOUR of them, not one.** Step 5 fixed `LeagueActivity` and stopped there. The
+2026-09-13 cleanup swept for the *shape* —
+`grep -rnoE '<[a-z][A-Za-z0-9]*\.[A-Z][A-Za-z0-9]*' src --include=*.jsx` — and
+found three more, all in Trade: `badge.Icon` (`TradePartnerFinder`),
+`chip.Icon` (`TradeAnalyzer`) and `vs.Icon` (`TheCall`). Every one of their maps
+had had its `Icon` field deleted with a comment explaining that the word carries
+the verdict; only the render call was left behind. **`TradePartnerFinder`'s
+crashed unconditionally, so `/trade` — Trade › Partners, the section's landing
+screen — was a white screen on `main` for a day.** Run that grep whenever a
+prop is removed from a lookup map: it costs nothing and it finds the whole
+family, where a route sweep only finds the ones a given data state reaches.
+
+**A ROUTE SWEEP WHOSE DATA NEVER LOADS IS NOT A ROUTE SWEEP — this is why step
+5's sweep missed three of the four.** With the APIs unreachable, a view
+short-circuits to `ErrorState` long before it renders the component that
+crashes, and the sweep records a confident OK. Measured on the same commit: the
+first pass of the 2026-09-13 sweep had a broken curl header parse (with `-L`,
+curl emits one header block PER HOP, so the redirect's headers land at the head
+of the body and every JSON parse dies on `"HTTP/2 200"`), and it passed
+**21 of 22 routes** — `/trade` included. With the parse fixed and real data
+flowing, `/trade` threw on the first render. **Assert the data actually
+arrived** (a route's rendered text length is a cheap proxy) before believing a
+green sweep.
 
 **Lint:** `npm run lint` runs ESLint 9 (flat config, `eslint.config.js`) over
 `src/` and `scripts/` — `@eslint/js` recommended rules plus

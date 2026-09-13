@@ -7,7 +7,7 @@ import { findPickValue, buildDraftPickIndex, buildGenericRoundValues } from '../
 import { useSleeperDraft } from '../../hooks/useSleeperDraft'
 import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
-import { Chip, Badge, Button, cn, Loading } from '../ui'
+import { Chip, Badge, Button, Card, cn, Loading } from '../ui'
 
 const PAGE_SIZE = 25
 const ROUND_SUFFIXES = ['', '1st', '2nd', '3rd', '4th', '5th']
@@ -42,7 +42,7 @@ function AssetLine({ sign, asset, onSelectPlayer }) {
       {asset.player ? (
         <button
           onClick={() => onSelectPlayer(asset.player)}
-          className="font-body text-xs text-text-primary dark:text-text-primary truncate min-w-0 underline decoration-dotted decoration-text-tertiary underline-offset-2 press"
+          className="focus-ring press font-body text-xs text-text-primary dark:text-text-primary truncate min-w-0 underline decoration-dotted decoration-text-tertiary underline-offset-2"
         >
           {asset.label}
         </button>
@@ -264,13 +264,10 @@ export default function LeagueActivity() {
             const meta = TYPE_META[tx.type] ?? TYPE_META.commissioner
             const involvesMe = (tx.roster_ids ?? []).includes(myRosterId)
             return (
-              <div
+              <Card
                 key={tx.transaction_id}
-                className={`rounded-none bg-bg-card dark:bg-bg-card border px-3 py-3 ${
-                  involvesMe
-                    ? 'border-brand/40'
-                    : 'border-border-default dark:border-border-default'
-                }`}
+                padding="sm"
+                className={involvesMe ? 'border-brand/40' : undefined}
               >
                 <div className="flex items-center gap-1.5 mb-2">
                   <span className={`font-body text-[11px] font-semibold uppercase tracking-wider ${meta.color}`}>
@@ -284,7 +281,7 @@ export default function LeagueActivity() {
                 {tx.type === 'trade'
                   ? <TradeCard tx={tx} teamName={teamName} resolveAsset={resolveAsset} resolvePick={resolvePick} onSelectPlayer={setSelectedPlayer} />
                   : <PickupCard tx={tx} teamName={teamName} resolveAsset={resolveAsset} onSelectPlayer={setSelectedPlayer} />}
-              </div>
+              </Card>
             )
           })}
 
