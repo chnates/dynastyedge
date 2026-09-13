@@ -4,7 +4,7 @@ import { usePlayerDB } from '../../hooks/usePlayerDB'
 import { useLineupHistory } from '../../hooks/useLineupHistory'
 import { computeOptimalPoints } from '../../utils/lineupHistory'
 import SectionHeader from '../shared/SectionHeader'
-import { RuledList } from '../ui'
+import { Card, RuledList } from '../ui'
 
 function Page({ children }) {
   return (
@@ -93,7 +93,7 @@ export default function LineupEfficiency() {
       <section>
         <SectionHeader label="Efficiency" count={`${rows.length} wks`} />
 
-        <div className="rounded-none bg-bg-card dark:bg-bg-card border border-border-default dark:border-border-default px-4 py-3 mb-2">
+        <Card padding="md" className="mb-2">
           <div className="flex items-baseline gap-2">
             <span className="font-mono text-2xl font-semibold text-accent tabular-nums">
               {efficiency.toFixed(1)}%
@@ -105,7 +105,7 @@ export default function LineupEfficiency() {
           <p className="font-body text-xs text-text-secondary dark:text-text-secondary mt-1">
             {totalLeft.toFixed(1)} points left on the bench across {rows.length} week{rows.length === 1 ? '' : 's'}.
           </p>
-        </div>
+        </Card>
 
         <RuledList>
           {rows.map(({ week, actual, optimal, delta }) => {

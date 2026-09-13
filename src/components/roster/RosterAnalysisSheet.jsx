@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { PEAK_WINDOWS } from '../../utils/peakWindows'
-import { Sheet, SheetHeader, Chip } from '../ui'
+import { Sheet, SheetHeader, Chip, Card } from '../ui'
 import { POS_SVG as POS_COLORS } from '../../utils/positionColors'
 
 const LANE_ORDER = ['QB', 'RB', 'WR', 'TE']
@@ -63,14 +63,14 @@ function starterAvg(players, position = null) {
 
 function StatCard({ label, value, valueClass = 'text-text-primary' }) {
   return (
-    <div className="rounded-none bg-bg-card border border-border-default px-3 py-2.5">
+    <Card padding="sm">
       <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-1">
         {label}
       </p>
       <p className={`font-mono text-lg font-semibold tabular-nums leading-none ${valueClass}`}>
         {value}
       </p>
-    </div>
+    </Card>
   )
 }
 
@@ -161,7 +161,7 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
             </div>
 
             {/* Age chart */}
-            <div className="rounded-none bg-bg-card border border-border-default px-2 py-3">
+            <Card padding="px-2 py-3">
               <svg
                 viewBox={`0 0 ${SVG_W} ${svgH}`}
                 width="100%"
@@ -301,7 +301,7 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
                   Solid = starter · Faded = bench
                 </span>
               </div>
-            </div>
+            </Card>
 
             {/* Summary stat cards */}
             <div className="grid grid-cols-2 gap-2">
@@ -325,7 +325,7 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
             </div>
 
             {/* Position breakdown */}
-            <div className="rounded-none bg-bg-card border border-border-default px-3 py-3">
+            <Card padding="sm">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
                 Avg Starter Age by Position
               </p>
@@ -360,10 +360,10 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
               <p className="font-body text-[9px] text-text-tertiary mt-2">
                 Green = younger than league average at that position
               </p>
-            </div>
+            </Card>
 
             {/* How to read this */}
-            <div className="rounded-none bg-bg-card border border-border-default">
+            <Card padding="none">
               <button
                 onClick={() => setHowToOpen(o => !o)}
                 className="focus-ring press w-full flex items-center justify-between px-3 py-3"
@@ -405,7 +405,7 @@ export default function RosterAnalysisSheet({ players, avgStarterAge, allRosters
                   </p>
                 </div>
               )}
-            </div>
+            </Card>
 
       </div>
     </Sheet>
