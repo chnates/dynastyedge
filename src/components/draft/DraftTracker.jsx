@@ -5,7 +5,7 @@ import { buildRookieProspects } from '../../utils/rookieAdp'
 import { useSleeperDraft, buildDraftOrder, FALLBACK_DRAFT_SEASON } from '../../hooks/useSleeperDraft'
 import { deriveDraftState, buildBestAvailable, buildMyCapital, buildRecap, VOE_NEUTRAL } from '../../utils/draftLive'
 import { getTeamName } from '../../hooks/useLeague'
-import { Sheet, Modal, Button, Card, Chip, Loading, Row, RuledList } from '../ui'
+import { Sheet, Modal, Button, Card, Chip, SearchInput, Loading, Row, RuledList } from '../ui'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { BOARD_ORDER_KEY, NOTES_KEY, readJSON } from './boardStorage'
 import ErrorState from '../shared/ErrorState'
@@ -240,13 +240,12 @@ function ProspectList({
         )}
       </div>
 
-      <div className="relative mb-2">
-        <input
+      <div className="mb-2">
+        <SearchInput
           type="search"
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search prospects"
-          className="w-full pl-9 pr-3 py-2 bg-bg-card border border-border-default font-body text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent"
         />
       </div>
 

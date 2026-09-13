@@ -976,12 +976,17 @@ export default function PlayerProfileDrawer({
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-2">
                 Scout Note
               </p>
+              {/* The library has no Textarea, so this is the one field that
+                  cannot route through a primitive — it takes `.focus-ring`
+                  directly instead. It previously stripped the outline with
+                  nothing in its place, which is the only control in the app
+                  that focus left completely unmarked. */}
               <textarea
                 defaultValue={note}
                 placeholder="Add a note about this prospect…"
                 onBlur={e => onNoteChange?.(player.sleeperId, e.target.value)}
                 rows={3}
-                className="w-full bg-transparent font-body text-sm text-text-primary placeholder:text-text-tertiary resize-none focus:outline-none leading-snug"
+                className="w-full bg-transparent font-body text-sm text-text-primary placeholder:text-text-tertiary resize-none leading-snug focus-ring"
               />
             </Card>
           )}

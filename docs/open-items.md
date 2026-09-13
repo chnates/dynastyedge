@@ -1196,7 +1196,30 @@ Evidence: `docs/design/review-2026-09/findings.md` §X1–X3, B3.
    bottom step of a three-step text ramp, so tertiary now sits closer to
    secondary than before; that compression is the price of legibility and is
    recorded in `index.css` so nobody "fixes" it back.
-2. **Focus.** One `.focus-ring` rule in `index.css`, `:focus-visible` not
+2. **Focus — REOPENED AND RE-CLOSED 2026-09-13.** The fix was correct and
+   incomplete, and the gap is worth more than the fix: `.focus-ring` was
+   carried by every *primitive*, so the four fields that never routed through
+   one kept stripping the outline. A post-merge review found them
+   (`grep focus:outline-none src` → 4 live hits, all outside
+   `src/components/ui/`). `PlayerProfileDrawer`'s scout-note textarea was the
+   sharp one: `focus:outline-none` with **nothing** in its place, the only
+   control in the app where focus was completely unmarked. The other three
+   (`TradeBuilder`'s add-sheet search, `DraftBoard`'s and `DraftTracker`'s
+   prospect search) replaced it with a border or ring tint rather than the
+   shared ring.
+   **Closed by routing three through `Input`/`SearchInput` and giving the
+   textarea `.focus-ring` directly** — there is no `Textarea` primitive, which
+   is why that one field cannot be fixed structurally and is the standing
+   recurrence risk. Two incidental wins: the two prospect searches carried
+   `relative` + `pl-9` wrappers reserving space for magnifier icons that left
+   with lucide in step 4, and `DraftBoard` had been importing `Input` without
+   using it for its own search box. `grep focus:outline-none src` is now 0.
+   **The lesson is step 5's own, one layer down: a primitive-level fix only
+   reaches call sites that use the primitive.** The 21 hand-rolled panels this
+   record hands on are a design-consistency debt *and* an accessibility one.
+   Original closure follows.
+
+   One `.focus-ring` rule in `index.css`, `:focus-visible` not
    `:focus`, carried by every interactive primitive. Verified rendering: the
    global search sheet auto-focuses its input, and browsers always treat text
    input focus as focus-visible, so the ring is visible in a plain capture.
