@@ -28,24 +28,47 @@
 // nothing but a refusal — no league data, no tools, no token accepted — it
 // just returns a 503 that names the cause instead of a platform stack trace.
 
-import { createApp } from './app.js'
+// THE IMPORT IS DYNAMIC, AND THAT IS A DIAGNOSTIC DECISION.
+//
+// A static `import` that fails to resolve kills the module before any code
+// here can run, which on Vercel is an opaque FUNCTION_INVOCATION_FAILED —
+// and runtime logs are not readable from the deploy tooling, so that is a
+// dead end. Importing inside the handler means a resolution failure becomes
+// an HTTP response that NAMES the missing module.
+//
+// This matters because `src/utils` uses Vite-style extensionless relative
+// imports. esbuild and Vite resolve those by appending extensions; Node's own
+// ESM resolver does not. Whether the host bundles or merely traces decides
+// whether this server can run there at all, and the answer should be
+// readable, not inferred.
+//
+// The module is imported ONCE and cached, so a warm instance still pays for
+// construction only on its first request.
 
-let app = null
-let initError = null
+let appPromise = null
 
-try {
-  app = createApp()
-} catch (err) {
-  initError = err
+async function getApp() {
+  if (!appPromise) {
+    appPromise = import('./app.js').then(m => m.createApp())
+  }
+  return appPromise
 }
 
-export default function handler(request) {
-  if (initError) {
+export default async function handler(request) {
+  let app
+  try {
+    app = await getApp()
+  } catch (err) {
+    // Reset so a transient failure can be retried rather than cached forever.
+    appPromise = null
     return new Response(JSON.stringify({
-      error: 'server_misconfigured',
+      error: 'server_unavailable',
       // The message, never the stack — a stack on a public endpoint leaks
-      // paths and module layout for no benefit to the person reading it.
-      detail: initError.message,
+      // paths and module layout and helps nobody reading it. The message
+      // alone distinguishes the two failures that matter: a missing secret
+      // versus a module the host could not resolve.
+      detail: err?.message ?? String(err),
+      code: err?.code ?? null,
     }), {
       status: 503,
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
