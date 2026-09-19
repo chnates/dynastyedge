@@ -19,6 +19,7 @@ import { buildSellHighAnswer, renderSellHighText } from './tools/findSellHigh.js
 import { buildFreeAgentAnswer, renderFreeAgentText, MAX_LIMIT } from './tools/recommendFreeAgents.js'
 import { buildResolveAnswer, renderResolveText, MAX_QUERIES } from './tools/resolveAssets.js'
 import { buildTradeAnswer, renderTradeText } from './tools/analyzeTrade.js'
+import { buildLineupAnswer, renderLineupText } from './tools/lineupAdvice.js'
 
 export const SERVER_NAME = 'dynastyedge'
 export const SERVER_VERSION = '0.1.0'
@@ -99,6 +100,22 @@ const pickCandidateSchema = z.object({
   ownerTeam: z.string(),
   originalOwnerRosterId: z.number(),
   originalOwnerTeam: z.string().nullable(),
+})
+
+// A player on a lineup row. `projected` is Sleeper's number; `effective` is
+// what he actually contributes — 0 for anyone blocked, whatever Sleeper still
+// carries for him, because an "Out" starter holding 12.4 would otherwise
+// inflate the current total and hide the gap the tool exists to surface.
+const lineupPlayerSchema = z.object({
+  sleeperId: z.string(),
+  name: z.string().nullable(),
+  position: z.string().nullable(),
+  nflTeam: z.string().nullable(),
+  projected: z.number(),
+  effective: z.number(),
+  blocked: z.boolean(),
+  status: z.string().nullable(),
+  statusLabel: z.string().nullable(),
 })
 
 // An asset as it appears on one side of a graded trade.
@@ -597,6 +614,100 @@ export function createServer({ env = process.env, fetcher } = {}) {
       if (answer.ok) answer.asOf = mergeAsOf(answer.asOf, weekly.sources)
       return {
         content: [{ type: 'text', text: renderTradeText(answer) }],
+        structuredContent: answer,
+        isError: !answer.ok,
+      }
+    }
+  )
+
+  // ── Tool 6 — lineup_advice ──────────────────────────────────────────────
+  //
+  // IN-SEASON ONLY. The offseason returns ok:false with `unavailable: true`
+  // and a reason, never a lineup of zeros.
+
+  server.registerTool(
+    'lineup_advice',
+    {
+      title: 'Weekly start/sit advice',
+      description:
+        'Solves your optimal starting lineup on this week\'s Sleeper projections and diffs it against ' +
+        'what you are actually starting: the points sitting on your bench, every move with its own ' +
+        'point gain, a must-fix flag for anyone on bye / Out / IR or an empty slot, and a measured ' +
+        'confidence percentage for the genuine judgement calls. IN-SEASON ONLY — in the offseason it ' +
+        'says so rather than returning zeros. Sleeper is read-only, so it tells you what to change; ' +
+        'you make the change in the Sleeper app.',
+      inputSchema: {
+        week: z.number().int().optional()
+          .describe('Week to advise on. Omit for the current week.'),
+        team: z.string().optional()
+          .describe('Team name, manager username, or roster id. Omit for your own team.'),
+        leagueId: z.string().optional()
+          .describe('Sleeper league id. Omit for the configured league.'),
+        refresh: z.boolean().optional()
+          .describe('Bypass the caches and refetch. Use near kickoff, when a late inactive can move a projection faster than its ~60 minute TTL.'),
+      },
+      outputSchema: {
+        ok: z.boolean(),
+        error: z.string().optional(),
+        // True when there is simply no lineup question to answer (offseason,
+        // or projections down) — distinct from a bad argument.
+        unavailable: z.boolean().optional(),
+        reason: z.enum(['offseason', 'projections-unavailable']).optional(),
+        candidates: z.array(teamCandidate).optional(),
+        asOf: asOfSchema.optional(),
+        league: z.object({
+          leagueId: z.string().nullable(), name: z.string().nullable(),
+          season: z.string().nullable(), week: z.number().nullable(),
+          isOffseason: z.boolean(),
+        }).optional(),
+        team: z.object({
+          rosterId: z.number(), teamName: z.string(), isYou: z.boolean().optional(),
+        }).optional(),
+        summary: z.object({
+          pointsLeftOnBench: z.number(),
+          currentProjected: z.number(),
+          optimalProjected: z.number(),
+          mustFixCount: z.number(),
+          upgradeCount: z.number(),
+          coinFlipCount: z.number(),
+          emptySlots: z.number(),
+          isOptimal: z.boolean(),
+        }).optional(),
+        moves: z.array(z.object({
+          action: z.enum(['swap', 'fill', 'bench']),
+          sit: lineupPlayerSchema.nullable(),
+          start: lineupPlayerSchema.nullable(),
+          gain: z.number(),
+          mustFix: z.boolean(),
+          // A PERCENTAGE (0-100), and NULL on a must-fix by rule: a bye /
+          // Out / empty slot scores 0 by rule rather than by projection, so
+          // the measured hit-rate curve has no question to answer there.
+          confidencePct: z.number().nullable(),
+          directSwap: z.boolean(),
+          meaningful: z.boolean(),
+          reason: z.string(),
+        })).optional(),
+        lineup: z.array(z.object({
+          slot: z.string(),
+          eligible: z.array(z.string()).nullable(),
+          player: lineupPlayerSchema.nullable(),
+          isOptimal: z.boolean(),
+        })).optional(),
+        bench: z.array(lineupPlayerSchema).optional(),
+        notes: z.array(z.string()).optional(),
+      },
+    },
+    async ({ week, team, leagueId, refresh }) => {
+      const snapshot = await snapshotFor(leagueId, refresh)
+      const weekly = await weeklyFor(snapshot, week, refresh)
+      const answer = buildLineupAnswer(snapshot, weekly, {
+        team,
+        defaultRosterId: config.defaultRosterId,
+        myRosterId: config.defaultRosterId,
+      })
+      if (answer.asOf) answer.asOf = mergeAsOf(answer.asOf, weekly.sources)
+      return {
+        content: [{ type: 'text', text: renderLineupText(answer) }],
         structuredContent: answer,
         isError: !answer.ok,
       }

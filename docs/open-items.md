@@ -5,7 +5,8 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-09-19 (**MCP-1** — the MCP server's phase 1 shipped:
+**Last reviewed:** 2026-09-19 (**MCP-1b** — all six MCP tools now ship over
+stdio; see MCP-1b. Previously **MCP-1** — the MCP server's phase 1 shipped:
 the three prerequisite refactors plus `get_roster` over stdio. Phase 2 (remote
 transport, OAuth, deployment) is **MCP-2**, deferred with its trigger, and
 needs two owner decisions before it is ready work. Previously 2026-09-12:
@@ -77,13 +78,62 @@ What shipped: the three prerequisite refactors (§4 A/B/C) plus **one** tool,
   defense as a general pickup" rule is now enforced by construction.
 
 **Deliberately NOT in phase 1:** the other five tools, HTTP transport, OAuth,
-deployment.
+deployment. The five tools became **MCP-1b**, below; the rest is MCP-2.
 
 **It also closed `MCP_DISCOVERY.md` §8 question 2** (flagged there as
 untested): esbuild, already present via Vite, bundles `mcp/stdio.js` plus all
 of `src/utils` into a single 1.4MB ESM file that boots with **no resolver
 hook**. Not shipped as a build step — that belongs to MCP-2 — but the approach
 is de-risked.
+
+### MCP-1b — MCP server phase 1b: the remaining five tools **SHIPPED 2026-09-19**
+
+All six tools from `MCP_DISCOVERY.md` §5 now exist, still stdio only.
+`find_sell_high`, `recommend_free_agents`, `resolve_assets`, `analyze_trade`
+and `lineup_advice`, each documented with its contract and traps in CLAUDE.md's
+**The MCP Server** section.
+
+Every one is orchestration over `src/utils` in `getRoster.js`'s shape — no
+domain math was added anywhere, so the server and the phone cannot disagree.
+
+**New supporting pieces:**
+
+- **`mcp/weekly.js`** — projections + the NFL schedule, on a **deliberate
+  60-minute TTL** rather than the league snapshot's 15. League data changes on
+  an event; the projections endpoint drifts 0.06% per ten hours
+  (`weeklyProjections.js:13-15`). `mergeAsOf` recomputes `oldestSourceAt` over
+  the union so a stale projection cannot hide behind a fresh roster fetch.
+- **`mcp/teams.js`** — `resolveTeam` extracted from `getRoster` so
+  `analyze_trade`'s `partner` and `lineup_advice`'s `team` resolve through one
+  definition.
+
+**Two real bugs found and fixed on the way:**
+
+1. **Sleeper's `/league/{id}/users` returns `display_name`, NOT `username`** —
+   verified live, all 10 users. Phase 1's `resolveTeam` matched on `username`
+   alone, so the advertised "manager username" path had never fired and every
+   candidate list rendered a bare `@`. Fixed once in the extracted resolver,
+   so all three consumers get it.
+2. **The output schemas caught two wrong assumptions before a reader saw
+   them** — `fairBand.inside` (written as `inBand`) and `buildTradePitch`
+   returning `{ text, lines, bullets }` rather than a string. This is the
+   concrete first payoff of the zod validation `MCP_DISCOVERY.md` §7 asked
+   for, landing on its first live call.
+
+**Measured on the live league:** one 614ms cold snapshot assembly, then
+3–47ms per tool; largest response 8,964B. `find_sell_high` returns a real
+two-sided move (sell Jaxson Dart to Crippled Gang for Chris Olave, filling the
+WR deficit). `resolve_assets` returns **six candidates for "Brown"** and
+refuses to pick — the exact failure the resolve-then-grade rule exists to
+prevent. Tests **357 → 489**; without `node_modules` **323 → 455**, the same
+four hook-loading files. `dist` byte-identical at 995,441 bytes.
+
+**Known gap, stated rather than hidden:** `analyze_trade` scores Layer 3 on
+the win-window **tier**, not live playoff odds, because the server does not
+fetch the rest-of-season simulation — and the response says so via
+`winWindow.basis`. `myPlayoffPct`, `myDraftGrade` and `partnerActivity` are
+likewise unwired. Each needs a fetch beyond the league snapshot; wiring them
+is a natural phase-2-or-later increment, not a correctness bug.
 
 ### MCP-2 — MCP server phase 2: remote transport, OAuth, deployment **[owner ask required]**
 
