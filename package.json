@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:mcp": "node scripts/build-mcp.mjs",
     "preview": "vite preview",
     "mcp": "node --import ./mcp/register.mjs mcp/stdio.js",
     "lint": "eslint src scripts mcp",

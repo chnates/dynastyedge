@@ -690,6 +690,191 @@ mcp/
     resolveAssets.js  analyzeTrade.js  lineupAdvice.js
 ```
 
+### The HTTP transport (phase 2) — stateless, by necessity
+
+`mcp/http.js` exposes `createMcpHandler()`, which returns a **Web-standard
+`(Request) => Promise<Response>`** — the signature Vercel Functions,
+Cloudflare Workers, Deno and Bun all take, so the host stays a *packaging*
+decision rather than a code one. `createServer()` was already
+transport-agnostic, so **no tool was forked**: stdio and HTTP expose the same
+six tools, pinned by test.
+
+**THE TRAP: a session held in RAM is exactly what serverless cannot keep.**
+The SDK's streamable transport can run session-ful — it mints a session id and
+expects later requests on it to reach the *same process*. A serverless host
+gives no such guarantee, and the failure is **intermittent**: it works in
+testing, where one warm instance serves everything, and breaks in production
+under the conditions hardest to reproduce. So the transport runs **stateless**
+(`sessionIdGenerator: undefined`, `enableJsonResponse: true`), a fresh server
+and transport per request, and `tests/mcpHttp.test.mjs` asserts no
+`mcp-session-id` header is ever minted. Same reasoning as `store.js`: anything
+remembered between requests must live where a second instance can see it.
+
+**The limiter is hoisted to module scope, deliberately.** A per-request server
+would mint a per-request rate limiter, handing every concurrent request the
+full budget — precisely what `mcp/limit.js` exists to bound. `createServer`
+now takes `fetcher` and `store` so a warm instance shares one of each.
+
+**The gate fails CLOSED.** An authenticator that throws returns 500, never
+200; a falsy or `ok: false` result is a 401; and **every POST is
+authenticated**, so a session cannot be established once and then trusted. A
+401 carries `WWW-Authenticate: Bearer resource_metadata="…"` (RFC 9728) so a
+client is told where to authenticate rather than merely refused. `GET` is a
+liveness probe that reports only that the process is up — a test asserts it
+leaks no roster, player, value or league data, because an unauthenticated read
+would defeat the gate.
+
+**Verified over the real transport against the live league** (2026-09-19, a
+real MCP client over `StreamableHTTPClientTransport`): health 200;
+unauthenticated POST 401 with the discovery header; `tools/list` → six tools;
+`get_roster` 509ms cold / 11,312B, Nix Cage 0-1, 31 players + 12 picks, slots
+STARTER 11 · BENCH 13 · TAXI 5 · IR 2, total 86,090, value rank 3, window
+Middle, all three `asOf` sources stamped and not stale, one unranked player at
+`value: null` (rule 7). Then `resolve_assets` in **21ms** — the store survived
+across separate HTTP requests, which is what the `store.js` refactor was for —
+returning **six candidates for "Brown" and refusing to match**, byte-matching
+the behaviour phase 1b measured over stdio.
+
+### The auth model (phase 2) — OAuth 2.1, and STATELESS
+
+`mcp/oauth.js` (crypto + policy) and `mcp/oauthRoutes.js` (the five endpoints)
+make the server both the OAuth **resource server** the MCP spec requires and
+its own **authorization server**, with **GitHub as the upstream identity
+provider**. `mcp/app.js` composes them in front of the MCP handler.
+
+**The spec's own words:** *"Authorization is OPTIONAL… Implementations using
+an HTTP-based transport SHOULD conform."* Conforming means RFC 9728 protected
+resource metadata, RFC 8414 AS metadata, PKCE, RFC 8707 resource indicators
+and audience-bound tokens. Claude's custom-connector UI is OAuth-only; there
+is no static-token path.
+
+**Normally that needs three kinds of durable state, and serverless has none.
+Two facts remove the need:**
+
+1. **NO DYNAMIC CLIENT REGISTRATION.** RFC 7591 is a SHOULD, and the spec
+   names the alternative: pre-register out of band. Claude's connector has
+   "Advanced settings" for exactly that, so there is **one** client, it lives
+   in `config.js`, and there is no registry to persist. It is a **public
+   client** (`token_endpoint_auth_methods_supported: ['none']`) — OAuth 2.1
+   allows that precisely when PKCE protects the exchange, and inventing a
+   second secret would add a handling step guarding nothing PKCE plus the
+   GitHub login plus the allowlist do not already guard.
+2. **EVERYTHING ELSE IS SIGNED, NOT STORED.** An authorization code and an
+   access token are each a payload plus an HMAC. Verification is recomputing
+   the MAC, so any instance verifies what any other minted.
+
+**The signing key is DERIVED, so there is no second secret to manage.**
+`crypto.hkdfSync` over `GITHUB_CLIENT_SECRET` with a distinct `info` string —
+independent by construction, not reversible to the secret.
+`DYNASTYEDGE_TOKEN_SECRET` overrides it if a dedicated key is ever wanted.
+
+**No JWT library, deliberately.** `jose` ships as a transitive dep of the SDK,
+but a transitive dep is one upstream release from vanishing and rule 5 says
+write the ~30-line version first. The token is `base64url(payload).base64url(hmac)`
+and deliberately **not** a JWT: no `alg` header means no algorithm confusion
+and no `alg: none` to remember to reject. Measured payoff — all 25 auth tests
+run with no `node_modules` (see the npm-ci block).
+
+**What signed-not-stored COSTS, stated rather than buried:**
+
+- **A token cannot be revoked before it expires**, so access tokens live
+  **1 hour**. Revocation in practice is rotating the GitHub client secret,
+  which changes the derived key and invalidates everything at once.
+- **An authorization code cannot be marked used**, so replay is bounded by its
+  **60-second** life rather than prevented. **PKCE is therefore not defence in
+  depth here — it IS the defence**, which is why `S256` is required and
+  `plain` is refused (under `plain` the challenge equals the verifier, so
+  whoever holds the code holds everything needed to redeem it).
+
+Both are acceptable for one user. Neither would be for a multi-tenant server —
+that wants the KV the caching layer deliberately does not need.
+
+**THE LOAD-BEARING CHECK IS REDIRECT-URI VALIDATION.** The spec: *"Authorization
+servers MUST validate exact redirect URIs against pre-registered values."* With
+no registry, an **origin allowlist** replaces it — `claude.ai`, `claude.com`
+and loopback — matched on **exact hostname**, so `evil.claude.ai` and
+`claude.ai.evil.com` both fail. It is checked **before anything is minted**,
+and a failure renders an error page rather than redirecting: *redirecting an
+unvalidated URI is the attack.* Everything else (bad PKCE, wrong client)
+bounces an OAuth error to the client, because by then the redirect is vetted.
+
+**Three more things the tests pin as attacks, not happy paths:** a token
+minted for another audience is refused (the confused-deputy problem); **the
+allowlist is re-checked on every request, not only at login**, so a token
+minted before it changed stops working immediately; and the `kind`
+discriminator keeps the three token types apart, so an access token cannot be
+redeemed as an authorization code or vice versa.
+
+**GitHub is asked for NO scopes.** The upstream token is read once to learn
+the login, then discarded — never stored, never returned to the client, never
+forwarded. The spec forbids passing an upstream token through, and the
+cleanest way to honour that is to hold nothing worth passing.
+
+**The server refuses to start without `GITHUB_CLIENT_SECRET`** — no key means
+either no authentication or a guessable one, both worse than a failed deploy.
+
+**Verified end to end** (2026-09-19, only GitHub's identity call faked):
+no-token → 401 with the discovery header → both metadata documents →
+authorize → GitHub with `scope=""` → callback → code to
+`claude.ai/api/mcp/auth_callback` with state echoed → token (Bearer, 3600s) →
+**authenticated `get_roster` against the live league in 608ms** (Nix Cage,
+86,090, rank 3, 31 players, 12 picks, stamped and not stale) → a tampered
+token 401s → an unknown path 404s without reaching the transport.
+
+### Deployment (phase 2) — LIVE at `dynastyedge-mcp.vercel.app`
+
+Vercel project `dynastyedge-mcp` in team `dynastyedge`, deployed from this
+repo. `api/mcp.js` is the function; `vercel.json` rewrites every path to it.
+
+**Three findings cost a deploy cycle each, and none was guessable from the
+docs. They are recorded because the next person will hit the same three.**
+
+1. **Vercel detects functions from the SOURCE tree, not from build output.**
+   With `api/` gitignored, a build that produced `api/mcp.js` deployed a
+   static page and **no function** — `x-vercel-error: NOT_FOUND` on every
+   route. Worse, **that deployment reported `readyState: READY` and
+   `type: LAMBDAS`**, so "the deploy succeeded" is not evidence a function
+   exists. Curl the route.
+2. **Vercel TRACES module dependencies; it does not bundle them.** A
+   three-line `api/mcp.js` re-exporting `../mcp/vercelEntry.js` deployed a
+   function that crashed on invocation, because Node's ESM resolver — unlike
+   esbuild and Vite — does not append `.js` to the extensionless relative
+   imports `src/utils` uses. **This is the same resolver gap `npm run mcp`
+   needs its `--import` hook for, reappearing at the host.** So the esbuild
+   output is **committed** (`scripts/build-mcp.mjs` → `api/mcp.js`, 1.6MB):
+   the file verified locally is byte-for-byte the file that runs.
+   **`ci.yml` rebuilds and diffs it on every push**, because a stale bundle
+   would mean the deployed server runs older logic than the repo describes —
+   exactly the drift the "`mcp/` imports `src/utils`, never copies it" rule
+   exists to prevent.
+3. **The host may invoke a Node function with EITHER calling convention.**
+   Handed Node's `(IncomingMessage, ServerResponse)` rather than a Web
+   `Request`, `new URL(req.url)` throws — `req.url` is a bare path with no
+   origin — and it surfaced as a bodiless platform 500. `vercelEntry.js`
+   detects the shape with one property check instead of betting on a runtime;
+   `mcp/http.js` stays Web-standard, which is what keeps the host a
+   *packaging* decision.
+
+**Nothing reaches an opaque platform 500 any more.** A missing secret, an
+unresolvable module and a runtime fault inside a tool each answer with a body
+naming the cause — message only, never a stack, which on a public endpoint
+leaks paths and module layout for no benefit. That mattered concretely:
+**Vercel's runtime logs return 403 to the deploy tooling**, so an opaque 500
+is a dead end, and the server had to be made to explain itself.
+
+**Vercel's deployment protection does NOT cover the production alias.**
+Deployment-specific URLs redirect to a Vercel login; `dynastyedge-mcp.vercel.app`
+does not. So **the OAuth gate is the only thing in front of this endpoint** —
+there is no second layer, and any change to it is a change to the only lock.
+
+**Verified from the public internet 2026-09-19**, not from a sandbox: an
+unauthenticated `tools/call` returns **401** with the `WWW-Authenticate`
+discovery header and no data; a made-up bearer token **401**; an unknown path
+**404**; a hostile `redirect_uri` (`evil.example`) **403 with no `Location`
+header at all**; a lookalike host (`evil.claude.ai`) **403**; PKCE `plain`
+bounced as `invalid_request`; and a valid authorize request redirects to
+GitHub with **`scope=`** empty and the callback matching the registered URI.
+
 Run it with `npm run mcp`. The `--import ./mcp/register.mjs` hook is
 **mandatory**: `src/utils` uses Vite-style extensionless relative imports that
 plain Node cannot resolve. The hook is a deliberate copy of the test suite's —
@@ -743,9 +928,44 @@ re-download it. It is also **best-effort**: without it, rostered players
 FantasyCalc doesn't rank are absent rather than shown with `—` (exactly how the
 app behaves before that background fetch lands), and a note says so.
 
-These are module-level caches, the same pattern as the app's ~20 hook
-singletons. Correct for a long-lived stdio process, **wrong for phase 2's
-serverless deployment**, which has no warm process and wants external KV.
+**The BACKEND is a parameter; the POLICY is shared (`mcp/store.js`, phase 2).**
+`snapshot.js` and `weekly.js` each kept their own module-level Maps *and* their
+own verbatim copy of `loadSource` — correct for a long-lived stdio process,
+where a cached snapshot resolves in **1ms against a 658ms cold assembly**, and
+impossible for the serverless HTTP transport, which has no warm process to hold
+a Map. Both now call one `loadSource(store, key, ttlMs, load)`. stdio keeps
+`memoryStore()` and is unchanged; HTTP passes a KV-backed store. Two copies of
+the stale-fallback contract was the same drift prerequisite C removed from
+`src/`, so the refactor *deletes* a duplicate rather than adding a layer.
+
+**Trap 1 — a store-level TTL would silently break provenance.** `loadSource`
+reads the cached entry **even when it is expired**; that is precisely what
+makes "serve the cache and label its age" work. Set a Redis-native `EX` to the
+TTL and that path loses its fallback: a Sleeper outage at minute 16 throws a
+cold "I don't know" where today it returns a usable 20-minute-old answer
+stamped `stale: true`. **Freshness is decided in `loadSource` from `fetchedAt`,
+never by the store**; `STORE_GC_SECONDS` (7 days) is eviction so a store cannot
+grow forever, and is set far longer than any TTL a caller will pass.
+`tests/mcpStore.test.mjs` pins the trap by modelling an evicting store and
+asserting it throws where a keeping store answers.
+
+**Trap 2 — the player DB must be compressed going into KV.** Measured live
+2026-09-19: the whole snapshot serialises to **1.37 MB**, of which the trimmed
+player DB is **1.20 MB** — at or over the per-value limit of a typical hosted
+KV. Gzipped they are **208 KB** and **180 KB**. `node:zlib` is built in, so
+entries are gzip+base64 on the way out and inflated on the way back for no
+dependency, fewer bytes, and no size question.
+
+**`fetchedAt` must round-trip byte-for-byte.** It is the provenance the whole
+design rests on — it becomes `asOf.sources[*].fetchedAt` and feeds
+`oldestSourceAt`. A store that rounds or drops it breaks non-negotiable 1, so
+the round trip is pinned by test rather than assumed.
+
+**A store failure degrades an answer to "slower", never to "broken".** A failed
+read is a cache miss; a failed write is dropped, because the answer was already
+correct before it. **That guard lives in `loadSource`, not only inside a
+well-behaved backend** — the first cut awaited `store.set` unguarded and a
+throwing write killed an already-fetched answer, which is what the test caught.
 
 ### Rate discipline lives in `mcp/`, never in `fetchJSON`
 
@@ -4511,11 +4731,20 @@ dynastyedge/
 │       ├── asset-aging-backtest.mjs ← analysis-only: THE keep-score calibration — longitudinal player aging (the survivorship trap the trajectory curves fall into) + whether rookie picks deliver their market price; see docs/analysis/asset-aging-and-pick-value-2026-09.md
 │       ├── contrast-audit.mjs ← THE accessibility-floor instrument: reads the tokens out of src/index.css and measures each against its theme's WORST-CASE ground, plus the two reversal cases a text-on-ground audit misses (paper type on a position band, type on an ink field). Exits non-zero on any failure — re-run after ANY ground-colour change.
 │       └── news-coverage.mjs ← analysis-only: THE news-pipeline acceptance metric — how many of my rostered players the app can actually resolve in the feed (no arg = live feed); see docs/analysis/news-sources-2026-09.md
+├── api/
+│   └── mcp.js                  ← THE deployed Vercel function — a COMMITTED esbuild bundle. Vercel detects functions from the source tree and TRACES rather than bundles, so a shim importing mcp/ crashed on Node's ESM resolver; ci.yml rebuilds and diffs this to stop it drifting
+├── vercel.json                 ← rewrites every path to the one function + pins an empty static root (without outputDirectory, Vercel can serve the repo root as static files)
 ├── mcp/                        ← THE MCP SERVER (see The MCP Server section). Imports src/utils, never copies it; src/ imports nothing from here.
 │   ├── README.md               ← how to run it, the three rules a new tool must keep, phase-2 notes
 │   ├── stdio.js                ← entry point (stdio transport). Needs --import ./mcp/register.mjs
 │   ├── server.js               ← the McpServer: tool schemas + wiring, ZERO domain math
 │   ├── snapshot.js             ← league fetch + ~15-min cache + THE as-of stamp (the §7 mitigation: nothing in this repo validates an external payload, so provenance is what makes a wrong answer LOOK wrong). Also mergeAsOf, which RECOMPUTES oldestSourceAt over the union so an added source can't overstate freshness
+│   ├── vercelEntry.js          ← the bundle's entry: accepts BOTH calling conventions (a host may hand you a Web Request or Node's req/res), imports lazily so a resolution failure is an HTTP body rather than an opaque platform 500, and reports every failure with a message — never a stack
+│   ├── app.js                  ← THE hosted server: OAuth routes in front of the MCP endpoint. Refuses to start without GITHUB_CLIENT_SECRET — no signing key means no auth, and a failed deploy beats an open one
+│   ├── oauth.js                ← THE auth crypto + policy: HMAC tokens (no JWT lib, no `alg` to confuse), HKDF-derived key, PKCE S256-only, audience binding. Documents what signed-not-stored COSTS: no revocation (1h tokens), no single-use codes (60s + PKCE)
+│   ├── oauthRoutes.js          ← the five OAuth endpoints. Owns THE load-bearing check: redirect-URI origin allowlist, exact-hostname, checked BEFORE anything is minted, failing to an error page because redirecting an unvalidated URI IS the attack
+│   ├── http.js                 ← THE streamable-HTTP transport: a Web-standard (Request) => Response, so the host is a packaging decision. STATELESS by necessity (a serverless instance cannot hold a session — the failure is intermittent, warm-passes/cold-fails). Owns the auth gate, which fails CLOSED
+│   ├── store.js                ← THE cache backend boundary + the ONE freshness policy (loadSource). Backend is a parameter (memory for stdio, KV for HTTP); the policy is shared. Owns the two traps: a store-level TTL would break the stale-fallback contract, and the 1.20MB player DB must be gzipped into KV
 │   ├── weekly.js               ← projections + the schedule, on their OWN ~60-min TTL (league data changes on an EVENT, projections on a 0.06%/10h DRIP). Owns the two silent traps: the schedule is off /v1 (SLEEPER_ROOT) and its fields are home/away
 │   ├── teams.js                ← resolveTeam, shared by get_roster / analyze_trade / lineup_advice so "which team did they mean?" has one definition. Reads display_name — Sleeper's /users returns NO username
 │   ├── limit.js                ← concurrency gate + backoff. Lives here, NEVER in fetchJSON — that would change the app's behaviour to fix a server problem
@@ -4723,6 +4952,9 @@ dynastyedge/
 │   ├── newsRetention.test.mjs       ← the news window's retention policy: newest-N-per-player, a redundant item losing to an OLDER item about an uncovered player, breadth preserved at every k, roundups charging every player they name, and an id-less item never dropped by quota
 │   ├── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
 │   ├── leagueState.test.mjs         ← buildLeagueState: string-id normalization across mixed-shape payloads + the '0' sentinel (rule 8), unranked players kept at value 0 and the skip-then-self-heal path (rule 7), a pick at its ORIGINAL owner's slot vs round medians (Feature 1), FAAB read from settings, identity as runtime state, input immutability
+│   ├── mcpOauth.test.mjs            ← the auth layer, written as ATTACKS: a foreign redirect_uri refused without redirecting, lookalike hosts (evil.claude.ai, claude.ai.evil.com) refused, PKCE `plain` refused, a stolen code useless without the verifier, a token for another audience refused, the allowlist re-checked at every request, and the three token kinds never interchangeable
+│   ├── mcpHttp.test.mjs             ← the HTTP transport + its gate: a throwing authenticator is never authorized, EVERY post is authenticated (not initialize-only), 401 advertises RFC 9728 discovery, no session id is ever minted, GET leaks no league data, and the same six tools as stdio
+│   ├── mcpStore.test.mjs            ← the cache backend: fetchedAt round-tripping byte-for-byte (the provenance contract), gzip on a player-DB-shaped payload, the stale-on-failure fallback AND its cold-failure throw, THE TRAP (an evicting store loses the fallback that a keeping store answers with), and a broken store degrading to slower-never-broken on both read and write
 │   ├── mcpLimit.test.mjs            ← the rate discipline fetchJSON does NOT have: concurrency cap, a rejecting job freeing its slot, 429/503 retried with bounded backoff, and a 404 never retried (it is an answer, not a failure)
 │   ├── mcpSnapshot.test.mjs         ← mocked-fetch: the 15-min TTL, values + player DB cached ACROSS leagues (a second league must not re-download 5-8MB), per-source as-of stamps with oldestSourceAt as the STALEST input, serve-cache-and-label-stale on failure vs a cold throw, and the FantasyCalc shape guards
 │   ├── mcpGetRoster.test.mjs        ← get_roster: never guessing between two teams (candidates instead), rule 7 as value:null + unranked:true (never 0), taxi/IR as their own slots, pick pricing basis, bounded output with the truncation disclosed
@@ -4743,11 +4975,11 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 455 / # pass 451
-/ # fail 4`, which reads like a code regression. A file that cannot load never
-runs its tests, so the count silently drops from **489** to 455.
+honestly:** instead of "cannot find module" it prints `# tests 495 / # pass 490
+/ # fail 5`, which reads like a code regression. A file that cannot load never
+runs its tests, so the count silently drops from **538** to 495.
 `npm run build` in the same state fails with `sh: 1: vite: not found`.
-**If the test count isn't 489, run `npm ci` before debugging anything.**
+**If the test count isn't 538, run `npm ci` before debugging anything.**
 
 The pair was re-measured 2026-09-19 (MCP phase 1b) by renaming `node_modules`
 aside, and it had drifted seven times before that: 178/130, 177/115, 219/136,
@@ -4770,7 +5002,30 @@ the broken-state count stayed at 152; the 2026-09-12 news-retention work moved
 both, because `newsRetention.test.mjs` imports only a zero-dependency pure
 module. **Re-measure both whenever the suite grows.**
 
-Phase 1b moved both by the same 132 (357/323 → **489/455**), and that
+Phase 2's OAuth layer moved both by the same 25 (513/470 → **538/495**) —
+the equality check passing again, and here it proves something specific:
+`mcp/oauth.js` and `mcp/oauthRoutes.js` reach nothing outside Node's
+builtins, so every one of their 25 tests loads with no `node_modules` at all.
+That is the measurement behind the decision not to use `jose` (see the auth
+section): the vanilla version is not merely dependency-free on paper, it is
+dependency-free under test.
+
+**The failing-file count changed for the second time ever, 4 → 5, and the
+fifth is a different KIND.** `tests/mcpHttp.test.mjs` imports
+`@modelcontextprotocol/sdk` to exercise the HTTP transport, so it cannot load
+without `node_modules` — that is a legitimate runtime dependency, not the
+React taint the other four carry, and no refactor of `src/utils` will fix it.
+Note the deltas therefore do NOT match here (full +10, broken +1): a file that
+fails to load contributes one failed entry and zero passing tests, which is
+why `# pass` held at 465. **An uneven delta is only acceptable when you can
+say which file caused it and why** — an unexplained one means a test reached
+something it should not have.
+
+Phase 2's cache work moved both by the same 14 (489/455 → **503/469**), the
+same equality check applied again: `mcpStore.test.mjs` imports one
+zero-dependency module, so a store that had reached React — or pulled `zod`
+down out of `mcp/server.js` — would have shown up as a gap between the two
+deltas. Phase 1b moved both by the same 132 (357/323 → **489/455**), and that
 equality is itself a check worth keeping: it means all six new test files —
 five tool suites plus `mcpWeekly` — load with no `node_modules` at all. A tool
 that had reached React, or pulled `zod` down out of `mcp/server.js`, would

@@ -154,7 +154,13 @@ const sideFitSchema = z.object({
   landingSpots: z.array(z.any()).optional(),
 })
 
-export function createServer({ env = process.env, fetcher } = {}) {
+// `store` and `fetcher` are injectable so the HTTP transport can share ONE of
+// each across requests on a warm instance. Without that, a per-request server
+// would mint a per-request limiter and defeat the process-wide concurrency
+// gate — three simultaneous tool calls would each get the full budget, which
+// is the exact failure mcp/limit.js exists to prevent. Omitted (stdio), both
+// fall back to the module-level defaults.
+export function createServer({ env = process.env, fetcher, store } = {}) {
   const config = loadConfig(env)
   // One limiter for the whole process, so concurrency is bounded ACROSS tool
   // calls rather than per call — an eager model firing three tools at once
@@ -267,6 +273,7 @@ export function createServer({ env = process.env, fetcher } = {}) {
         ttlMs: config.snapshotTtlMs,
         force: !!refresh,
         fetcher: get,
+        ...(store ? { store } : {}),
       })
       const answer = buildRosterAnswer(snapshot, {
         team,
@@ -292,6 +299,7 @@ export function createServer({ env = process.env, fetcher } = {}) {
     ttlMs: config.snapshotTtlMs,
     force: !!refresh,
     fetcher: get,
+    ...(store ? { store } : {}),
   })
 
   const weeklyFor = (snapshot, week, refresh) => getWeekly({
@@ -300,6 +308,7 @@ export function createServer({ env = process.env, fetcher } = {}) {
     ttlMs: config.weeklyTtlMs,
     force: !!refresh,
     fetcher: get,
+    ...(store ? { store } : {}),
   })
 
   // ── Tool 2 — find_sell_high ─────────────────────────────────────────────

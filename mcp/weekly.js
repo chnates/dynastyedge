@@ -44,15 +44,21 @@
 import { SLEEPER_BASE, SLEEPER_ROOT } from '../src/constants.js'
 import { createFetcher } from './limit.js'
 import { stampSource } from './snapshot.js'
+import { memoryStore, loadSource } from './store.js'
 
 export const DEFAULT_WEEKLY_TTL_MS = 60 * 60 * 1000
 
-const projCaches = new Map()     // `${season}_${week}` -> { data, fetchedAt }
-const scheduleCaches = new Map() // season -> { data, fetchedAt }
+// Key prefixes are distinct from snapshot.js's, so both layers can share ONE
+// store — which is what the HTTP deployment does, with a single KV connection.
+const projKeyFor = (season, week) => `proj:${season}_${week}`
+const scheduleKeyFor = season => `schedule:${season}`
+
+// Memory by default: correct for the long-lived stdio process. The serverless
+// transport has no warm process and passes its own store (mcp/store.js).
+const defaultStore = memoryStore()
 
 export function resetWeeklyCache() {
-  projCaches.clear()
-  scheduleCaches.clear()
+  return defaultStore.clear()
 }
 
 // Teams with a game this week — everyone else is on bye. Mirrors
@@ -72,19 +78,8 @@ export function parseByeTeams(schedule, week) {
   return playing
 }
 
-const fresh = (entry, ttl) => entry && Date.now() - entry.fetchedAt < ttl
-
-async function loadSource(current, ttl, load) {
-  if (fresh(current, ttl)) return { ...current, stale: false, error: null }
-  try {
-    return { data: await load(), fetchedAt: Date.now(), stale: false, error: null }
-  } catch (err) {
-    // Same contract as snapshot.js: an old answer beats no answer, provided it
-    // says it is old.
-    if (current) return { ...current, stale: true, error: err.message }
-    throw err
-  }
-}
+// The freshness policy — including the stale-on-failure fallback that used to
+// be duplicated verbatim here and in snapshot.js — now lives in one place.
 
 // Load one week of projections plus the season schedule.
 //
@@ -97,6 +92,7 @@ async function loadSource(current, ttl, load) {
 // (CLAUDE.md, "Weekly tools are in-season only").
 export async function getWeekly({
   nflState, week, ttlMs = DEFAULT_WEEKLY_TTL_MS, force = false, fetcher, concurrency = 6,
+  store = defaultStore,
 } = {}) {
   const notes = []
   if (!nflState || nflState.season_type !== 'regular') {
@@ -132,10 +128,9 @@ export async function getWeekly({
 
   const get = fetcher ?? createFetcher({ concurrency })
   const ttl = force ? -1 : ttlMs
-  const projKey = `${season}_${targetWeek}`
 
   const [proj, schedule] = await Promise.all([
-    loadSource(projCaches.get(projKey), ttl, () =>
+    loadSource(store, projKeyFor(season, targetWeek), ttl, () =>
       get(`${SLEEPER_BASE}/projections/nfl/regular/${season}/${targetWeek}`, {
         timeoutMs: 30000, label: 'Sleeper projections',
       })
@@ -143,13 +138,12 @@ export async function getWeekly({
     // Best-effort, exactly as useLineupData treats it: without the schedule we
     // lose bye detection, which degrades the advice but must never fail it.
     // NOTE THE BASE — SLEEPER_ROOT, not SLEEPER_BASE. /v1 404s here.
-    loadSource(scheduleCaches.get(season), ttl, () =>
+    loadSource(store, scheduleKeyFor(season), ttl, () =>
       get(`${SLEEPER_ROOT}/schedule/nfl/regular/${season}`, { label: 'Sleeper schedule' })
     ).catch(err => ({ data: null, fetchedAt: null, stale: false, error: err.message })),
   ])
 
-  if (proj.data) projCaches.set(projKey, { data: proj.data, fetchedAt: proj.fetchedAt })
-  if (schedule.data) scheduleCaches.set(season, { data: schedule.data, fetchedAt: schedule.fetchedAt })
+  // No write-back here any more — loadSource persists a successful refresh.
 
   if (!proj.data) {
     notes.push(`Sleeper's week ${targetWeek} projections did not load (${proj.error}), so no projection is shown.`)

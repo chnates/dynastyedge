@@ -30,3 +30,20 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      # api/mcp.js is a COMMITTED build artifact — Vercel detects functions
+      # from the source tree and traces rather than bundles, so the esbuild
+      # output has to be in git (see scripts/build-mcp.mjs's header). The cost
+      # of a generated file in git is that it can drift silently from the
+      # source it was built from, and a stale bundle means the deployed server
+      # runs older logic than the repo describes — the exact drift the whole
+      # "mcp/ imports src/utils, never copies it" rule exists to prevent.
+      # Rebuilding and diffing is what makes that impossible rather than
+      # merely discouraged.
+      - name: MCP bundle is current
+        run: |
+          npm run build:mcp
+          if ! git diff --quiet -- api/mcp.js; then
+            echo "::error::api/mcp.js is stale. Run 'npm run build:mcp' and commit the result."
+            git diff --stat -- api/mcp.js
+            exit 1
+          fi
