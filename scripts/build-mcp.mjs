@@ -8,14 +8,22 @@
 // deployed server gets the same treatment rather than shipping a resolver
 // hook (MCP_DISCOVERY.md §6).
 //
-// The output is GENERATED, never committed — `api/` is gitignored. Committing
-// a 1.4MB artifact would mean reviewing a diff nobody reads and a file that
-// can silently drift from its source.
+// IT IS NOT WHAT VERCEL DEPLOYS, and that is the correction this file exists
+// to record. Vercel detects functions from the SOURCE tree, not from build
+// output: with `api/` gitignored, a build that produced `api/mcp.js` deployed
+// a static page and no function at all — verified by a live deploy returning
+// `x-vercel-error: NOT_FOUND` on every route. `api/mcp.js` is therefore a
+// committed shim, and Vercel's own bundler resolves the imports.
+//
+// This script survives as the CHECK behind that: it proves the whole server,
+// `src/utils` included, bundles and boots under plain Node with no resolver
+// hook. If Vercel's bundler ever stops resolving the extensionless imports
+// `src/` uses, this is the escape hatch — commit its output as the function.
 
 import { build } from 'esbuild'
 import { stat, mkdir, writeFile } from 'node:fs/promises'
 
-const OUT = 'api/mcp.js'
+const OUT = '.mcp-build/mcp.js'
 const STATIC_DIR = 'public-mcp'
 
 const result = await build({
