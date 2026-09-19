@@ -9,6 +9,7 @@
 // the server at another league is an env var, not a code edit.
 
 import { LEAGUE_ID, MY_ROSTER_ID } from '../src/constants.js'
+import { DEFAULT_WEEKLY_TTL_MS } from './weekly.js'
 
 export function loadConfig(env = process.env) {
   const rosterEnv = env.DYNASTYEDGE_ROSTER_ID
@@ -19,6 +20,11 @@ export function loadConfig(env = process.env) {
     // a number or absent — never NaN (Feature 18's identity contract).
     defaultRosterId: Number.isFinite(parsedRoster) ? parsedRoster : MY_ROSTER_ID,
     snapshotTtlMs: Number(env.DYNASTYEDGE_SNAPSHOT_TTL_MS) || 15 * 60 * 1000,
+    // Deliberately LONGER than the league snapshot, not inherited from it.
+    // League data changes on an event (a trade lands and a roster is wrong);
+    // projections change on a drip (6 of 9,419 entries moved in ten hours).
+    // The full argument is in mcp/weekly.js's header.
+    weeklyTtlMs: Number(env.DYNASTYEDGE_WEEKLY_TTL_MS) || DEFAULT_WEEKLY_TTL_MS,
     concurrency: Number(env.DYNASTYEDGE_CONCURRENCY) || 6,
   }
 }
