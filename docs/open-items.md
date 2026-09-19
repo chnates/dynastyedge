@@ -5,7 +5,11 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-09-12 (DESIGN-1 **CLOSED** — step 5, motion, shipped and
+**Last reviewed:** 2026-09-19 (**MCP-1** — the MCP server's phase 1 shipped:
+the three prerequisite refactors plus `get_roster` over stdio. Phase 2 (remote
+transport, OAuth, deployment) is **MCP-2**, deferred with its trigger, and
+needs two owner decisions before it is ready work. Previously 2026-09-12:
+DESIGN-1 **CLOSED** — step 5, motion, shipped and
 the Matchday rebuild is complete: the global reduced-motion guard, one easing
 curve reaching all 69 transitions, the press run, `.press` as the third
 control-level contract, `Loading` in place of every spinner, the sheet entrance,
@@ -45,6 +49,74 @@ deleted. The active work queue remains `docs/build-plan-2026-09.md`).
 ---
 
 ## 1. Active
+
+### MCP-1 — MCP server phase 1 **SHIPPED 2026-09-19**
+
+`mcp/`, a Model Context Protocol server, so the owner can ask DynastyEdge
+questions from the Claude apps and get answers grounded in live Sleeper data
+and this app's own analysis. Spec: `MCP_DISCOVERY.md` (discovery 2026-09-19).
+Behaviour and rules: CLAUDE.md's **The MCP Server** section.
+
+What shipped: the three prerequisite refactors (§4 A/B/C) plus **one** tool,
+`get_roster`, over stdio.
+
+- **Prerequisite A** — `getTeamName` → `src/utils/teamName.js`,
+  `MIN_SPARKLINE_POINTS` → `src/utils/valueHistory.js`, both re-exported from
+  their old homes. Measured with a resolver hook that throws on any resolution
+  of `react`: **3 of 30 utils React-tainted before, 0 after.** That probe is
+  the right instrument — a plain "does it import?" check passes whenever
+  `node_modules` is present, which is why §4 recorded 27 of 30. Side effect:
+  the no-`node_modules` failing-file count moved **7 → 4**, the first time that
+  constant has ever changed.
+- **Prerequisite B** — `buildLeagueState` (`src/utils/leagueState.js`), lifted
+  out of `useLeague`'s `useMemo`, with the 23 tests it never had. Equivalence
+  **proved, not inspected**: the old memo body run verbatim beside the new
+  function on live payloads, `deepStrictEqual` at three identity settings.
+- **Prerequisite C** — one free-agent pool (`buildFreeAgentPool` /
+  `buildAvailableDefenses`), replacing two divergent copies. The "never offer a
+  defense as a general pickup" rule is now enforced by construction.
+
+**Deliberately NOT in phase 1:** the other five tools, HTTP transport, OAuth,
+deployment.
+
+**It also closed `MCP_DISCOVERY.md` §8 question 2** (flagged there as
+untested): esbuild, already present via Vite, bundles `mcp/stdio.js` plus all
+of `src/utils` into a single 1.4MB ESM file that boots with **no resolver
+hook**. Not shipped as a build step — that belongs to MCP-2 — but the approach
+is de-risked.
+
+### MCP-2 — MCP server phase 2: remote transport, OAuth, deployment **[owner ask required]**
+
+**Trigger — two owner decisions, neither of which a sandbox can make:**
+
+1. **Is `@modelcontextprotocol/sdk` approved as a runtime dependency?** It
+   landed with MCP-1 and is flagged in that commit, but change control
+   (`dynastyedge-change-control` §2 rule 5) reserves the call for the owner.
+   If the answer is no, MCP-1 has to be reworked onto a hand-rolled JSON-RPC
+   layer — roughly 150 lines whose only job is matching a spec we don't
+   control — and phase 2 should not start until that is settled.
+2. **Which host, and the OAuth app registration.** Both need an account and a
+   secret. `MCP_DISCOVERY.md` §1 chose "serverless (Workers/Vercel class) +
+   OAuth, single user" as the only shape that reaches the Claude **mobile**
+   app; §8 question 1 leaves the deployment mechanism undesigned.
+
+**What phase 2 must change, beyond adding a transport:**
+
+- **The caches.** `mcp/snapshot.js` uses module-level singletons — correct for
+  a long-lived stdio process, **wrong for serverless**, which has no warm
+  process. §6 calls for external KV.
+- **The resolver hook.** A deployed server must not depend on `mcp/loader.mjs`.
+  Use the bundling step MCP-1 verified.
+- **The rate limiter's blind spot.** `mcp/limit.js` backs off on a fixed
+  schedule because `fetchJSON` discards the `Response`, so a 429's
+  `Retry-After` is unreachable. One user over stdio makes this academic; a
+  hosted endpoint may not.
+
+**Not blocked on any of the above: the remaining five tools** (`find_sell_high`,
+`recommend_free_agents`, `resolve_assets`, `analyze_trade`, `lineup_advice` —
+`MCP_DISCOVERY.md` §5, in build order). They work over stdio today and need no
+host. Treat them as phase 1b if the owner wants more capability before more
+infrastructure.
 
 ### ACTIVE-3 — the September 2026 build plan (owner-approved 2026-09-04)
 
