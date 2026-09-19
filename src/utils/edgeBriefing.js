@@ -3,11 +3,12 @@ import {
   getPositionalDeltas,
   assignWinWindowTiers,
 } from './rosterAnalysis'
-import { getTeamName } from '../hooks/useLeague'
+import { getTeamName } from './teamName'
 import { getDeadlineVerdict } from './playoffOdds'
 import { buildAgeCurves, buildRosterTrajectory, getTrajectoryRead } from './dynastyTrajectory'
 import { recommendFreeAgents } from './recommendations'
-import { MIN_SPARKLINE_POINTS } from '../hooks/useValueHistory'
+import { buildFreeAgentPool } from './freeAgents'
+import { MIN_SPARKLINE_POINTS } from './valueHistory'
 import { POSITIONS } from '../constants'
 
 // The Edge's assistant-GM logic: turn everything the app already caches into
@@ -137,13 +138,7 @@ export function computeEdgeSignals({ league, values, watchlist, nflState, myRost
   // roster (fills a need / upgrades depth / rising), from the same engine the
   // Free Agents tab uses. Zero extra fetch — the FA pool is the cached pool
   // minus rostered players.
-  const rosteredIds = new Set()
-  allRosters.forEach(r => r.players.forEach(p => rosteredIds.add(String(p.sleeperId))))
-  const freeAgents = Object.values(values.playerMap).filter(p =>
-    !rosteredIds.has(String(p.sleeperId)) &&
-    POSITIONS.includes(p.position) &&
-    (p.value ?? 0) > 0
-  )
+  const freeAgents = buildFreeAgentPool({ fcPlayerMap: values.playerMap, allRosters })
   const topPickup = recommendFreeAgents(freeAgents, myRoster, allRosters, { limit: 1 })[0] ?? null
 
   const playerValue = myRoster.players.reduce((s, p) => s + (p.value ?? 0), 0)

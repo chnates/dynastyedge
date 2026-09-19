@@ -5,6 +5,7 @@ import { usePlayerDB } from '../../hooks/usePlayerDB'
 import { useWeeklyProjections } from '../../hooks/weeklyProjections'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { recommendFreeAgents } from '../../utils/recommendations'
+import { buildFreeAgentPool, buildAvailableDefenses, buildRosteredIdSet, VALUED_POSITIONS } from '../../utils/freeAgents'
 import { Card, Chip, RuledList, SearchInput, Loading } from '../ui'
 import ErrorState from '../shared/ErrorState'
 import SectionHeader from '../shared/SectionHeader'
@@ -17,7 +18,6 @@ import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
 // ['QB','RB','WR','TE']) made every available defense invisible. See
 // utils/freeAgents.js for the same blind spot on the Optimizer's waiver list.
 const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'DEF']
-const VALUED_POSITIONS = ['QB', 'RB', 'WR', 'TE']
 const SORT_VALUE = { id: 'value', label: 'Value' }
 const SORT_PROJ  = { id: 'proj',  label: 'Proj'  }
 const SORT_AGE   = { id: 'age',   label: 'Age'   }
@@ -196,44 +196,22 @@ export default function FreeAgentsView() {
     return byPos
   }, [league])
 
-  const rosteredIds = useMemo(() => {
-    const rostered = new Set()
-    ;(league?.allRosters ?? []).forEach(r =>
-      r.players.forEach(p => rostered.add(p.sleeperId))
-    )
-    return rostered
-  }, [league])
+  const rosteredIds = useMemo(() => buildRosteredIdSet(league?.allRosters), [league])
 
-  // The dynasty-valued pool. This is what the recommendation engine scores —
-  // it reasons entirely in FantasyCalc value, so defenses must never enter it.
-  const freeAgents = useMemo(() => {
-    if (!league || !values?.playerMap) return []
-    return Object.values(values.playerMap)
-      .filter(p =>
-        !rosteredIds.has(p.sleeperId) &&
-        VALUED_POSITIONS.includes(p.position) &&
-        (p.value ?? 0) > 0
-      )
-  }, [league, values, rosteredIds])
+  // The dynasty-valued pool — one shared definition (utils/freeAgents.js), so
+  // this list and The Edge's pickup item can never disagree about who is
+  // available. Defenses can't enter it by construction.
+  const freeAgents = useMemo(
+    () => buildFreeAgentPool({ fcPlayerMap: league ? values?.playerMap : null, rosteredIds }),
+    [league, values, rosteredIds]
+  )
 
-  // Available defenses, resolved from the shared player DB — FantasyCalc ranks
-  // none, so they carry no dynasty value and show `—` (rule 7). Without this
-  // the DEF chip would be a filter over an empty set.
-  const availableDefenses = useMemo(() => {
-    if (!league || !playerDB) return []
-    return Object.entries(playerDB)
-      .filter(([id, p]) => p.position === 'DEF' && p.team && !rosteredIds.has(id))
-      .map(([id, p]) => ({
-        sleeperId: id,
-        name: p.name,
-        position: 'DEF',
-        team: p.team,
-        value: null,
-        age: null,
-        overallRank: null,
-        trend30Day: 0,
-      }))
-  }, [league, playerDB, rosteredIds])
+  // Available defenses — a separate call by name, reachable only behind the
+  // DEF chip. FantasyCalc ranks none, so they show `—` (rule 7).
+  const availableDefenses = useMemo(
+    () => buildAvailableDefenses({ playerDB: league ? playerDB : null, rosteredIds }),
+    [league, playerDB, rosteredIds]
+  )
 
   // The defense I roster, plus whether it plays this week. A defense on bye has
   // NO row in the projections payload at all (verified against 2025 W6: 30 of
