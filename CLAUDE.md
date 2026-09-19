@@ -20,6 +20,23 @@ lineup optimization with matchup context, and a full league-wide competitive lan
 **Hosting:** GitHub Pages (static site, no backend, no server)
 **Live URL:** <https://chnates.github.io/dynastyedge/>
 
+> **AMENDMENT (2026-09-19) — "no backend" now means "the APP has no backend".**
+> The repo also contains **`mcp/`**, a Model Context Protocol server that lets
+> the owner ask the same questions from the Claude apps. It is a real server
+> process, so the old blanket phrasing above is no longer literally true and is
+> corrected here rather than quietly contradicted.
+>
+> What is unchanged, and what the rule was always protecting:
+> **the web app at the URL above is still a pure static site.** It has no
+> backend, calls no server of ours, and the MCP server is not in its bundle
+> (verified byte-identical, 995,441 bytes, when the SDK was added). Nothing in
+> `src/` imports anything from `mcp/`; the dependency runs one way only.
+>
+> The constraint chain that produced the rule — one user, $0, zero ops,
+> therefore static hosting, therefore free unauthenticated APIs and GitHub
+> Actions as the "server" — still governs every decision inside `src/`. A
+> feature may **not** grow a backend. See **The MCP Server** below.
+
 -----
 
 ## Tech Stack
@@ -32,6 +49,7 @@ lineup optimization with matchup context, and a full league-wide competitive lan
 |Build tool|Vite            |Outputs to `dist/` for GitHub Pages|
 |Deployment|GitHub Pages    |Auto-deploys via GitHub Actions    |
 |CI/CD     |GitHub Actions  |Every push to `main`: lint + test, then deploy|
+|MCP server|`@modelcontextprotocol/sdk` (Node)|`mcp/`, stdio — **not** part of the web bundle|
 
 ### Non-negotiable rules
 
@@ -602,6 +620,411 @@ GET https://api.fantasycalc.com/values/current
 "Rk ADP" is derived locally (`utils/rookieAdp.js`): the Sleeper-verified rookie
 class re-ranked 1..N by FantasyCalc overall rank. Rookies with no FantasyCalc
 rank show `—` and sort to the bottom.
+
+-----
+
+## The MCP Server (`mcp/`)
+
+**Purpose:** ask DynastyEdge questions in plain English from the Claude apps,
+including mobile, and get answers grounded in live Sleeper data and **this
+app's own analysis code** — not general knowledge. Design spec and the
+owner-confirmed decisions: `MCP_DISCOVERY.md`.
+
+**Status: phase 1b — ALL SIX tools from `MCP_DISCOVERY.md` §5, over stdio.**
+Remote (streamable HTTP) transport, OAuth and deployment are phase 2 (`MCP-2`
+in `docs/open-items.md`) and are deliberately not built — they are blocked on
+an owner decision (host + OAuth registration) that no sandbox can make.
+
+Phase 1 shipped the three prerequisite refactors plus `get_roster`; phase 1b
+added `find_sell_high`, `recommend_free_agents`, `resolve_assets`,
+`analyze_trade` and `lineup_advice`, plus the weekly data layer the last three
+share.
+
+**Two tools are IN-SEASON ONLY**, and both say so rather than returning zeros:
+`lineup_advice` entirely, and `recommend_free_agents`' projection column.
+
+**It is a full citizen, not a side project** (owner decision, `MCP_DISCOVERY.md`
+§1). `npm run lint` covers `mcp/`, `npm test` covers its logic, and `ci.yml` /
+`deploy.yml` gate it exactly as they gate `src/`. The no-backend framing at the
+top of this file is amended explicitly rather than quietly contradicted.
+
+**`@modelcontextprotocol/sdk` is the first new runtime dependency since the
+`@dnd-kit` trio, and it is OWNER-APPROVED (2026-09-19, PR #56).** Change
+control reserves that call for the owner
+(`dynastyedge-change-control` §2 rule 5) — do not treat this as precedent for
+the next dependency, which needs its own approval.
+
+It is the reference implementation of the protocol's JSON-RPC framing,
+handshake and capability negotiation — a hand-rolled version would be ~150
+lines whose whole job is to match a spec we do not control. It brings `zod`,
+which the server uses for tool input **and output** schemas, and that is a
+genuine gain against the risk in §7 below: it is the first schema validation
+anywhere in this repo. **It never reaches the web bundle** — nothing in `src/`
+imports `mcp/`, verified by a byte-identical `dist` (995,441 bytes) across the
+install.
+
+### Architecture — two layers, and the dependency runs one way
+
+`mcp/` owns fetching, caching, rate discipline and tool schemas. It **imports**
+`src/utils` and never copies it, so there is exactly one definition of a
+roster, a value, or a verdict, and the app and the server can never disagree.
+`src/` imports nothing from `mcp/`.
+
+A tool is **orchestration only** — assemble arguments, call the utils, bound
+and stamp the result. `src/components/trade/TradeAnalyzer.jsx` is the worked
+example: eleven `useMemo`s and zero domain math. **Any math a tool needs is
+written in `src/utils`, where the app gets it too.**
+
+```
+mcp/
+  stdio.js      entry point (stdio transport)
+  server.js     the McpServer: tool schemas + wiring, no domain math
+  snapshot.js   league fetch + ~15-min cache + the as-of stamp + mergeAsOf
+  weekly.js     projections + schedule, on their OWN ~60-min TTL
+  teams.js      resolveTeam — shared by get_roster, analyze_trade, lineup_advice
+  limit.js      concurrency gate + retry/backoff
+  config.js     league / identity / TTLs, env-first
+  register.mjs + loader.mjs   the extensionless-import resolver hook
+  tools/
+    getRoster.js  findSellHigh.js  recommendFreeAgents.js
+    resolveAssets.js  analyzeTrade.js  lineupAdvice.js
+```
+
+Run it with `npm run mcp`. The `--import ./mcp/register.mjs` hook is
+**mandatory**: `src/utils` uses Vite-style extensionless relative imports that
+plain Node cannot resolve. The hook is a deliberate copy of the test suite's —
+a runnable server must not depend on a file inside `.claude/skills/`.
+**For a deployed server the answer is bundling, and it is verified**
+(2026-09-19, closing `MCP_DISCOVERY.md` §8 question 2): esbuild, already
+present via Vite, bundles `mcp/stdio.js` plus all of `src/utils` into one
+1.4MB ESM file that boots with no hook at all. Not shipped as a build step —
+that is phase 2.
+
+### The three non-negotiables for every tool
+
+Each answers a specific risk in `MCP_DISCOVERY.md` §7. They are enforced in
+`mcp/snapshot.js` and pinned by tests.
+
+1. **Every response carries an as-of timestamp.** This is the single most
+   important rule here. **There is no schema validation anywhere in this
+   codebase** — no TypeScript, no JSDoc types, no zod in `src/`, no PropTypes
+   — so every external payload is consumed unvalidated. In the app a Sleeper
+   shape change produces a *visibly broken screen*. Through an LLM it produces
+   a *confident, fluent, wrong answer*. Provenance is the mitigation: a
+   per-source `fetchedAt` / `ageSeconds` / `stale` / `error` stamp, plus
+   counts, plus explicit `unranked` and `isOffseason` flags, so a wrong answer
+   at least **looks** wrong. `asOf.oldestSourceAt` is the **stalest**
+   contributing source, never the newest — an answer is only as fresh as its
+   worst input.
+2. **Bounded output.** The player DB is 5–8MB and the FantasyCalc payload is
+   large. Never return a raw payload: cap every list, report the true count
+   beside the capped one, and disclose the truncation in `notes`.
+   `get_roster` caps at 60 players / 40 picks and answers in ~9KB.
+3. **`leagueId` and `rosterId` are parameters, not constants.** `constants.js`
+   hardcodes one league and one owner because the app is one person's phone; a
+   server must not. Both are per-call arguments, defaulting to
+   `DYNASTYEDGE_LEAGUE_ID` / `DYNASTYEDGE_ROSTER_ID` and only then to the
+   constants.
+
+### Caching and freshness
+
+**~15-minute snapshot TTL** (`DYNASTYEDGE_SNAPSHOT_TTL_MS`) — one assembly per
+conversation instead of five, because a model asks four follow-ups about the
+same roster. Measured on the live league: **cold 539ms, cached 3ms**.
+
+**On an upstream failure, serve the cache and label its age.** Per source, with
+the error attached. A *cold* failure with nothing cached still throws — that is
+a real "I don't know", and inventing an answer there is the failure this whole
+design guards against.
+
+**FantasyCalc values and the player DB are cached ACROSS leagues**; only league
+data is keyed by `leagueId`. The player DB is 5–8MB — a second league must not
+re-download it. It is also **best-effort**: without it, rostered players
+FantasyCalc doesn't rank are absent rather than shown with `—` (exactly how the
+app behaves before that background fetch lands), and a note says so.
+
+These are module-level caches, the same pattern as the app's ~20 hook
+singletons. Correct for a long-lived stdio process, **wrong for phase 2's
+serverless deployment**, which has no warm process and wants external KV.
+
+### Rate discipline lives in `mcp/`, never in `fetchJSON`
+
+`src/utils/fetchJSON.js` is 21 lines with an AbortController timeout and
+**nothing else** — no retry, no backoff, no 429 handling — and there is no
+concurrency limiter anywhere in the app. That is fine for one phone making ~47
+calls on a cold start; it is not fine for a server driven by an eager model,
+where `useLeagueHistory`'s path alone fires **~169 concurrent** requests
+against Sleeper's published guidance of under 1,000/minute.
+
+`mcp/limit.js` wraps `fetchJSON` with a **process-wide** concurrency gate
+(default 6, shared across tool calls so three simultaneous tools don't get 3×
+the budget) and bounded exponential backoff with full jitter. **Retries only
+408/425/429/5xx — a 404 is an answer, not a failure**, and retrying one just
+spends the rate budget.
+
+Putting any of this in `fetchJSON` would change the *app's* behaviour to fix a
+*server* problem. Don't.
+**Known limit, stated rather than hidden:** `fetchJSON` throws an `Error` whose
+message embeds the status and discards the `Response`, so a 429's
+`Retry-After` is unreachable from the limiter. The backoff schedule is fixed
+rather than server-advised. Revisit only if `fetchJSON` ever surfaces the
+response.
+
+### Tool 1 — `get_roster`
+
+"What's on my team?" / "Show me Jake's roster." Takes `team` (team name,
+manager username, or roster id; defaults to the configured identity),
+optional `leagueId`, optional `refresh`. Returns every player with value,
+overall and positional rank, 30-day trend and **STARTER / BENCH / TAXI / IR**
+slot; every pick owned with its exact slot label where the draft order is
+known; plus total value with league value rank, win-window tier
+(`rosterAnalysis.getWinWindowTier`), record and FAAB.
+
+- **It never guesses which team you meant.** An ambiguous or unknown name
+  returns the candidate list and `ok: false`. This is the same discipline §1
+  sets for `resolve_assets` — picking the wrong team is the same class of
+  error as grading the wrong player.
+- **The manager-handle match reads `display_name`, because Sleeper's
+  `/league/{id}/users` returns NO `username` field** — verified live
+  2026-09-19, where all 10 users carry a `display_name` and none carries a
+  `username`. Phase 1 matched on `username` alone, so the advertised handle
+  path could never fire and every candidate list rendered a bare `@`. Fixed
+  in phase 1b when `resolveTeam` moved to `mcp/teams.js`, which is why it is
+  fixed for three tools at once. `getTeamName` had always used the same
+  `display_name || username` fallback; the resolver simply had not.
+- **Rule 7 holds end to end:** an unranked player is returned with
+  `value: null` **and** `unranked: true`, never 0 — "unpriced" must not read
+  to a model as "worthless" — and renders as `—`. A roster with no games
+  played reports `record: null`, not an 0-0 result.
+- **Taxi and IR are their own slots**, because they sit *outside* the 24
+  active spots: a taxi player is unavailable, not bench depth.
+- Picks report `pricing: 'exact-slot' | 'round-median'` so the reader knows
+  which they are looking at.
+
+### Caching the weekly data — a DIFFERENT TTL, deliberately
+
+`mcp/weekly.js` owns this week's projections and the NFL schedule, and caches
+them for **60 minutes** (`DYNASTYEDGE_WEEKLY_TTL_MS`) — four times the league
+snapshot's 15, not the same number inherited.
+
+They are different freshness domains. **League data changes on an EVENT**: a
+trade or a waiver claim lands at an arbitrary moment and changes a roster
+completely, so 15 minutes bounds how long the server can be wrong about who
+owns whom. **Projections change on a DRIP**: `weeklyProjections.js:13-15`
+records the measurement — Sleeper rewrites `/projections/.../{week}` in place,
+and 6 of 9,419 entries moved between two fetches ten hours apart, 0.06%.
+Refetching a 1–2MB payload every 15 minutes buys a change that measurably
+almost never happens.
+
+Two things keep the longer TTL honest:
+
+- **`mergeAsOf` recomputes `oldestSourceAt` and `stale` over the UNION** of
+  sources, so a 50-minute-old projection drags the whole answer's stated age
+  down with it instead of hiding behind a fresh roster fetch. A tool that
+  added a source without re-deriving those two would quietly overstate its own
+  freshness.
+- **`refresh: true`** forces a refetch. Near kickoff a late inactive can move
+  a number faster than the drip rate, and the tool descriptions say so.
+
+### Tool 2 — `find_sell_high`
+
+"Who's my best sell-high candidate?" No arguments. `edgeBriefing.computeEdgeSignals`
++ `recommendations.suggestSellMove`.
+
+- **The point of the tool is that it names a CONCRETE partner and a CONCRETE
+  return**, not "shop him to someone". `suggestSellMove` scores every opponent
+  on three roster facts — do they need the position, would he actually
+  **start** for them (`buildValueLineup`), and do they own a comparable-value
+  player at one of **my** deficit positions — so a needy team holding nothing
+  I want loses to a slightly-less-needy one that can pay. Measured live
+  2026-09-19: sell Jaxson Dart (+796 at a surplus QB) to Crippled Gang for
+  Chris Olave, filling the WR deficit.
+- It also returns the **buy-low** target to spend the sale on and the
+  **underperforming opponent** (record rank trailing value rank by ≥ 4).
+- **`watchlist` is passed empty on purpose.** It is a browser concept
+  (localStorage, Feature 8) with no meaning on a server, and it only ever
+  *adds* radar rows, which this tool does not use.
+- **"There is no sell-high right now" is an ANSWER**, and the notes say which
+  condition produced it — no riser at a surplus position, or no surplus at
+  all — rather than returning an empty field that reads as a data gap.
+- The copy states that acceptance is **not modelled**, per the standing ruling
+  (`docs/analysis/trade-structure-stability-2026-08.md`).
+
+### Tool 3 — `recommend_free_agents`
+
+"Who should I pick up and why?" Optional `position` and `limit` (default 8,
+max 25). `recommendations.recommendFreeAgents` over prerequisite C's
+`buildFreeAgentPool`.
+
+- **A DEFENSE IS NEVER A GENERAL PICKUP, and the rule holds by construction.**
+  `buildFreeAgentPool` cannot return one; getting a defense requires calling
+  `buildAvailableDefenses` by name. This tool calls only the former and does
+  **not** route around it — there is no `position: 'DEF'` escape hatch. Asking
+  for DEF returns the measured explanation (one DEF slot, no dynasty value,
+  streaming worth **−0.00 pts/wk** over 408 team-weeks) **plus the incumbent
+  defense and its projection**, because "should I replace the one I have?" is
+  the one real question and refusing without answering it would be unhelpful.
+- **Two axes, and the projection never enters the ranking.** Dynasty value and
+  this week's projection correlate at only **r = 0.427**, and three of the
+  dynasty top ten project 0.0 (rookies who won't play). `recommendFreeAgents`
+  scores in dynasty value; the projection rides beside it as context, with the
+  measured tier caveat (a 0–2 projection is a 0.9% chance of a 15+ point game;
+  6–8 is 10.6%).
+- **In-season only for the projection column.** The offseason reports
+  `projectedPoints: null` with `projections.reason` naming why — **never 0**,
+  which would read as "not worth starting". A *failed* in-season fetch reports
+  a different reason, so the two are distinguishable.
+
+### Tool 4 — `resolve_assets`
+
+*(support)* "Which Bijan?" Free-text names in, candidates out. **Always called
+before `analyze_trade`.**
+
+- **The load-bearing behaviour is that an ambiguous name resolves to NOTHING.**
+  `match` is non-null only on a unique hit; anything else returns
+  `candidates` and no match. It never prefers the higher-valued of two.
+  Measured live: **"Brown" returns six candidates** — Amon-Ra St. Brown, Chase
+  Brown, A.J. Brown and three free agents — which is precisely the case an LLM
+  would otherwise resolve fluently and wrongly.
+- **It resolves PICKS too** ("2027 1st", "2027 first", "2026 1.05", "2027
+  round 2"), because "my 2027 1st" is exactly what a person types into a
+  trade. A pick's id is **`season-round-originalOwner`** — byte-identical to
+  what `TradeAnalyzer.jsx:38` builds, so an id resolved here round-trips into
+  `analyze_trade` and dedupes against the app's own assets. An unqualified
+  "2027 1st" is ambiguous by however many teams own one (live: ten).
+- Rule 7 applies to search: an unranked stash and a defense are **findable**,
+  with `value: null`.
+- Free agents are included by default and flagged `isFreeAgent`.
+
+### Tool 5 — `analyze_trade`
+
+"Grade this trade." `give[]` / `get[]` as **resolved ids only**, plus
+`partner`. Mirrors `TradeAnalyzer.jsx:141-256`: `analyzeTrade` →
+`getTradeVerdict` → `adjustVerdictForInjuries` → `getCounterSuggestion` →
+`buildTradePitch`.
+
+- **IDS ONLY, ENFORCED IN CODE — this is the whole point.**
+  `MCP_DISCOVERY.md` §1: *"resolve_assets first, then grade on IDs only —
+  costs a round-trip; makes grading the wrong player structurally
+  impossible."* A free-text name is **rejected with a pointer to
+  `resolve_assets`**, never guessed at, **even when it happens to be
+  unambiguous** — the tool does no name matching at all. Grading the wrong
+  Mike Williams produces a fluent, confident, completely wrong verdict that
+  nothing downstream can catch.
+- **An asset's price is read from the OWNING roster, never from the caller**,
+  and the side is checked: a player who is not on my roster cannot be on the
+  `give` side. Ids accepted are a numeric Sleeper player id or
+  `SEASON-ROUND-OWNERROSTERID`.
+- Surfaces the verdict + reasoning, the value split, **both seats' appeal**
+  (`myFit` and `partnerFit` off the one `buildSideFit` engine), landing spots
+  both directions, the fair band, the counter suggestion and the pitch.
+- **`concerns` is a SUBSET of `reasons`** — `buildSideFit`'s `against()`
+  helper pushes to both — so a renderer must mark the overlap, not print the
+  two arrays in sequence. Doing the latter states every objection twice.
+- **`fairBand`'s field is `inside`, not "inBand", and `buildTradePitch`
+  returns `{ text, lines, bullets }`, not a string.** Both were wrong on the
+  first cut and both were caught by the zod **output** schema before they
+  reached a reader — the concrete first payoff of the validation §7 asked for.
+- **Layer 3 is scored on the win-window TIER here, and the response SAYS so**
+  (`winWindow.basis: 'tier'`). The server does not fetch the rest-of-season
+  simulation, and in season the app scores that layer on live playoff odds,
+  which track the starting lineup far more closely (Spearman 0.988 vs 0.721).
+  Naming the basis is what stops a reader assuming the stronger one.
+- Three of `analyzeTrade`'s optional signals are **not wired** and the notes
+  name them: `myPlayoffPct`, `myDraftGrade` and `partnerActivity`, each
+  needing a fetch beyond the league snapshot. Their absence removes context,
+  never a number.
+- A **one-sided** trade is a valid state, not an error: totals render and the
+  verdict is `null`, the app's own gate.
+
+### Tool 6 — `lineup_advice`
+
+"What do I start, and what's it costing me?" Optional `week` and `team`.
+`lineupMoves.buildLineupMoves` — pure, five plain args, heavily tested.
+
+- **IN-SEASON ONLY, and it is the one tool that is dead half the year.** The
+  offseason returns `ok: false` with `unavailable: true` and
+  `reason: 'offseason'` — **no summary, no moves, no zeros**. A lineup of
+  zeros would read as "nobody is worth starting", which is a different and
+  false claim. A failed projections fetch reports
+  `reason: 'projections-unavailable'` instead, so "we don't know" is
+  distinguishable from "there is nothing to know".
+- **THE SCHEDULE IS THE ONE SLEEPER ENDPOINT NOT UNDER `/v1`** (`SLEEPER_ROOT`)
+  and its fields are **`home`/`away`**, not `home_team`/`away_team`. Both
+  mistakes fail **silently** as "no games", which reads as "every team is on
+  bye" and would have this tool confidently benching a healthy lineup.
+  `weekly.js` owns both, and `tests/mcpWeekly.test.mjs` pins each one —
+  including that the wrong field names yield an empty set.
+- **An empty `playingTeams` means "byes unknown", never "everyone is on
+  bye"** — `getAvailability` only calls a bye when the set is non-empty, so a
+  failed schedule degrades the advice and says so rather than inverting it.
+- **A must-fix carries NO confidence, by rule.** A bye / Out / IR / empty slot
+  scores 0 *by rule*, not by projection, so the measured hit-rate curve
+  (n = 666,026) has no "higher-projected player" question to answer there.
+  The engine sets `confidence: null` and the tool passes the null through.
+- **`confidencePct` is a PERCENTAGE (0–100) and is the ONLY confidence field.**
+  `confidenceForGap` returns `65.3`, not `0.653` — the app renders it directly
+  as `m.confidence.toFixed(0)%`. Carrying both a `confidence` and a
+  `confidencePct` is what produced *"6530% likely to be the right call"* on the
+  first cut, so there is one field and its name carries the unit.
+- **A blocked starter contributes 0** to the current total whatever Sleeper
+  still projects for him; `projected` and `effective` are both reported so the
+  difference is visible.
+- **Coin-flip moves are demoted, never dropped.** Sub-1-point swaps are 52/48,
+  but the headline is optimal − current, so hiding one would leave points
+  unexplained. They ship with `meaningful: false`.
+
+### Prerequisite refactors this shipped with
+
+Three changes inside `src/`, each of which stands on its own merit:
+
+- **`src/utils/teamName.js` + `src/utils/valueHistory.js`.** `getTeamName` and
+  `MIN_SPARKLINE_POINTS` moved out of hooks. Three import lines in
+  `recommendations.js` and `edgeBriefing.js` reached into `../hooks/`, and both
+  hooks import React (and `useLeague` transitively loads `useIdentity`, which
+  reads `localStorage` at module scope). Measured with a resolver hook that
+  throws on any resolution of `react`: **3 of 30 utils were React-tainted
+  before, 0 after.** Both symbols are re-exported from their old locations, so
+  the 22 components importing `getTeamName` from the hook are untouched.
+  *That probe is the right instrument* — a plain "does it import?" check
+  passes whenever `node_modules` happens to be present, which is why
+  `MCP_DISCOVERY.md` §4 recorded 27 of 30.
+- **`src/utils/leagueState.js` — `buildLeagueState`.** The five-source join
+  that produces `league` lived only as a `useMemo` in `useLeague.js`, so the
+  object every analysis function eats could not be produced outside a browser,
+  and it had no tests. `useLeague` now calls it and does nothing else.
+  Equivalence was **proved, not inspected**: the pre-extraction memo body was
+  lifted verbatim from the previous commit and run beside the new function on
+  live payloads (10 rosters / 295 players / 120 picks) at three identity
+  settings plus the null-gate cases — `deepStrictEqual` on every one.
+- **`buildFreeAgentPool` / `buildAvailableDefenses` in
+  `src/utils/freeAgents.js`.** "Who is a free agent?" was built independently
+  in `FreeAgentsView.jsx` and `edgeBriefing.js`. The standing rule travels with
+  the code and is now enforced by construction: **the general pool cannot
+  return a defense** — not because FantasyCalc ranks none, but because you
+  roster exactly one, ever — and getting one requires calling
+  `buildAvailableDefenses` by name.
+
+### What the server can never do
+
+**Sleeper's API is read-only.** The server can say exactly what to start and
+what sitting pat costs in points. It can never set a lineup, accept a trade, or
+place a waiver claim — the user still taps it into Sleeper. Say so rather than
+implying otherwise.
+
+**Weekly tools are in-season only.** Projections do not exist in the
+offseason; a weekly tool must say so rather than return zeros, the same
+contract `LineupOptimizer` honours.
+
+**The four static feeds are not parameterized.** `news.json`,
+`values-history.json`, `trade-values.json` and `rookie-intel.json` are
+published from *this* repo's branches. A second league gets working rosters,
+values, trades, lineups and odds — but no news, sparklines or rookie research.
+No tool reads them yet; the ones that will must degrade cleanly and say so.
+
+**"Who won our league in 2023?" is still unanswerable.** It needs
+`/league/{id}/winners_bracket`, an endpoint this app has never called
+(`MCP_DISCOVERY.md` §5).
 
 -----
 
@@ -4088,6 +4511,24 @@ dynastyedge/
 │       ├── asset-aging-backtest.mjs ← analysis-only: THE keep-score calibration — longitudinal player aging (the survivorship trap the trajectory curves fall into) + whether rookie picks deliver their market price; see docs/analysis/asset-aging-and-pick-value-2026-09.md
 │       ├── contrast-audit.mjs ← THE accessibility-floor instrument: reads the tokens out of src/index.css and measures each against its theme's WORST-CASE ground, plus the two reversal cases a text-on-ground audit misses (paper type on a position band, type on an ink field). Exits non-zero on any failure — re-run after ANY ground-colour change.
 │       └── news-coverage.mjs ← analysis-only: THE news-pipeline acceptance metric — how many of my rostered players the app can actually resolve in the feed (no arg = live feed); see docs/analysis/news-sources-2026-09.md
+├── mcp/                        ← THE MCP SERVER (see The MCP Server section). Imports src/utils, never copies it; src/ imports nothing from here.
+│   ├── README.md               ← how to run it, the three rules a new tool must keep, phase-2 notes
+│   ├── stdio.js                ← entry point (stdio transport). Needs --import ./mcp/register.mjs
+│   ├── server.js               ← the McpServer: tool schemas + wiring, ZERO domain math
+│   ├── snapshot.js             ← league fetch + ~15-min cache + THE as-of stamp (the §7 mitigation: nothing in this repo validates an external payload, so provenance is what makes a wrong answer LOOK wrong). Also mergeAsOf, which RECOMPUTES oldestSourceAt over the union so an added source can't overstate freshness
+│   ├── weekly.js               ← projections + the schedule, on their OWN ~60-min TTL (league data changes on an EVENT, projections on a 0.06%/10h DRIP). Owns the two silent traps: the schedule is off /v1 (SLEEPER_ROOT) and its fields are home/away
+│   ├── teams.js                ← resolveTeam, shared by get_roster / analyze_trade / lineup_advice so "which team did they mean?" has one definition. Reads display_name — Sleeper's /users returns NO username
+│   ├── limit.js                ← concurrency gate + backoff. Lives here, NEVER in fetchJSON — that would change the app's behaviour to fix a server problem
+│   ├── config.js               ← league / identity / TTLs, env-first: leagueId and rosterId are parameters, not constants
+│   ├── register.mjs            ← registers loader.mjs (deliberate copy of the test suite's — a runnable server must not depend on .claude/skills/)
+│   ├── loader.mjs              ← the extensionless-import resolver hook
+│   └── tools/                  ← all six are orchestration only, in the shape of TradeAnalyzer.jsx
+│       ├── getRoster.js            ← #1 "what's on my team?"
+│       ├── findSellHigh.js         ← #2 "who's my best sell-high?" — names a CONCRETE partner and return
+│       ├── recommendFreeAgents.js  ← #3 "who should I pick up?" — dynasty value AND this week's projection; a defense is never a general pickup
+│       ├── resolveAssets.js        ← #4 (support) "which Bijan?" — an ambiguous name resolves to NOTHING
+│       ├── analyzeTrade.js         ← #5 "grade this trade" — IDS ONLY; a free-text name is rejected, never guessed
+│       └── lineupAdvice.js         ← #6 "what do I start?" — IN-SEASON ONLY; a must-fix carries no confidence
 ├── public/
 │   └── favicon.ico
 ├── src/
@@ -4210,6 +4651,9 @@ dynastyedge/
 │   │   └── useRookieADP.js
 │   ├── utils/
 │   │   ├── fetchJSON.js         ← shared fetch wrapper with timeout — use everywhere
+│   │   ├── leagueState.js       ← THE five-source join (buildLeagueState): the object EVERY analysis function eats. Extracted from useLeague's useMemo so it runs under plain Node; equivalence to the old memo proved against live payloads, not inspected
+│   │   ├── teamName.js         ← getTeamName — in utils, not hooks, so the analysis layer stays React-free (re-exported from useLeague for the 22 components that import it there)
+│   │   ├── valueHistory.js     ← MIN_SPARKLINE_POINTS, same reason (re-exported from useValueHistory)
 │   │   ├── appVersion.js        ← pure reload-URL builder for the version self-heal
 │   │   ├── positionColors.js    ← position identity color class maps — use everywhere
 │   │   ├── roundColors.js       ← pick round color classes (PickBadge, TeamCard)
@@ -4235,7 +4679,7 @@ dynastyedge/
 │   │   ├── lineupBuild.js       ← THE optimal starting-lineup slot-fill (metric-agnostic); fed points (Optimizer) or dynasty value (Trade Analyzer fit sim)
 │   │   ├── lineupMoves.js       ← THE weekly start/sit engine: solves the lineup, diffs it against yours, emits the move list (gains sum to the headline)
 │   │   ├── lineupConfidence.js  ← the MEASURED hit-rate curve behind "61% likely to be the right call" — regenerate, never hand-edit
-│   │   ├── freeAgents.js        ← THE waiver-options list (never gated on FantasyCalc; carries the TEAM_* guard)
+│   │   ├── freeAgents.js        ← THE waiver-options list (never gated on FantasyCalc; carries the TEAM_* guard) AND the one dynasty free-agent pool (buildFreeAgentPool / buildAvailableDefenses), which by construction can never return a defense as a general pickup
 │   │   ├── lineupHistory.js     ← optimal-lineup POINTS math for efficiency review (delegates to lineupBuild)
 │   │   ├── playoffOdds.js       ← scoring model + Monte Carlo + deadline verdict
 │   │   └── projections.js       ← lineup optimization, matchup quality
@@ -4277,7 +4721,18 @@ dynastyedge/
 │   ├── rookieResearch.test.mjs      ← opportunity blend, shared points scale (the backup-TE trap), within-position divergence, roster-fit re-ranking (need/window bonuses, score untouched), drawer hand-off fields, best-effort feed degradation, and the measurables NULL (age/combine can never move a score)
 │   ├── recommendations.test.mjs     ← suggestSellMove's two-sided partner pick (a concrete return beats a needier team with nothing, the neediest-team fallback, startsForThem, nav-ready shape); pick keep-scores by round (strict ordering under every tier, nothing auto-excluded, unknown round falls back); the past-peak age tilt (decline-only, per-position, saturating, never positive, cliff protection survives it); and the cash-out board (value-at-risk selection, the reach/premium labels, and the pin that its gap equals buildFairBand's)
 │   ├── newsRetention.test.mjs       ← the news window's retention policy: newest-N-per-player, a redundant item losing to an OLDER item about an uncovered player, breadth preserved at every k, roundups charging every player they name, and an id-less item never dropped by quota
-│   └── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
+│   ├── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
+│   ├── leagueState.test.mjs         ← buildLeagueState: string-id normalization across mixed-shape payloads + the '0' sentinel (rule 8), unranked players kept at value 0 and the skip-then-self-heal path (rule 7), a pick at its ORIGINAL owner's slot vs round medians (Feature 1), FAAB read from settings, identity as runtime state, input immutability
+│   ├── mcpLimit.test.mjs            ← the rate discipline fetchJSON does NOT have: concurrency cap, a rejecting job freeing its slot, 429/503 retried with bounded backoff, and a 404 never retried (it is an answer, not a failure)
+│   ├── mcpSnapshot.test.mjs         ← mocked-fetch: the 15-min TTL, values + player DB cached ACROSS leagues (a second league must not re-download 5-8MB), per-source as-of stamps with oldestSourceAt as the STALEST input, serve-cache-and-label-stale on failure vs a cold throw, and the FantasyCalc shape guards
+│   ├── mcpGetRoster.test.mjs        ← get_roster: never guessing between two teams (candidates instead), rule 7 as value:null + unranked:true (never 0), taxi/IR as their own slots, pick pricing basis, bounded output with the truncation disclosed
+│   ├── mcpWeekly.test.mjs           ← the weekly layer: the offseason costing ZERO requests and reporting no projMap (never zeros), the schedule fetched off SLEEPER_ROOT not /v1, parseByeTeams reading home/away (and the wrong field names yielding an empty set — the silent bug), an empty playingTeams meaning "byes unknown" not "everyone on bye", the 60-min TTL being LONGER than the snapshot's, and mergeAsOf recomputing age over the union
+│   ├── mcpFindSellHigh.test.mjs     ← find_sell_high: a CONCRETE partner and return (not "shop him"), the two-sided partner pick, every alternative genuinely at a surplus position, and "no sell-high" stated as the answer rather than hidden
+│   ├── mcpRecommendFreeAgents.test.mjs ← recommend_free_agents: no defense in the general list EVER, the DEF refusal still naming the incumbent, the ranking being by dynasty value not projection, and the offseason reporting projectedPoints null — never 0
+│   ├── mcpResolveAssets.test.mjs    ← resolve_assets: an ambiguous name resolving to NOTHING (never the higher-valued of two), pick parsing to the season-round-originalOwner id analyze_trade accepts, rule 7 keeping unranked players findable
+│   ├── mcpAnalyzeTrade.test.mjs     ← analyze_trade: a free-text name REJECTED even when unambiguous (the tool does no name matching at all), an id on the wrong roster refused, the price read from the owning roster not the caller, both seats graded, concerns as a subset of reasons, and windowBasis naming the tier
+│   ├── mcpLineupAdvice.test.mjs     ← lineup_advice: the offseason returning no summary and no zeros, per-move gains summing EXACTLY to the headline, a must-fix carrying NO confidence, confidencePct being a percentage not a fraction (the ×100 bug that printed "6530%"), and a blocked starter contributing 0
+│   └── helpers/mcpFixtures.mjs      ← ONE synthetic league shared by the six MCP tool suites — four tools read the same object, and four divergent copies is the drift prerequisite C removed from src/
 ├── index.html
 ├── eslint.config.js             ← ESLint 9 flat config (recommended + react-hooks, src/ + scripts/)
 ├── vite.config.js
@@ -4288,24 +4743,38 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 161 / # pass 154 /
-# fail 7`, which reads like a code regression. The files that fail are the ones
-transitively importing `react` (`tradeAnalysis.js` → `recommendations.js` →
-`useLeague.js`, plus `matchupWeeks`, `transactions`, `sleeperDraft`, and
-`draftLive` loading their hooks) — the file fails to load, so its tests never
-run and the count silently drops from **284** to 161. `npm run build` in the
-same state fails with `sh: 1: vite: not found`. **If the test count isn't 284,
-run `npm ci` before debugging anything.** (Both numbers re-measured 2026-09-12
-by renaming `node_modules` aside; re-measure them whenever the suite grows —
-the pair had drifted five times before this, 178/130, 177/115, 219/136,
-242/136 and 275/152. The **7 failing files** have been the constant across every
-re-measurement. Note the two counts do **not** always move together: the
-2026-09-07 trade-engine work added 6 tests to `tradeAnalysis.test.mjs`, which
-is already one of the 7 files that cannot load without `node_modules`, so the
-full count went 258 → 264 → 269 → 275 while the broken-state count stayed at 152.
-The 2026-09-12 news-retention work moved **both** (275/152 → **284/161**),
-because `newsRetention.test.mjs` imports only a zero-dependency pure module.
-Only tests added to a file outside those 7 move the second number.)
+honestly:** instead of "cannot find module" it prints `# tests 455 / # pass 451
+/ # fail 4`, which reads like a code regression. A file that cannot load never
+runs its tests, so the count silently drops from **489** to 455.
+`npm run build` in the same state fails with `sh: 1: vite: not found`.
+**If the test count isn't 489, run `npm ci` before debugging anything.**
+
+The pair was re-measured 2026-09-19 (MCP phase 1b) by renaming `node_modules`
+aside, and it had drifted seven times before that: 178/130, 177/115, 219/136,
+242/136, 275/152, 284/161, 357/323.
+
+**The number of failing files changed for the first time — 7 → 4** — and that
+is a real result, not drift. It had been the one constant across every
+re-measurement. The MCP prerequisite work moved `getTeamName` and
+`MIN_SPARKLINE_POINTS` out of hooks (see The MCP Server), which un-tainted
+`tradeAnalysis.js`, `recommendations.js` and `edgeBriefing.js` — so
+`tradeAnalysis.test.mjs`, `tradeContext.test.mjs`, `tradeTargets.test.mjs` and
+`recommendations.test.mjs` now run without `node_modules`. The remaining four
+are the ones that load a **hook** directly, which no refactor to `src/utils`
+can fix: `draftLive`, `matchupWeeks`, `sleeperDraft`, `transactions`.
+
+Note the two counts do **not** always move together: tests added to one of
+those four raise only the first number. The 2026-09-07 trade-engine work added
+6 tests to `tradeAnalysis.test.mjs` and moved the full count 258 → 275 while
+the broken-state count stayed at 152; the 2026-09-12 news-retention work moved
+both, because `newsRetention.test.mjs` imports only a zero-dependency pure
+module. **Re-measure both whenever the suite grows.**
+
+Phase 1b moved both by the same 132 (357/323 → **489/455**), and that
+equality is itself a check worth keeping: it means all six new test files —
+five tool suites plus `mcpWeekly` — load with no `node_modules` at all. A tool
+that had reached React, or pulled `zod` down out of `mcp/server.js`, would
+have shown up as a gap between the two deltas.
 
 **Tests:** `npm test` runs the `tests/` suite — plain `.mjs` scripts on Node's
 built-in `node:test` runner with `node:assert/strict`, zero new dependencies
@@ -4388,7 +4857,7 @@ arrived** (a route's rendered text length is a cheap proxy) before believing a
 green sweep.
 
 **Lint:** `npm run lint` runs ESLint 9 (flat config, `eslint.config.js`) over
-`src/` and `scripts/` — `@eslint/js` recommended rules plus
+`src/`, `scripts/` and `mcp/` — `@eslint/js` recommended rules plus
 `react-hooks/rules-of-hooks` and `react-hooks/exhaustive-deps`, all at error
 severity so CI actually fails. `eslint` + `eslint-plugin-react-hooks` are the
 two owner-sanctioned lint devDependencies (the config imports `@eslint/js`,
@@ -4812,6 +5281,13 @@ Two things the roll must not break, both pinned by tests:
    disable-with-comment on the one line, stating why the value is stable.
 1. **The app name is DynastyEdge.** Use it in the page `<title>`,
    the header, and any loading/splash screen.
+1. **The MCP server (`mcp/`) imports `src/utils` — it never copies it, and
+   `src/` never imports from `mcp/`.** A tool is orchestration only; any math
+   it needs is written in `src/utils` so the app gets the same number. Every
+   tool response carries an as-of stamp, is bounded (never a raw payload), and
+   takes `leagueId` / `rosterId` as parameters rather than reading the
+   constants. Rate-limit and retry logic lives in `mcp/limit.js`, never in
+   `fetchJSON`. See **The MCP Server**.
 
 -----
 
