@@ -26,6 +26,7 @@
 import {
   mintGithubState, readGithubState, mintAuthCode, redeemAuthCode, mintAccessToken,
   protectedResourceMetadata, authorizationServerMetadata, ACCESS_TOKEN_TTL_S,
+  mintClientId, readClientId,
 } from './oauth.js'
 
 export const DEFAULT_REDIRECT_ORIGINS = [
@@ -77,9 +78,19 @@ function redirectError(redirectUri, state, error, description) {
 export function createOAuthRoutes({
   origin, clientId, githubClientId, githubClientSecret, allowedLogin,
   signingKey, allowedRedirectOrigins = DEFAULT_REDIRECT_ORIGINS,
-  fetchImpl = fetch,
+  resource = `${origin}/mcp`, fetchImpl = fetch,
 }) {
   const callbackUrl = `${origin}/api/oauth/callback/github`
+
+  // A client_id is valid if it is the pre-registered static one OR a signed
+  // registration we issued. A dynamically registered client is additionally
+  // held to the exact redirect URIs it registered — the origin allowlist says
+  // where a code may go at all, the registration says where THIS client's may.
+  const clientAllows = (candidateId, redirectUri) => {
+    if (candidateId === clientId) return true
+    const registered = readClientId(candidateId, signingKey)
+    return !!registered && registered.includes(redirectUri)
+  }
 
   // ── GET /api/oauth/authorize ────────────────────────────────────────────
   async function authorize(url) {
@@ -99,8 +110,9 @@ export function createOAuthRoutes({
       return redirectError(redirectUri, state, 'unsupported_response_type',
         'Only the authorization code flow is supported')
     }
-    if (q.get('client_id') !== clientId) {
-      return redirectError(redirectUri, state, 'unauthorized_client', 'Unknown client_id')
+    if (!clientAllows(q.get('client_id'), redirectUri)) {
+      return redirectError(redirectUri, state, 'unauthorized_client',
+        'Unknown client_id, or a redirect_uri this client did not register')
     }
     if (q.get('code_challenge_method') !== 'S256' || !q.get('code_challenge')) {
       return redirectError(redirectUri, state, 'invalid_request',
@@ -111,6 +123,7 @@ export function createOAuthRoutes({
     // server remembers nothing while the human logs in.
     const packed = mintGithubState({
       redirectUri,
+      clientId: q.get('client_id'),
       clientState: state ?? null,
       codeChallenge: q.get('code_challenge'),
       resource: q.get('resource') ?? origin,
@@ -182,7 +195,8 @@ export function createOAuthRoutes({
     }
 
     const authCode = mintAuthCode({
-      login, clientId,
+      login,
+      clientId: packed.clientId ?? clientId,
       redirectUri: packed.redirectUri,
       codeChallenge: packed.codeChallenge,
       resource: packed.resource,
@@ -219,12 +233,56 @@ export function createOAuthRoutes({
     // this server — so it cannot be replayed at a different one.
     return json({
       access_token: mintAccessToken({
-        login: result.login, audience: result.resource || origin, clientId,
+        login: result.login,
+        audience: result.resource || resource,
+        clientId: form.get('client_id'),
       }, signingKey),
       token_type: 'Bearer',
       expires_in: ACCESS_TOKEN_TTL_S,
       scope: 'mcp',
     })
+  }
+
+  // ── POST /api/oauth/register (RFC 7591) ─────────────────────────────────
+  //
+  // Stateless: the returned client_id IS the registration, signed. The origin
+  // allowlist is enforced HERE, so a signed id can only ever name URIs that
+  // already passed it — registration widens who may ask, never where a code
+  // may be sent.
+  async function register(request) {
+    let body
+    try {
+      body = await request.json()
+    } catch {
+      return json({ error: 'invalid_client_metadata', error_description: 'Body is not JSON' }, 400)
+    }
+
+    const uris = body?.redirect_uris
+    if (!Array.isArray(uris) || uris.length === 0) {
+      return json({
+        error: 'invalid_redirect_uri',
+        error_description: 'redirect_uris is required and must be a non-empty array',
+      }, 400)
+    }
+    const rejected = uris.filter(u => !redirectOriginAllowed(u, allowedRedirectOrigins))
+    if (rejected.length) {
+      return json({
+        error: 'invalid_redirect_uri',
+        error_description: `Not an allowed redirect target: ${rejected.join(', ')}`,
+      }, 400)
+    }
+
+    return json({
+      client_id: mintClientId(uris, signingKey),
+      redirect_uris: uris,
+      // A PUBLIC client: no secret is issued, and PKCE is what protects the
+      // exchange. Saying so explicitly stops a client waiting for one.
+      token_endpoint_auth_method: 'none',
+      grant_types: ['authorization_code'],
+      response_types: ['code'],
+      client_id_issued_at: Math.floor(Date.now() / 1000),
+      client_name: body?.client_name ?? null,
+    }, 201)
   }
 
   // ── the router ──────────────────────────────────────────────────────────
@@ -233,8 +291,15 @@ export function createOAuthRoutes({
     const url = new URL(request.url)
     const { pathname } = url
 
-    if (request.method === 'GET' && pathname === '/.well-known/oauth-protected-resource') {
-      return json(protectedResourceMetadata(origin))
+    // RFC 9728 §3.1: for a resource with a path, the document lives at
+    // /.well-known/oauth-protected-resource/<path>. Serving only the bare
+    // path meant a client connecting to /mcp got a 404 and could not
+    // discover anything — a SILENT failure, since nothing logs a 404 anyone
+    // reads. Both are served, and both name the same canonical resource.
+    if (request.method === 'GET' &&
+        (pathname === '/.well-known/oauth-protected-resource' ||
+         pathname === '/.well-known/oauth-protected-resource/mcp')) {
+      return json(protectedResourceMetadata(origin, resource))
     }
     if (request.method === 'GET' && pathname === '/.well-known/oauth-authorization-server') {
       return json(authorizationServerMetadata(origin))
@@ -242,6 +307,7 @@ export function createOAuthRoutes({
     if (request.method === 'GET' && pathname === '/api/oauth/authorize') return authorize(url)
     if (request.method === 'GET' && pathname === '/api/oauth/callback/github') return githubCallback(url)
     if (request.method === 'POST' && pathname === '/api/oauth/token') return token(request)
+    if (request.method === 'POST' && pathname === '/api/oauth/register') return register(request)
     return null
   }
 }

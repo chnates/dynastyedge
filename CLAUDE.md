@@ -751,14 +751,26 @@ is no static-token path.
 **Normally that needs three kinds of durable state, and serverless has none.
 Two facts remove the need:**
 
-1. **NO DYNAMIC CLIENT REGISTRATION.** RFC 7591 is a SHOULD, and the spec
-   names the alternative: pre-register out of band. Claude's connector has
-   "Advanced settings" for exactly that, so there is **one** client, it lives
-   in `config.js`, and there is no registry to persist. It is a **public
-   client** (`token_endpoint_auth_methods_supported: ['none']`) — OAuth 2.1
-   allows that precisely when PKCE protects the exchange, and inventing a
-   second secret would add a handling step guarding nothing PKCE plus the
-   GitHub login plus the allowlist do not already guard.
+1. **DYNAMIC CLIENT REGISTRATION, WITHOUT A REGISTRY.** The first cut had no
+   `/register`, reasoning that RFC 7591 is a SHOULD and that Claude's
+   "Advanced settings" pre-registration is the spec's named alternative.
+   **That was wrong in practice, and it is the one mistake here that a user
+   actually hit:** Claude's connector registers itself, and with no
+   registration endpoint it reported *"Couldn't start sign-in"* before a
+   browser ever opened. A missing SHOULD is not a missing nicety when the
+   client implements it.
+   A registry is the one piece of OAuth state that genuinely must persist —
+   **unless the `client_id` IS the registration.** `mintClientId` signs the
+   redirect URIs into the id, so `/authorize` recovers them by verifying a
+   MAC and any instance honours what any other issued, with nothing stored.
+   **The origin allowlist binds at registration**, so a signed id can only
+   ever name URIs that already passed it: registration widens *who may ask*,
+   never *where a code may be sent* — and a registered client is then held to
+   the exact URIs it registered, which is stricter than the allowlist alone.
+   The client stays **public** (`token_endpoint_auth_methods_supported:
+   ['none']`) — OAuth 2.1 allows that precisely when PKCE protects the
+   exchange, and a secret would guard nothing PKCE plus the GitHub login plus
+   the allowlist do not.
 2. **EVERYTHING ELSE IS SIGNED, NOT STORED.** An authorization code and an
    access token are each a payload plus an HMAC. Verification is recomputing
    the MAC, so any instance verifies what any other minted.
@@ -789,6 +801,17 @@ run with no `node_modules` (see the npm-ci block).
 Both are acceptable for one user. Neither would be for a multi-tenant server —
 that wants the KV the caching layer deliberately does not need.
 
+**TWO DISCOVERY DETAILS ARE EASY TO GET WRONG AND FAIL SILENTLY.** Both did.
+`resource` in the protected-resource document MUST be the **canonical URI of
+the MCP server, path included** — returning the bare origin meant it did not
+match the `/mcp` URL the user actually typed. And RFC 9728 §3.1 puts the
+document for a resource with a path at
+**`/.well-known/oauth-protected-resource/mcp`**, not only at the bare
+well-known path; serving only the latter returned a 404 that nothing logs and
+nobody reads. Both paths are now served and both name the same canonical
+resource. The access-token audience accordingly accepts **both spellings of
+this server** — `${origin}/mcp` and the bare origin — and nothing else.
+
 **THE LOAD-BEARING CHECK IS REDIRECT-URI VALIDATION.** The spec: *"Authorization
 servers MUST validate exact redirect URIs against pre-registered values."* With
 no registry, an **origin allowlist** replaces it — `claude.ai`, `claude.com`
@@ -813,8 +836,10 @@ cleanest way to honour that is to hold nothing worth passing.
 **The server refuses to start without `GITHUB_CLIENT_SECRET`** — no key means
 either no authentication or a guessable one, both worse than a failed deploy.
 
-**Verified end to end** (2026-09-19, only GitHub's identity call faked):
-no-token → 401 with the discovery header → both metadata documents →
+**Verified end to end against the flow Claude actually performs** (2026-09-19,
+only GitHub's identity call faked): no-token → 401 with the discovery header →
+the protected-resource document at **both** paths, naming the canonical
+`/mcp` resource → AS metadata → **self-registration (201, no secret issued)** →
 authorize → GitHub with `scope=""` → callback → code to
 `claude.ai/api/mcp/auth_callback` with state echoed → token (Bearer, 3600s) →
 **authenticated `get_roster` against the live league in 608ms** (Nix Cage,

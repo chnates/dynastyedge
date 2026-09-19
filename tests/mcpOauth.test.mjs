@@ -22,7 +22,7 @@ import crypto from 'node:crypto'
 import {
   deriveSigningKey, sign, verify, verifyPkce, mintAuthCode, redeemAuthCode,
   mintAccessToken, verifyAccessToken, authorizationServerMetadata,
-  protectedResourceMetadata,
+  protectedResourceMetadata, mintClientId, readClientId,
 } from '../mcp/oauth.js'
 import { createOAuthRoutes, DEFAULT_REDIRECT_ORIGINS } from '../mcp/oauthRoutes.js'
 
@@ -167,11 +167,36 @@ test('the metadata documents say what we actually implement', () => {
   const as = authorizationServerMetadata(ORIGIN)
   assert.deepEqual(as.code_challenge_methods_supported, ['S256'], 'plain is never advertised')
   assert.deepEqual(as.token_endpoint_auth_methods_supported, ['none'], 'a public client')
-  assert.equal(as.registration_endpoint, undefined,
-    'we do not do dynamic registration; advertising an endpoint that does not exist is worse than none')
-  const prm = protectedResourceMetadata(ORIGIN)
+  // Advertising no registration endpoint was the first cut, on the reading
+  // that RFC 7591 is a SHOULD. A real client could then not START sign-in.
+  assert.equal(as.registration_endpoint, `${ORIGIN}/api/oauth/register`)
+  const prm = protectedResourceMetadata(ORIGIN, `${ORIGIN}/mcp`)
   assert.deepEqual(prm.authorization_servers, [ORIGIN])
-  assert.equal(prm.resource, ORIGIN)
+  assert.equal(prm.resource, `${ORIGIN}/mcp`,
+    'the CANONICAL server URI, path included — the bare origin does not match what a client connected to')
+})
+
+test('a registered client_id carries its redirect URIs and nothing else', () => {
+  const uris = ['https://claude.ai/api/mcp/auth_callback']
+  const id = mintClientId(uris, KEY)
+  assert.deepEqual(readClientId(id, KEY), uris)
+  assert.equal(readClientId(id, deriveSigningKey('other')), null, 'a forged id does not verify')
+  assert.equal(readClientId('not-an-id', KEY), null)
+  // The three token kinds stay disjoint.
+  assert.equal(readClientId(codeFor(), KEY), null, 'an auth code is not a client id')
+  assert.equal(verifyAccessToken(id, { audiences: [ORIGIN], allowedLogin: LOGIN }, KEY), null,
+    'a client id is not a bearer token')
+})
+
+test('AUDIENCE: both spellings of this server are accepted, nothing else is', () => {
+  const auds = [`${ORIGIN}/mcp`, ORIGIN]
+  for (const aud of auds) {
+    const t = mintAccessToken({ login: LOGIN, audience: aud, clientId: CLIENT_ID }, KEY)
+    assert.ok(verifyAccessToken(t, { audiences: auds, allowedLogin: LOGIN }, KEY),
+      `${aud} identifies this server`)
+  }
+  const foreign = mintAccessToken({ login: LOGIN, audience: 'https://evil.example', clientId: CLIENT_ID }, KEY)
+  assert.equal(verifyAccessToken(foreign, { audiences: auds, allowedLogin: LOGIN }, KEY), null)
 })
 
 // ── the routes ─────────────────────────────────────────────────────────────
@@ -321,6 +346,57 @@ test('the token endpoint refuses a stolen code without the verifier', async () =
   }))
   assert.equal(res.status, 400)
   assert.equal((await res.json()).error, 'invalid_grant')
+})
+
+test('REGISTRATION is stateless, and the allowlist still binds', async () => {
+  const handler = routes()
+  const reg = async body => handler(new Request(`${ORIGIN}/api/oauth/register`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  }))
+
+  const ok = await reg({ redirect_uris: ['https://claude.ai/api/mcp/auth_callback'], client_name: 'Claude' })
+  assert.equal(ok.status, 201)
+  const client = await ok.json()
+  assert.ok(client.client_id)
+  assert.equal(client.token_endpoint_auth_method, 'none', 'public client — no secret issued')
+  assert.deepEqual(readClientId(client.client_id, KEY), ['https://claude.ai/api/mcp/auth_callback'])
+
+  // Registration widens WHO may ask, never WHERE a code may be sent.
+  const evil = await reg({ redirect_uris: ['https://evil.example/steal'] })
+  assert.equal(evil.status, 400)
+  assert.equal((await evil.json()).error, 'invalid_redirect_uri')
+  const mixed = await reg({ redirect_uris: ['https://claude.ai/cb', 'https://evil.example/cb'] })
+  assert.equal(mixed.status, 400, 'one bad URI rejects the whole registration')
+  assert.equal((await reg({})).status, 400)
+})
+
+test('a registered client is held to the URIs IT registered', async () => {
+  const handler = routes()
+  const reg = await handler(new Request(`${ORIGIN}/api/oauth/register`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ redirect_uris: ['https://claude.ai/registered'] }),
+  }))
+  const { client_id } = await reg.json()
+
+  const good = await handler(authorizeUrl({ client_id, redirect_uri: 'https://claude.ai/registered' }))
+  assert.equal(good.status, 302)
+  assert.match(good.headers.get('location'), /github\.com/)
+
+  // An allowlisted origin this client did NOT register is still refused.
+  const other = await handler(authorizeUrl({ client_id, redirect_uri: 'https://claude.ai/somewhere-else' }))
+  assert.equal(other.status, 302)
+  assert.match(new URL(other.headers.get('location')).search, /unauthorized_client/)
+})
+
+test('the router serves the PRM at BOTH paths RFC 9728 allows', async () => {
+  const handler = routes()
+  for (const path of ['/.well-known/oauth-protected-resource',
+                      '/.well-known/oauth-protected-resource/mcp']) {
+    const res = await handler(new Request(`${ORIGIN}${path}`))
+    assert.equal(res.status, 200, `${path} must serve the document`)
+    assert.equal((await res.json()).resource, `${ORIGIN}/mcp`,
+      'both name the same canonical resource')
+  }
 })
 
 test('the router serves both discovery documents and declines unknown paths', async () => {

@@ -128,6 +128,37 @@ export function readGithubState(state, key) {
   return p?.kind === 'gh-state' ? p : null
 }
 
+// ── DYNAMIC CLIENT REGISTRATION, WITHOUT A REGISTRY ───────────────────────
+//
+// The first cut had no `/register` at all, on the reading that RFC 7591 is a
+// SHOULD and a pre-registered client is the documented alternative. That was
+// wrong in practice: Claude's connector registers itself, and with no
+// registration endpoint it cannot even START sign-in — the failure the owner
+// hit, before a browser ever opened.
+//
+// A registry is the one piece of OAuth state that genuinely has to persist...
+// unless the client_id IS the registration. Signing the redirect URIs into
+// the id means `/authorize` can recover them by verifying a MAC, so any
+// instance honours a registration any other issued, with nothing stored.
+//
+// THE ALLOWLIST STILL BINDS AT REGISTRATION. A signed id is only ever minted
+// for URIs that passed the origin check, so this widens who may register, not
+// where a code may be sent.
+export const CLIENT_ID_TTL_S = 10 * 365 * 24 * 60 * 60 // effectively permanent
+
+export function mintClientId(redirectUris, key) {
+  return sign({
+    kind: 'client', redirectUris,
+    exp: nowS() + CLIENT_ID_TTL_S,
+  }, key)
+}
+
+// Returns the registered redirect URIs, or null when this is not one of ours.
+export function readClientId(clientId, key) {
+  const p = verify(clientId, key)
+  return p?.kind === 'client' && Array.isArray(p.redirectUris) ? p.redirectUris : null
+}
+
 export function mintAuthCode({ login, clientId, redirectUri, codeChallenge, resource }, key) {
   return sign({
     kind: 'code', login, clientId, redirectUri, codeChallenge, resource,
@@ -157,10 +188,15 @@ export function mintAccessToken({ login, audience, clientId }, key) {
   }, key)
 }
 
-export function verifyAccessToken(token, { audience, allowedLogin }, key) {
+export function verifyAccessToken(token, { audience, audiences, allowedLogin }, key) {
   const p = verify(token, key)
   if (p?.kind !== 'access') return null
-  if (p.aud !== audience) return null
+  // A client may name the resource as the canonical MCP URL or as the bare
+  // origin; both identify this server. The check still REJECTS anything else,
+  // which is what audience binding is for — this accepts two spellings of us,
+  // never someone else.
+  const accepted = audiences ?? (audience ? [audience] : [])
+  if (!accepted.includes(p.aud)) return null
   // The allowlist is re-checked at EVERY request, not only at login. A token
   // minted before the allowlist changed must stop working immediately.
   if (allowedLogin && p.login !== allowedLogin) return null
@@ -171,18 +207,20 @@ export function verifyAccessToken(token, { audience, allowedLogin }, key) {
 
 // RFC 9728. The MCP spec says a server MUST serve this, and MUST point at it
 // from WWW-Authenticate on a 401.
-export function protectedResourceMetadata(origin) {
+// `resource` MUST be the canonical URI of the MCP server — the URL the client
+// actually connected to, path included. Returning the bare origin made the
+// document fail to match what the user typed, which is a silent discovery
+// failure rather than an error anyone sees.
+export function protectedResourceMetadata(origin, resource = origin) {
   return {
-    resource: origin,
+    resource,
     authorization_servers: [origin],
     bearer_methods_supported: ['header'],
     scopes_supported: ['mcp'],
   }
 }
 
-// RFC 8414. `registration_endpoint` is deliberately absent — we do not do
-// dynamic registration, and advertising an endpoint that does not exist is
-// worse than advertising none.
+// RFC 8414.
 export function authorizationServerMetadata(origin) {
   return {
     issuer: origin,
@@ -190,6 +228,9 @@ export function authorizationServerMetadata(origin) {
     token_endpoint: `${origin}/api/oauth/token`,
     response_types_supported: ['code'],
     grant_types_supported: ['authorization_code'],
+    // Clients register themselves — see mintClientId. Without this, a client
+    // that expects RFC 7591 cannot begin sign-in at all.
+    registration_endpoint: `${origin}/api/oauth/register`,
     code_challenge_methods_supported: ['S256'],
     // A PUBLIC client — no client secret. OAuth 2.1 supports this precisely
     // when PKCE protects the code exchange, which it does here. The

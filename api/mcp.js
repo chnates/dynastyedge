@@ -43414,6 +43414,17 @@ function readGithubState(state, key) {
   const p = verify(state, key);
   return p?.kind === "gh-state" ? p : null;
 }
+function mintClientId(redirectUris, key) {
+  return sign({
+    kind: "client",
+    redirectUris,
+    exp: nowS() + CLIENT_ID_TTL_S
+  }, key);
+}
+function readClientId(clientId, key) {
+  const p = verify(clientId, key);
+  return p?.kind === "client" && Array.isArray(p.redirectUris) ? p.redirectUris : null;
+}
 function mintAuthCode({ login, clientId, redirectUri, codeChallenge, resource }, key) {
   return sign({
     kind: "code",
@@ -43443,16 +43454,17 @@ function mintAccessToken({ login, audience, clientId }, key) {
     exp: nowS() + ACCESS_TOKEN_TTL_S
   }, key);
 }
-function verifyAccessToken(token, { audience, allowedLogin }, key) {
+function verifyAccessToken(token, { audience, audiences, allowedLogin }, key) {
   const p = verify(token, key);
   if (p?.kind !== "access") return null;
-  if (p.aud !== audience) return null;
+  const accepted = audiences ?? (audience ? [audience] : []);
+  if (!accepted.includes(p.aud)) return null;
   if (allowedLogin && p.login !== allowedLogin) return null;
   return { token, clientId: p.clientId, scopes: ["mcp"], expiresAt: p.exp, extra: { login: p.login } };
 }
-function protectedResourceMetadata(origin) {
+function protectedResourceMetadata(origin, resource = origin) {
   return {
-    resource: origin,
+    resource,
     authorization_servers: [origin],
     bearer_methods_supported: ["header"],
     scopes_supported: ["mcp"]
@@ -43465,6 +43477,9 @@ function authorizationServerMetadata(origin) {
     token_endpoint: `${origin}/api/oauth/token`,
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code"],
+    // Clients register themselves — see mintClientId. Without this, a client
+    // that expects RFC 7591 cannot begin sign-in at all.
+    registration_endpoint: `${origin}/api/oauth/register`,
     code_challenge_methods_supported: ["S256"],
     // A PUBLIC client — no client secret. OAuth 2.1 supports this precisely
     // when PKCE protects the code exchange, which it does here. The
@@ -43476,7 +43491,7 @@ function authorizationServerMetadata(origin) {
     scopes_supported: ["mcp"]
   };
 }
-var ACCESS_TOKEN_TTL_S, AUTH_CODE_TTL_S, GITHUB_STATE_TTL_S, b64u, unb64u, nowS;
+var ACCESS_TOKEN_TTL_S, AUTH_CODE_TTL_S, GITHUB_STATE_TTL_S, b64u, unb64u, nowS, CLIENT_ID_TTL_S;
 var init_oauth = __esm({
   "mcp/oauth.js"() {
     ACCESS_TOKEN_TTL_S = 60 * 60;
@@ -43485,6 +43500,7 @@ var init_oauth = __esm({
     b64u = (buf) => Buffer.from(buf).toString("base64url");
     unb64u = (str) => Buffer.from(str, "base64url");
     nowS = () => Math.floor(Date.now() / 1e3);
+    CLIENT_ID_TTL_S = 10 * 365 * 24 * 60 * 60;
   }
 });
 
@@ -43518,9 +43534,15 @@ function createOAuthRoutes({
   allowedLogin,
   signingKey,
   allowedRedirectOrigins = DEFAULT_REDIRECT_ORIGINS,
+  resource = `${origin}/mcp`,
   fetchImpl = fetch
 }) {
   const callbackUrl = `${origin}/api/oauth/callback/github`;
+  const clientAllows = (candidateId, redirectUri) => {
+    if (candidateId === clientId) return true;
+    const registered = readClientId(candidateId, signingKey);
+    return !!registered && registered.includes(redirectUri);
+  };
   async function authorize(url2) {
     const q = url2.searchParams;
     const redirectUri = q.get("redirect_uri");
@@ -43542,8 +43564,13 @@ Only Claude and localhost may receive an authorization code from this server.`,
         "Only the authorization code flow is supported"
       );
     }
-    if (q.get("client_id") !== clientId) {
-      return redirectError(redirectUri, state, "unauthorized_client", "Unknown client_id");
+    if (!clientAllows(q.get("client_id"), redirectUri)) {
+      return redirectError(
+        redirectUri,
+        state,
+        "unauthorized_client",
+        "Unknown client_id, or a redirect_uri this client did not register"
+      );
     }
     if (q.get("code_challenge_method") !== "S256" || !q.get("code_challenge")) {
       return redirectError(
@@ -43555,6 +43582,7 @@ Only Claude and localhost may receive an authorization code from this server.`,
     }
     const packed = mintGithubState({
       redirectUri,
+      clientId: q.get("client_id"),
       clientState: state ?? null,
       codeChallenge: q.get("code_challenge"),
       resource: q.get("resource") ?? origin
@@ -43615,7 +43643,7 @@ Only Claude and localhost may receive an authorization code from this server.`,
     }
     const authCode = mintAuthCode({
       login,
-      clientId,
+      clientId: packed.clientId ?? clientId,
       redirectUri: packed.redirectUri,
       codeChallenge: packed.codeChallenge,
       resource: packed.resource
@@ -43646,19 +43674,52 @@ Only Claude and localhost may receive an authorization code from this server.`,
     return json2({
       access_token: mintAccessToken({
         login: result.login,
-        audience: result.resource || origin,
-        clientId
+        audience: result.resource || resource,
+        clientId: form.get("client_id")
       }, signingKey),
       token_type: "Bearer",
       expires_in: ACCESS_TOKEN_TTL_S,
       scope: "mcp"
     });
   }
+  async function register(request) {
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return json2({ error: "invalid_client_metadata", error_description: "Body is not JSON" }, 400);
+    }
+    const uris = body?.redirect_uris;
+    if (!Array.isArray(uris) || uris.length === 0) {
+      return json2({
+        error: "invalid_redirect_uri",
+        error_description: "redirect_uris is required and must be a non-empty array"
+      }, 400);
+    }
+    const rejected = uris.filter((u) => !redirectOriginAllowed(u, allowedRedirectOrigins));
+    if (rejected.length) {
+      return json2({
+        error: "invalid_redirect_uri",
+        error_description: `Not an allowed redirect target: ${rejected.join(", ")}`
+      }, 400);
+    }
+    return json2({
+      client_id: mintClientId(uris, signingKey),
+      redirect_uris: uris,
+      // A PUBLIC client: no secret is issued, and PKCE is what protects the
+      // exchange. Saying so explicitly stops a client waiting for one.
+      token_endpoint_auth_method: "none",
+      grant_types: ["authorization_code"],
+      response_types: ["code"],
+      client_id_issued_at: Math.floor(Date.now() / 1e3),
+      client_name: body?.client_name ?? null
+    }, 201);
+  }
   return async function handleOAuth(request) {
     const url2 = new URL(request.url);
     const { pathname } = url2;
-    if (request.method === "GET" && pathname === "/.well-known/oauth-protected-resource") {
-      return json2(protectedResourceMetadata(origin));
+    if (request.method === "GET" && (pathname === "/.well-known/oauth-protected-resource" || pathname === "/.well-known/oauth-protected-resource/mcp")) {
+      return json2(protectedResourceMetadata(origin, resource));
     }
     if (request.method === "GET" && pathname === "/.well-known/oauth-authorization-server") {
       return json2(authorizationServerMetadata(origin));
@@ -43666,6 +43727,7 @@ Only Claude and localhost may receive an authorization code from this server.`,
     if (request.method === "GET" && pathname === "/api/oauth/authorize") return authorize(url2);
     if (request.method === "GET" && pathname === "/api/oauth/callback/github") return githubCallback(url2);
     if (request.method === "POST" && pathname === "/api/oauth/token") return token(request);
+    if (request.method === "POST" && pathname === "/api/oauth/register") return register(request);
     return null;
   };
 }
@@ -43733,7 +43795,9 @@ function createApp({ env = process.env, store = null, fetchImpl = fetch } = {}) 
         return { ok: false, reason: "A Bearer token is required" };
       }
       const info = verifyAccessToken(token, {
-        audience: config2.origin,
+        // Both spellings of this server: the canonical MCP URL a client names
+        // as its `resource`, and the bare origin. Anything else is refused.
+        audiences: [`${config2.origin}/mcp`, config2.origin],
         allowedLogin: config2.allowedGithubLogin
       }, signingKey);
       if (!info) return { ok: false, reason: "Token invalid, expired, or not for this server" };

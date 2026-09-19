@@ -56,7 +56,9 @@ export function createApp({ env = process.env, store = null, fetchImpl = fetch }
         return { ok: false, reason: 'A Bearer token is required' }
       }
       const info = verifyAccessToken(token, {
-        audience: config.origin,
+        // Both spellings of this server: the canonical MCP URL a client names
+        // as its `resource`, and the bare origin. Anything else is refused.
+        audiences: [`${config.origin}/mcp`, config.origin],
         allowedLogin: config.allowedGithubLogin,
       }, signingKey)
       if (!info) return { ok: false, reason: 'Token invalid, expired, or not for this server' }
