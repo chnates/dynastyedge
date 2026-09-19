@@ -43761,6 +43761,33 @@ var init_app = __esm({
 });
 
 // mcp/vercelEntry.js
+var isNodeResponse = (res) => !!res && typeof res.setHeader === "function" && typeof res.end === "function";
+function requestFromNode(req) {
+  const proto = req.headers["x-forwarded-proto"] || "https";
+  const host = req.headers["x-forwarded-host"] || req.headers.host || "localhost";
+  const url2 = new URL(req.url, `${proto}://${host}`);
+  const hasBody = !["GET", "HEAD"].includes(req.method);
+  return new Promise((resolve, reject) => {
+    if (!hasBody) {
+      resolve(new Request(url2, { method: req.method, headers: req.headers }));
+      return;
+    }
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => resolve(new Request(url2, {
+      method: req.method,
+      headers: req.headers,
+      body: Buffer.concat(chunks)
+    })));
+    req.on("error", reject);
+  });
+}
+async function writeToNode(response, res) {
+  res.statusCode = response.status;
+  response.headers.forEach((value, key) => res.setHeader(key, value));
+  const body = Buffer.from(await response.arrayBuffer());
+  res.end(body);
+}
 var appPromise = null;
 async function getApp() {
   if (!appPromise) {
@@ -43768,26 +43795,38 @@ async function getApp() {
   }
   return appPromise;
 }
-async function handler(request) {
+var failure = (err, status) => new Response(JSON.stringify({
+  error: status === 503 ? "server_unavailable" : "internal_error",
+  detail: err?.message ?? String(err),
+  code: err?.code ?? null
+}), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+async function respond(request) {
   let app;
   try {
     app = await getApp();
   } catch (err) {
     appPromise = null;
-    return new Response(JSON.stringify({
-      error: "server_unavailable",
-      // The message, never the stack — a stack on a public endpoint leaks
-      // paths and module layout and helps nobody reading it. The message
-      // alone distinguishes the two failures that matter: a missing secret
-      // versus a module the host could not resolve.
-      detail: err?.message ?? String(err),
-      code: err?.code ?? null
-    }), {
-      status: 503,
-      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }
-    });
+    return failure(err, 503);
   }
-  return app(request);
+  try {
+    return await app(request);
+  } catch (err) {
+    return failure(err, 500);
+  }
+}
+async function handler(reqOrRequest, maybeRes) {
+  if (isNodeResponse(maybeRes)) {
+    try {
+      const response = await respond(await requestFromNode(reqOrRequest));
+      await writeToNode(response, maybeRes);
+    } catch (err) {
+      maybeRes.statusCode = 500;
+      maybeRes.setHeader("Content-Type", "application/json");
+      maybeRes.end(JSON.stringify({ error: "adapter_error", detail: err?.message ?? String(err) }));
+    }
+    return void 0;
+  }
+  return respond(reqOrRequest);
 }
 export {
   handler as default
