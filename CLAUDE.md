@@ -642,14 +642,19 @@ are specified in `MCP_DISCOVERY.md` §5, in build order.
 top of this file is amended explicitly rather than quietly contradicted.
 
 **`@modelcontextprotocol/sdk` is the first new runtime dependency since the
-`@dnd-kit` trio.** It is the reference implementation of the protocol's
-JSON-RPC framing, handshake and capability negotiation — a hand-rolled version
-would be ~150 lines whose whole job is to match a spec we do not control. It
-brings `zod`, which the server uses for tool input **and output** schemas, and
-that is a genuine gain against the risk in §7 below: it is the first schema
-validation anywhere in this repo. **It never reaches the web bundle** — nothing
-in `src/` imports `mcp/`, verified by a byte-identical `dist` (995,441 bytes)
-across the install.
+`@dnd-kit` trio, and it is OWNER-APPROVED (2026-09-19, PR #56).** Change
+control reserves that call for the owner
+(`dynastyedge-change-control` §2 rule 5) — do not treat this as precedent for
+the next dependency, which needs its own approval.
+
+It is the reference implementation of the protocol's JSON-RPC framing,
+handshake and capability negotiation — a hand-rolled version would be ~150
+lines whose whole job is to match a spec we do not control. It brings `zod`,
+which the server uses for tool input **and output** schemas, and that is a
+genuine gain against the risk in §7 below: it is the first schema validation
+anywhere in this repo. **It never reaches the web bundle** — nothing in `src/`
+imports `mcp/`, verified by a byte-identical `dist` (995,441 bytes) across the
+install.
 
 ### Architecture — two layers, and the dependency runs one way
 

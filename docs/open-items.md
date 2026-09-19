@@ -87,17 +87,17 @@ is de-risked.
 
 ### MCP-2 — MCP server phase 2: remote transport, OAuth, deployment **[owner ask required]**
 
-**Trigger — two owner decisions, neither of which a sandbox can make:**
+**Trigger — two owner decisions. The first is now SETTLED:**
 
-1. **Is `@modelcontextprotocol/sdk` approved as a runtime dependency?** It
-   landed with MCP-1 and is flagged in that commit, but change control
-   (`dynastyedge-change-control` §2 rule 5) reserves the call for the owner.
-   If the answer is no, MCP-1 has to be reworked onto a hand-rolled JSON-RPC
-   layer — roughly 150 lines whose only job is matching a spec we don't
-   control — and phase 2 should not start until that is settled.
-2. **Which host, and the OAuth app registration.** Both need an account and a
-   secret. `MCP_DISCOVERY.md` §1 chose "serverless (Workers/Vercel class) +
-   OAuth, single user" as the only shape that reaches the Claude **mobile**
+1. ~~**Is `@modelcontextprotocol/sdk` approved as a runtime dependency?**~~
+   **APPROVED by the owner 2026-09-19 (PR #56).** The hand-rolled JSON-RPC
+   fallback is off the table; `mcp/` stays as built. Note the approval is for
+   **this** dependency only — the next one needs its own, per
+   `dynastyedge-change-control` §2 rule 5.
+2. **Which host, and the OAuth app registration — STILL OPEN, and the only
+   thing blocking phase 2.** Both need an account and a secret, so no sandbox
+   can do them. `MCP_DISCOVERY.md` §1 chose "serverless (Workers/Vercel class)
+   + OAuth, single user" as the only shape that reaches the Claude **mobile**
    app; §8 question 1 leaves the deployment mechanism undesigned.
 
 **What phase 2 must change, beyond adding a transport:**
