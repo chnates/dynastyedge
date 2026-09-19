@@ -18,14 +18,38 @@
 // is evaluated once and the handler is reused, which is also what lets
 // http.js's shared limiter and the memory store span requests.
 //
-// A MISSING SECRET THROWS HERE, AT IMPORT. That is deliberate: it surfaces as
-// a failed function invocation rather than a server that answers requests
-// with no authentication.
+// A MISSING SECRET STILL REFUSES TO SERVE, but it SAYS WHY. The first cut let
+// the constructor throw at import, which on Vercel surfaces as an opaque
+// `FUNCTION_INVOCATION_FAILED` — and with runtime logs unreadable from the
+// deploy tooling, that is a dead end for whoever is debugging it. "Fails
+// loudly" has to mean *says what is wrong*, not merely *stops*.
+//
+// So construction is caught and the error is held. The server still answers
+// nothing but a refusal — no league data, no tools, no token accepted — it
+// just returns a 503 that names the cause instead of a platform stack trace.
 
 import { createApp } from './app.js'
 
-const app = createApp()
+let app = null
+let initError = null
+
+try {
+  app = createApp()
+} catch (err) {
+  initError = err
+}
 
 export default function handler(request) {
+  if (initError) {
+    return new Response(JSON.stringify({
+      error: 'server_misconfigured',
+      // The message, never the stack — a stack on a public endpoint leaks
+      // paths and module layout for no benefit to the person reading it.
+      detail: initError.message,
+    }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+    })
+  }
   return app(request)
 }
