@@ -2,10 +2,15 @@ import { useMemo, useCallback } from 'react'
 import { useSleeper } from './useSleeper'
 import { useFantasyCalc } from './useFantasyCalc'
 import { usePlayerDB } from './usePlayerDB'
-import { resolvePickOwnership, findExactSlotValue, buildDraftSlots, slotForRound, computePickCapitalScore } from '../utils/pickCapital'
+import { buildLeagueState } from '../utils/leagueState'
 import { resolvePickYears } from '../utils/seasonWindow'
 import { PICK_YEARS } from '../constants'
 import { useIdentity } from './useIdentity'
+import { getTeamName } from '../utils/teamName'
+
+// Moved to src/utils/teamName.js so the analysis layer stays React-free.
+// Re-exported here because 22 components import it from this module.
+export { getTeamName }
 
 export function useLeague() {
   // The logged-in roster is now runtime state, not a constant — "me" is
@@ -28,149 +33,10 @@ export function useLeague() {
     [sleeperData]
   )
 
-  const league = useMemo(() => {
-    if (!sleeperData || !fcValues) return null
-
-    const { leagueInfo, rosters, users, tradedPicks, drafts } = sleeperData
-    const { playerMap, pickEntries } = fcValues
-
-    // The upcoming rookie draft (pickYears[0]). Its order — in practice always
-    // from draft_order, since the `/league/{id}/drafts` list endpoint never
-    // returns slot_to_roster_id (only `/draft/{draft_id}` does) — lets us
-    // resolve each of that season's picks to its exact slot (1.09) and price
-    // it at FantasyCalc's slot-level value instead of the round median. Once
-    // that draft is held there is no match here, so its successor's picks
-    // correctly fall back to round medians until Sleeper sets its order.
-    const draftSeason = pickYears[0]
-    const rookieDraft = (drafts ?? []).find(
-      d => String(d.season) === draftSeason && d.type !== 'auction'
-    ) ?? null
-    const draftSlots = buildDraftSlots(rookieDraft, rosters)
-    const draftType = rookieDraft?.type ?? 'linear'
-    const draftTeams = rookieDraft?.settings?.teams ?? rosters.length
-
-    // Build user lookup: user_id → user
-    const userById = {}
-    users.forEach(u => { userById[u.user_id] = u })
-
-    // Build roster → user map
-    const userMap = {}
-    rosters.forEach(r => {
-      userMap[r.roster_id] = userById[r.owner_id] ?? null
-    })
-
-    // Resolve pick ownership
-    const picksByRoster = resolvePickOwnership(tradedPicks, rosters, pickYears)
-
-    const waiverBudget = leagueInfo?.settings?.waiver_budget ?? 100
-
-    function resolveRoster(roster) {
-      // Sleeper IDs arrive as strings or numbers depending on endpoint —
-      // normalize everything to strings once so set lookups can't miss.
-      const toIdSet = ids => new Set(
-        (ids ?? []).map(id => String(id)).filter(id => id && id !== '0')
-      )
-      const starterSet = toIdSet(roster.starters)
-      const reserveSet = toIdSet(roster.reserve)
-      const taxiSet = toIdSet(roster.taxi)
-
-      const seenIds = new Set()
-      const allPlayers = (roster.players ?? []).flatMap(pid => {
-        const id = String(pid)
-        if (seenIds.has(id)) return []
-        seenIds.add(id)
-
-        const fc = playerMap[id]
-        const meta = playerDB?.[id]
-        // Unranked by FantasyCalc: resolve identity from the Sleeper player
-        // DB and show with no market value. Skip only if neither source
-        // knows the player (or the DB hasn't loaded yet).
-        if (!fc && !(meta?.position)) return []
-
-        const base = fc ?? {
-          name: meta.name ?? id,
-          position: meta.position,
-          team: meta.team,
-          age: meta.age,
-          value: 0,
-          overallRank: null,
-          positionRank: null,
-          trend30Day: 0,
-        }
-
-        return [{
-          sleeperId: id,
-          name: base.name,
-          position: base.position,
-          team: base.team,
-          age: base.age,
-          value: base.value,
-          overallRank: base.overallRank,
-          positionRank: base.positionRank,
-          trend30Day: base.trend30Day,
-          unranked: !fc,
-          isStarter: starterSet.has(id),
-          isTaxi: taxiSet.has(id),
-          isIR: reserveSet.has(id),
-        }]
-      })
-
-      const ownedPicks = (picksByRoster[roster.roster_id] ?? []).map(pk => {
-        // A pick sits at its ORIGINAL owner's draft slot. Only the current
-        // rookie-draft season has a known order + FantasyCalc slot entries;
-        // future seasons fall through to the round median (slot stays null).
-        const slot = pk.season === draftSeason
-          ? slotForRound(draftSlots?.[pk.originalOwner], pk.round, draftType, draftTeams)
-          : null
-        return {
-          ...pk,
-          slot,
-          slotLabel: slot != null ? `${pk.round}.${String(slot).padStart(2, '0')}` : null,
-          value: findExactSlotValue({ season: pk.season, round: pk.round, slot }, pickEntries),
-        }
-      })
-      const playerValue = allPlayers.reduce((s, p) => s + p.value, 0)
-      const pickValue = ownedPicks.reduce((s, pk) => s + pk.value, 0)
-      const pickCapitalScore = computePickCapitalScore(ownedPicks, pickEntries, pickYears)
-
-      const startersWithAge = allPlayers.filter(p => p.isStarter && !p.isIR && !p.isTaxi && p.age != null && !p.unranked)
-      const avgStarterAge = startersWithAge.length > 0
-        ? startersWithAge.reduce((s, p) => s + p.age, 0) / startersWithAge.length
-        : null
-
-      const starterOrder = (roster.starters ?? []).map(id => String(id))
-
-      const settings = roster.settings ?? {}
-      const wins = settings.wins ?? 0
-      const losses = settings.losses ?? 0
-      const ties = settings.ties ?? 0
-
-      return {
-        rosterId: roster.roster_id,
-        owner: userMap[roster.roster_id],
-        players: allPlayers,
-        picks: ownedPicks,
-        totalValue: playerValue + pickValue,
-        faabBudget: waiverBudget,
-        faabRemaining: waiverBudget - (settings.waiver_budget_used ?? 0),
-        faabSpent: settings.waiver_budget_used ?? 0,
-        record: { wins, losses, ties },
-        hasRecord: wins + losses + ties > 0,
-        pointsFor: (settings.fpts ?? 0) + (settings.fpts_decimal ?? 0) / 100,
-        pointsAgainst: (settings.fpts_against ?? 0) + (settings.fpts_against_decimal ?? 0) / 100,
-        pickCapitalScore,
-        avgStarterAge,
-        starterOrder,
-      }
-    }
-
-    const allRosters = rosters.map(resolveRoster)
-    const myRoster = myRosterId != null
-      ? allRosters.find(r => r.rosterId === myRosterId) ?? null
-      : null
-
-    return { allRosters, myRoster, userMap, leagueInfo, pickYears }
-  }, [sleeperData, fcValues, playerDB, myRosterId, pickYears])
+  const league = useMemo(
+    () => buildLeagueState({ sleeperData, fcValues, playerDB, myRosterId, pickYears }),
+    [sleeperData, fcValues, playerDB, myRosterId, pickYears]
+  )
 
   // A Sleeper-only roster list for sign-in. Identity selection must never
   // depend on FantasyCalc — a values-API outage shouldn't lock the user out of
@@ -245,13 +111,4 @@ export function useLeague() {
     myRosterId, pickYears, loading, error, retry, sleeperFetchedAt, fcFetchedAt, fcValues,
     signInRosters, sleeperLoading, sleeperError, sleeperRetry, fcRetry,
   ])
-}
-
-function toTitleCase(str) {
-  return str.replace(/\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-}
-
-export function getTeamName(user) {
-  const raw = user?.metadata?.team_name || user?.display_name || user?.username || 'Unknown Team'
-  return toTitleCase(raw)
 }

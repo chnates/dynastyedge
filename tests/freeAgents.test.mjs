@@ -109,3 +109,75 @@ test('the DEF slot returns ONLY defenses — never a skill player', () => {
   assert.ok(rows.length > 0)
   assert.ok(rows.every(r => r.position === 'DEF'))
 })
+
+// ── the DYNASTY free-agent pool (shared by League › Free Agents and The Edge) ──
+//
+// Behaviors pinned (with their doc source):
+//  - CLAUDE.md League Context: "Exactly one defense is ever rostered … The app
+//    must therefore never suggest adding a defense as a pickup: defenses appear
+//    only against the DEF slot … never in a general free-agent pool, never in
+//    recommendFreeAgents."
+//  - CLAUDE.md Rule #8: ids normalize to String() before any Set lookup.
+//  - CLAUDE.md Rule #7: an unranked player shows `—`, never a fabricated 0.
+
+import {
+  buildFreeAgentPool, buildAvailableDefenses, buildRosteredIdSet, VALUED_POSITIONS,
+} from '../src/utils/freeAgents.js'
+
+const FA_MAP = {
+  '1': { sleeperId: '1', name: 'Rostered WR', position: 'WR', value: 4000 },
+  '2': { sleeperId: '2', name: 'Free WR', position: 'WR', value: 900 },
+  '3': { sleeperId: '3', name: 'Free QB', position: 'QB', value: 1500 },
+  '4': { sleeperId: '4', name: 'Zero Value', position: 'TE', value: 0 },
+  '5': { sleeperId: '5', name: 'Null Value', position: 'RB', value: null },
+  '6': { sleeperId: '6', name: 'Some Defense', position: 'DEF', value: 300 },
+}
+const FA_DB = {
+  '6': { name: 'Some Defense', position: 'DEF', team: 'ATL' },
+  '7': { name: 'Free Defense', position: 'DEF', team: 'SF' },
+  '8': { name: 'Rostered Defense', position: 'DEF', team: 'KC' },
+  '9': { name: 'Teamless Defense', position: 'DEF', team: null },
+}
+// Roster ids given as NUMBERS on purpose — the pool must still exclude them.
+const FA_ROSTERS = [{ players: [{ sleeperId: 1 }, { sleeperId: 8 }] }]
+
+test('the general free-agent pool can never contain a defense (League Context)', () => {
+  const pool = buildFreeAgentPool({ fcPlayerMap: FA_MAP, allRosters: FA_ROSTERS })
+  assert.equal(pool.filter(p => p.position === 'DEF').length, 0,
+    'a valued DEF row must still be refused — the rule is not "FantasyCalc ranks none"')
+  assert.ok(!VALUED_POSITIONS.includes('DEF'))
+})
+
+test('the pool excludes rostered, zero- and null-valued players (rule 8)', () => {
+  const ids = buildFreeAgentPool({ fcPlayerMap: FA_MAP, allRosters: FA_ROSTERS })
+    .map(p => p.sleeperId).sort()
+  assert.deepEqual(ids, ['2', '3'],
+    'numeric rostered id 1 excluded; 4 and 5 carry no value; 6 is a defense')
+})
+
+test('an explicit rosteredIds set is honoured over allRosters', () => {
+  const pool = buildFreeAgentPool({ fcPlayerMap: FA_MAP, rosteredIds: new Set(['2']) })
+  assert.deepEqual(pool.map(p => p.sleeperId).sort(), ['1', '3'],
+    'allRosters is ignored entirely — 1 is free here and 2 is not')
+})
+
+test('the pool degrades to empty without FantasyCalc, never throwing', () => {
+  assert.deepEqual(buildFreeAgentPool(), [])
+  assert.deepEqual(buildFreeAgentPool({ fcPlayerMap: null, allRosters: FA_ROSTERS }), [])
+})
+
+test('buildRosteredIdSet normalizes every id to a string (rule 8)', () => {
+  const owned = buildRosteredIdSet(FA_ROSTERS)
+  assert.ok(owned.has('1') && owned.has('8'))
+  assert.ok([...owned].every(id => typeof id === 'string'))
+  assert.equal(buildRosteredIdSet(null).size, 0)
+})
+
+test('defenses are reachable only by their own named call, and show no value (rule 7)', () => {
+  const defs = buildAvailableDefenses({ playerDB: FA_DB, allRosters: FA_ROSTERS })
+  assert.deepEqual(defs.map(d => d.sleeperId).sort(), ['6', '7'],
+    'rostered 8 excluded (numeric id), teamless 9 excluded')
+  assert.ok(defs.every(d => d.value === null), '`—`, never a fabricated 0')
+  assert.ok(defs.every(d => typeof d.sleeperId === 'string'))
+  assert.deepEqual(buildAvailableDefenses(), [], 'no player DB ⇒ empty, never an error')
+})

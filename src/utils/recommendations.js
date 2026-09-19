@@ -13,7 +13,7 @@ import { computeLeagueAverages, getPositionalDeltas, assignWinWindowTiers, build
 import { buildValueLineup } from './lineupBuild'
 import { PEAK_WINDOWS } from './peakWindows'
 import { buildFairBand, FAIR_BAND_PCT } from './fairBand'
-import { getTeamName } from '../hooks/useLeague'
+import { getTeamName } from './teamName'
 
 // The starters we protect hardest at each position in this 10-team Superflex
 // Half-PPR league (QB doubles up via the Superflex slot; 3 FLEX spots make RB/WR

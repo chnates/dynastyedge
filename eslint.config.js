@@ -1,6 +1,9 @@
-// ESLint v9 flat config — the CI lint gate (npm run lint = `eslint src scripts`).
-// Scope is deliberately src/ + scripts/ only: tests/ run under `npm test` and
-// the config itself has no lint surface worth gating.
+// ESLint v9 flat config — the CI lint gate
+// (npm run lint = `eslint src scripts mcp`).
+// Scope is src/ + scripts/ + mcp/: tests/ run under `npm test` and the config
+// itself has no lint surface worth gating. mcp/ is in scope because it is
+// shipped code, not tooling — CLAUDE.md's MCP section makes the server a full
+// citizen under the same gates as the app.
 //
 // Globals are hand-written literals instead of importing the `globals` package:
 // package.json declares exactly the two owner-approved devDependencies (eslint,
@@ -83,6 +86,17 @@ export default [
   // Pipeline scripts: Node ESM, no JSX, no React.
   {
     files: ['scripts/**/*.mjs'],
+    ...js.configs.recommended,
+    languageOptions: {
+      ecmaVersion: 2024,
+      sourceType: 'module',
+      globals: nodeGlobals,
+    },
+  },
+  // MCP server: Node ESM, no JSX, no React. Same rules as the pipeline
+  // scripts — it is shipped code under the same gates as src/.
+  {
+    files: ['mcp/**/*.{js,mjs}'],
     ...js.configs.recommended,
     languageOptions: {
       ecmaVersion: 2024,

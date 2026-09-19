@@ -57,3 +57,72 @@ export function buildWaiverOptions({
     .sort((a, b) => b.projPts - a.projPts)
     .slice(0, limit)
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// The DYNASTY free-agent pool — a different question from buildWaiverOptions
+// above. That one asks "who can fill this lineup slot this week?" and ranks by
+// Sleeper projection. This one asks "who is available as an asset?" and is what
+// `recommendFreeAgents` scores, in dynasty value.
+//
+// It existed twice — once in FreeAgentsView.jsx and once in edgeBriefing.js —
+// with no shared definition, so League › Free Agents and The Edge's pickup item
+// were one edit away from disagreeing about who is even available. This is the
+// single definition; the MCP server must not become a third copy.
+//
+// THE STANDING RULE TRAVELS WITH IT: a defense is never offered as a general
+// pickup. You roster exactly one, ever (CLAUDE.md League Context), FantasyCalc
+// ranks zero of them so they carry no dynasty value to rank on, and a list that
+// mixes 14 defenses into the pool reads as "pick up some defenses" — advice
+// this app must never give. That is enforced here by construction rather than
+// by each caller remembering: the general pool cannot return a DEF, and getting
+// one requires calling buildAvailableDefenses by name.
+
+// The positions that carry a dynasty value. Deliberately NOT `POSITIONS` from
+// constants — that is the app's general position list, and this is the narrower
+// "has a FantasyCalc price" set. They coincide today; conflating them is how a
+// defense gets into a value-ranked list the day DEF is added to one of them.
+export const VALUED_POSITIONS = ['QB', 'RB', 'WR', 'TE']
+
+// Every rostered sleeperId in the league, normalized to strings (rule 8).
+export function buildRosteredIdSet(allRosters) {
+  const owned = new Set()
+  ;(allRosters ?? []).forEach(r =>
+    (r.players ?? []).forEach(p => owned.add(String(p.sleeperId)))
+  )
+  return owned
+}
+
+// Available, dynasty-valued players — the pool `recommendFreeAgents` scores.
+//
+//   fcPlayerMap  the cached FantasyCalc playerMap (string-keyed)
+//   allRosters   the league's resolved rosters; pass `rosteredIds` instead when
+//                the caller already built the set
+export function buildFreeAgentPool({ fcPlayerMap, allRosters, rosteredIds } = {}) {
+  if (!fcPlayerMap) return []
+  const owned = rosteredIds ?? buildRosteredIdSet(allRosters)
+  return Object.values(fcPlayerMap).filter(p =>
+    !owned.has(String(p.sleeperId)) &&
+    VALUED_POSITIONS.includes(p.position) &&
+    (p.value ?? 0) > 0
+  )
+}
+
+// Available defenses, resolved from the shared player DB — FantasyCalc ranks
+// none, so they carry no dynasty value and show `—` (rule 7). Kept a separate
+// call, never merged into the pool above: see the standing rule.
+export function buildAvailableDefenses({ playerDB, allRosters, rosteredIds } = {}) {
+  if (!playerDB) return []
+  const owned = rosteredIds ?? buildRosteredIdSet(allRosters)
+  return Object.entries(playerDB)
+    .filter(([id, p]) => p.position === 'DEF' && p.team && !owned.has(String(id)))
+    .map(([id, p]) => ({
+      sleeperId: String(id),
+      name: p.name,
+      position: 'DEF',
+      team: p.team,
+      value: null,
+      age: null,
+      overallRank: null,
+      trend30Day: 0,
+    }))
+}
