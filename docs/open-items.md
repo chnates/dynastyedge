@@ -135,9 +135,67 @@ fetch the rest-of-season simulation — and the response says so via
 likewise unwired. Each needs a fetch beyond the league snapshot; wiring them
 is a natural phase-2-or-later increment, not a correctness bug.
 
-### MCP-2 — MCP server phase 2: remote transport, OAuth, deployment **[owner ask required]**
+### MCP-2 — MCP server phase 2: remote transport, OAuth, deployment **IN PROGRESS 2026-09-19**
 
-**Trigger — two owner decisions. The first is now SETTLED:**
+**Both owner decisions are now SETTLED.** Host: **Vercel** (owner call — an
+account and a `dynastyedge` team already existed, so nothing new was signed up
+for; project `dynastyedge-mcp`, production domain
+`dynastyedge-mcp.vercel.app`). OAuth: a **GitHub OAuth App**, registered by the
+owner, client id `Ov23lipGgde1WRtguwMc` in `mcp/config.js` (public by design)
+and the secret set as `GITHUB_CLIENT_SECRET` in Vercel (Production, Sensitive).
+
+**Shipped on `claude/dynastyedge-mcp-phase-2-unblock-fyze45`:**
+
+- **`mcp/store.js`** — the cache backend is a parameter, the freshness policy
+  is shared. stdio keeps `memoryStore()` unchanged; HTTP passes its own. It
+  *deleted* a duplicate: `snapshot.js` and `weekly.js` each carried a verbatim
+  `loadSource`. Two traps pinned by test — a store-level TTL would break the
+  stale-fallback contract, and the 1.20MB player DB must be gzipped (208KB).
+- **`mcp/http.js`** — streamable HTTP as a Web-standard `(Request) => Response`,
+  so the host is a packaging decision. **Stateless by necessity**: a session in
+  RAM is what serverless cannot keep, and the failure would be intermittent
+  (passes warm, fails cold). The limiter is hoisted so a warm instance does not
+  hand every request the full concurrency budget.
+- **`mcp/oauth.js` + `mcp/oauthRoutes.js` + `mcp/app.js`** — OAuth 2.1,
+  stateless, GitHub upstream. No DCR (one pre-registered public client, the
+  spec's named alternative), no JWT library (HMAC over base64url; all 25 auth
+  tests run with no `node_modules`), HKDF-derived signing key so there is no
+  second secret. Costs stated: 1-hour unrevocable tokens, 60-second codes
+  where **PKCE is the defence rather than defence in depth**.
+
+**Verified end to end against the live league**, only GitHub's identity call
+faked: 401 + discovery → authorize → callback → token → `get_roster` in 608ms
+(Nix Cage, 86,090, rank 3, 31 players, 12 picks, stamped, not stale); tampered
+token 401s; unknown path 404s. Tests 489 → **538**; without `node_modules`
+455 → **495**, and the failing-file count moved 4 → **5** (the fifth is
+`mcpHttp.test.mjs`, which imports the SDK — a real dependency, not React
+taint). `dist` byte-identical at 995,441 throughout.
+
+**KV was NOT needed, and that is now a verified finding rather than a hope.**
+It was considered twice and declined twice for different reasons: for
+*caching*, a warm instance holds the store and the second request measured
+21ms; for *OAuth state*, Claude's connector supports a pre-registered client,
+which removes the registry that was the only thing genuinely requiring
+storage. A multi-tenant server would still want it.
+
+**What remains:**
+
+1. **Vercel packaging** — an `api/` entry, a `vercel.json` with rewrites so
+   every path reaches the one function, and an esbuild bundle step (verified
+   in MCP-1, still not wired into `package.json` or CI). The open question is
+   whether Vercel's function detection runs after the build command; resolve
+   it by deploying, not by assuming.
+2. **First deploy + turning off Vercel deployment protection.** Protection is
+   currently ON, which is right until auth is live. **Sequence it so the lock
+   is verified from outside BEFORE the protection comes off**, never after.
+3. **Connecting Claude** as a custom connector and a real browser login — the
+   one step no sandbox can do.
+
+**Still open, unchanged:** `mcp/limit.js` backs off on a fixed schedule because
+`fetchJSON` discards the `Response`, so a 429's `Retry-After` is unreachable.
+One user makes this academic; a hosted endpoint may not.
+
+**Historical — the trigger, now discharged:**
 
 1. ~~**Is `@modelcontextprotocol/sdk` approved as a runtime dependency?**~~
    **APPROVED by the owner 2026-09-19 (PR #56).** The hand-rolled JSON-RPC
