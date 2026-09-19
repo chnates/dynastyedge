@@ -53,6 +53,13 @@ const nodeGlobals = {
   clearTimeout: 'readonly',
   AbortSignal: 'readonly',
   Buffer: 'readonly',
+  // Web-standard request/response types. Node has had these since 18, and
+  // mcp/http.js is written against them deliberately: a (Request) => Response
+  // handler is what every serverless runtime takes, so the host stays a
+  // packaging decision rather than a code one.
+  Request: 'readonly',
+  Response: 'readonly',
+  Headers: 'readonly',
 }
 
 export default [

@@ -690,6 +690,51 @@ mcp/
     resolveAssets.js  analyzeTrade.js  lineupAdvice.js
 ```
 
+### The HTTP transport (phase 2) — stateless, by necessity
+
+`mcp/http.js` exposes `createMcpHandler()`, which returns a **Web-standard
+`(Request) => Promise<Response>`** — the signature Vercel Functions,
+Cloudflare Workers, Deno and Bun all take, so the host stays a *packaging*
+decision rather than a code one. `createServer()` was already
+transport-agnostic, so **no tool was forked**: stdio and HTTP expose the same
+six tools, pinned by test.
+
+**THE TRAP: a session held in RAM is exactly what serverless cannot keep.**
+The SDK's streamable transport can run session-ful — it mints a session id and
+expects later requests on it to reach the *same process*. A serverless host
+gives no such guarantee, and the failure is **intermittent**: it works in
+testing, where one warm instance serves everything, and breaks in production
+under the conditions hardest to reproduce. So the transport runs **stateless**
+(`sessionIdGenerator: undefined`, `enableJsonResponse: true`), a fresh server
+and transport per request, and `tests/mcpHttp.test.mjs` asserts no
+`mcp-session-id` header is ever minted. Same reasoning as `store.js`: anything
+remembered between requests must live where a second instance can see it.
+
+**The limiter is hoisted to module scope, deliberately.** A per-request server
+would mint a per-request rate limiter, handing every concurrent request the
+full budget — precisely what `mcp/limit.js` exists to bound. `createServer`
+now takes `fetcher` and `store` so a warm instance shares one of each.
+
+**The gate fails CLOSED.** An authenticator that throws returns 500, never
+200; a falsy or `ok: false` result is a 401; and **every POST is
+authenticated**, so a session cannot be established once and then trusted. A
+401 carries `WWW-Authenticate: Bearer resource_metadata="…"` (RFC 9728) so a
+client is told where to authenticate rather than merely refused. `GET` is a
+liveness probe that reports only that the process is up — a test asserts it
+leaks no roster, player, value or league data, because an unauthenticated read
+would defeat the gate.
+
+**Verified over the real transport against the live league** (2026-09-19, a
+real MCP client over `StreamableHTTPClientTransport`): health 200;
+unauthenticated POST 401 with the discovery header; `tools/list` → six tools;
+`get_roster` 509ms cold / 11,312B, Nix Cage 0-1, 31 players + 12 picks, slots
+STARTER 11 · BENCH 13 · TAXI 5 · IR 2, total 86,090, value rank 3, window
+Middle, all three `asOf` sources stamped and not stale, one unranked player at
+`value: null` (rule 7). Then `resolve_assets` in **21ms** — the store survived
+across separate HTTP requests, which is what the `store.js` refactor was for —
+returning **six candidates for "Brown" and refusing to match**, byte-matching
+the behaviour phase 1b measured over stdio.
+
 Run it with `npm run mcp`. The `--import ./mcp/register.mjs` hook is
 **mandatory**: `src/utils` uses Vite-style extensionless relative imports that
 plain Node cannot resolve. The hook is a deliberate copy of the test suite's —
@@ -4551,6 +4596,7 @@ dynastyedge/
 │   ├── stdio.js                ← entry point (stdio transport). Needs --import ./mcp/register.mjs
 │   ├── server.js               ← the McpServer: tool schemas + wiring, ZERO domain math
 │   ├── snapshot.js             ← league fetch + ~15-min cache + THE as-of stamp (the §7 mitigation: nothing in this repo validates an external payload, so provenance is what makes a wrong answer LOOK wrong). Also mergeAsOf, which RECOMPUTES oldestSourceAt over the union so an added source can't overstate freshness
+│   ├── http.js                 ← THE streamable-HTTP transport: a Web-standard (Request) => Response, so the host is a packaging decision. STATELESS by necessity (a serverless instance cannot hold a session — the failure is intermittent, warm-passes/cold-fails). Owns the auth gate, which fails CLOSED
 │   ├── store.js                ← THE cache backend boundary + the ONE freshness policy (loadSource). Backend is a parameter (memory for stdio, KV for HTTP); the policy is shared. Owns the two traps: a store-level TTL would break the stale-fallback contract, and the 1.20MB player DB must be gzipped into KV
 │   ├── weekly.js               ← projections + the schedule, on their OWN ~60-min TTL (league data changes on an EVENT, projections on a 0.06%/10h DRIP). Owns the two silent traps: the schedule is off /v1 (SLEEPER_ROOT) and its fields are home/away
 │   ├── teams.js                ← resolveTeam, shared by get_roster / analyze_trade / lineup_advice so "which team did they mean?" has one definition. Reads display_name — Sleeper's /users returns NO username
@@ -4759,6 +4805,7 @@ dynastyedge/
 │   ├── newsRetention.test.mjs       ← the news window's retention policy: newest-N-per-player, a redundant item losing to an OLDER item about an uncovered player, breadth preserved at every k, roundups charging every player they name, and an id-less item never dropped by quota
 │   ├── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
 │   ├── leagueState.test.mjs         ← buildLeagueState: string-id normalization across mixed-shape payloads + the '0' sentinel (rule 8), unranked players kept at value 0 and the skip-then-self-heal path (rule 7), a pick at its ORIGINAL owner's slot vs round medians (Feature 1), FAAB read from settings, identity as runtime state, input immutability
+│   ├── mcpHttp.test.mjs             ← the HTTP transport + its gate: a throwing authenticator is never authorized, EVERY post is authenticated (not initialize-only), 401 advertises RFC 9728 discovery, no session id is ever minted, GET leaks no league data, and the same six tools as stdio
 │   ├── mcpStore.test.mjs            ← the cache backend: fetchedAt round-tripping byte-for-byte (the provenance contract), gzip on a player-DB-shaped payload, the stale-on-failure fallback AND its cold-failure throw, THE TRAP (an evicting store loses the fallback that a keeping store answers with), and a broken store degrading to slower-never-broken on both read and write
 │   ├── mcpLimit.test.mjs            ← the rate discipline fetchJSON does NOT have: concurrency cap, a rejecting job freeing its slot, 429/503 retried with bounded backoff, and a 404 never retried (it is an answer, not a failure)
 │   ├── mcpSnapshot.test.mjs         ← mocked-fetch: the 15-min TTL, values + player DB cached ACROSS leagues (a second league must not re-download 5-8MB), per-source as-of stamps with oldestSourceAt as the STALEST input, serve-cache-and-label-stale on failure vs a cold throw, and the FantasyCalc shape guards
@@ -4780,11 +4827,11 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 469 / # pass 465
-/ # fail 4`, which reads like a code regression. A file that cannot load never
-runs its tests, so the count silently drops from **503** to 469.
+honestly:** instead of "cannot find module" it prints `# tests 470 / # pass 465
+/ # fail 5`, which reads like a code regression. A file that cannot load never
+runs its tests, so the count silently drops from **513** to 470.
 `npm run build` in the same state fails with `sh: 1: vite: not found`.
-**If the test count isn't 503, run `npm ci` before debugging anything.**
+**If the test count isn't 513, run `npm ci` before debugging anything.**
 
 The pair was re-measured 2026-09-19 (MCP phase 1b) by renaming `node_modules`
 aside, and it had drifted seven times before that: 178/130, 177/115, 219/136,
@@ -4806,6 +4853,17 @@ those four raise only the first number. The 2026-09-07 trade-engine work added
 the broken-state count stayed at 152; the 2026-09-12 news-retention work moved
 both, because `newsRetention.test.mjs` imports only a zero-dependency pure
 module. **Re-measure both whenever the suite grows.**
+
+**The failing-file count changed for the second time ever, 4 → 5, and the
+fifth is a different KIND.** `tests/mcpHttp.test.mjs` imports
+`@modelcontextprotocol/sdk` to exercise the HTTP transport, so it cannot load
+without `node_modules` — that is a legitimate runtime dependency, not the
+React taint the other four carry, and no refactor of `src/utils` will fix it.
+Note the deltas therefore do NOT match here (full +10, broken +1): a file that
+fails to load contributes one failed entry and zero passing tests, which is
+why `# pass` held at 465. **An uneven delta is only acceptable when you can
+say which file caused it and why** — an unexplained one means a test reached
+something it should not have.
 
 Phase 2's cache work moved both by the same 14 (489/455 → **503/469**), the
 same equality check applied again: `mcpStore.test.mjs` imports one
