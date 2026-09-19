@@ -743,9 +743,44 @@ re-download it. It is also **best-effort**: without it, rostered players
 FantasyCalc doesn't rank are absent rather than shown with `—` (exactly how the
 app behaves before that background fetch lands), and a note says so.
 
-These are module-level caches, the same pattern as the app's ~20 hook
-singletons. Correct for a long-lived stdio process, **wrong for phase 2's
-serverless deployment**, which has no warm process and wants external KV.
+**The BACKEND is a parameter; the POLICY is shared (`mcp/store.js`, phase 2).**
+`snapshot.js` and `weekly.js` each kept their own module-level Maps *and* their
+own verbatim copy of `loadSource` — correct for a long-lived stdio process,
+where a cached snapshot resolves in **1ms against a 658ms cold assembly**, and
+impossible for the serverless HTTP transport, which has no warm process to hold
+a Map. Both now call one `loadSource(store, key, ttlMs, load)`. stdio keeps
+`memoryStore()` and is unchanged; HTTP passes a KV-backed store. Two copies of
+the stale-fallback contract was the same drift prerequisite C removed from
+`src/`, so the refactor *deletes* a duplicate rather than adding a layer.
+
+**Trap 1 — a store-level TTL would silently break provenance.** `loadSource`
+reads the cached entry **even when it is expired**; that is precisely what
+makes "serve the cache and label its age" work. Set a Redis-native `EX` to the
+TTL and that path loses its fallback: a Sleeper outage at minute 16 throws a
+cold "I don't know" where today it returns a usable 20-minute-old answer
+stamped `stale: true`. **Freshness is decided in `loadSource` from `fetchedAt`,
+never by the store**; `STORE_GC_SECONDS` (7 days) is eviction so a store cannot
+grow forever, and is set far longer than any TTL a caller will pass.
+`tests/mcpStore.test.mjs` pins the trap by modelling an evicting store and
+asserting it throws where a keeping store answers.
+
+**Trap 2 — the player DB must be compressed going into KV.** Measured live
+2026-09-19: the whole snapshot serialises to **1.37 MB**, of which the trimmed
+player DB is **1.20 MB** — at or over the per-value limit of a typical hosted
+KV. Gzipped they are **208 KB** and **180 KB**. `node:zlib` is built in, so
+entries are gzip+base64 on the way out and inflated on the way back for no
+dependency, fewer bytes, and no size question.
+
+**`fetchedAt` must round-trip byte-for-byte.** It is the provenance the whole
+design rests on — it becomes `asOf.sources[*].fetchedAt` and feeds
+`oldestSourceAt`. A store that rounds or drops it breaks non-negotiable 1, so
+the round trip is pinned by test rather than assumed.
+
+**A store failure degrades an answer to "slower", never to "broken".** A failed
+read is a cache miss; a failed write is dropped, because the answer was already
+correct before it. **That guard lives in `loadSource`, not only inside a
+well-behaved backend** — the first cut awaited `store.set` unguarded and a
+throwing write killed an already-fetched answer, which is what the test caught.
 
 ### Rate discipline lives in `mcp/`, never in `fetchJSON`
 
@@ -4516,6 +4551,7 @@ dynastyedge/
 │   ├── stdio.js                ← entry point (stdio transport). Needs --import ./mcp/register.mjs
 │   ├── server.js               ← the McpServer: tool schemas + wiring, ZERO domain math
 │   ├── snapshot.js             ← league fetch + ~15-min cache + THE as-of stamp (the §7 mitigation: nothing in this repo validates an external payload, so provenance is what makes a wrong answer LOOK wrong). Also mergeAsOf, which RECOMPUTES oldestSourceAt over the union so an added source can't overstate freshness
+│   ├── store.js                ← THE cache backend boundary + the ONE freshness policy (loadSource). Backend is a parameter (memory for stdio, KV for HTTP); the policy is shared. Owns the two traps: a store-level TTL would break the stale-fallback contract, and the 1.20MB player DB must be gzipped into KV
 │   ├── weekly.js               ← projections + the schedule, on their OWN ~60-min TTL (league data changes on an EVENT, projections on a 0.06%/10h DRIP). Owns the two silent traps: the schedule is off /v1 (SLEEPER_ROOT) and its fields are home/away
 │   ├── teams.js                ← resolveTeam, shared by get_roster / analyze_trade / lineup_advice so "which team did they mean?" has one definition. Reads display_name — Sleeper's /users returns NO username
 │   ├── limit.js                ← concurrency gate + backoff. Lives here, NEVER in fetchJSON — that would change the app's behaviour to fix a server problem
@@ -4723,6 +4759,7 @@ dynastyedge/
 │   ├── newsRetention.test.mjs       ← the news window's retention policy: newest-N-per-player, a redundant item losing to an OLDER item about an uncovered player, breadth preserved at every k, roundups charging every player they name, and an id-less item never dropped by quota
 │   ├── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
 │   ├── leagueState.test.mjs         ← buildLeagueState: string-id normalization across mixed-shape payloads + the '0' sentinel (rule 8), unranked players kept at value 0 and the skip-then-self-heal path (rule 7), a pick at its ORIGINAL owner's slot vs round medians (Feature 1), FAAB read from settings, identity as runtime state, input immutability
+│   ├── mcpStore.test.mjs            ← the cache backend: fetchedAt round-tripping byte-for-byte (the provenance contract), gzip on a player-DB-shaped payload, the stale-on-failure fallback AND its cold-failure throw, THE TRAP (an evicting store loses the fallback that a keeping store answers with), and a broken store degrading to slower-never-broken on both read and write
 │   ├── mcpLimit.test.mjs            ← the rate discipline fetchJSON does NOT have: concurrency cap, a rejecting job freeing its slot, 429/503 retried with bounded backoff, and a 404 never retried (it is an answer, not a failure)
 │   ├── mcpSnapshot.test.mjs         ← mocked-fetch: the 15-min TTL, values + player DB cached ACROSS leagues (a second league must not re-download 5-8MB), per-source as-of stamps with oldestSourceAt as the STALEST input, serve-cache-and-label-stale on failure vs a cold throw, and the FantasyCalc shape guards
 │   ├── mcpGetRoster.test.mjs        ← get_roster: never guessing between two teams (candidates instead), rule 7 as value:null + unranked:true (never 0), taxi/IR as their own slots, pick pricing basis, bounded output with the truncation disclosed
@@ -4743,11 +4780,11 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 455 / # pass 451
+honestly:** instead of "cannot find module" it prints `# tests 469 / # pass 465
 / # fail 4`, which reads like a code regression. A file that cannot load never
-runs its tests, so the count silently drops from **489** to 455.
+runs its tests, so the count silently drops from **503** to 469.
 `npm run build` in the same state fails with `sh: 1: vite: not found`.
-**If the test count isn't 489, run `npm ci` before debugging anything.**
+**If the test count isn't 503, run `npm ci` before debugging anything.**
 
 The pair was re-measured 2026-09-19 (MCP phase 1b) by renaming `node_modules`
 aside, and it had drifted seven times before that: 178/130, 177/115, 219/136,
@@ -4770,7 +4807,11 @@ the broken-state count stayed at 152; the 2026-09-12 news-retention work moved
 both, because `newsRetention.test.mjs` imports only a zero-dependency pure
 module. **Re-measure both whenever the suite grows.**
 
-Phase 1b moved both by the same 132 (357/323 → **489/455**), and that
+Phase 2's cache work moved both by the same 14 (489/455 → **503/469**), the
+same equality check applied again: `mcpStore.test.mjs` imports one
+zero-dependency module, so a store that had reached React — or pulled `zod`
+down out of `mcp/server.js` — would have shown up as a gap between the two
+deltas. Phase 1b moved both by the same 132 (357/323 → **489/455**), and that
 equality is itself a check worth keeping: it means all six new test files —
 five tool suites plus `mcpWeekly` — load with no `node_modules` at all. A tool
 that had reached React, or pulled `zod` down out of `mcp/server.js`, would

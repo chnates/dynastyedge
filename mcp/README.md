@@ -80,6 +80,7 @@ truth is "there is no number".
 mcp/
   stdio.js        entry point — stdio transport
   server.js       the McpServer: tool schemas and wiring, no domain math
+  store.js        THE cache backend boundary + the one freshness policy
   snapshot.js     league fetch + cache + the as-of stamp + mergeAsOf
   weekly.js       projections + schedule, on their own longer TTL
   teams.js        resolveTeam — one definition, three tools
@@ -163,10 +164,19 @@ first live call, before either reached a reader — which is the concrete payoff
   is unreachable without changing `fetchJSON` — which would change the app's
   behaviour to fix a server problem. `limit.js` backs off on a fixed
   exponential schedule with jitter instead.
-- **Module-level caches are process-global**, the same pattern as the app's
-  ~20 hook singletons. Correct for a long-lived stdio process; **wrong for the
-  serverless phase-2 deployment**, which has no warm process and wants
-  external KV.
+- **The cache backend is now a parameter** (`mcp/store.js`). stdio keeps
+  `memoryStore()` — process-global, the app's hook-singleton pattern, and
+  correct here (1ms cached against a 658ms cold assembly). The HTTP transport
+  passes a KV-backed store instead. The freshness POLICY is shared by both, in
+  one `loadSource`, because two copies of the stale-fallback contract is the
+  drift prerequisite C removed from `src/`.
+  Two traps it exists to hold, both pinned by `tests/mcpStore.test.mjs`:
+  **a store-level TTL would break the stale-fallback contract** (an entry
+  evicted at the TTL leaves nothing to serve when the upstream fails, turning
+  a usable 20-minute-old answer into a cold throw — so `STORE_GC_SECONDS` is
+  7 days and freshness is decided from `fetchedAt`), and **the 1.20MB trimmed
+  player DB must be gzipped into KV** (208KB/180KB compressed; `node:zlib` is
+  built in, so no dependency).
 - **The schedule is the ONE Sleeper endpoint not under `/v1`**, and its fields
   are `home`/`away`, not `home_team`/`away_team`. Both mistakes fail
   **silently** as "no games", which reads as "every team is on bye".
@@ -192,6 +202,23 @@ first live call, before either reached a reader — which is the concrete payoff
   Not shipped as a build step here — deployment is phase 2 — but the approach
   is de-risked, and it is the right answer for a deployed service, which
   should not depend on a resolver hook.
+- **The KV backend is WRITTEN BUT NOT VERIFIED against a live store.**
+  `restKvStore` speaks the generic Redis-over-HTTP command form
+  (`POST <url>` with `["GET", key]`) that Upstash and its work-alikes serve,
+  and it round-trips through a fake transport in the tests — but no hosted KV
+  has been provisioned, so under `dynastyedge-validation-and-qa`'s evidence
+  bar this is synthetic-only and does **not** count as done. The vendor
+  specifics are confined to one function: a different KV is a different
+  `command`, not a change anywhere else.
+- **`restKvStore` does not use `fetchJSON`, deliberately.** `fetchJSON` is
+  GET-only with no headers and no body, so it structurally cannot issue an
+  authenticated POST; teaching it to would change the app's 21-line wrapper to
+  serve a server's needs, the exact trade `limit.js` already declined. The
+  rule that wrapper enforces — a hung request must never hang the caller — is
+  kept here with the same AbortController discipline. It also deliberately
+  skips the concurrency limiter: that gate protects Sleeper's rate budget, and
+  a cache read queueing behind the API calls the cache exists to avoid would
+  be backwards.
 - Remaining phase-2 unknowns: host choice, OAuth registration, whether
   projections deserve a shorter TTL than the league snapshot
   (`weeklyProjections.js:13-15` notes Sleeper rewrites that endpoint in place).

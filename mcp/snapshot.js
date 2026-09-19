@@ -31,20 +31,34 @@
 import { SLEEPER_BASE, FANTASYCALC_BASE, FANTASYCALC_PARAMS } from '../src/constants.js'
 import { buildLeagueState } from '../src/utils/leagueState.js'
 import { createFetcher } from './limit.js'
+import { memoryStore, loadSource } from './store.js'
 
 const FC_PARAMS = new URLSearchParams(
   Object.entries(FANTASYCALC_PARAMS).map(([k, v]) => [k, String(v)])
 )
 
-// ── shared, league-agnostic caches ─────────────────────────────────────────
-let valuesCache = null   // { data, fetchedAt }
-let playerDBCache = null // { data, fetchedAt }
-const leagueCaches = new Map() // leagueId -> { data, fetchedAt }
+// ── cache keys ─────────────────────────────────────────────────────────────
+//
+// FantasyCalc values and the Sleeper player DB are league-AGNOSTIC and share
+// one key across every league — the player DB is 5-8MB on the wire and a
+// second league must not re-download it. Only Sleeper's league payload is
+// keyed by leagueId.
+//
+// Prefixes are distinct from weekly.js's so both layers can share ONE store
+// (which is what the HTTP deployment does — a single KV connection) without
+// any chance of collision.
+const VALUES_KEY = 'values'
+const PLAYERDB_KEY = 'playerdb'
+const leagueKey = leagueId => `league:${leagueId}`
+
+// The DEFAULT backend is process memory: correct for the long-lived stdio
+// process, where a cached snapshot resolves in 1ms against a 658ms cold
+// assembly. The serverless HTTP transport has no warm process to hold this,
+// so it passes its own store — see mcp/store.js.
+const defaultStore = memoryStore()
 
 export function resetSnapshotCache() {
-  valuesCache = null
-  playerDBCache = null
-  leagueCaches.clear()
+  return defaultStore.clear()
 }
 
 // Mirrors useFantasyCalc's split EXACTLY. The player/pick classification is by
@@ -121,36 +135,21 @@ async function fetchSleeperCore(get, leagueId) {
   return { leagueInfo, rosters, users, tradedPicks, nflState, drafts }
 }
 
-const fresh = (entry, ttl) => entry && Date.now() - entry.fetchedAt < ttl
-
-// Load one source, honouring the TTL and falling back to a stale cache when
-// the refresh fails. Returns { data, fetchedAt, stale, error }.
-async function loadSource(current, ttl, load) {
-  if (fresh(current, ttl)) return { ...current, stale: false, error: null }
-  try {
-    const data = await load()
-    return { data, fetchedAt: Date.now(), stale: false, error: null }
-  } catch (err) {
-    // Decision 2: an old answer beats no answer, as long as it says it is old.
-    if (current) return { ...current, stale: true, error: err.message }
-    throw err
-  }
-}
-
 // THE snapshot: raw sources fetched + the assembled league state + provenance.
 //
 //   leagueId    which league (never a constant here)
 //   myRosterId  whose "me" — decides `myRoster` only
 export async function getSnapshot({
   leagueId, myRosterId = null, ttlMs = 15 * 60 * 1000, concurrency = 6, force = false, fetcher,
+  store = defaultStore,
 } = {}) {
   if (!leagueId) throw new Error('getSnapshot requires a leagueId')
   const get = fetcher ?? createFetcher({ concurrency })
   const ttl = force ? -1 : ttlMs
 
   const [core, values, playerDB] = await Promise.all([
-    loadSource(leagueCaches.get(leagueId), ttl, () => fetchSleeperCore(get, leagueId)),
-    loadSource(valuesCache, ttl, async () =>
+    loadSource(store, leagueKey(leagueId), ttl, () => fetchSleeperCore(get, leagueId)),
+    loadSource(store, VALUES_KEY, ttl, async () =>
       splitValues(await get(`${FANTASYCALC_BASE}/values/current?${FC_PARAMS}`, {
         timeoutMs: 30000, label: 'FantasyCalc',
       }))),
@@ -159,15 +158,15 @@ export async function getSnapshot({
     // best-effort — without it those players are simply absent, exactly as the
     // app behaves before the background fetch lands — so it must never fail
     // the whole snapshot.
-    loadSource(playerDBCache, ttl, async () =>
+    loadSource(store, PLAYERDB_KEY, ttl, async () =>
       trimPlayerDB(await get(`${SLEEPER_BASE}/players/nfl`, {
         timeoutMs: 45000, label: 'Sleeper player DB',
       }))).catch(err => ({ data: null, fetchedAt: null, stale: false, error: err.message })),
   ])
 
-  leagueCaches.set(leagueId, { data: core.data, fetchedAt: core.fetchedAt })
-  valuesCache = { data: values.data, fetchedAt: values.fetchedAt }
-  if (playerDB.data) playerDBCache = { data: playerDB.data, fetchedAt: playerDB.fetchedAt }
+  // NOTE: no write-back here any more. loadSource persists a successful
+  // refresh itself, so there is exactly one place that decides what gets
+  // cached — and the stale path never re-writes an entry it only read.
 
   const league = buildLeagueState({
     sleeperData: core.data,
