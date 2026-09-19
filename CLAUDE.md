@@ -821,6 +821,60 @@ authorize → GitHub with `scope=""` → callback → code to
 86,090, rank 3, 31 players, 12 picks, stamped and not stale) → a tampered
 token 401s → an unknown path 404s without reaching the transport.
 
+### Deployment (phase 2) — LIVE at `dynastyedge-mcp.vercel.app`
+
+Vercel project `dynastyedge-mcp` in team `dynastyedge`, deployed from this
+repo. `api/mcp.js` is the function; `vercel.json` rewrites every path to it.
+
+**Three findings cost a deploy cycle each, and none was guessable from the
+docs. They are recorded because the next person will hit the same three.**
+
+1. **Vercel detects functions from the SOURCE tree, not from build output.**
+   With `api/` gitignored, a build that produced `api/mcp.js` deployed a
+   static page and **no function** — `x-vercel-error: NOT_FOUND` on every
+   route. Worse, **that deployment reported `readyState: READY` and
+   `type: LAMBDAS`**, so "the deploy succeeded" is not evidence a function
+   exists. Curl the route.
+2. **Vercel TRACES module dependencies; it does not bundle them.** A
+   three-line `api/mcp.js` re-exporting `../mcp/vercelEntry.js` deployed a
+   function that crashed on invocation, because Node's ESM resolver — unlike
+   esbuild and Vite — does not append `.js` to the extensionless relative
+   imports `src/utils` uses. **This is the same resolver gap `npm run mcp`
+   needs its `--import` hook for, reappearing at the host.** So the esbuild
+   output is **committed** (`scripts/build-mcp.mjs` → `api/mcp.js`, 1.6MB):
+   the file verified locally is byte-for-byte the file that runs.
+   **`ci.yml` rebuilds and diffs it on every push**, because a stale bundle
+   would mean the deployed server runs older logic than the repo describes —
+   exactly the drift the "`mcp/` imports `src/utils`, never copies it" rule
+   exists to prevent.
+3. **The host may invoke a Node function with EITHER calling convention.**
+   Handed Node's `(IncomingMessage, ServerResponse)` rather than a Web
+   `Request`, `new URL(req.url)` throws — `req.url` is a bare path with no
+   origin — and it surfaced as a bodiless platform 500. `vercelEntry.js`
+   detects the shape with one property check instead of betting on a runtime;
+   `mcp/http.js` stays Web-standard, which is what keeps the host a
+   *packaging* decision.
+
+**Nothing reaches an opaque platform 500 any more.** A missing secret, an
+unresolvable module and a runtime fault inside a tool each answer with a body
+naming the cause — message only, never a stack, which on a public endpoint
+leaks paths and module layout for no benefit. That mattered concretely:
+**Vercel's runtime logs return 403 to the deploy tooling**, so an opaque 500
+is a dead end, and the server had to be made to explain itself.
+
+**Vercel's deployment protection does NOT cover the production alias.**
+Deployment-specific URLs redirect to a Vercel login; `dynastyedge-mcp.vercel.app`
+does not. So **the OAuth gate is the only thing in front of this endpoint** —
+there is no second layer, and any change to it is a change to the only lock.
+
+**Verified from the public internet 2026-09-19**, not from a sandbox: an
+unauthenticated `tools/call` returns **401** with the `WWW-Authenticate`
+discovery header and no data; a made-up bearer token **401**; an unknown path
+**404**; a hostile `redirect_uri` (`evil.example`) **403 with no `Location`
+header at all**; a lookalike host (`evil.claude.ai`) **403**; PKCE `plain`
+bounced as `invalid_request`; and a valid authorize request redirects to
+GitHub with **`scope=`** empty and the callback matching the registered URI.
+
 Run it with `npm run mcp`. The `--import ./mcp/register.mjs` hook is
 **mandatory**: `src/utils` uses Vite-style extensionless relative imports that
 plain Node cannot resolve. The hook is a deliberate copy of the test suite's —
@@ -4677,11 +4731,15 @@ dynastyedge/
 │       ├── asset-aging-backtest.mjs ← analysis-only: THE keep-score calibration — longitudinal player aging (the survivorship trap the trajectory curves fall into) + whether rookie picks deliver their market price; see docs/analysis/asset-aging-and-pick-value-2026-09.md
 │       ├── contrast-audit.mjs ← THE accessibility-floor instrument: reads the tokens out of src/index.css and measures each against its theme's WORST-CASE ground, plus the two reversal cases a text-on-ground audit misses (paper type on a position band, type on an ink field). Exits non-zero on any failure — re-run after ANY ground-colour change.
 │       └── news-coverage.mjs ← analysis-only: THE news-pipeline acceptance metric — how many of my rostered players the app can actually resolve in the feed (no arg = live feed); see docs/analysis/news-sources-2026-09.md
+├── api/
+│   └── mcp.js                  ← THE deployed Vercel function — a COMMITTED esbuild bundle. Vercel detects functions from the source tree and TRACES rather than bundles, so a shim importing mcp/ crashed on Node's ESM resolver; ci.yml rebuilds and diffs this to stop it drifting
+├── vercel.json                 ← rewrites every path to the one function + pins an empty static root (without outputDirectory, Vercel can serve the repo root as static files)
 ├── mcp/                        ← THE MCP SERVER (see The MCP Server section). Imports src/utils, never copies it; src/ imports nothing from here.
 │   ├── README.md               ← how to run it, the three rules a new tool must keep, phase-2 notes
 │   ├── stdio.js                ← entry point (stdio transport). Needs --import ./mcp/register.mjs
 │   ├── server.js               ← the McpServer: tool schemas + wiring, ZERO domain math
 │   ├── snapshot.js             ← league fetch + ~15-min cache + THE as-of stamp (the §7 mitigation: nothing in this repo validates an external payload, so provenance is what makes a wrong answer LOOK wrong). Also mergeAsOf, which RECOMPUTES oldestSourceAt over the union so an added source can't overstate freshness
+│   ├── vercelEntry.js          ← the bundle's entry: accepts BOTH calling conventions (a host may hand you a Web Request or Node's req/res), imports lazily so a resolution failure is an HTTP body rather than an opaque platform 500, and reports every failure with a message — never a stack
 │   ├── app.js                  ← THE hosted server: OAuth routes in front of the MCP endpoint. Refuses to start without GITHUB_CLIENT_SECRET — no signing key means no auth, and a failed deploy beats an open one
 │   ├── oauth.js                ← THE auth crypto + policy: HMAC tokens (no JWT lib, no `alg` to confuse), HKDF-derived key, PKCE S256-only, audience binding. Documents what signed-not-stored COSTS: no revocation (1h tokens), no single-use codes (60s + PKCE)
 │   ├── oauthRoutes.js          ← the five OAuth endpoints. Owns THE load-bearing check: redirect-URI origin allowlist, exact-hostname, checked BEFORE anything is minted, failing to an error page because redirecting an unvalidated URI IS the attack
