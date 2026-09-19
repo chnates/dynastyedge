@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { VALUES_HISTORY_URL } from '../constants'
 import { fetchJSON } from '../utils/fetchJSON'
+import { MIN_SPARKLINE_POINTS } from '../utils/valueHistory'
 
 // Daily dynasty-value snapshots accumulated by the values-history GitHub
 // Action. Fetched lazily (first consumer mount) and cached for the session.
@@ -48,10 +49,9 @@ export function loadHistory(force = false) {
   return historyPromise
 }
 
-// Minimum snapshots before a sparkline is worth drawing. With fewer, the
-// "graph" is just a straight segment (the pipeline adds one point per day
-// from the day it shipped) — hide it until it has real shape.
-export const MIN_SPARKLINE_POINTS = 4
+// Moved to src/utils/valueHistory.js so the analysis layer stays React-free.
+// Re-exported here: this is where the app has always imported it from.
+export { MIN_SPARKLINE_POINTS }
 
 export function useValueHistory() {
   const [history, setHistory] = useState(historyCache)

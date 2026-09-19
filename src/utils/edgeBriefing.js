@@ -3,11 +3,11 @@ import {
   getPositionalDeltas,
   assignWinWindowTiers,
 } from './rosterAnalysis'
-import { getTeamName } from '../hooks/useLeague'
+import { getTeamName } from './teamName'
 import { getDeadlineVerdict } from './playoffOdds'
 import { buildAgeCurves, buildRosterTrajectory, getTrajectoryRead } from './dynastyTrajectory'
 import { recommendFreeAgents } from './recommendations'
-import { MIN_SPARKLINE_POINTS } from '../hooks/useValueHistory'
+import { MIN_SPARKLINE_POINTS } from './valueHistory'
 import { POSITIONS } from '../constants'
 
 // The Edge's assistant-GM logic: turn everything the app already caches into

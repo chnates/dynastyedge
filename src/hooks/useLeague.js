@@ -6,6 +6,11 @@ import { resolvePickOwnership, findExactSlotValue, buildDraftSlots, slotForRound
 import { resolvePickYears } from '../utils/seasonWindow'
 import { PICK_YEARS } from '../constants'
 import { useIdentity } from './useIdentity'
+import { getTeamName } from '../utils/teamName'
+
+// Moved to src/utils/teamName.js so the analysis layer stays React-free.
+// Re-exported here because 22 components import it from this module.
+export { getTeamName }
 
 export function useLeague() {
   // The logged-in roster is now runtime state, not a constant — "me" is
@@ -245,13 +250,4 @@ export function useLeague() {
     myRosterId, pickYears, loading, error, retry, sleeperFetchedAt, fcFetchedAt, fcValues,
     signInRosters, sleeperLoading, sleeperError, sleeperRetry, fcRetry,
   ])
-}
-
-function toTitleCase(str) {
-  return str.replace(/\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-}
-
-export function getTeamName(user) {
-  const raw = user?.metadata?.team_name || user?.display_name || user?.username || 'Unknown Team'
-  return toTitleCase(raw)
 }
