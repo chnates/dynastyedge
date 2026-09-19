@@ -630,15 +630,24 @@ including mobile, and get answers grounded in live Sleeper data and **this
 app's own analysis code** — not general knowledge. Design spec and the
 owner-confirmed decisions: `MCP_DISCOVERY.md`.
 
-**Status: phase 1b — ALL SIX tools from `MCP_DISCOVERY.md` §5, over stdio.**
-Remote (streamable HTTP) transport, OAuth and deployment are phase 2 (`MCP-2`
-in `docs/open-items.md`) and are deliberately not built — they are blocked on
-an owner decision (host + OAuth registration) that no sandbox can make.
+**Status: phase 2 — LIVE and CONNECTED at `https://dynastyedge-mcp.vercel.app/mcp`.**
+All six tools from `MCP_DISCOVERY.md` §5 answer over **both** transports: stdio
+for local runs, streamable HTTP for the Claude apps, authenticated by GitHub
+against a single-account allowlist.
 
 Phase 1 shipped the three prerequisite refactors plus `get_roster`; phase 1b
 added `find_sell_high`, `recommend_free_agents`, `resolve_assets`,
 `analyze_trade` and `lineup_advice`, plus the weekly data layer the last three
-share.
+share. Phase 2 added the swappable cache backend (`store.js`), the HTTP
+transport (`http.js`), stateless OAuth 2.1 (`oauth.js` / `oauthRoutes.js` /
+`app.js`) and the Vercel packaging (`api/mcp.js`, `vercel.json`).
+
+**Verified through Claude's own connector, 2026-09-19** — not a probe, the real
+client: added as a custom connector, GitHub login completed in a browser, and
+`find_sell_high` returned the live answer (sell Jaxson Dart to Crippled Gang
+for Chris Olave, filling the WR deficit) with all three sources stamped fresh.
+That is the whole chain — discovery, self-registration, OAuth, transport,
+cache, tools — exercised end to end by the thing it was built for.
 
 **Two tools are IN-SEASON ONLY**, and both say so rather than returning zeros:
 `lineup_advice` entirely, and `recommend_free_agents`' projection column.

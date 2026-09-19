@@ -135,7 +135,7 @@ fetch the rest-of-season simulation — and the response says so via
 likewise unwired. Each needs a fetch beyond the league snapshot; wiring them
 is a natural phase-2-or-later increment, not a correctness bug.
 
-### MCP-2 — MCP server phase 2: remote transport, OAuth, deployment **IN PROGRESS 2026-09-19**
+### MCP-2 — MCP server phase 2: remote transport, OAuth, deployment **SHIPPED 2026-09-19**
 
 **Both owner decisions are now SETTLED.** Host: **Vercel** (owner call — an
 account and a `dynastyedge` team already existed, so nothing new was signed up
@@ -178,18 +178,37 @@ It was considered twice and declined twice for different reasons: for
 which removes the registry that was the only thing genuinely requiring
 storage. A multi-tenant server would still want it.
 
-**What remains:**
+**All three remaining items are DONE, and each taught something.**
 
-1. **Vercel packaging** — an `api/` entry, a `vercel.json` with rewrites so
-   every path reaches the one function, and an esbuild bundle step (verified
-   in MCP-1, still not wired into `package.json` or CI). The open question is
-   whether Vercel's function detection runs after the build command; resolve
-   it by deploying, not by assuming.
-2. **First deploy + turning off Vercel deployment protection.** Protection is
-   currently ON, which is right until auth is live. **Sequence it so the lock
-   is verified from outside BEFORE the protection comes off**, never after.
-3. **Connecting Claude** as a custom connector and a real browser login — the
-   one step no sandbox can do.
+1. **Vercel packaging.** Three findings, one deploy cycle each, all in
+   CLAUDE.md's Deployment section: function detection reads the **source
+   tree**, not build output (and a deployment reporting `READY`/`LAMBDAS` can
+   contain no function — curl the route); Vercel **traces** rather than
+   bundles, so `src/utils`' extensionless imports fail on Node's ESM resolver
+   exactly as they do under plain `node`, which is why `api/mcp.js` is a
+   committed esbuild bundle with a CI drift guard; and the host may invoke a
+   Node function with **either** calling convention.
+2. **Deployment protection turned out not to apply** to the production alias
+   at all — only to deployment-specific URLs. So the sequencing constraint
+   recorded here was moot: the OAuth gate has always been the only lock, and
+   it was verified from the public internet (401 unauthenticated, 401 forged
+   token, 403 hostile `redirect_uri` with no `Location`, 403 lookalike host,
+   PKCE `plain` refused, 404 unknown path).
+3. **Connected.** The first attempt failed with *"Couldn't start sign-in"* —
+   three silent discovery bugs, all mine, all now fixed and pinned:
+   **no `registration_endpoint`** (RFC 7591 is a SHOULD, but Claude's
+   connector registers itself, so a missing SHOULD is a hard failure);
+   `resource` returning the **bare origin** rather than the canonical `/mcp`
+   URL the user typed; and the protected-resource document served **only at
+   the bare well-known path**, not the `/mcp`-suffixed one RFC 9728 §3.1
+   specifies. **The lesson worth carrying: a discovery bug fails before any
+   browser opens and logs nothing anyone reads.** Registration stays
+   stateless — the signed `client_id` *is* the registration, and the origin
+   allowlist binds when it is minted.
+
+**Verified through Claude's own connector**, which is the acceptance test this
+item always wanted: `find_sell_high` returned the live two-sided move (Jaxson
+Dart → Crippled Gang for Chris Olave) with every source stamped fresh.
 
 **Still open, unchanged:** `mcp/limit.js` backs off on a fixed schedule because
 `fetchJSON` discards the `Response`, so a 429's `Retry-After` is unreachable.
