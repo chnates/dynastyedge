@@ -185,6 +185,13 @@ export async function getSnapshot({
 
   return {
     league,
+    // The FantasyCalc split itself. `buildLeagueState` folds values INTO the
+    // rosters, but the pool of everyone NOT on a roster (free agents) and the
+    // market-wide scan `computeEdgeSignals` runs both need the raw map, so it
+    // is exposed rather than re-derived. Same object the app's LeagueContext
+    // hands its consumers as `values`.
+    values: values.data,
+    playerDB: playerDB.data,
     nflState: core.data.nflState ?? null,
     isOffseason: core.data.nflState?.season_type !== 'regular',
     asOf: {
@@ -222,4 +229,26 @@ function stamp(s) {
 function oldestIso(sources) {
   const times = Object.values(sources).map(s => s.fetchedAt).filter(Boolean)
   return times.length ? times.slice().sort()[0] : null
+}
+
+// Fold extra per-source stamps (weekly projections, the schedule) into an
+// existing asOf block. `oldestSourceAt` and `stale` are RECOMPUTED over the
+// union, never carried across — the whole point of the stamp is that an
+// answer is only as fresh as its stalest input, and a tool that adds a source
+// without re-deriving those two would quietly overstate its own freshness.
+export function mergeAsOf(asOf, extraSources) {
+  const sources = { ...asOf.sources, ...extraSources }
+  return {
+    ...asOf,
+    oldestSourceAt: oldestIso(sources),
+    stale: Object.values(sources).some(s => s.stale),
+    sources,
+  }
+}
+
+// Exported so mcp/weekly.js stamps its sources in exactly this shape — two
+// stamp formats reaching one `asOf` block would be a bug the reader could not
+// see.
+export function stampSource(s) {
+  return stamp(s)
 }

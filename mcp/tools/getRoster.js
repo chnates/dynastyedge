@@ -8,6 +8,12 @@
 
 import { getWinWindowTier } from '../../src/utils/rosterAnalysis.js'
 import { getTeamName } from '../../src/utils/teamName.js'
+// Team resolution moved to mcp/teams.js in phase 1b so analyze_trade's
+// `partner` argument resolves through the SAME code. Re-exported here because
+// this module's existing tests (and its contract) name it.
+import { resolveTeam } from '../teams.js'
+
+export { resolveTeam }
 
 // Bounded output is a hard requirement (§7): the player DB is 5–8MB and the
 // FantasyCalc payload is large, so a tool must never hand back a raw payload.
@@ -28,60 +34,6 @@ function slotOf(p) {
 }
 
 const POS_ORDER = { QB: 0, RB: 1, WR: 2, TE: 3, DEF: 4 }
-
-// Resolve a `team` argument to one roster. Returns either a roster or a list
-// of candidates — it NEVER guesses between two plausible matches, the same
-// discipline §1 sets for resolve_assets ("makes grading the wrong player
-// structurally impossible"). Getting the wrong team is the same class of error.
-export function resolveTeam(league, team, defaultRosterId) {
-  const rosters = league.allRosters
-
-  if (team == null || team === '') {
-    const mine = rosters.find(r => r.rosterId === defaultRosterId)
-    return mine
-      ? { roster: mine }
-      : { error: `No roster ${defaultRosterId} in this league. Name a team explicitly.` }
-  }
-
-  const raw = String(team).trim()
-
-  // A bare integer is a roster id.
-  if (/^\d+$/.test(raw)) {
-    const byId = rosters.find(r => r.rosterId === Number(raw))
-    return byId ? { roster: byId } : { error: `No roster with id ${raw} in this league.` }
-  }
-
-  const q = raw.toLowerCase()
-  const described = rosters.map(r => ({
-    roster: r,
-    teamName: getTeamName(r.owner),
-    username: r.owner?.username ?? '',
-  }))
-
-  const exact = described.filter(
-    d => d.teamName.toLowerCase() === q || d.username.toLowerCase() === q
-  )
-  if (exact.length === 1) return { roster: exact[0].roster }
-
-  const partial = described.filter(
-    d => d.teamName.toLowerCase().includes(q) || d.username.toLowerCase().includes(q)
-  )
-  if (partial.length === 1) return { roster: partial[0].roster }
-  if (partial.length > 1) {
-    return {
-      error: `"${raw}" matches ${partial.length} teams. Say which one.`,
-      candidates: partial.map(d => ({
-        rosterId: d.roster.rosterId, teamName: d.teamName, username: d.username,
-      })),
-    }
-  }
-  return {
-    error: `No team matching "${raw}".`,
-    candidates: described.map(d => ({
-      rosterId: d.roster.rosterId, teamName: d.teamName, username: d.username,
-    })),
-  }
-}
 
 // Build the answer. `snapshot` comes from mcp/snapshot.js and carries its own
 // provenance, which is copied onto the response verbatim — every tool response
