@@ -11,6 +11,19 @@
 import { LEAGUE_ID, MY_ROSTER_ID } from '../src/constants.js'
 import { DEFAULT_WEEKLY_TTL_MS } from './weekly.js'
 
+// The GitHub OAuth App this server authenticates against. A client ID is
+// PUBLIC by design — it travels in the browser's address bar on every
+// authorization request, and GitHub documents it as non-secret — so it lives
+// here as a default exactly as LEAGUE_ID does, and an env var still overrides
+// it. The client SECRET is never in this repo: it is read from the
+// environment and has no default, so a missing one fails loudly at startup
+// rather than silently authenticating nobody.
+export const DEFAULT_GITHUB_CLIENT_ID = 'Ov23lipGgde1WRtguwMc'
+
+// Only this GitHub login may obtain a token. One user, one allowlist entry —
+// the whole authorization rule, stated in one place.
+export const DEFAULT_ALLOWED_GITHUB_LOGIN = 'chnates'
+
 export function loadConfig(env = process.env) {
   const rosterEnv = env.DYNASTYEDGE_ROSTER_ID
   const parsedRoster = rosterEnv != null && rosterEnv !== '' ? Number(rosterEnv) : null
@@ -26,5 +39,10 @@ export function loadConfig(env = process.env) {
     // The full argument is in mcp/weekly.js's header.
     weeklyTtlMs: Number(env.DYNASTYEDGE_WEEKLY_TTL_MS) || DEFAULT_WEEKLY_TTL_MS,
     concurrency: Number(env.DYNASTYEDGE_CONCURRENCY) || 6,
+    githubClientId: env.GITHUB_CLIENT_ID || DEFAULT_GITHUB_CLIENT_ID,
+    // No default, deliberately. A server that starts without this would
+    // accept nobody while looking healthy.
+    githubClientSecret: env.GITHUB_CLIENT_SECRET || null,
+    allowedGithubLogin: env.DYNASTYEDGE_ALLOWED_LOGIN || DEFAULT_ALLOWED_GITHUB_LOGIN,
   }
 }
