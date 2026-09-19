@@ -735,6 +735,92 @@ across separate HTTP requests, which is what the `store.js` refactor was for —
 returning **six candidates for "Brown" and refusing to match**, byte-matching
 the behaviour phase 1b measured over stdio.
 
+### The auth model (phase 2) — OAuth 2.1, and STATELESS
+
+`mcp/oauth.js` (crypto + policy) and `mcp/oauthRoutes.js` (the five endpoints)
+make the server both the OAuth **resource server** the MCP spec requires and
+its own **authorization server**, with **GitHub as the upstream identity
+provider**. `mcp/app.js` composes them in front of the MCP handler.
+
+**The spec's own words:** *"Authorization is OPTIONAL… Implementations using
+an HTTP-based transport SHOULD conform."* Conforming means RFC 9728 protected
+resource metadata, RFC 8414 AS metadata, PKCE, RFC 8707 resource indicators
+and audience-bound tokens. Claude's custom-connector UI is OAuth-only; there
+is no static-token path.
+
+**Normally that needs three kinds of durable state, and serverless has none.
+Two facts remove the need:**
+
+1. **NO DYNAMIC CLIENT REGISTRATION.** RFC 7591 is a SHOULD, and the spec
+   names the alternative: pre-register out of band. Claude's connector has
+   "Advanced settings" for exactly that, so there is **one** client, it lives
+   in `config.js`, and there is no registry to persist. It is a **public
+   client** (`token_endpoint_auth_methods_supported: ['none']`) — OAuth 2.1
+   allows that precisely when PKCE protects the exchange, and inventing a
+   second secret would add a handling step guarding nothing PKCE plus the
+   GitHub login plus the allowlist do not already guard.
+2. **EVERYTHING ELSE IS SIGNED, NOT STORED.** An authorization code and an
+   access token are each a payload plus an HMAC. Verification is recomputing
+   the MAC, so any instance verifies what any other minted.
+
+**The signing key is DERIVED, so there is no second secret to manage.**
+`crypto.hkdfSync` over `GITHUB_CLIENT_SECRET` with a distinct `info` string —
+independent by construction, not reversible to the secret.
+`DYNASTYEDGE_TOKEN_SECRET` overrides it if a dedicated key is ever wanted.
+
+**No JWT library, deliberately.** `jose` ships as a transitive dep of the SDK,
+but a transitive dep is one upstream release from vanishing and rule 5 says
+write the ~30-line version first. The token is `base64url(payload).base64url(hmac)`
+and deliberately **not** a JWT: no `alg` header means no algorithm confusion
+and no `alg: none` to remember to reject. Measured payoff — all 25 auth tests
+run with no `node_modules` (see the npm-ci block).
+
+**What signed-not-stored COSTS, stated rather than buried:**
+
+- **A token cannot be revoked before it expires**, so access tokens live
+  **1 hour**. Revocation in practice is rotating the GitHub client secret,
+  which changes the derived key and invalidates everything at once.
+- **An authorization code cannot be marked used**, so replay is bounded by its
+  **60-second** life rather than prevented. **PKCE is therefore not defence in
+  depth here — it IS the defence**, which is why `S256` is required and
+  `plain` is refused (under `plain` the challenge equals the verifier, so
+  whoever holds the code holds everything needed to redeem it).
+
+Both are acceptable for one user. Neither would be for a multi-tenant server —
+that wants the KV the caching layer deliberately does not need.
+
+**THE LOAD-BEARING CHECK IS REDIRECT-URI VALIDATION.** The spec: *"Authorization
+servers MUST validate exact redirect URIs against pre-registered values."* With
+no registry, an **origin allowlist** replaces it — `claude.ai`, `claude.com`
+and loopback — matched on **exact hostname**, so `evil.claude.ai` and
+`claude.ai.evil.com` both fail. It is checked **before anything is minted**,
+and a failure renders an error page rather than redirecting: *redirecting an
+unvalidated URI is the attack.* Everything else (bad PKCE, wrong client)
+bounces an OAuth error to the client, because by then the redirect is vetted.
+
+**Three more things the tests pin as attacks, not happy paths:** a token
+minted for another audience is refused (the confused-deputy problem); **the
+allowlist is re-checked on every request, not only at login**, so a token
+minted before it changed stops working immediately; and the `kind`
+discriminator keeps the three token types apart, so an access token cannot be
+redeemed as an authorization code or vice versa.
+
+**GitHub is asked for NO scopes.** The upstream token is read once to learn
+the login, then discarded — never stored, never returned to the client, never
+forwarded. The spec forbids passing an upstream token through, and the
+cleanest way to honour that is to hold nothing worth passing.
+
+**The server refuses to start without `GITHUB_CLIENT_SECRET`** — no key means
+either no authentication or a guessable one, both worse than a failed deploy.
+
+**Verified end to end** (2026-09-19, only GitHub's identity call faked):
+no-token → 401 with the discovery header → both metadata documents →
+authorize → GitHub with `scope=""` → callback → code to
+`claude.ai/api/mcp/auth_callback` with state echoed → token (Bearer, 3600s) →
+**authenticated `get_roster` against the live league in 608ms** (Nix Cage,
+86,090, rank 3, 31 players, 12 picks, stamped and not stale) → a tampered
+token 401s → an unknown path 404s without reaching the transport.
+
 Run it with `npm run mcp`. The `--import ./mcp/register.mjs` hook is
 **mandatory**: `src/utils` uses Vite-style extensionless relative imports that
 plain Node cannot resolve. The hook is a deliberate copy of the test suite's —
@@ -4596,6 +4682,9 @@ dynastyedge/
 │   ├── stdio.js                ← entry point (stdio transport). Needs --import ./mcp/register.mjs
 │   ├── server.js               ← the McpServer: tool schemas + wiring, ZERO domain math
 │   ├── snapshot.js             ← league fetch + ~15-min cache + THE as-of stamp (the §7 mitigation: nothing in this repo validates an external payload, so provenance is what makes a wrong answer LOOK wrong). Also mergeAsOf, which RECOMPUTES oldestSourceAt over the union so an added source can't overstate freshness
+│   ├── app.js                  ← THE hosted server: OAuth routes in front of the MCP endpoint. Refuses to start without GITHUB_CLIENT_SECRET — no signing key means no auth, and a failed deploy beats an open one
+│   ├── oauth.js                ← THE auth crypto + policy: HMAC tokens (no JWT lib, no `alg` to confuse), HKDF-derived key, PKCE S256-only, audience binding. Documents what signed-not-stored COSTS: no revocation (1h tokens), no single-use codes (60s + PKCE)
+│   ├── oauthRoutes.js          ← the five OAuth endpoints. Owns THE load-bearing check: redirect-URI origin allowlist, exact-hostname, checked BEFORE anything is minted, failing to an error page because redirecting an unvalidated URI IS the attack
 │   ├── http.js                 ← THE streamable-HTTP transport: a Web-standard (Request) => Response, so the host is a packaging decision. STATELESS by necessity (a serverless instance cannot hold a session — the failure is intermittent, warm-passes/cold-fails). Owns the auth gate, which fails CLOSED
 │   ├── store.js                ← THE cache backend boundary + the ONE freshness policy (loadSource). Backend is a parameter (memory for stdio, KV for HTTP); the policy is shared. Owns the two traps: a store-level TTL would break the stale-fallback contract, and the 1.20MB player DB must be gzipped into KV
 │   ├── weekly.js               ← projections + the schedule, on their OWN ~60-min TTL (league data changes on an EVENT, projections on a 0.06%/10h DRIP). Owns the two silent traps: the schedule is off /v1 (SLEEPER_ROOT) and its fields are home/away
@@ -4805,6 +4894,7 @@ dynastyedge/
 │   ├── newsRetention.test.mjs       ← the news window's retention policy: newest-N-per-player, a redundant item losing to an OLDER item about an uncovered player, breadth preserved at every k, roundups charging every player they name, and an id-less item never dropped by quota
 │   ├── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
 │   ├── leagueState.test.mjs         ← buildLeagueState: string-id normalization across mixed-shape payloads + the '0' sentinel (rule 8), unranked players kept at value 0 and the skip-then-self-heal path (rule 7), a pick at its ORIGINAL owner's slot vs round medians (Feature 1), FAAB read from settings, identity as runtime state, input immutability
+│   ├── mcpOauth.test.mjs            ← the auth layer, written as ATTACKS: a foreign redirect_uri refused without redirecting, lookalike hosts (evil.claude.ai, claude.ai.evil.com) refused, PKCE `plain` refused, a stolen code useless without the verifier, a token for another audience refused, the allowlist re-checked at every request, and the three token kinds never interchangeable
 │   ├── mcpHttp.test.mjs             ← the HTTP transport + its gate: a throwing authenticator is never authorized, EVERY post is authenticated (not initialize-only), 401 advertises RFC 9728 discovery, no session id is ever minted, GET leaks no league data, and the same six tools as stdio
 │   ├── mcpStore.test.mjs            ← the cache backend: fetchedAt round-tripping byte-for-byte (the provenance contract), gzip on a player-DB-shaped payload, the stale-on-failure fallback AND its cold-failure throw, THE TRAP (an evicting store loses the fallback that a keeping store answers with), and a broken store degrading to slower-never-broken on both read and write
 │   ├── mcpLimit.test.mjs            ← the rate discipline fetchJSON does NOT have: concurrency cap, a rejecting job freeing its slot, 429/503 retried with bounded backoff, and a 404 never retried (it is an answer, not a failure)
@@ -4827,11 +4917,11 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 470 / # pass 465
+honestly:** instead of "cannot find module" it prints `# tests 495 / # pass 490
 / # fail 5`, which reads like a code regression. A file that cannot load never
-runs its tests, so the count silently drops from **513** to 470.
+runs its tests, so the count silently drops from **538** to 495.
 `npm run build` in the same state fails with `sh: 1: vite: not found`.
-**If the test count isn't 513, run `npm ci` before debugging anything.**
+**If the test count isn't 538, run `npm ci` before debugging anything.**
 
 The pair was re-measured 2026-09-19 (MCP phase 1b) by renaming `node_modules`
 aside, and it had drifted seven times before that: 178/130, 177/115, 219/136,
@@ -4853,6 +4943,14 @@ those four raise only the first number. The 2026-09-07 trade-engine work added
 the broken-state count stayed at 152; the 2026-09-12 news-retention work moved
 both, because `newsRetention.test.mjs` imports only a zero-dependency pure
 module. **Re-measure both whenever the suite grows.**
+
+Phase 2's OAuth layer moved both by the same 25 (513/470 → **538/495**) —
+the equality check passing again, and here it proves something specific:
+`mcp/oauth.js` and `mcp/oauthRoutes.js` reach nothing outside Node's
+builtins, so every one of their 25 tests loads with no `node_modules` at all.
+That is the measurement behind the decision not to use `jose` (see the auth
+section): the vanilla version is not merely dependency-free on paper, it is
+dependency-free under test.
 
 **The failing-file count changed for the second time ever, 4 → 5, and the
 fifth is a different KIND.** `tests/mcpHttp.test.mjs` imports

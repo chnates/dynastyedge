@@ -80,6 +80,10 @@ truth is "there is no number".
 mcp/
   stdio.js        entry point — stdio transport
   server.js       the McpServer: tool schemas and wiring, no domain math
+  app.js          the hosted server: OAuth in front of MCP
+  oauth.js        auth crypto + policy (HMAC tokens, PKCE, audience)
+  oauthRoutes.js  the five OAuth endpoints
+  http.js         the streamable-HTTP transport (Web-standard handler)
   store.js        THE cache backend boundary + the one freshness policy
   snapshot.js     league fetch + cache + the as-of stamp + mergeAsOf
   weekly.js       projections + schedule, on their own longer TTL
@@ -186,6 +190,40 @@ first live call, before either reached a reader — which is the concrete payoff
   published from this repo's own branches. A second league gets working
   rosters, values and trades — but no news, sparklines or rookie research.
   No tool reads them yet; the ones that will must degrade cleanly and say so.
+
+## Auth (phase 2)
+
+OAuth 2.1, with this server as both resource server and authorization server
+and **GitHub as the upstream identity provider**. Claude's connector UI is
+OAuth-only — there is no static-token path — and the MCP spec requires RFC
+9728 discovery, PKCE and audience-bound tokens.
+
+**It is stateless**, because serverless has nowhere to keep state. Two facts
+make that possible: there is **no dynamic client registration** (one
+pre-registered public client in `config.js`, which the spec explicitly allows
+as the alternative to RFC 7591), and **everything else is signed rather than
+stored** (an HMAC over a payload; any instance verifies what any other
+minted). The signing key is HKDF-derived from `GITHUB_CLIENT_SECRET`, so
+there is no second secret to manage, and no JWT library is used — the token
+has no `alg` header, so there is no algorithm confusion to defend against.
+All 25 auth tests run with no `node_modules`.
+
+**What it costs, stated rather than hidden:** a token cannot be revoked before
+it expires (so they live 1 hour; rotating the GitHub secret invalidates all of
+them at once), and an authorization code cannot be marked used (so replay is
+bounded by its 60-second life). **PKCE is therefore not defence in depth here,
+it IS the defence** — `S256` required, `plain` refused.
+
+**The load-bearing control is redirect-URI validation.** With no client
+registry, an exact-hostname origin allowlist (`claude.ai`, `claude.com`,
+loopback) replaces the spec's pre-registered values. It is checked before
+anything is minted, and it fails to an error page rather than a redirect —
+redirecting an unvalidated URI is the attack. `tests/mcpOauth.test.mjs` is
+written as attacks rather than happy paths.
+
+**The server refuses to start without `GITHUB_CLIENT_SECRET`**: no key means
+no authentication or a guessable one, and a failed deploy beats an open
+endpoint.
 
 ## Phase 2 notes
 

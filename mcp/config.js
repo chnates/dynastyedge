@@ -24,6 +24,16 @@ export const DEFAULT_GITHUB_CLIENT_ID = 'Ov23lipGgde1WRtguwMc'
 // the whole authorization rule, stated in one place.
 export const DEFAULT_ALLOWED_GITHUB_LOGIN = 'chnates'
 
+// The server's canonical URL. It is the OAuth token AUDIENCE, so it must not
+// be derived from the request's Host header — a spoofed Host would mint a
+// token stamped for somewhere else. Configured, with an env override for a
+// different deployment.
+export const DEFAULT_ORIGIN = 'https://dynastyedge-mcp.vercel.app'
+
+// The MCP client's id. Public, fixed, and not a secret: this is a PUBLIC
+// OAuth client protected by PKCE, so there is no client secret to guard.
+export const DEFAULT_MCP_CLIENT_ID = 'dynastyedge-claude'
+
 export function loadConfig(env = process.env) {
   const rosterEnv = env.DYNASTYEDGE_ROSTER_ID
   const parsedRoster = rosterEnv != null && rosterEnv !== '' ? Number(rosterEnv) : null
@@ -44,5 +54,7 @@ export function loadConfig(env = process.env) {
     // accept nobody while looking healthy.
     githubClientSecret: env.GITHUB_CLIENT_SECRET || null,
     allowedGithubLogin: env.DYNASTYEDGE_ALLOWED_LOGIN || DEFAULT_ALLOWED_GITHUB_LOGIN,
+    origin: (env.DYNASTYEDGE_ORIGIN || DEFAULT_ORIGIN).replace(/\/+$/, ''),
+    mcpClientId: env.DYNASTYEDGE_MCP_CLIENT_ID || DEFAULT_MCP_CLIENT_ID,
   }
 }
