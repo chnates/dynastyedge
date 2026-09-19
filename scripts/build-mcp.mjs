@@ -8,22 +8,31 @@
 // deployed server gets the same treatment rather than shipping a resolver
 // hook (MCP_DISCOVERY.md §6).
 //
-// IT IS NOT WHAT VERCEL DEPLOYS, and that is the correction this file exists
-// to record. Vercel detects functions from the SOURCE tree, not from build
-// output: with `api/` gitignored, a build that produced `api/mcp.js` deployed
-// a static page and no function at all — verified by a live deploy returning
-// `x-vercel-error: NOT_FOUND` on every route. `api/mcp.js` is therefore a
-// committed shim, and Vercel's own bundler resolves the imports.
+// ── ITS OUTPUT IS COMMITTED, AND THAT IS DELIBERATE ────────────────────────
 //
-// This script survives as the CHECK behind that: it proves the whole server,
-// `src/utils` included, bundles and boots under plain Node with no resolver
-// hook. If Vercel's bundler ever stops resolving the extensionless imports
-// `src/` uses, this is the escape hatch — commit its output as the function.
+// Two live deploys established the constraints, neither of which was
+// guessable from the docs:
+//
+//   1. Vercel detects functions from the SOURCE tree, not from build output.
+//      With `api/` gitignored, a build that produced `api/mcp.js` deployed a
+//      static page and no function — `x-vercel-error: NOT_FOUND` on every
+//      route, from a deployment reporting `readyState: READY`.
+//   2. A three-line `api/mcp.js` re-exporting `../mcp/vercelEntry.js` then
+//      deployed a function that crashed on invocation. Vercel TRACES module
+//      dependencies rather than bundling them, and Node's ESM resolver — 
+//      unlike esbuild and Vite — does not append `.js` to the extensionless
+//      relative imports `src/utils` uses.
+//
+// So the artifact is committed. The file verified locally is byte-for-byte
+// the file that runs, with no build-order or resolver assumption left in the
+// path. The cost is a 1.5MB generated file in git that can drift from its
+// source — `ci.yml` rebuilds and diffs it on every push, which is what makes
+// the drift impossible rather than merely discouraged.
 
 import { build } from 'esbuild'
 import { stat, mkdir, writeFile } from 'node:fs/promises'
 
-const OUT = '.mcp-build/mcp.js'
+const OUT = 'api/mcp.js'
 const STATIC_DIR = 'public-mcp'
 
 const result = await build({

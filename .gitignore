@@ -14,7 +14,7 @@ trade-values.json
 rookie-intel.json
 .cache/
 
-# scripts/build-mcp.mjs's verification bundle (api/mcp.js is a COMMITTED shim —
-# Vercel detects functions from the source tree, not from build output)
-.mcp-build/
+# NOTE: api/ is deliberately NOT ignored. Vercel detects functions from the
+# source tree and traces rather than bundles, so the esbuild output is
+# committed; ci.yml rebuilds and diffs it to prevent drift.
 public-mcp/
