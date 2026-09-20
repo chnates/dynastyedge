@@ -145,7 +145,11 @@ League ID: `1313933520715907072` (constant `LEAGUE_ID`).
 - **`/state/nfl`**: `season_type` (`!== 'regular'` ⇒ offseason mode),
   `week`, `season`. usePlayerIntel also checks `season_type === 'post'`.
 - **`/matchups/{week}`**: `matchup_id` (groups the two sides), `roster_id`,
-  `points`, `players[]`, `players_points{}` (per-player scores — the raw
+  `points`, `players[]`, `players_points{}` (per-player scores — **also the
+  live box score the Lineup Optimizer prices a LOCKED slot at**, exposed as
+  `weeklyPlayerPoints` on `LeagueContext` and fetched by `mcp/liveScores.js` on
+  the server; a played game is fact and outranks both the projection and the
+  blocked-scores-0 rule. The raw
   material for lineup efficiency), `starters[]`. usePlayoffOdds treats a
   week as complete only when **every** entry has `points > 0`.
 - **`/transactions/{week}`**: only `status === 'complete'` kept; `type`
@@ -169,7 +173,10 @@ League ID: `1313933520715907072` (constant `LEAGUE_ID`).
   player and discards the rest (verified in `usePlayerDB.js`):
   `name` (joined `first_name` + `last_name`), `position`, `team`, `age`,
   `years_exp`, `injury_status`, `espn_id`, `depth_chart_position`,
-  `depth_chart_order`, `news_updated`. **If you need another field, add it
+  `depth_chart_order`, `news_updated`. The **MCP server's** trim
+  (`mcp/snapshot.js`) is a smaller mirror and additionally keeps
+  **`injury_body_part`** and **`injury_notes`** — the two fields that turn a
+  bare "Doubtful" into "Doubtful · Knee - Meniscus · Surgery". **If you need another field, add it
   to this trim list — consumers never see the raw response.**
 - **`/players/nfl/{playerId}`** (usePlayerNews only): `injury_status`,
   `injury_body_part`, `injury_notes` → three-tier flag (red: out/ir/
@@ -179,8 +186,13 @@ League ID: `1313933520715907072` (constant `LEAGUE_ID`).
   ranked **client-side** from `pts_half_ppr`.
 - **`/projections/nfl/regular/{season}/{week}`**: `pts_half_ppr` (present for
   ~1,000 of ~9,400 entries — the rest are ADP-only rows).
-- **`/schedule/nfl/regular/{season}`**: `week`, **`home`, `away`** — NOT
-  `home_team`/`away_team`, and NOT under `/v1`. Bye detection = teams absent
+- **`/schedule/nfl/regular/{season}`**: `week`, **`home`, `away`**, **`status`**,
+  `date`, `game_id`. `home`/`away` are NOT `home_team`/`away_team`, and it is
+  NOT under `/v1`. **`status` is `pre_game` → `in_game` → `complete`, and it is
+  load-bearing**: Sleeper seals a lineup slot at kickoff, so `parseLockedTeams`
+  (`utils/projections.js`) reads it to stop the Optimizer offering moves that
+  cannot be made. Both `parseByeTeams` implementations discarded it until
+  2026-09-20 — see the failure-archaeology skill. Bye detection = teams absent
   from that week's games. Consumed by `useLineupData` / `utils/projections.js`.
 
 ### Sleeper quirks that cause real bugs

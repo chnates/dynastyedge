@@ -7,15 +7,19 @@ knowledge.
 Design spec: [`../MCP_DISCOVERY.md`](../MCP_DISCOVERY.md). Read it first — this
 file covers only what is built.
 
-**Phase 2b (this): seven tools, over stdio AND streamable HTTP, with every
-one of `analyze_trade`'s eight optional signals wired.** Phase 1
+**Phase 2c (this): eight tools, over stdio AND streamable HTTP — game locks in
+`lineup_advice`, and the first tools to read one of the Actions-published
+static feeds.** Phase 1
 shipped three prerequisite refactors plus `get_roster`; 1b added the other four
 of `MCP_DISCOVERY.md` §5's set and the weekly data layer; phase 2 added the
 HTTP transport, stateless OAuth and the Vercel packaging, and is **live at
 `https://dynastyedge-mcp.vercel.app/mcp`**. Phase 2a added `get_playoff_odds`
 and the rest-of-season layer behind it, and used the same fetch to put
 `analyze_trade`'s Layer 3 on **live playoff odds** instead of the win-window
-tier.
+tier. Phase 2b wired the last two of `analyze_trade`'s eight optional signals.
+Phase 2c added `get_player_news`, taught `lineup_advice` that a player whose
+game has kicked off **cannot be moved**, and attached injury detail and beat
+reporting to the flagged players in `lineup_advice` and `get_roster`.
 
 ## Run it
 
@@ -68,9 +72,21 @@ Every tool also takes `leagueId` per call; these are only the fallbacks.
 | `analyze_trade` | "Grade this trade." | **Resolved ids only**; a name is rejected, never guessed |
 | `lineup_advice` | "What do I start, and what's it costing me?" | **In-season only** — the offseason says so, never zeros |
 | `get_playoff_odds` | "Am I making the playoffs — buying or selling?" | The preseason returns a **null** percentage and a labelled preview, never a made-up one |
+| `get_player_news` | "What's the latest on Bowers?" / "Who on my team is hurt?" | Injury body part + notes + the feed; an ambiguous name is **refused**, and silence is a gap in coverage, never good health |
 
-All seven are documented with their contracts and traps in CLAUDE.md's
+All eight are documented with their contracts and traps in CLAUDE.md's
 **The MCP Server** section. Read that before changing one.
+
+### A LOCKED slot is not a decision
+
+`lineup_advice` reads the schedule's `status` field, which both `parseByeTeams`
+implementations used to discard. Sleeper seals a lineup slot at kickoff, so
+before this the tool told the owner on a Sunday to bench a player whose game
+had finished on Thursday — and reported the resulting points as "sitting on
+your bench", where they were not sitting and could not be collected. Locked
+starters pin to their slots at their **real** score (from `players_points`);
+locked bench players leave the pool. Neither produces a move. See CLAUDE.md
+Feature 4's **Game locks** for the full contract.
 
 ### The in-season-only tools, and the one that is season-aware
 
@@ -105,6 +121,10 @@ mcp/
   snapshot.js     league fetch + cache + the as-of stamp + mergeAsOf
   weekly.js       projections + schedule, on their own longer TTL
   season.js       every regular-season week's matchups, on a third TTL
+  transactions.js the season transaction feed, on a FOURTH and SPLIT TTL
+  liveScores.js   this week's box score, on a FIFTH and deliberately SHORT TTL
+  news.js         the player-news feed + the id-only matcher (Class B)
+  history.js      the deliberately narrow league-history walk
   teams.js        resolveTeam — one definition, three tools
   limit.js        concurrency gate + retry/backoff
   config.js       league / identity / TTLs, env-first
@@ -113,13 +133,14 @@ mcp/
   tools/
     getRoster.js  findSellHigh.js  recommendFreeAgents.js
     resolveAssets.js  analyzeTrade.js  lineupAdvice.js
-    playoffOdds.js
+    playoffOdds.js    playerNews.js
 ```
 
 Tests live with the rest of the suite: `mcpLimit`, `mcpSnapshot`, `mcpWeekly`,
 `mcpSeason`, `mcpStore`, `mcpHttp`, `mcpOauth`, and one file per tool
 (`mcpGetRoster`, `mcpFindSellHigh`, `mcpRecommendFreeAgents`,
-`mcpResolveAssets`, `mcpAnalyzeTrade`, `mcpLineupAdvice`, `mcpPlayoffOdds`),
+`mcpResolveAssets`, `mcpAnalyzeTrade`, `mcpLineupAdvice`, `mcpPlayoffOdds`,
+`mcpNews`),
 plus `tests/leagueState.test.mjs` and `tests/playoffOdds.test.mjs` for the join
 and the model this all rests on. The tool suites share
 `tests/helpers/mcpFixtures.mjs` — one synthetic league, because several tools
@@ -162,8 +183,8 @@ first live call, before either reached a reader — which is the concrete payoff
 
 - **Snapshot TTL ~15 min.** One assembly per conversation instead of five.
   Measured on the live league: cold call 539ms, cached call 3ms. Phase 1b
-  measured the same shape across all six tools — one 614ms cold assembly,
-  then 3-47ms per tool.
+  measured the same shape across every tool — one 614ms cold assembly, then
+  3-47ms per tool.
 - **Weekly TTL ~60 min — LONGER than the snapshot, deliberately.** League data
   changes on an EVENT (a trade lands and a roster is wrong); projections
   change on a DRIP (`weeklyProjections.js:13-15`: 6 of 9,419 entries moved in
@@ -171,6 +192,18 @@ first live call, before either reached a reader — which is the concrete payoff
   change that measurably almost never happens. `mergeAsOf` recomputes
   `oldestSourceAt` over the union so a stale projection cannot hide behind a
   fresh roster fetch, and `refresh: true` is the near-kickoff escape hatch.
+- **Live-score TTL ~5 min — the only SHORT one here, and the argument is not
+  symmetry.** Every other layer caches LONGER than instinct because its input
+  changes on an event, a drip, or once a week. A box score changes every few
+  plays for three hours on a Sunday, and it is the number that decides whether
+  a slot is still a decision or already a result. Deliberately **not**
+  `season.js`'s cache, whose long TTL exists *because* the odds model discards
+  a partially-played week — borrowing it would mean reading a 60-minute-old box
+  score to decide whether a game has finished.
+- **News TTL ~10 min, and the tool reports its own blind spot.** The feed
+  publishes twice an hour through a CDN that caches ~5 minutes, so it can trail
+  a wire report by ~35 minutes. `staleForKickoff` marks that and the tools say
+  to confirm against a live source, rather than being silently behind.
 - **Season TTL ~60 min — a THIRD domain, not an alias of the weekly one.** A
   completed week is frozen forever, and the model *discards* a partially-played
   one (a week counts only when every team has scored), so the odds output moves

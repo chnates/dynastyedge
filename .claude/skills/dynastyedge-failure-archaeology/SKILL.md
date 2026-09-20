@@ -13,7 +13,10 @@ description: >-
   score; touching fairBand.js or any surface that predicts the Analyzer's
   verdict; touching
   Trade Analyzer preload / nav-state / sessionStorage-draft wiring or fair
-  package suggestions; adding dark-mode glow effects to cards; changing taxi
+  package suggestions; touching the weekly lineup engine (lineupMoves.js,
+  lineupBuild.js, projections.js getAvailability/parseByeTeams/parseLockedTeams)
+  or anything that decides whether a player can be started; adding dark-mode
+  glow effects to cards; changing taxi
   rules, sparkline thresholds, or the drafted trade UX. Also load when a bug
   "smells familiar" or before re-attempting any fix that might have been tried
   and reverted already.
@@ -592,6 +595,73 @@ killed. Full method + numbers:
   saturated neon on the **LoginScreen** (`0b15ca3`) and the hero-card
   "stadium lights" treatment are different, deliberate surfaces — the ruling
   is specifically about tinted edge-bar content cards.)
+
+---
+
+## 5b. The weekly lineup engine — a LOCKED slot is not a decision (SETTLED 2026-09-20)
+
+**The single most instructive wrong answer this repo has produced**, because it
+was confident, specific, and acted on. On a Sunday lunchtime in Week 2 the
+Optimizer (and `lineup_advice`) told the owner:
+
+> `[MUST FIX] SIT DJ Moore → START TreVeyon Henderson · +8.5` ·
+> "DJ Moore is listed Out and will likely score 0" ·
+> **8.4 points sitting on your bench**
+
+Moore's game (DET @ BUF) had **finished on Thursday**. Three claims were false
+at once: he could not be benched (Sleeper seals a slot at kickoff), he had not
+scored 0 — he had banked **−0.1** before leaving with an AC joint sprain — and
+the 8.5 points were reported as recoverable when nothing could recover them.
+
+**It was never a staleness bug.** Reproduced live with `refresh: true`, every
+source **0 seconds old**. The schedule payload had carried
+`status: "complete"` for that game the whole time; both `parseByeTeams`
+implementations (`useLineupData.js` and `mcp/weekly.js`) read only
+`home`/`away`/`week` and threw `status` away.
+
+### The standing rulings
+
+1. **`locked` is ORTHOGONAL to `blocked`, and conflating them is the bug.**
+   `blocked` is a forward-looking claim — "he will score 0, take him out".
+   `locked` is a claim about the transaction — "you cannot take him out at
+   all". Moore was both. Never collapse them into one flag.
+2. **A played game is FACT and outranks both the projection and the
+   blocked-scores-0 rule.** `players_points` is the truth for a locked player.
+   A locked player with **no** live score falls back to his **projection, never
+   0** — "he will score 0" is a claim about the future and his game is not in
+   the future, so guessing 0 re-manufactures the same overstatement.
+3. **An empty locked set means "locks unknown", never "everything locked"** —
+   the same discipline an empty `playingTeams` keeps about byes. An absent or
+   unrecognised `status` does not lock: over-locking pins a player you can
+   still move and hides a real move, while under-locking merely degrades to the
+   pre-2026-09-20 behaviour.
+4. **The Σ-gains invariant survives by construction.** A locked contribution
+   appears identically in the current total and the optimal total, so it
+   cancels. Any future change to the pinning must preserve that; it is pinned
+   by test.
+5. **The locks come from the SCHEDULE, not the box score.** So a failed live
+   -score fetch degrades the banked figure to a projection and can never
+   restore an impossible move. Keep that asymmetry.
+
+### The two transferable lessons
+
+- **A payload field nobody reads is not a field nobody needs.** The schedule
+  has three useful fields; the repo documented two, because both parsers were
+  written to answer "who is on bye" and were never revisited when the question
+  widened. **Re-read a payload when the question changes**, not only when it
+  breaks.
+- **`--overflow` cannot see a wrapping failure.** Adding a `FINAL` badge to the
+  lineup row squeezed the name column hard enough to break "DJ Moore" into
+  **seven lines** at 390px, and the truncation instrument reported **zero**
+  clipped elements — correctly, because the name *wraps* rather than clips.
+  Look at the screenshot. (The fix was also better information design: a locked
+  row drops the matchup pill, since a rating that forecasts the defense a
+  player is *due to face* is meaningless once his game is over.)
+
+Evidence: `src/utils/projections.js` (`parseLockedTeams`, `getAvailability`'s
+fourth arg), `src/utils/lineupBuild.js` (`pinned`), `src/utils/lineupMoves.js`,
+`mcp/liveScores.js`, CLAUDE.md Feature 4 **Game locks**, `docs/open-items.md`
+MCP-2c, `tests/lineupMoves.test.mjs` + `tests/projections.test.mjs`.
 
 ---
 

@@ -680,7 +680,8 @@ transport (`http.js`), stateless OAuth 2.1 (`oauth.js` / `oauthRoutes.js` /
 `app.js`) and the Vercel packaging (`api/mcp.js`, `vercel.json`).
 
 **All SEVEN tools confirmed in the connector's own tool list, 2026-09-20** —
-the owner's phone, after phase 2b deployed: Grade a trade · Find a sell-high
+the owner's phone, after phase 2b deployed (phase 2c's `get_player_news` makes
+eight, and the same re-check is owed after it deploys): Grade a trade · Find a sell-high
 candidate · Rest-of-season playoff odds · Get a team roster · Weekly start/sit
 advice · Recommend free agents · Resolve player and pick names to ids. That is
 the end of the chain no probe can reach — what the client actually enumerates
@@ -754,7 +755,9 @@ mcp/
 Cloudflare Workers, Deno and Bun all take, so the host stays a *packaging*
 decision rather than a code one. `createServer()` was already
 transport-agnostic, so **no tool was forked**: stdio and HTTP expose the same
-six tools, pinned by test.
+tools, pinned by test — the assertion lists them by name, so adding one to
+`createServer` and forgetting the transport fails the suite rather than
+shipping a fork.
 
 **THE TRAP: a session held in RAM is exactly what serverless cannot keep.**
 The SDK's streamable transport can run session-ful — it mints a session id and
@@ -783,7 +786,8 @@ would defeat the gate.
 
 **Verified over the real transport against the live league** (2026-09-19, a
 real MCP client over `StreamableHTTPClientTransport`): health 200;
-unauthenticated POST 401 with the discovery header; `tools/list` → six tools;
+unauthenticated POST 401 with the discovery header; `tools/list` → the full
+tool set (six at the time; eight since phase 2c);
 `get_roster` 509ms cold / 11,312B, Nix Cage 0-1, 31 players + 12 picks, slots
 STARTER 11 · BENCH 13 · TAXI 5 · IR 2, total 86,090, value rank 3, window
 Middle, all three `asOf` sources stamped and not stale, one unranked player at
@@ -2491,7 +2495,8 @@ win window); Season Review remains available on its own tab.*
 |----------------------------|--------------------------------------------------------------------------------------------------|
 |Weekly point projections    |Sleeper `/projections/nfl/regular/{year}/{week}`                                                  |
 |Injury / availability status|Sleeper player data (injury_status field)                                                         |
-|Bye weeks                   |Sleeper `/schedule/nfl/regular/{year}` (off `/v1` — `SLEEPER_ROOT`; fields `home`/`away`)          |
+|Bye weeks **and game locks** |Sleeper `/schedule/nfl/regular/{year}` (off `/v1` — `SLEEPER_ROOT`; fields `home`/`away`, **plus `status`** — see Game locks)|
+|Points already scored        |`players_points` on `/league/{id}/matchups/{week}` — already fetched by `useSleeper`, so no extra request|
 |Matchup quality             |Sleeper `/stats/nfl/regular/{year}/{week}` for points, joined to the player DB (position + team) and the schedule (opponent) — those stats carry no `pos`/`opp`/`tm`|
 |Dynasty value (secondary)   |FantasyCalc (already cached)                                                                      |
 
@@ -2592,7 +2597,10 @@ Two contracts worth stating:
   inflate the total and hide the exact gap this tool exists to surface.
 
 **`getAvailability` (`utils/projections.js`) is the one availability verdict** —
-`{ blocked, status, label, short }` for bye / IR / Out / Questionable / ok.
+`{ blocked, status, label, short, locked }` for bye / IR / Out / Questionable /
+ok, taking `(player, playerStatuses, playingTeams, lockedTeams)`. `locked` is
+orthogonal to `blocked` (see Game locks); omitting the fourth argument means
+"locks unknown" and reproduces the pre-lock behaviour exactly.
 `label` is the full word for prose ("is listed Questionable"); `short` is the
 fantasy shorthand for a row chip, because a full-width badge at 390px squeezes
 the player's own name to "Rach…".
@@ -5252,7 +5260,7 @@ dynastyedge/
 │   ├── config.js               ← league / identity / TTLs, env-first: leagueId and rosterId are parameters, not constants
 │   ├── register.mjs            ← registers loader.mjs (deliberate copy of the test suite's — a runnable server must not depend on .claude/skills/)
 │   ├── loader.mjs              ← the extensionless-import resolver hook
-│   └── tools/                  ← all six are orchestration only, in the shape of TradeAnalyzer.jsx
+│   └── tools/                  ← all EIGHT are orchestration only, in the shape of TradeAnalyzer.jsx
 │       ├── getRoster.js            ← #1 "what's on my team?"
 │       ├── findSellHigh.js         ← #2 "who's my best sell-high?" — names a CONCRETE partner and return
 │       ├── recommendFreeAgents.js  ← #3 "who should I pick up?" — dynasty value AND this week's projection; a defense is never a general pickup
@@ -5455,7 +5463,7 @@ dynastyedge/
 │   ├── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
 │   ├── leagueState.test.mjs         ← buildLeagueState: string-id normalization across mixed-shape payloads + the '0' sentinel (rule 8), unranked players kept at value 0 and the skip-then-self-heal path (rule 7), a pick at its ORIGINAL owner's slot vs round medians (Feature 1), FAAB read from settings, identity as runtime state, input immutability
 │   ├── mcpOauth.test.mjs            ← the auth layer, written as ATTACKS: a foreign redirect_uri refused without redirecting, lookalike hosts (evil.claude.ai, claude.ai.evil.com) refused, PKCE `plain` refused, a stolen code useless without the verifier, a token for another audience refused, the allowlist re-checked at every request, and the three token kinds never interchangeable
-│   ├── mcpHttp.test.mjs             ← the HTTP transport + its gate: a throwing authenticator is never authorized, EVERY post is authenticated (not initialize-only), 401 advertises RFC 9728 discovery, no session id is ever minted, GET leaks no league data, and the same six tools as stdio
+│   ├── mcpHttp.test.mjs             ← the HTTP transport + its gate: a throwing authenticator is never authorized, EVERY post is authenticated (not initialize-only), 401 advertises RFC 9728 discovery, no session id is ever minted, GET leaks no league data, and the same tools as stdio — asserted BY NAME, so a tool added to createServer and not to the transport fails here instead of shipping a fork
 │   ├── mcpStore.test.mjs            ← the cache backend: fetchedAt round-tripping byte-for-byte (the provenance contract), gzip on a player-DB-shaped payload, the stale-on-failure fallback AND its cold-failure throw, THE TRAP (an evicting store loses the fallback that a keeping store answers with), and a broken store degrading to slower-never-broken on both read and write
 │   ├── mcpLimit.test.mjs            ← the rate discipline fetchJSON does NOT have: concurrency cap, a rejecting job freeing its slot, 429/503 retried with bounded backoff, and a 404 never retried (it is an answer, not a failure)
 │   ├── mcpSnapshot.test.mjs         ← mocked-fetch: the 15-min TTL, values + player DB cached ACROSS leagues (a second league must not re-download 5-8MB), per-source as-of stamps with oldestSourceAt as the STALEST input, serve-cache-and-label-stale on failure vs a cold throw, and the FantasyCalc shape guards
