@@ -172,6 +172,9 @@ export function makeWeekly(over = {}) {
       9: { pts_half_ppr: 8.6 },
     },
     playingTeams: new Set(['ATL', 'NE', 'MIN', 'DAL', 'KC', 'BUF']),
+    // Empty by default: "locks unknown", never "everything locked".
+    lockedTeams: new Set(),
+    gameStatus: {},
     scheduleGames: [],
     sources: {
       projections: stamp('2027-09-19T13:50:00.000Z', 720),
@@ -186,7 +189,8 @@ export function makeWeekly(over = {}) {
 export function makeOffseasonWeekly() {
   return {
     available: false, isOffseason: true, season: '2027', week: null,
-    requestedWeek: null, projMap: null, playingTeams: new Set(), scheduleGames: [],
+    requestedWeek: null, projMap: null, playingTeams: new Set(),
+    lockedTeams: new Set(), gameStatus: {}, scheduleGames: [],
     sources: {}, notes: ['It is the offseason, so Sleeper publishes no weekly projections.'],
   }
 }

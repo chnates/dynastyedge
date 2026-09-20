@@ -12,6 +12,7 @@ import { getTeamName } from '../../src/utils/teamName.js'
 // `partner` argument resolves through the SAME code. Re-exported here because
 // this module's existing tests (and its contract) name it.
 import { resolveTeam } from '../teams.js'
+import { newsForPlayer } from '../news.js'
 
 export { resolveTeam }
 
@@ -38,7 +39,7 @@ const POS_ORDER = { QB: 0, RB: 1, WR: 2, TE: 3, DEF: 4 }
 // Build the answer. `snapshot` comes from mcp/snapshot.js and carries its own
 // provenance, which is copied onto the response verbatim — every tool response
 // says how old it is (§7).
-export function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId } = {}) {
+export function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId, news } = {}) {
   const { league } = snapshot
   if (!league) throw new Error('League state unavailable')
 
@@ -71,6 +72,14 @@ export function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId 
       positionRank: p.positionRank ?? null,
       trend30Day: p.trend30Day ?? 0,
       slot: slotOf(p),
+      // ── Health, on the roster itself ─────────────────────────────────
+      // A dynasty roster read is where "who is hurt?" gets asked, and the
+      // answer was previously nowhere in this payload at all. The body part
+      // and note come free from the player DB this tool already holds; a
+      // single headline comes from the news feed when it loaded. Both are
+      // omitted when absent, never rendered as "healthy" — we would be
+      // reporting the absence of a field as a fact about a person.
+      ...injuryFields(snapshot, news, p.sleeperId),
     }))
 
   const picks = [...roster.picks]
@@ -147,6 +156,26 @@ export function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId 
     // Caveats the reader needs in order to read the numbers correctly. These
     // are conditions, not decoration — each one changes what a number means.
     notes: buildNotes(snapshot, roster, players, picks),
+  }
+}
+
+// Only a flagged player carries this. Attaching a headline to 26 healthy
+// players would blow the bounded-output rule to say nothing.
+function injuryFields(snapshot, news, sleeperId) {
+  const meta = snapshot.playerDB?.[String(sleeperId)] ?? null
+  const status = meta?.injury_status ?? null
+  if (!status) return {}
+  const items = newsForPlayer(news, sleeperId, { limit: 1, playerDB: snapshot.playerDB })
+  const latest = items[0] ?? null
+  return {
+    injuryStatus: status,
+    injuryBodyPart: meta?.injury_body_part ?? null,
+    injuryNotes: meta?.injury_notes ?? null,
+    // Headline only — the full story lives in get_player_news. This is the
+    // hook that tells a reader whether to ask.
+    latestNews: latest
+      ? { headline: latest.headline, source: latest.source, published: latest.published, multiPlayer: latest.multiPlayer }
+      : null,
   }
 }
 

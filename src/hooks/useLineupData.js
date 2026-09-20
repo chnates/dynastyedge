@@ -3,6 +3,7 @@ import { SLEEPER_BASE, SLEEPER_ROOT } from '../constants'
 import { fetchJSON } from '../utils/fetchJSON'
 import { loadPlayerDB } from './usePlayerDB'
 import { loadNflState, loadWeeklyProjections, clearProjectionCache } from './weeklyProjections'
+import { parseLockedTeams } from '../utils/projections'
 
 // Teams with a game this week — everyone else is on bye. Sleeper's schedule
 // payload uses `home`/`away` (NOT `home_team`/`away_team`).
@@ -24,6 +25,9 @@ export function useLineupData() {
   const [playerStatuses, setPlayerStatuses] = useState(null)
   const [schedule, setSchedule] = useState([])
   const [playingTeams, setPlayingTeams] = useState(new Set())
+  // Teams whose game has kicked off. Sleeper seals those lineup slots, so the
+  // Optimizer must stop offering moves it cannot make — see parseLockedTeams.
+  const [lockedTeams, setLockedTeams] = useState(new Set())
   const [defStatsRaw, setDefStatsRaw] = useState(null)
   const [statsWeek, setStatsWeek] = useState(null)
   const [isOffseason, setIsOffseason] = useState(false)
@@ -74,6 +78,7 @@ export function useLineupData() {
       setStatsWeek(prevWeek)
 
       const { playing, schedule: parsed } = parseByeTeams(scheduleData, week)
+      setLockedTeams(parseLockedTeams(parsed, week))
       setSchedule(parsed)
       setPlayingTeams(playing)
 
@@ -97,6 +102,7 @@ export function useLineupData() {
     playerStatuses,
     schedule,
     playingTeams,
+    lockedTeams,
     defStatsRaw,
     statsWeek,
     loading,

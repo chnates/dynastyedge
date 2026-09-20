@@ -24,11 +24,35 @@ import { selectOptimalStarters } from './lineupBuild'
 import { getProjPts, getAvailability } from './projections'
 import { confidenceForGap, MIN_MEANINGFUL_GAIN } from './lineupConfidence'
 
-// A blocked player scores 0 no matter what Sleeper projects for him. An "Out"
-// starter carrying a 12.4 projection would otherwise inflate the current total
-// and hide the very gap this tool exists to surface.
-function effectivePts(player, projMap, availability) {
-  if (!player || availability?.blocked) return 0
+// What a player actually contributes.
+//
+// THREE CASES, AND THE ORDER MATTERS:
+//
+//   1. His game has kicked off and we have a live score → that score. A played
+//      game is FACT, and a fact outranks both a projection and the blocked
+//      rule. DJ Moore exited Thursday's game hurt and was listed Out by
+//      Sunday; the blocked rule scored him 0 and the projection said 10.9,
+//      while `players_points` said he had already banked -0.1. Only the third
+//      number is true, and it is the only one the owner can do nothing about.
+//   2. Blocked (bye / Out / IR / empty) with no game played → 0. An "Out"
+//      starter carrying a 12.4 projection would inflate the current total and
+//      hide the very gap this tool exists to surface.
+//   3. Otherwise → Sleeper's projection.
+//
+// A locked player with NO live score falls through to the projection rather
+// than to 0 (case 2 is skipped for him), because "he will score 0" is a
+// forward-looking claim and his game is not in the future. Guessing 0 there
+// would re-manufacture the exact overstatement this function was fixed to
+// remove; the caller discloses that live scores were unavailable instead.
+function effectivePts(player, projMap, availability, actualPoints) {
+  if (!player) return 0
+  const id = String(player.sleeperId)
+  if (availability?.locked) {
+    const actual = actualPoints?.[id]
+    if (Number.isFinite(actual)) return actual
+    return getProjPts(player.sleeperId, projMap)
+  }
+  if (availability?.blocked) return 0
   return getProjPts(player.sleeperId, projMap)
 }
 
@@ -79,13 +103,31 @@ function reasonFor({ outEntry, inEntry, gain }) {
 //   projMap        Sleeper weekly projections
 //   playerStatuses the shared trimmed player DB (injury_status lives here)
 //   playingTeams   teams with a game this week (empty ⇒ bye info unavailable)
-export function buildLineupMoves({ players, lineup, projMap, playerStatuses, playingTeams }) {
+//   lockedTeams    teams whose game has kicked off (empty ⇒ locks unknown)
+//   actualPoints   sleeperId → points already scored, for locked players
+//
+// ── WHAT A LOCK DOES TO THE SOLVE ─────────────────────────────────────────
+//
+// Sleeper seals a player's slot the moment his game starts. So the question
+// this engine answers narrows from "what is your best lineup?" to "what is the
+// best lineup you can still REACH?" — and that is a strictly better question,
+// because the first one has an answer you may not be allowed to act on.
+//
+// Locked STARTERS are pinned to their slots and carry their real score into
+// both totals, where it cancels. Locked BENCH players leave the eligible pool
+// outright — you cannot start a player whose game is over. Neither can produce
+// a move, which is the whole point: the engine previously emitted "SIT DJ
+// Moore → START TreVeyon Henderson, +8.5" for a slot that had been sealed for
+// three days, and counted those 8.5 fictional points in the headline.
+export function buildLineupMoves({
+  players, lineup, projMap, playerStatuses, playingTeams, lockedTeams, actualPoints,
+}) {
   const startable = (players ?? []).filter(p => !p.isTaxi && !p.isIR)
   const byId = new Map(startable.map(p => [String(p.sleeperId), p]))
 
   const availabilityOf = new Map()
   startable.forEach(p => {
-    availabilityOf.set(String(p.sleeperId), getAvailability(p, playerStatuses, playingTeams))
+    availabilityOf.set(String(p.sleeperId), getAvailability(p, playerStatuses, playingTeams, lockedTeams))
   })
 
   const entryFor = id => {
@@ -97,7 +139,14 @@ export function buildLineupMoves({ players, lineup, projMap, playerStatuses, pla
       player,
       availability,
       projPts: getProjPts(player.sleeperId, projMap),
-      effPts: effectivePts(player, projMap, availability),
+      effPts: effectivePts(player, projMap, availability, actualPoints),
+      locked: !!availability?.locked,
+      // Present only when his game has started AND a live score arrived, so a
+      // caller can distinguish "he scored 3.2" from "his game is under way and
+      // we could not read the score".
+      actualPts: availability?.locked && Number.isFinite(actualPoints?.[String(id)])
+        ? actualPoints[String(id)]
+        : null,
     }
   }
 
@@ -109,15 +158,29 @@ export function buildLineupMoves({ players, lineup, projMap, playerStatuses, pla
   // metric: a 0-metric player still gets placed when nothing else is eligible,
   // which would quietly "optimize" a bye-week player back into your lineup.
   // Leaving the slot empty is the truthful outcome.
+  //
+  // Locked players leave the pool for a different reason — not "he will score
+  // nothing" but "this is not yours to decide any more".
   const pool = startable
-    .filter(p => !availabilityOf.get(String(p.sleeperId)).blocked)
+    .filter(p => {
+      const a = availabilityOf.get(String(p.sleeperId))
+      return !a.blocked && !a.locked
+    })
     .map(p => ({
       key: String(p.sleeperId),
       position: p.position,
       metric: getProjPts(p.sleeperId, projMap),
       item: p,
     }))
-  const optimal = selectOptimalStarters(pool)
+
+  // A locked starter holds his slot at his REAL contribution, so the optimal
+  // total is a lineup you could actually end up with rather than one the rules
+  // forbid.
+  const pinned = current
+    .map((e, slotIndex) => (e?.locked ? { slotIndex, key: e.id, position: e.player.position, metric: e.effPts, item: e.player } : null))
+    .filter(Boolean)
+
+  const optimal = selectOptimalStarters(pool, { pinned })
 
   const optimalByIdx = ROSTER_SLOTS.map(() => null)
   optimal.starters.forEach(s => { optimalByIdx[s.slotIndex] = s.key })
@@ -213,6 +276,19 @@ export function buildLineupMoves({ players, lineup, projMap, playerStatuses, pla
     upgradeCount: moves.filter(m => !m.mustFix && m.meaningful).length,
     coinFlipCount: moves.filter(m => !m.meaningful).length,
     emptySlots: slots.filter(s => !s.entry).length,
+    // ── Lock reporting ────────────────────────────────────────────────
+    // `lockedStarters` is how many of your slots are already sealed, and
+    // `lockedPoints` is what they have banked — the part of the current total
+    // that is settled rather than forecast. A caller that prints one number
+    // for "your lineup" is printing two different kinds of thing added
+    // together, and on a Sunday afternoon that matters.
+    lockedStarters: pinned.length,
+    lockedPoints: Math.round(pinned.reduce((sum, p) => sum + (p.metric ?? 0), 0) * 10) / 10,
+    // Locked players whose live score never arrived, so their contribution is
+    // still a projection. Disclosed rather than hidden: it is the one case
+    // where a locked slot's number is not yet a fact.
+    lockedWithoutScore: current.filter(e => e?.locked && e.actualPts === null).length,
+    lockedBench: bench.filter(e => e?.locked).length,
   }
 }
 

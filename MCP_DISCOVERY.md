@@ -222,12 +222,33 @@ Build in this order. Each row names what it reuses and what must exist first.
 | 3 | `recommend_free_agents` | "Who should I pick up and why?" | optional `position`, optional `limit` | Ranked available players with plain-English reasons, **dynasty value AND this week's Sleeper projection** | `recommendations.recommendFreeAgents` + prerequisite C + `weeklyProjections`. In-season only for the projection column. |
 | 4 | `resolve_assets` | *(support)* "Which Bijan?" | free-text names | Candidate matches with team, position, current value, owning roster | `buildLeagueState` + the player DB. **Always called before #5.** |
 | 5 | `analyze_trade` | "Grade this trade." | `give[]`, `get[]` (resolved IDs only), `partner` | Verdict, reasoning, value split, both-seat appeal, landing spots, fair band, counter suggestion, pitch text | `tradeAnalysis.analyzeTrade` → `getTradeVerdict` → `adjustVerdictForInjuries` → `getCounterSuggestion` → `buildTradePitch`. Mirror `TradeAnalyzer.jsx:141-256`. |
-| 6 | `lineup_advice` | "What do I start, and what's it costing me?" | optional `week` | Moves with per-move gain, confidence %, must-fix flags, total points left on bench | `lineupMoves.buildLineupMoves` — pure, five plain args (`:82`), heavily tested. Needs projections (already committed), player DB, and the schedule for byes. |
+| 6 | `lineup_advice` | "What do I start, and what's it costing me?" | optional `week` | Moves with per-move gain, confidence %, must-fix flags, total points left on bench | `lineupMoves.buildLineupMoves` — pure, heavily tested. Needs projections (already committed), player DB, and the schedule for byes **and locks**. |
 
-**Phase two, deliberately deferred:** playoff odds (cheap once `processWeeks` is
-lifted), trade targets / fair packages (`getTopTradeTargets` +
-`suggestFairPackage` — note this is the ~730ms path in-app), manager scouting
-(biggest fetch burst), rookie research.
+> **This table is the original plan, kept as the record. Two tools shipped
+> beyond it** — `get_playoff_odds` (phase 2a, the first "deferred" item below)
+> and `get_player_news` (phase 2c). CLAUDE.md's **The MCP Server** section is
+> the live truth for all eight; this section is what was specified on
+> 2026-09-19.
+>
+> **Row 6 gained a requirement that was not foreseen here, and it cost a wrong
+> answer to find.** "The schedule for byes" is incomplete: the same payload's
+> `status` field says whether a game has kicked off, and Sleeper **seals a
+> lineup slot at kickoff**. Without it the tool recommended benching a player
+> whose game had finished three days earlier and counted the points as
+> recoverable. A weekly tool needs the schedule for byes AND locks, and the
+> live box score (`players_points`) to price a slot that is already settled.
+
+**Phase two, deliberately deferred:** playoff odds (**shipped, phase 2a** —
+cheap once `processWeeks` was lifted, which became
+`playoffOdds.buildPlayoffOutlook`), trade targets / fair packages
+(`getTopTradeTargets` + `suggestFairPackage` — note this is the ~730ms path
+in-app), manager scouting (biggest fetch burst), rookie research.
+
+**Not foreseen here and shipped anyway: reading the static feeds.** §6 treats
+the Actions-published branches as app-only. `get_player_news` reads
+`news.json`, which is what makes "should I start Bowers?" answerable without a
+second lookup — and it keeps the app's own Class B contract (a miss is
+`available: false` with a note, never an error and never "there is no news").
 
 ### The one question that is NOT answerable today
 

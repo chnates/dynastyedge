@@ -52,7 +52,17 @@ then shoot; **repeatable**, applied in order) ·
 `--overflow` (report every element currently being CLIPPED by
 `text-overflow: ellipsis`).
 
-**`--overflow` is THE truncation instrument.** Truncation of a load-bearing
+**`--overflow` HAS A BLIND SPOT, and it is the one you will hit next.** It
+measures `scrollWidth > clientWidth`, so it sees **clipping** and is blind to
+**wrapping** — and a column squeezed to near-zero width does not clip, it wraps,
+one character per line. Measured 2026-09-20: adding a `FINAL` badge to
+`LineupRow` broke "DJ Moore" into **seven lines** at 390px while `--overflow`
+reported **zero** clipped elements, correctly. `--text` cannot see it either
+(the rendered text is identical). **Look at the screenshot** whenever you add
+an element to a row that already has a name column; the instrument only covers
+the ellipsis half of the rule.
+
+**`--overflow` is THE truncation instrument** for the clipping half. Truncation of a load-bearing
 value has recurred five times in this repo and CLAUDE.md carries a standing rule
 against it, but the rule had no detector until step 4. Neither obvious approach
 works: `--text` reads `innerText`, which returns the element's FULL string

@@ -56,6 +56,8 @@ function run(players, lineup, opts = {}) {
     projMap: projOf(players),
     playerStatuses: opts.playerStatuses ?? {},
     playingTeams: opts.playingTeams ?? new Set(['AAA']),
+    lockedTeams: opts.lockedTeams,
+    actualPoints: opts.actualPoints,
   })
 }
 
@@ -288,4 +290,112 @@ test('confidenceForGap is monotone and only defined above a zero gap', () => {
     assert.ok(p > 50 && p < 100, `${p} must read as a probability`)
     if (i > 0) assert.ok(p > pcts[i - 1], 'a bigger gap is never less reliable')
   })
+})
+
+
+// ── GAME LOCKS ────────────────────────────────────────────────────────────
+//
+// The bug these pin, in full, because it shipped and was acted on: on a Sunday
+// morning the engine told the owner to sit DJ Moore (BUF) for TreVeyon
+// Henderson, "+8.5, must fix". Moore's game had finished on Thursday night. He
+// could not be benched, he had not scored 0 — he had banked -0.1 before
+// leaving injured — and those 8.5 points were counted in "points sitting on
+// your bench" where they were not sitting and could not be collected. The
+// schedule payload carried `status: "complete"` for that game the whole time.
+
+test('a locked starter produces NO move, however much better the bench is', () => {
+  // WR4 starts in a FLEX at 7; WR5 on the bench projects 30 — normally an
+  // obvious upgrade. WR4's game has kicked off, so it is not available.
+  const players = makeRoster([ps => {
+    ps.find(x => x.sleeperId === 'WR4').team = 'LOCK'
+    ps.find(x => x.sleeperId === 'WR5')._pts = 30
+  }])
+  const lineup = idsOf(players)
+
+  const open = run(players, lineup)
+  assert.ok(open.moves.some(m => m.out?.id === 'WR4'),
+    'sanity: with no locks the engine does want to bench WR4')
+
+  const sealed = run(players, lineup, { lockedTeams: new Set(['LOCK']) })
+  assert.equal(sealed.moves.filter(m => m.out?.id === 'WR4' || m.in?.id === 'WR4').length, 0,
+    'a sealed slot is not a decision — offering a move for it advertises points that cannot be won')
+  assert.equal(sealed.lockedStarters, 1)
+})
+
+test('a locked BENCH player is never started', () => {
+  const players = makeRoster([ps => {
+    ps.find(x => x.sleeperId === 'WR5').team = 'LOCK'
+    ps.find(x => x.sleeperId === 'WR5')._pts = 99
+  }])
+  const lineup = idsOf(players)
+  const res = run(players, lineup, { lockedTeams: new Set(['LOCK']) })
+  assert.ok(!res.moves.some(m => m.in?.id === 'WR5'),
+    'you cannot start a player whose game has already begun, whatever he projects')
+  assert.equal(res.lockedBench, 1)
+})
+
+test('a locked player scores what he ACTUALLY scored, not 0 and not his projection', () => {
+  // Exactly DJ Moore's case: game finished, listed Out afterwards, real -0.1.
+  const players = makeRoster([ps => {
+    const w = ps.find(x => x.sleeperId === 'WR4')
+    w.team = 'LOCK'; w._pts = 10.9
+  }])
+  const lineup = idsOf(players)
+  const res = run(players, lineup, {
+    lockedTeams: new Set(['LOCK']),
+    playerStatuses: { WR4: { injury_status: 'Out' } },
+    actualPoints: { WR4: -0.1 },
+  })
+  const row = res.slots.find(s => s.entry?.id === 'WR4').entry
+  assert.equal(row.effPts, -0.1,
+    'a played game is FACT — it outranks both the projection and the blocked-scores-0 rule')
+  assert.equal(row.actualPts, -0.1)
+  assert.equal(res.lockedPoints, -0.1, 'the banked figure is what is already settled')
+})
+
+test('a locked player with NO live score falls back to his projection, never to 0', () => {
+  const players = makeRoster([ps => {
+    const w = ps.find(x => x.sleeperId === 'WR4')
+    w.team = 'LOCK'; w._pts = 10.9
+  }])
+  const res = run(players, idsOf(players), {
+    lockedTeams: new Set(['LOCK']),
+    playerStatuses: { WR4: { injury_status: 'Out' } },
+  })
+  const row = res.slots.find(s => s.entry?.id === 'WR4').entry
+  assert.equal(row.effPts, 10.9,
+    '"he will score 0" is a claim about the future; his game is not in the future. ' +
+    'Guessing 0 here re-manufactures the overstatement the lock fix removed')
+  assert.equal(row.actualPts, null, 'and the missing score is reported as missing')
+  assert.equal(res.lockedWithoutScore, 1)
+})
+
+test('the Σ-gains invariant survives locks', () => {
+  const players = makeRoster([ps => {
+    ps.find(x => x.sleeperId === 'RB2').team = 'LOCK'
+    ps.find(x => x.sleeperId === 'QB2').team = 'LOCK'
+  }])
+  const lineup = ['QB1', 'RB4', 'RB3', 'WR5', 'WR4', 'TE2', 'WR3', 'RB2', 'WR2', 'QB2', 'DEF1']
+  const res = run(players, lineup, {
+    lockedTeams: new Set(['LOCK']),
+    actualPoints: { RB2: 4.4, QB2: 21.7 },
+  })
+  const sum = res.moves.reduce((a, m) => a + m.gain, 0)
+  assert.ok(Math.abs(sum - (res.optimalTotal - res.currentTotal)) < 1e-9,
+    'a locked contribution appears identically in both totals, so it cancels and the ' +
+    'per-move gains still sum to the headline')
+  assert.ok(Math.abs(res.pointsLeft - sum) < 1e-9)
+})
+
+test('no locks means byte-for-byte the behaviour that shipped before them', () => {
+  const players = makeRoster()
+  const lineup = ['QB1', 'RB4', 'RB3', 'WR5', 'WR4', 'TE2', 'WR3', 'RB2', 'WR2', 'QB2', 'DEF1']
+  const before = run(players, lineup)
+  // An EMPTY locked set must mean "locks unknown", never "everything locked" —
+  // the same discipline an empty playingTeams keeps about byes.
+  const after = run(players, lineup, { lockedTeams: new Set(), actualPoints: {} })
+  assert.equal(after.moves.length, before.moves.length)
+  assert.equal(after.currentTotal, before.currentTotal)
+  assert.equal(after.optimalTotal, before.optimalTotal)
+  assert.equal(after.lockedStarters, 0)
 })

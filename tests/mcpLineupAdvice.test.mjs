@@ -249,3 +249,119 @@ test('the offseason renders as prose, not an empty lineup', () => {
   assert.match(txt, /offseason/i)
   assert.ok(!txt.includes('STARTING LINEUP'))
 })
+
+
+// ── GAME LOCKS, AT THE TOOL ───────────────────────────────────────────────
+//
+// The live failure: "SIT DJ Moore -> START TreVeyon Henderson, +8.5, must
+// fix", issued on a Sunday about a Thursday game. Moore could not be moved,
+// had already banked -0.1, and the 8.5 points were reported as sitting on the
+// bench. The schedule the tool had already fetched said `status: "complete"`.
+
+test('a locked starter yields NO move and NO must-fix, however he is flagged', () => {
+  const { snapshot, weekly } = improvableSnapshot()
+  // The hurt starter's game has finished. He is still listed Out.
+  const sealed = { ...weekly, lockedTeams: new Set(['ATL']), gameStatus: { ATL: 'complete' } }
+
+  const open = buildLineupAnswer(snapshot, weekly, { defaultRosterId: 6, myRosterId: 6 })
+  assert.ok(open.summary.mustFixCount > 0, 'sanity: unlocked, the Out starter is a must-fix')
+
+  const a = buildLineupAnswer(snapshot, sealed, {
+    defaultRosterId: 6, myRosterId: 6,
+    live: { available: true, pointsByRoster: { 6: { 4: -0.1 } }, notes: [] },
+  })
+  assert.equal(a.moves.length, 0, 'every slot is sealed, so there is nothing to change')
+  assert.equal(a.summary.mustFixCount, 0,
+    'a sealed slot cannot be "fixed" — calling it a must-fix asks for an impossible action')
+  assert.equal(a.summary.pointsLeftOnBench, 0,
+    'points that cannot be collected are not sitting on the bench')
+  assert.equal(a.summary.lockedSlots, 11)
+})
+
+test('a locked player reports what he SCORED, and the row says it is locked', () => {
+  const { snapshot, weekly } = improvableSnapshot()
+  const a = buildLineupAnswer(snapshot,
+    { ...weekly, lockedTeams: new Set(['ATL']), gameStatus: { ATL: 'complete' } },
+    { defaultRosterId: 6, myRosterId: 6,
+      live: { available: true, pointsByRoster: { 6: { 4: -0.1 } }, notes: [] } })
+
+  const row = a.lineup.find(s => s.player?.sleeperId === '4').player
+  assert.equal(row.locked, true)
+  assert.equal(row.actualPoints, -0.1)
+  assert.equal(row.effective, -0.1, 'a played game outranks both the projection and the blocked rule')
+  assert.equal(row.gameState, 'complete')
+
+  const text = renderLineupText(a)
+  assert.match(text, /LOCKED, scored -0\.1/,
+    'the rendered text must not print a projection for a game that has finished')
+  assert.match(text, /slots LOCKED/)
+})
+
+test('locked slots are NOT reported as an optimal lineup you chose', () => {
+  const { snapshot, weekly } = improvableSnapshot()
+  const a = buildLineupAnswer(snapshot,
+    { ...weekly, lockedTeams: new Set(['ATL']) },
+    { defaultRosterId: 6, myRosterId: 6 })
+  const text = renderLineupText(a)
+  assert.match(text, /NOTHING LEFT TO CHANGE/,
+    '"your lineup is optimal" would claim credit for a lineup the rules froze')
+  assert.ok(a.notes.some(n => /cannot be changed|LOCKED/.test(n)))
+})
+
+test('live scores are best-effort — without them locks still hold', () => {
+  const { snapshot, weekly } = improvableSnapshot()
+  const a = buildLineupAnswer(snapshot,
+    { ...weekly, lockedTeams: new Set(['ATL']) },
+    { defaultRosterId: 6, myRosterId: 6, live: { available: false, pointsByRoster: {}, notes: ['scores down'] } })
+  assert.equal(a.moves.length, 0,
+    'which slots are locked comes from the SCHEDULE, so a missing box score never ' +
+    'restores an impossible move')
+  const row = a.lineup.find(s => s.player?.sleeperId === '4').player
+  assert.equal(row.actualPoints, null, 'and the missing score is reported as missing, not as 0')
+  assert.ok(a.notes.some(n => /live score/i.test(n)))
+})
+
+// ── NEWS ATTACHMENT ───────────────────────────────────────────────────────
+
+const NEWS = {
+  available: true,
+  updatedAt: '2026-09-20T14:15:00.000Z',
+  ageMinutes: 12,
+  staleForKickoff: false,
+  items: [{
+    headline: 'Hurt Starter: Trending toward Week 3 return',
+    story: 'Expected to sit this week but likely to return.',
+    source: 'RotoWire', published: '2026-09-20T13:25:00.000Z', link: null,
+    playerIds: ['4'], athleteIds: [], isPlayerNews: true,
+  }],
+}
+
+test('a flagged player carries his injury detail and his latest item', () => {
+  const { snapshot, weekly } = improvableSnapshot()
+  const a = buildLineupAnswer(snapshot, weekly, { defaultRosterId: 6, myRosterId: 6, news: NEWS })
+  assert.ok(a.news, 'the news block is present when the feed loaded')
+  assert.equal(a.news.byPlayer['4'].length, 1)
+  const text = renderLineupText(a)
+  assert.match(text, /STATUS DETAIL/)
+  assert.match(text, /Trending toward Week 3 return/,
+    'the answer to "why is he out?" belongs in the same response as the advice')
+})
+
+test('a healthy player gets no news attached', () => {
+  const { snapshot, weekly } = improvableSnapshot()
+  const a = buildLineupAnswer(snapshot, weekly, { defaultRosterId: 6, myRosterId: 6, news: NEWS })
+  assert.equal(a.news.byPlayer['1'], undefined,
+    'attaching a beat report to 24 healthy players would spend the output budget saying nothing')
+})
+
+test('a missing news feed is absent, never an error and never "no news"', () => {
+  const { snapshot, weekly } = improvableSnapshot()
+  const a = buildLineupAnswer(snapshot, weekly, {
+    defaultRosterId: 6, myRosterId: 6,
+    news: { available: false, items: [] },
+  })
+  assert.equal(a.ok, true, 'Class B: news has never been allowed to break a panel in the app')
+  assert.equal(a.news, null)
+  assert.ok(a.notes.some(n => /missing source, not evidence/.test(n)),
+    'an outage must not read as a claim that nothing has happened')
+})

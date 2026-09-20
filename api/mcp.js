@@ -32,7 +32,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 
 // src/constants.js
-var LEAGUE_ID, MY_ROSTER_ID, SLEEPER_BASE, SLEEPER_ROOT, FANTASYCALC_BASE, FANTASYCALC_PARAMS, PICK_YEARS, POSITIONS, ROSTER_SLOTS;
+var LEAGUE_ID, MY_ROSTER_ID, SLEEPER_BASE, SLEEPER_ROOT, FANTASYCALC_BASE, NEWS_FEED_URL, FANTASYCALC_PARAMS, PICK_YEARS, POSITIONS, ROSTER_SLOTS;
 var init_constants = __esm({
   "src/constants.js"() {
     LEAGUE_ID = "1313933520715907072";
@@ -40,6 +40,7 @@ var init_constants = __esm({
     SLEEPER_BASE = "https://api.sleeper.app/v1";
     SLEEPER_ROOT = "https://api.sleeper.app";
     FANTASYCALC_BASE = "https://api.fantasycalc.com";
+    NEWS_FEED_URL = "https://raw.githubusercontent.com/chnates/dynastyedge/news-data/news.json";
     FANTASYCALC_PARAMS = {
       isDynasty: true,
       numQbs: 2,
@@ -61,6 +62,60 @@ var init_constants = __esm({
       { label: "SFLX", eligible: ["QB", "RB", "WR", "TE"] },
       { label: "DEF", eligible: ["DEF"] }
     ];
+  }
+});
+
+// src/utils/projections.js
+function getProjPts(sleeperId, projMap) {
+  if (!projMap || !sleeperId) return 0;
+  return projMap[sleeperId]?.pts_half_ppr ?? 0;
+}
+function parseLockedTeams(schedule, week) {
+  const locked = /* @__PURE__ */ new Set();
+  (Array.isArray(schedule) ? schedule : []).forEach((g) => {
+    if (g.week !== week) return;
+    const status = typeof g.status === "string" ? g.status.toLowerCase() : null;
+    if (!status || status === "pre_game" || !LOCKED_GAME_STATUSES.has(status)) return;
+    if (g.home) locked.add(g.home);
+    if (g.away) locked.add(g.away);
+  });
+  return locked;
+}
+function getAvailability(player, playerStatuses, playingTeams, lockedTeams) {
+  const locked = !!(lockedTeams?.size > 0 && player?.team && lockedTeams.has(player.team));
+  const done = (blocked, status2, label) => ({ blocked, status: status2, label, short: label ? SHORT_LABEL[label] ?? label : null, locked });
+  if (!player) return done(true, "out", "Empty");
+  if (player.isIR) return done(true, "ir", "IR");
+  if (playingTeams?.size > 0 && player.team && !playingTeams.has(player.team)) {
+    return done(true, "bye", "Bye");
+  }
+  const status = playerStatuses?.[player.sleeperId]?.injury_status;
+  if (status && HARD_BLOCK_STATUSES.has(status)) return done(true, "out", status);
+  if (status && SOFT_FLAG_STATUSES.has(status)) return done(false, "questionable", status);
+  return done(false, "ok", null);
+}
+var HARD_BLOCK_STATUSES, SOFT_FLAG_STATUSES, LOCKED_GAME_STATUSES, SHORT_LABEL;
+var init_projections = __esm({
+  "src/utils/projections.js"() {
+    HARD_BLOCK_STATUSES = /* @__PURE__ */ new Set([
+      "Out",
+      "IR",
+      "Suspended",
+      "PUP",
+      "NFI",
+      "NFI-R",
+      "SUSP",
+      "NA"
+    ]);
+    SOFT_FLAG_STATUSES = /* @__PURE__ */ new Set(["Questionable", "Doubtful"]);
+    LOCKED_GAME_STATUSES = /* @__PURE__ */ new Set(["in_game", "complete", "post_game", "final"]);
+    SHORT_LABEL = {
+      Questionable: "Q",
+      Doubtful: "D",
+      Suspended: "SUSP",
+      "NFI-R": "NFI",
+      NA: "NA"
+    };
   }
 });
 
@@ -524,7 +579,18 @@ function trimPlayerDB(data) {
       team: p.team || "",
       age: p.age ?? null,
       years_exp: p.years_exp ?? null,
-      injury_status: p.injury_status ?? null
+      injury_status: p.injury_status ?? null,
+      // The three fields that turn a bare label into an answer. "Doubtful"
+      // tells a reader to go and look something up; "Doubtful — Knee/Meniscus,
+      // surgery" tells them the season is the question, not the afternoon.
+      // Measured on the live payload: Brock Bowers carried exactly that, and
+      // the tool that had it in hand reported only the word "Doubtful" and
+      // advised checking Sleeper.
+      injury_body_part: p.injury_body_part ?? null,
+      injury_notes: p.injury_notes || null,
+      // ESPN's athlete id, the secondary join into the news feed for items
+      // that carry `athleteIds` but no resolved Sleeper id.
+      espn_id: p.espn_id ?? null
     };
   });
   return meta3;
@@ -660,6 +726,16 @@ var init_snapshot = __esm({
 });
 
 // mcp/weekly.js
+function parseGameStatus(schedule, week) {
+  const byTeam = {};
+  (Array.isArray(schedule) ? schedule : []).forEach((g) => {
+    if (g.week !== week) return;
+    const status = typeof g.status === "string" ? g.status.toLowerCase() : null;
+    if (g.home) byTeam[g.home] = status;
+    if (g.away) byTeam[g.away] = status;
+  });
+  return byTeam;
+}
 function parseByeTeams(schedule, week) {
   const games = Array.isArray(schedule) ? schedule.filter((g) => g.week === week) : [];
   const playing = /* @__PURE__ */ new Set();
@@ -687,6 +763,8 @@ async function getWeekly({
       week: null,
       projMap: null,
       playingTeams: /* @__PURE__ */ new Set(),
+      lockedTeams: /* @__PURE__ */ new Set(),
+      gameStatus: {},
       scheduleGames: [],
       sources: {},
       requestedWeek: week ?? null,
@@ -703,6 +781,8 @@ async function getWeekly({
       week: null,
       projMap: null,
       playingTeams: /* @__PURE__ */ new Set(),
+      lockedTeams: /* @__PURE__ */ new Set(),
+      gameStatus: {},
       scheduleGames: [],
       sources: {},
       requestedWeek: week ?? null,
@@ -741,6 +821,8 @@ async function getWeekly({
   }
   const scheduleGames = Array.isArray(schedule.data) ? schedule.data : [];
   const playingTeams = parseByeTeams(scheduleGames, targetWeek);
+  const lockedTeams = parseLockedTeams(scheduleGames, targetWeek);
+  const gameStatus = parseGameStatus(scheduleGames, targetWeek);
   if (!playingTeams.size) {
     notes.push(
       "The NFL schedule did not load, so bye weeks cannot be detected. A player on bye will not be flagged \u2014 nobody is assumed to be on bye rather than everybody."
@@ -754,6 +836,8 @@ async function getWeekly({
     requestedWeek: week ?? null,
     projMap: proj.data,
     playingTeams,
+    lockedTeams,
+    gameStatus,
     scheduleGames,
     sources: {
       projections: stampSource(proj),
@@ -766,6 +850,7 @@ var DEFAULT_WEEKLY_TTL_MS, projKeyFor, scheduleKeyFor, defaultStore2;
 var init_weekly = __esm({
   "mcp/weekly.js"() {
     init_constants();
+    init_projections();
     init_limit();
     init_snapshot();
     init_store();
@@ -40094,16 +40179,26 @@ var init_managerAnalysis = __esm({
 });
 
 // src/utils/lineupBuild.js
-function selectOptimalStarters(items) {
+function selectOptimalStarters(items, { pinned = [] } = {}) {
+  const pinnedBySlot = /* @__PURE__ */ new Map();
+  (pinned ?? []).forEach((p) => {
+    if (p && Number.isInteger(p.slotIndex)) pinnedBySlot.set(p.slotIndex, p);
+  });
+  const pinnedKeys = new Set([...pinnedBySlot.values()].map((p) => String(p.key)));
   const byPos = {};
   (items ?? []).forEach((it) => {
     if (!it.position) return;
+    if (pinnedKeys.has(String(it.key))) return;
     (byPos[it.position] ||= []).push(it);
   });
   Object.values(byPos).forEach((arr) => arr.sort((a, b) => b.metric - a.metric));
-  const slots = ROSTER_SLOTS.map((s, index) => ({ ...s, index })).sort((a, b) => a.eligible.length - b.eligible.length);
+  const slots = ROSTER_SLOTS.map((s, index) => ({ ...s, index })).filter((s) => !pinnedBySlot.has(s.index)).sort((a, b) => a.eligible.length - b.eligible.length);
   const starters = [];
   let total = 0;
+  pinnedBySlot.forEach((p, slotIndex) => {
+    starters.push({ slot: ROSTER_SLOTS[slotIndex]?.label ?? String(slotIndex), ...p, slotIndex });
+    total += p.metric ?? 0;
+  });
   slots.forEach((slot) => {
     let bestPos = null;
     slot.eligible.forEach((pos) => {
@@ -40529,6 +40624,117 @@ var init_teams = __esm({
   }
 });
 
+// mcp/news.js
+async function getNews({
+  ttlMs = DEFAULT_NEWS_TTL_MS,
+  force = false,
+  fetcher,
+  concurrency = 6,
+  store = defaultStore6
+} = {}) {
+  const get = fetcher ?? createFetcher({ concurrency });
+  const loaded = await loadSource(
+    store,
+    NEWS_KEY,
+    force ? -1 : ttlMs,
+    () => get(NEWS_FEED_URL, { label: "DynastyEdge news feed" })
+  ).catch((err) => ({ data: null, fetchedAt: null, stale: false, error: err.message }));
+  const feed = loaded.data;
+  const items = Array.isArray(feed?.items) ? feed.items : null;
+  if (!items) {
+    return {
+      available: false,
+      items: [],
+      updatedAt: null,
+      ageMinutes: null,
+      coverage: null,
+      staleForKickoff: false,
+      source: stampSource(loaded),
+      notes: []
+    };
+  }
+  const updatedAt = feed.updatedAt ?? null;
+  const ageMinutes = updatedAt ? Math.max(0, Math.round((Date.now() - new Date(updatedAt).getTime()) / 6e4)) : null;
+  return {
+    available: true,
+    items,
+    updatedAt,
+    ageMinutes,
+    coverage: feed.coverage ?? null,
+    staleForKickoff: ageMinutes != null && ageMinutes > NEWS_STALE_MINUTES,
+    source: stampSource(loaded),
+    notes: []
+  };
+}
+function newsForPlayer(feed, sleeperId, { limit = 3, playerDB } = {}) {
+  if (!feed?.available || !sleeperId) return [];
+  const id = String(sleeperId);
+  const espnId = playerDB?.[id]?.espn_id != null ? String(playerDB[id].espn_id) : null;
+  const hits = feed.items.filter((item) => {
+    if (Array.isArray(item.playerIds) && item.playerIds.some((p) => String(p) === id)) return true;
+    if (espnId && Array.isArray(item.athleteIds) && item.athleteIds.some((a) => String(a) === espnId)) return true;
+    return false;
+  });
+  hits.sort((a, b) => new Date(b.published ?? 0) - new Date(a.published ?? 0));
+  return hits.slice(0, Math.max(0, limit)).map((item) => shapeItem(item, id));
+}
+function shapeItem(item, forId) {
+  const named = Math.max(
+    Array.isArray(item.playerIds) ? item.playerIds.length : 0,
+    Array.isArray(item.athleteIds) ? item.athleteIds.length : 0
+  );
+  return {
+    headline: item.headline ?? null,
+    story: item.story ?? null,
+    source: item.source ?? null,
+    published: item.published ?? null,
+    link: item.link ?? null,
+    // True when the item names several players, so the reader knows this may
+    // be a roundup mentioning him rather than a report about him.
+    multiPlayer: named > 1,
+    playersNamed: named,
+    forSleeperId: forId ? String(forId) : null
+  };
+}
+function newsForPlayers(feed, sleeperIds, { perPlayer = 2, maxPlayers = 8, playerDB } = {}) {
+  if (!feed?.available) return {};
+  const out = {};
+  (sleeperIds ?? []).slice(0, maxPlayers).forEach((id) => {
+    const items = newsForPlayer(feed, id, { limit: perPlayer, playerDB });
+    if (items.length) out[String(id)] = items;
+  });
+  return out;
+}
+function newsNotes(feed, { nearKickoff = false } = {}) {
+  const notes = [];
+  if (!feed) return notes;
+  if (!feed.available) {
+    notes.push(
+      "The player-news feed did not load, so no injury or beat reporting is attached here. That is a missing source, not evidence that there is no news \u2014 check a live source if a status matters."
+    );
+    return notes;
+  }
+  if (feed.staleForKickoff || nearKickoff) {
+    notes.push(
+      `The news feed was published ${feed.ageMinutes ?? "?"} minutes ago and republishes about twice an hour, so it can trail a wire report by roughly half an hour. For a game kicking off shortly, confirm a questionable status against a live source before acting on it.`
+    );
+  }
+  return notes;
+}
+var DEFAULT_NEWS_TTL_MS, NEWS_STALE_MINUTES, NEWS_KEY, defaultStore6;
+var init_news = __esm({
+  "mcp/news.js"() {
+    init_constants();
+    init_limit();
+    init_snapshot();
+    init_store();
+    DEFAULT_NEWS_TTL_MS = 10 * 60 * 1e3;
+    NEWS_STALE_MINUTES = 35;
+    NEWS_KEY = "news:feed";
+    defaultStore6 = memoryStore();
+  }
+});
+
 // mcp/tools/getRoster.js
 function slotOf(p) {
   if (p.isIR) return "IR";
@@ -40536,7 +40742,7 @@ function slotOf(p) {
   if (p.isStarter) return "STARTER";
   return "BENCH";
 }
-function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId } = {}) {
+function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId, news } = {}) {
   const { league } = snapshot;
   if (!league) throw new Error("League state unavailable");
   const resolved = resolveTeam(league, team, defaultRosterId);
@@ -40560,7 +40766,15 @@ function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId } = {})
     overallRank: p.overallRank ?? null,
     positionRank: p.positionRank ?? null,
     trend30Day: p.trend30Day ?? 0,
-    slot: slotOf(p)
+    slot: slotOf(p),
+    // ── Health, on the roster itself ─────────────────────────────────
+    // A dynasty roster read is where "who is hurt?" gets asked, and the
+    // answer was previously nowhere in this payload at all. The body part
+    // and note come free from the player DB this tool already holds; a
+    // single headline comes from the news feed when it loaded. Both are
+    // omitted when absent, never rendered as "healthy" — we would be
+    // reporting the absence of a field as a fact about a person.
+    ...injuryFields(snapshot, news, p.sleeperId)
   }));
   const picks = [...roster.picks].sort((a, b) => String(a.season).localeCompare(String(b.season)) || a.round - b.round).slice(0, MAX_PICKS).map((pk) => ({
     season: String(pk.season),
@@ -40623,6 +40837,21 @@ function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId } = {})
     // Caveats the reader needs in order to read the numbers correctly. These
     // are conditions, not decoration — each one changes what a number means.
     notes: buildNotes(snapshot, roster, players, picks)
+  };
+}
+function injuryFields(snapshot, news, sleeperId) {
+  const meta3 = snapshot.playerDB?.[String(sleeperId)] ?? null;
+  const status = meta3?.injury_status ?? null;
+  if (!status) return {};
+  const items = newsForPlayer(news, sleeperId, { limit: 1, playerDB: snapshot.playerDB });
+  const latest = items[0] ?? null;
+  return {
+    injuryStatus: status,
+    injuryBodyPart: meta3?.injury_body_part ?? null,
+    injuryNotes: meta3?.injury_notes ?? null,
+    // Headline only — the full story lives in get_player_news. This is the
+    // hook that tells a reader whether to ask.
+    latestNews: latest ? { headline: latest.headline, source: latest.source, published: latest.published, multiPlayer: latest.multiPlayer } : null
   };
 }
 function buildNotes(snapshot, roster, players, picks) {
@@ -40695,6 +40924,7 @@ var init_getRoster = __esm({
     init_rosterAnalysis();
     init_teamName();
     init_teams();
+    init_news();
     MAX_PLAYERS = 60;
     MAX_PICKS = 40;
     POS_ORDER = { QB: 0, RB: 1, WR: 2, TE: 3, DEF: 4 };
@@ -41414,47 +41644,6 @@ var init_findSellHigh = __esm({
     TREND_THRESHOLD2 = 50;
     MIN_TARGET_VALUE2 = 1e3;
     num = (n) => n == null ? "\u2014" : n.toLocaleString("en-US");
-  }
-});
-
-// src/utils/projections.js
-function getProjPts(sleeperId, projMap) {
-  if (!projMap || !sleeperId) return 0;
-  return projMap[sleeperId]?.pts_half_ppr ?? 0;
-}
-function getAvailability(player, playerStatuses, playingTeams) {
-  const done = (blocked, status2, label) => ({ blocked, status: status2, label, short: label ? SHORT_LABEL[label] ?? label : null });
-  if (!player) return done(true, "out", "Empty");
-  if (player.isIR) return done(true, "ir", "IR");
-  if (playingTeams?.size > 0 && player.team && !playingTeams.has(player.team)) {
-    return done(true, "bye", "Bye");
-  }
-  const status = playerStatuses?.[player.sleeperId]?.injury_status;
-  if (status && HARD_BLOCK_STATUSES.has(status)) return done(true, "out", status);
-  if (status && SOFT_FLAG_STATUSES.has(status)) return done(false, "questionable", status);
-  return done(false, "ok", null);
-}
-var HARD_BLOCK_STATUSES, SOFT_FLAG_STATUSES, SHORT_LABEL;
-var init_projections = __esm({
-  "src/utils/projections.js"() {
-    HARD_BLOCK_STATUSES = /* @__PURE__ */ new Set([
-      "Out",
-      "IR",
-      "Suspended",
-      "PUP",
-      "NFI",
-      "NFI-R",
-      "SUSP",
-      "NA"
-    ]);
-    SOFT_FLAG_STATUSES = /* @__PURE__ */ new Set(["Questionable", "Doubtful"]);
-    SHORT_LABEL = {
-      Questionable: "Q",
-      Doubtful: "D",
-      Suspended: "SUSP",
-      "NFI-R": "NFI",
-      NA: "NA"
-    };
   }
 });
 
@@ -43100,8 +43289,15 @@ var init_lineupConfidence = __esm({
 });
 
 // src/utils/lineupMoves.js
-function effectivePts(player, projMap, availability) {
-  if (!player || availability?.blocked) return 0;
+function effectivePts(player, projMap, availability, actualPoints) {
+  if (!player) return 0;
+  const id = String(player.sleeperId);
+  if (availability?.locked) {
+    const actual = actualPoints?.[id];
+    if (Number.isFinite(actual)) return actual;
+    return getProjPts(player.sleeperId, projMap);
+  }
+  if (availability?.blocked) return 0;
   return getProjPts(player.sleeperId, projMap);
 }
 function lineupFromRoster(myRoster) {
@@ -43132,12 +43328,20 @@ function reasonFor({ outEntry, inEntry, gain }) {
   const q = availability.status === "questionable" ? ` (${name} is ${availability.label})` : "";
   return `${inEntry.player.name} projects ${gain.toFixed(1)} more points${q}`;
 }
-function buildLineupMoves({ players, lineup, projMap, playerStatuses, playingTeams }) {
+function buildLineupMoves({
+  players,
+  lineup,
+  projMap,
+  playerStatuses,
+  playingTeams,
+  lockedTeams,
+  actualPoints
+}) {
   const startable = (players ?? []).filter((p) => !p.isTaxi && !p.isIR);
   const byId = new Map(startable.map((p) => [String(p.sleeperId), p]));
   const availabilityOf = /* @__PURE__ */ new Map();
   startable.forEach((p) => {
-    availabilityOf.set(String(p.sleeperId), getAvailability(p, playerStatuses, playingTeams));
+    availabilityOf.set(String(p.sleeperId), getAvailability(p, playerStatuses, playingTeams, lockedTeams));
   });
   const entryFor = (id) => {
     const player = byId.get(String(id));
@@ -43148,18 +43352,27 @@ function buildLineupMoves({ players, lineup, projMap, playerStatuses, playingTea
       player,
       availability,
       projPts: getProjPts(player.sleeperId, projMap),
-      effPts: effectivePts(player, projMap, availability)
+      effPts: effectivePts(player, projMap, availability, actualPoints),
+      locked: !!availability?.locked,
+      // Present only when his game has started AND a live score arrived, so a
+      // caller can distinguish "he scored 3.2" from "his game is under way and
+      // we could not read the score".
+      actualPts: availability?.locked && Number.isFinite(actualPoints?.[String(id)]) ? actualPoints[String(id)] : null
     };
   };
   const current = (lineup ?? []).map((id) => id ? entryFor(id) : null);
   const currentIds = new Set(current.filter(Boolean).map((e) => e.id));
-  const pool = startable.filter((p) => !availabilityOf.get(String(p.sleeperId)).blocked).map((p) => ({
+  const pool = startable.filter((p) => {
+    const a = availabilityOf.get(String(p.sleeperId));
+    return !a.blocked && !a.locked;
+  }).map((p) => ({
     key: String(p.sleeperId),
     position: p.position,
     metric: getProjPts(p.sleeperId, projMap),
     item: p
   }));
-  const optimal = selectOptimalStarters(pool);
+  const pinned = current.map((e, slotIndex) => e?.locked ? { slotIndex, key: e.id, position: e.player.position, metric: e.effPts, item: e.player } : null).filter(Boolean);
+  const optimal = selectOptimalStarters(pool, { pinned });
   const optimalByIdx = ROSTER_SLOTS.map(() => null);
   optimal.starters.forEach((s) => {
     optimalByIdx[s.slotIndex] = s.key;
@@ -43238,7 +43451,20 @@ function buildLineupMoves({ players, lineup, projMap, playerStatuses, playingTea
     // optimal − current and the per-move gains must keep summing to it.
     upgradeCount: moves.filter((m) => !m.mustFix && m.meaningful).length,
     coinFlipCount: moves.filter((m) => !m.meaningful).length,
-    emptySlots: slots.filter((s) => !s.entry).length
+    emptySlots: slots.filter((s) => !s.entry).length,
+    // ── Lock reporting ────────────────────────────────────────────────
+    // `lockedStarters` is how many of your slots are already sealed, and
+    // `lockedPoints` is what they have banked — the part of the current total
+    // that is settled rather than forecast. A caller that prints one number
+    // for "your lineup" is printing two different kinds of thing added
+    // together, and on a Sunday afternoon that matters.
+    lockedStarters: pinned.length,
+    lockedPoints: Math.round(pinned.reduce((sum, p) => sum + (p.metric ?? 0), 0) * 10) / 10,
+    // Locked players whose live score never arrived, so their contribution is
+    // still a projection. Disclosed rather than hidden: it is the one case
+    // where a locked slot's number is not yet a fact.
+    lockedWithoutScore: current.filter((e) => e?.locked && e.actualPts === null).length,
+    lockedBench: bench.filter((e) => e?.locked).length
   };
 }
 var init_lineupMoves = __esm({
@@ -43251,7 +43477,7 @@ var init_lineupMoves = __esm({
 });
 
 // mcp/tools/lineupAdvice.js
-function buildLineupAnswer(snapshot, weekly, { team, defaultRosterId, myRosterId } = {}) {
+function buildLineupAnswer(snapshot, weekly, { team, defaultRosterId, myRosterId, live, news } = {}) {
   const { league } = snapshot;
   if (!league) throw new Error("League state unavailable");
   const resolved = resolveTeam(league, team, defaultRosterId);
@@ -43271,13 +43497,23 @@ function buildLineupAnswer(snapshot, weekly, { team, defaultRosterId, myRosterId
     };
   }
   const lineup = lineupFromRoster(roster);
+  const actualPoints = live?.available ? live.pointsByRoster?.[roster.rosterId] ?? null : null;
   const result = buildLineupMoves({
     players: roster.players,
     lineup,
     projMap: weekly.projMap,
     playerStatuses: snapshot.playerDB,
-    playingTeams: weekly.playingTeams
+    playingTeams: weekly.playingTeams,
+    lockedTeams: weekly.lockedTeams,
+    actualPoints
   });
+  const flagged = [
+    ...result.slots.map((s) => s.entry).filter((e) => e && (e.availability?.blocked || e.availability?.status === "questionable")),
+    ...result.bench.filter((e) => e.availability?.status === "questionable" || e.availability?.blocked)
+  ];
+  const flaggedIds = [...new Set(flagged.map((e) => e.id))];
+  const newsByPlayer = newsForPlayers(news, flaggedIds, { perPlayer: 2, maxPlayers: 8, playerDB: snapshot.playerDB });
+  const entryRow = makeEntryRow(snapshot.playerDB, weekly.gameStatus);
   const moves = result.moves.slice(0, MAX_MOVES).map((m) => ({
     action: m.in && m.out ? "swap" : m.in ? "fill" : "bench",
     sit: m.out ? entryRow(m.out) : null,
@@ -43325,7 +43561,16 @@ function buildLineupAnswer(snapshot, weekly, { team, defaultRosterId, myRosterId
       // hiding them outright would leave points unexplained.
       coinFlipCount: result.coinFlipCount,
       emptySlots: result.emptySlots,
-      isOptimal: result.moves.length === 0
+      isOptimal: result.moves.length === 0,
+      // ── The settled half of the lineup ────────────────────────────────
+      // `currentProjected` stops being one kind of number the moment a game
+      // kicks off: part of it is banked and part is still forecast. Splitting
+      // them out is what lets a reader see that "69.3" on a Sunday afternoon
+      // is 2.0 already scored plus 67.3 still to play, rather than a
+      // collapsing projection.
+      lockedSlots: result.lockedStarters,
+      pointsBanked: result.lockedPoints,
+      lockedOnBench: result.lockedBench
     },
     moves,
     lineup: result.slots.map((s) => ({
@@ -43335,23 +43580,44 @@ function buildLineupAnswer(snapshot, weekly, { team, defaultRosterId, myRosterId
       isOptimal: s.isOptimal
     })),
     bench: result.bench.slice(0, MAX_BENCH).map(entryRow),
-    notes: buildNotes6({ snapshot, weekly, result, roster, moves })
+    // Latest beat reporting for every flagged player, keyed by Sleeper id.
+    // Absent entirely when the feed did not load (Class B) — never an error,
+    // and never an empty object pretending to be "no news".
+    news: news?.available ? { updatedAt: news.updatedAt, ageMinutes: news.ageMinutes, byPlayer: newsByPlayer } : null,
+    notes: buildNotes6({ snapshot, weekly, result, roster, moves, live, news })
   };
 }
-function entryRow(e) {
-  return {
-    sleeperId: e.id,
-    name: e.player?.name ?? null,
-    position: e.player?.position ?? null,
-    nflTeam: e.player?.team || null,
-    projected: round12(e.projPts),
-    effective: round12(e.effPts),
-    blocked: !!e.availability?.blocked,
-    status: e.availability?.status ?? null,
-    statusLabel: e.availability?.label ?? null
+function makeEntryRow(playerDB, gameStatus) {
+  return function entryRow(e) {
+    const meta3 = playerDB?.[String(e.id)] ?? null;
+    const locked = !!e.locked;
+    return {
+      sleeperId: e.id,
+      name: e.player?.name ?? null,
+      position: e.player?.position ?? null,
+      nflTeam: e.player?.team || null,
+      projected: round12(e.projPts),
+      effective: round12(e.effPts),
+      blocked: !!e.availability?.blocked,
+      status: e.availability?.status ?? null,
+      statusLabel: e.availability?.label ?? null,
+      // ── The lock ──────────────────────────────────────────────────────
+      // `locked` is the one field that decides whether anything below is
+      // actionable. `actualPoints` is non-null only when his game has started
+      // AND the live score arrived, so "he scored 3.2" stays distinguishable
+      // from "his game is under way and we could not read the score".
+      locked,
+      gameState: locked ? gameStatus?.[e.player?.team] ?? "started" : null,
+      actualPoints: e.actualPts != null ? round12(e.actualPts) : null,
+      // ── Why he is flagged ─────────────────────────────────────────────
+      // A bare "Doubtful" sends the reader to Sleeper; the body part and the
+      // note are what answer the question in place.
+      injuryBodyPart: meta3?.injury_body_part ?? null,
+      injuryNotes: meta3?.injury_notes ?? null
+    };
   };
 }
-function buildNotes6({ snapshot, weekly, result, roster, moves }) {
+function buildNotes6({ snapshot, weekly, result, roster, moves, live, news }) {
   const notes = [];
   if (snapshot.asOf.stale) {
     notes.push("At least one source failed to refresh, so this is cached data \u2014 see asOf.sources.");
@@ -43363,8 +43629,27 @@ function buildNotes6({ snapshot, weekly, result, roster, moves }) {
       "Sleeper's player DB did not load, so injury statuses are unknown \u2014 an Out or Questionable player will not be flagged. Bye detection is unaffected."
     );
   }
+  if (result.lockedStarters) {
+    notes.push(
+      `${result.lockedStarters} of your starting slots ${result.lockedStarters === 1 ? "is" : "are"} LOCKED \u2014 those games have kicked off, so Sleeper will not let you change them whatever the projection or injury status now says. They have banked ${result.lockedPoints} points so far, and that is a result, not a forecast. No move is offered for them because no move is possible.`
+    );
+  }
+  if (result.lockedBench) {
+    notes.push(
+      `${result.lockedBench} bench player(s) are also locked and cannot be started this week \u2014 their games have already begun.`
+    );
+  }
+  if (result.lockedWithoutScore) {
+    notes.push(
+      `${result.lockedWithoutScore} locked player(s) have no live score available, so they are still shown at their projection. Which slots are locked is unaffected \u2014 that comes from the NFL schedule, not from the box score.`
+    );
+  }
+  ;
+  (live?.notes ?? []).forEach((n) => notes.push(n));
   if (result.moves.length === 0) {
-    notes.push("Your lineup is already optimal on this week's projections \u2014 there is nothing to change.");
+    notes.push(
+      result.lockedStarters ? "There is nothing left to change: every move still available to you is already the best one." : "Your lineup is already optimal on this week's projections \u2014 there is nothing to change."
+    );
   }
   if (result.mustFixCount) {
     notes.push(
@@ -43387,6 +43672,7 @@ function buildNotes6({ snapshot, weekly, result, roster, moves }) {
   notes.push(
     "Confidence is the measured hit rate from 666,026 same-week FLEX-eligible pairs (2022-25): how often the higher-projected player actually outscores the lower, at that points gap."
   );
+  newsNotes(news).forEach((n) => notes.push(n));
   notes.push(
     `Sleeper's API is READ-ONLY: this cannot set ${roster.rosterId === void 0 ? "a" : "your"} lineup. Make these changes yourself in the Sleeper app.`
   );
@@ -43401,8 +43687,16 @@ function renderLineupText(a) {
   L.push(`${a.team.teamName}${a.team.isYou ? " (you)" : ""} \u2014 week ${a.league.week} lineup`);
   L.push(`As of ${a.asOf.oldestSourceAt ?? "unknown"}${a.asOf.stale ? " \u2014 STALE, a source failed to refresh" : ""}`);
   L.push("");
+  if (a.summary.lockedSlots) {
+    L.push(
+      `${a.summary.lockedSlots} of 11 slots LOCKED (games under way or finished) \u2014 ${a.summary.pointsBanked} pts already banked. Those slots cannot be changed.`
+    );
+    L.push("");
+  }
   if (a.summary.isOptimal) {
-    L.push(`LINEUP IS OPTIMAL \u2014 projecting ${a.summary.currentProjected}. No changes needed.`);
+    L.push(
+      a.summary.lockedSlots ? `NOTHING LEFT TO CHANGE \u2014 ${a.summary.currentProjected} total. Every slot you can still move is already optimal.` : `LINEUP IS OPTIMAL \u2014 projecting ${a.summary.currentProjected}. No changes needed.`
+    );
   } else {
     L.push(`${a.summary.pointsLeftOnBench} POINTS SITTING ON YOUR BENCH`);
     L.push(`  ${a.summary.currentProjected} now \u2192 ${a.summary.optimalProjected} optimal`);
@@ -43439,9 +43733,26 @@ function renderLineupText(a) {
     }
     const p = s.player;
     const flag = p.blocked ? ` [${p.statusLabel ?? p.status}]` : p.status === "questionable" ? ` [${p.statusLabel}]` : "";
-    L.push(`  ${String(s.slot).padEnd(5)} ${p.name} (${p.position}${p.nflTeam ? ` \xB7 ${p.nflTeam}` : ""}) \u2014 ${p.projected}${flag}${s.isOptimal ? " \u2713" : ""}`);
+    const lock = p.locked ? p.actualPoints != null ? ` \u2014 LOCKED, scored ${p.actualPoints}` : " \u2014 LOCKED (game started; live score unavailable)" : "";
+    const shown = p.locked && p.actualPoints != null ? p.actualPoints : p.projected;
+    L.push(`  ${String(s.slot).padEnd(5)} ${p.name} (${p.position}${p.nflTeam ? ` \xB7 ${p.nflTeam}` : ""}) \u2014 ${shown}${flag}${lock}${p.locked ? "" : s.isOptimal ? " \u2713" : ""}`);
   });
   L.push("");
+  const flaggedRows = [...a.lineup.map((s) => s.player).filter(Boolean), ...a.bench].filter((p) => p.status === "questionable" || p.blocked);
+  const newsByPlayer = a.news?.byPlayer ?? {};
+  const detail = flaggedRows.filter((p) => p.injuryBodyPart || p.injuryNotes || newsByPlayer[p.sleeperId]?.length);
+  if (detail.length) {
+    L.push(`STATUS DETAIL${a.news?.ageMinutes != null ? ` (news published ${a.news.ageMinutes}m ago)` : ""}`);
+    detail.forEach((p) => {
+      const bits = [p.statusLabel ?? p.status, p.injuryBodyPart, p.injuryNotes].filter(Boolean);
+      L.push(`  ${p.name} \u2014 ${bits.join(" \xB7 ")}`);
+      (newsByPlayer[p.sleeperId] ?? []).forEach((n) => {
+        L.push(`      "${n.headline}" (${n.source}${n.published ? `, ${n.published}` : ""})${n.multiPlayer ? " [roundup \u2014 mentions several players]" : ""}`);
+        if (n.story) L.push(`         ${n.story.slice(0, 220)}`);
+      });
+    });
+    L.push("");
+  }
   a.notes.forEach((n) => L.push(`Note: ${n}`));
   return L.join("\n").trimEnd();
 }
@@ -43452,6 +43763,7 @@ var init_lineupAdvice = __esm({
     init_teamName();
     init_constants();
     init_teams();
+    init_news();
     MAX_MOVES = 20;
     MAX_BENCH = 30;
     round12 = (n) => Math.round((n ?? 0) * 10) / 10;
@@ -43623,6 +43935,231 @@ var init_playoffOdds2 = __esm({
   }
 });
 
+// mcp/tools/playerNews.js
+function buildNewsAnswer(snapshot, news, {
+  player,
+  team,
+  limit = DEFAULT_LIMIT2,
+  defaultRosterId,
+  myRosterId
+} = {}) {
+  const { league } = snapshot;
+  if (!league) throw new Error("League state unavailable");
+  const cap = Math.min(Math.max(1, Number(limit) || DEFAULT_LIMIT2), MAX_NEWS_LIMIT);
+  const base = {
+    ok: true,
+    asOf: snapshot.asOf,
+    available: !!news?.available,
+    feed: news?.available ? { updatedAt: news.updatedAt, ageMinutes: news.ageMinutes, staleForKickoff: news.staleForKickoff } : null
+  };
+  if (player) {
+    const resolved = buildResolveAnswer(snapshot, { names: [player], includeFreeAgents: true });
+    const first = resolved.results?.[0];
+    if (!first?.match) {
+      return {
+        ...base,
+        ok: false,
+        error: first?.candidates?.length ? `"${player}" matches more than one player. Name which one you mean \u2014 this tool will not guess between two players and attach the wrong man's injury report.` : `No player matching "${player}" is in this league's universe.`,
+        candidates: first?.candidates ?? []
+      };
+    }
+    const m = first.match;
+    if (m.kind === "pick") {
+      return { ...base, ok: false, error: "Draft picks have no player news. Name a player instead." };
+    }
+    const items = newsForPlayer(news, m.sleeperId, { limit: cap, playerDB: snapshot.playerDB });
+    return {
+      ...base,
+      scope: "player",
+      player: playerRow2(m, snapshot, myRosterId),
+      items,
+      notes: buildNotes8({ news, items, scope: "player", name: m.name })
+    };
+  }
+  const resolvedTeam = resolveTeam(league, team, defaultRosterId);
+  if (resolvedTeam.error) {
+    return { ...base, ok: false, error: resolvedTeam.error, candidates: resolvedTeam.candidates ?? [] };
+  }
+  const roster = resolvedTeam.roster;
+  const rows = (roster.players ?? []).map((p) => {
+    const meta3 = snapshot.playerDB?.[String(p.sleeperId)] ?? null;
+    return {
+      sleeperId: String(p.sleeperId),
+      name: p.name ?? meta3?.name ?? null,
+      position: p.position ?? meta3?.position ?? null,
+      nflTeam: p.team || meta3?.team || null,
+      injuryStatus: meta3?.injury_status ?? null,
+      injuryBodyPart: meta3?.injury_body_part ?? null,
+      injuryNotes: meta3?.injury_notes ?? null,
+      items: newsForPlayer(news, p.sleeperId, { limit: PER_PLAYER_ON_ROSTER, playerDB: snapshot.playerDB })
+    };
+  });
+  const withSomethingToSay = rows.filter((r) => r.injuryStatus || r.items.length);
+  withSomethingToSay.sort((a, b) => {
+    const hurt = Number(!!b.injuryStatus) - Number(!!a.injuryStatus);
+    if (hurt) return hurt;
+    return new Date(b.items[0]?.published ?? 0) - new Date(a.items[0]?.published ?? 0);
+  });
+  const players = withSomethingToSay.slice(0, cap);
+  return {
+    ...base,
+    scope: "roster",
+    team: {
+      rosterId: roster.rosterId,
+      teamName: getTeamName(roster.owner),
+      isYou: myRosterId != null && roster.rosterId === myRosterId
+    },
+    players,
+    counts: {
+      rostered: (roster.players ?? []).length,
+      withNewsOrInjury: withSomethingToSay.length,
+      returned: players.length
+    },
+    notes: buildNotes8({
+      news,
+      scope: "roster",
+      truncated: withSomethingToSay.length > players.length ? `${players.length} of ${withSomethingToSay.length}` : null,
+      silent: (roster.players ?? []).length - withSomethingToSay.length
+    })
+  };
+}
+function playerRow2(m, snapshot, myRosterId) {
+  const meta3 = snapshot.playerDB?.[String(m.sleeperId)] ?? null;
+  return {
+    sleeperId: String(m.sleeperId),
+    name: m.name,
+    position: m.position ?? meta3?.position ?? null,
+    nflTeam: m.nflTeam ?? meta3?.team ?? null,
+    // Rule 7: an unpriced player is findable and reported as having no value,
+    // never as worth 0.
+    value: m.value ?? null,
+    unranked: !!m.unranked,
+    injuryStatus: meta3?.injury_status ?? null,
+    injuryBodyPart: meta3?.injury_body_part ?? null,
+    injuryNotes: meta3?.injury_notes ?? null,
+    ownerRosterId: m.ownerRosterId ?? null,
+    ownerTeam: m.ownerTeam ?? null,
+    isYours: m.ownerRosterId != null && myRosterId != null && m.ownerRosterId === myRosterId
+  };
+}
+function buildNotes8({ news, items, scope, name, truncated, silent }) {
+  const notes = [];
+  const feedNotes = newsNotes(news);
+  feedNotes.forEach((n) => notes.push(n));
+  if (news?.available && scope === "player" && !items?.length) {
+    notes.push(
+      `The feed carries nothing about ${name} in its retained window (about a week of player news). That means no covered source has written about him recently \u2014 it is not a statement that he is healthy or that nothing has happened. His injury status above, if any, comes from Sleeper and is independent of the feed.`
+    );
+  }
+  if (truncated) notes.push(`Showing ${truncated} players with news or an injury status.`);
+  if (silent > 0) {
+    notes.push(`${silent} rostered player(s) have no injury status and no recent items, so they are omitted.`);
+  }
+  if (news?.available) {
+    notes.push(
+      "ESPN and the aggregator tag a roundup with every player it mentions, so an item marked `multiPlayer` may mention this player rather than be about him."
+    );
+  }
+  return notes;
+}
+function renderNewsText(a) {
+  if (!a.ok) {
+    const list = a.candidates?.length ? "\n" + a.candidates.map((c) => `  ${c.name ?? c.teamName}${c.position ? ` (${c.position}${c.nflTeam ? ` \xB7 ${c.nflTeam}` : ""})` : ""}${c.ownerTeam ? ` \u2014 ${c.ownerTeam}` : ""}`).join("\n") : "";
+    return `${a.error}${list}`;
+  }
+  const L = [];
+  const stamp2 = a.feed ? `News feed published ${a.feed.ageMinutes}m ago${a.feed.staleForKickoff ? " \u2014 MAY BE BEHIND A LIVE REPORT" : ""}` : "News feed unavailable";
+  L.push(stamp2);
+  L.push("");
+  if (a.scope === "player") {
+    const p = a.player;
+    const inj = [p.injuryStatus, p.injuryBodyPart, p.injuryNotes].filter(Boolean).join(" \xB7 ");
+    L.push(`${p.name} (${p.position ?? "?"}${p.nflTeam ? ` \xB7 ${p.nflTeam}` : ""})${p.isYours ? " \u2014 YOURS" : p.ownerTeam ? ` \u2014 ${p.ownerTeam}` : " \u2014 free agent"}`);
+    if (inj) L.push(`  STATUS: ${inj}`);
+    L.push("");
+    if (!a.items.length) L.push("  No recent items in the feed.");
+    a.items.forEach((n) => {
+      L.push(`  "${n.headline}" \u2014 ${n.source}${n.published ? `, ${n.published}` : ""}${n.multiPlayer ? " [roundup]" : ""}`);
+      if (n.story) L.push(`     ${n.story}`);
+      if (n.link) L.push(`     ${n.link}`);
+    });
+  } else {
+    L.push(`${a.team.teamName}${a.team.isYou ? " (you)" : ""} \u2014 ${a.counts.withNewsOrInjury} of ${a.counts.rostered} players have news or a status`);
+    L.push("");
+    a.players.forEach((p) => {
+      const inj = [p.injuryStatus, p.injuryBodyPart, p.injuryNotes].filter(Boolean).join(" \xB7 ");
+      L.push(`${p.name} (${p.position ?? "?"}${p.nflTeam ? ` \xB7 ${p.nflTeam}` : ""})${inj ? ` \u2014 ${inj}` : ""}`);
+      p.items.forEach((n) => {
+        L.push(`   "${n.headline}" \u2014 ${n.source}${n.published ? `, ${n.published}` : ""}${n.multiPlayer ? " [roundup]" : ""}`);
+        if (n.story) L.push(`      ${n.story.slice(0, 220)}`);
+      });
+      L.push("");
+    });
+  }
+  L.push("");
+  (a.notes ?? []).forEach((n) => L.push(`Note: ${n}`));
+  return L.join("\n").trimEnd();
+}
+var MAX_NEWS_LIMIT, DEFAULT_LIMIT2, PER_PLAYER_ON_ROSTER;
+var init_playerNews = __esm({
+  "mcp/tools/playerNews.js"() {
+    init_teamName();
+    init_teams();
+    init_resolveAssets();
+    init_news();
+    MAX_NEWS_LIMIT = 30;
+    DEFAULT_LIMIT2 = 12;
+    PER_PLAYER_ON_ROSTER = 2;
+  }
+});
+
+// mcp/liveScores.js
+async function getLiveScores({
+  leagueId,
+  week,
+  ttlMs = DEFAULT_LIVE_TTL_MS,
+  force = false,
+  fetcher,
+  concurrency = 6,
+  store = defaultStore7
+} = {}) {
+  const notes = [];
+  if (!leagueId || !Number.isFinite(Number(week)) || Number(week) < 1) {
+    return { available: false, week: null, pointsByRoster: {}, source: null, notes };
+  }
+  const get = fetcher ?? createFetcher({ concurrency });
+  const loaded = await loadSource(
+    store,
+    keyFor(leagueId, week),
+    force ? -1 : ttlMs,
+    () => get(`${SLEEPER_BASE}/league/${leagueId}/matchups/${week}`, { label: "Sleeper live scores" })
+  ).catch((err) => ({ data: null, fetchedAt: null, stale: false, error: err.message }));
+  if (!Array.isArray(loaded.data)) {
+    notes.push(
+      `This week's live scores did not load (${loaded.error ?? "unexpected shape"}), so a player whose game has already started is priced at his projection rather than at what he actually scored. Which slots are locked is unaffected \u2014 that comes from the NFL schedule.`
+    );
+    return { available: false, week: Number(week), pointsByRoster: {}, source: stampSource(loaded), notes };
+  }
+  const pointsByRoster = {};
+  loaded.data.forEach((m) => {
+    if (m?.roster_id == null) return;
+    pointsByRoster[m.roster_id] = m.players_points ?? {};
+  });
+  return { available: true, week: Number(week), pointsByRoster, source: stampSource(loaded), notes };
+}
+var DEFAULT_LIVE_TTL_MS, keyFor, defaultStore7;
+var init_liveScores = __esm({
+  "mcp/liveScores.js"() {
+    init_constants();
+    init_limit();
+    init_snapshot();
+    init_store();
+    DEFAULT_LIVE_TTL_MS = 5 * 60 * 1e3;
+    keyFor = (leagueId, week) => `live:${leagueId}_${week}`;
+    defaultStore7 = memoryStore();
+  }
+});
+
 // mcp/server.js
 function createServer({ env = process.env, fetcher, store } = {}) {
   const config2 = loadConfig(env);
@@ -43701,7 +44238,19 @@ function createServer({ env = process.env, fetcher, store } = {}) {
           overallRank: external_exports.number().nullable(),
           positionRank: external_exports.number().nullable(),
           trend30Day: external_exports.number(),
-          slot: external_exports.enum(["STARTER", "BENCH", "TAXI", "IR"])
+          slot: external_exports.enum(["STARTER", "BENCH", "TAXI", "IR"]),
+          // Present only on a player Sleeper is carrying a status for. Their
+          // ABSENCE is not a claim that he is healthy — it is the absence of a
+          // report, which is a different thing and must not be read as one.
+          injuryStatus: external_exports.string().nullable().optional(),
+          injuryBodyPart: external_exports.string().nullable().optional(),
+          injuryNotes: external_exports.string().nullable().optional(),
+          latestNews: external_exports.object({
+            headline: external_exports.string().nullable(),
+            source: external_exports.string().nullable(),
+            published: external_exports.string().nullable(),
+            multiPlayer: external_exports.boolean()
+          }).nullable().optional()
         })).optional(),
         picks: external_exports.array(external_exports.object({
           season: external_exports.string(),
@@ -43725,11 +44274,16 @@ function createServer({ env = process.env, fetcher, store } = {}) {
         fetcher: get,
         ...store ? { store } : {}
       });
+      const news = await getNews({ force: refresh, fetcher: get, store }).catch(() => null);
       const answer = buildRosterAnswer(snapshot, {
         team,
         defaultRosterId: config2.defaultRosterId,
-        myRosterId: config2.defaultRosterId
+        myRosterId: config2.defaultRosterId,
+        news
       });
+      if (answer.asOf && news?.source && news.available) {
+        answer.asOf = mergeAsOf(answer.asOf, { news: news.source });
+      }
       return {
         content: [{ type: "text", text: renderRosterText(answer) }],
         structuredContent: answer,
@@ -44178,7 +44732,14 @@ function createServer({ env = process.env, fetcher, store } = {}) {
           upgradeCount: external_exports.number(),
           coinFlipCount: external_exports.number(),
           emptySlots: external_exports.number(),
-          isOptimal: external_exports.boolean()
+          isOptimal: external_exports.boolean(),
+          // Slots already sealed by kickoff, and what they have banked. On a
+          // Sunday `currentProjected` is part result and part forecast; these
+          // two split it, so a reader is never shown one number made of two
+          // different kinds of thing.
+          lockedSlots: external_exports.number().optional(),
+          pointsBanked: external_exports.number().optional(),
+          lockedOnBench: external_exports.number().optional()
         }).optional(),
         moves: external_exports.array(external_exports.object({
           action: external_exports.enum(["swap", "fill", "bench"]),
@@ -44201,18 +44762,45 @@ function createServer({ env = process.env, fetcher, store } = {}) {
           isOptimal: external_exports.boolean()
         })).optional(),
         bench: external_exports.array(lineupPlayerSchema).optional(),
+        // Beat reporting for the flagged players only, so "why is he
+        // Doubtful?" is answered in the same response instead of sending the
+        // reader to Sleeper. Null when the feed did not load — a missing
+        // source, never an assertion that there is no news.
+        news: external_exports.object({
+          updatedAt: external_exports.string().nullable(),
+          ageMinutes: external_exports.number().nullable(),
+          byPlayer: external_exports.record(external_exports.string(), external_exports.array(newsItemSchema))
+        }).nullable().optional(),
         notes: external_exports.array(external_exports.string()).optional()
       }
     },
     async ({ week, team, leagueId, refresh }) => {
       const snapshot = await snapshotFor(leagueId, refresh);
       const weekly = await weeklyFor(snapshot, week, refresh);
+      const [live, news] = await Promise.all([
+        getLiveScores({
+          leagueId: leagueId || config2.defaultLeagueId,
+          week: weekly.week,
+          force: refresh,
+          fetcher: get,
+          store
+        }).catch(() => null),
+        getNews({ force: refresh, fetcher: get, store }).catch(() => null)
+      ]);
       const answer = buildLineupAnswer(snapshot, weekly, {
         team,
         defaultRosterId: config2.defaultRosterId,
-        myRosterId: config2.defaultRosterId
+        myRosterId: config2.defaultRosterId,
+        live,
+        news
       });
-      if (answer.asOf) answer.asOf = mergeAsOf(answer.asOf, weekly.sources);
+      if (answer.asOf) {
+        answer.asOf = mergeAsOf(answer.asOf, {
+          ...weekly.sources,
+          ...live?.source ? { liveScores: live.source } : {},
+          ...news?.source && news.available ? { news: news.source } : {}
+        });
+      }
       return {
         content: [{ type: "text", text: renderLineupText(answer) }],
         structuredContent: answer,
@@ -44312,9 +44900,95 @@ function createServer({ env = process.env, fetcher, store } = {}) {
       };
     }
   );
+  server.registerTool(
+    "get_player_news",
+    {
+      title: "Latest player news and injury detail",
+      description: `The latest beat reporting and injury detail for one player, or for every player on a roster who is hurt or in the news. Combines Sleeper's injury status \u2014 including body part and notes, so "Doubtful" becomes "Doubtful, knee/meniscus, surgery" \u2014 with an aggregated feed of eleven sources resolved to Sleeper player ids. Names are matched with the same discipline as resolve_assets: an ambiguous name returns candidates rather than guessing. The feed republishes about twice an hour, so it reports its own age and says when to confirm against a live source.`,
+      inputSchema: {
+        player: external_exports.string().optional().describe("A player name. Omit to sweep a whole roster instead. Ambiguous names are refused with candidates, never guessed."),
+        team: external_exports.string().optional().describe("Team name, manager username, or roster id, when sweeping a roster. Omit for your own team."),
+        limit: external_exports.number().int().optional().describe(`Max players (roster sweep) or items (one player). Default 12, max ${MAX_NEWS_LIMIT}.`),
+        leagueId: external_exports.string().optional().describe("Sleeper league id. Omit for the configured league."),
+        refresh: external_exports.boolean().optional().describe("Bypass the ~10 minute news cache and refetch. Use when a status is about to matter.")
+      },
+      outputSchema: {
+        ok: external_exports.boolean(),
+        error: external_exports.string().optional(),
+        // The feed is published by GitHub Actions to a data branch, so a miss
+        // is a normal state. `available: false` means "we could not read the
+        // feed", never "this player has no news" — the difference between a
+        // gap in our data and a claim about the world.
+        available: external_exports.boolean(),
+        feed: external_exports.object({
+          updatedAt: external_exports.string().nullable(),
+          ageMinutes: external_exports.number().nullable(),
+          staleForKickoff: external_exports.boolean()
+        }).nullable().optional(),
+        scope: external_exports.enum(["player", "roster"]).optional(),
+        candidates: external_exports.array(external_exports.any()).optional(),
+        asOf: asOfSchema.optional(),
+        player: external_exports.object({
+          sleeperId: external_exports.string(),
+          name: external_exports.string().nullable(),
+          position: external_exports.string().nullable(),
+          nflTeam: external_exports.string().nullable(),
+          value: external_exports.number().nullable(),
+          unranked: external_exports.boolean(),
+          injuryStatus: external_exports.string().nullable(),
+          injuryBodyPart: external_exports.string().nullable(),
+          injuryNotes: external_exports.string().nullable(),
+          ownerRosterId: external_exports.number().nullable(),
+          ownerTeam: external_exports.string().nullable(),
+          isYours: external_exports.boolean()
+        }).optional(),
+        items: external_exports.array(newsItemSchema).optional(),
+        team: external_exports.object({
+          rosterId: external_exports.number(),
+          teamName: external_exports.string(),
+          isYou: external_exports.boolean()
+        }).optional(),
+        players: external_exports.array(external_exports.object({
+          sleeperId: external_exports.string(),
+          name: external_exports.string().nullable(),
+          position: external_exports.string().nullable(),
+          nflTeam: external_exports.string().nullable(),
+          injuryStatus: external_exports.string().nullable(),
+          injuryBodyPart: external_exports.string().nullable(),
+          injuryNotes: external_exports.string().nullable(),
+          items: external_exports.array(newsItemSchema)
+        })).optional(),
+        counts: external_exports.object({
+          rostered: external_exports.number(),
+          withNewsOrInjury: external_exports.number(),
+          returned: external_exports.number()
+        }).optional(),
+        notes: external_exports.array(external_exports.string()).optional()
+      }
+    },
+    async ({ player, team, limit, leagueId, refresh }) => {
+      const snapshot = await snapshotFor(leagueId, refresh);
+      const news = await getNews({ force: refresh, fetcher: get, store }).catch(() => null);
+      const answer = buildNewsAnswer(snapshot, news, {
+        player,
+        team,
+        limit,
+        defaultRosterId: config2.defaultRosterId,
+        myRosterId: config2.defaultRosterId
+      });
+      if (answer.asOf && news?.source && news.available) {
+        answer.asOf = mergeAsOf(answer.asOf, { news: news.source });
+      }
+      return {
+        content: [{ type: "text", text: renderNewsText(answer) }],
+        structuredContent: answer,
+        isError: !answer.ok
+      };
+    }
+  );
   return { server, config: config2 };
 }
-var SERVER_NAME, SERVER_VERSION, sourceStamp, asOfSchema, teamCandidate, playerRowSchema, playerCandidateSchema, pickCandidateSchema, lineupPlayerSchema, tradeAssetSchema, sideFitSchema;
+var SERVER_NAME, SERVER_VERSION, sourceStamp, asOfSchema, teamCandidate, playerRowSchema, playerCandidateSchema, pickCandidateSchema, lineupPlayerSchema, newsItemSchema, tradeAssetSchema, sideFitSchema;
 var init_server3 = __esm({
   "mcp/server.js"() {
     init_mcp();
@@ -44336,6 +45010,9 @@ var init_server3 = __esm({
     init_analyzeTrade();
     init_lineupAdvice();
     init_playoffOdds2();
+    init_playerNews();
+    init_liveScores();
+    init_news();
     SERVER_NAME = "dynastyedge";
     SERVER_VERSION = "0.1.0";
     sourceStamp = external_exports.object({
@@ -44373,7 +45050,17 @@ var init_server3 = __esm({
         // its job — it caught exactly this during live verification, where lint,
         // 630 tests and a clean build had all passed.
         transactions: sourceStamp.optional(),
-        history: sourceStamp.optional()
+        history: sourceStamp.optional(),
+        // This week's live box score, behind the lock handling in lineup_advice.
+        // It is the fastest-moving source here (5-minute TTL — see
+        // mcp/liveScores.js), so it drags `oldestSourceAt` least, which is
+        // correct: it is the one number that is never stale for long.
+        liveScores: sourceStamp.optional(),
+        // The Actions-published player-news feed. Class B, so a failure leaves it
+        // absent rather than erroring — but when it IS used it is stamped like
+        // everything else, because an answer quoting a beat report has to be
+        // datable.
+        news: sourceStamp.optional()
       })
     });
     teamCandidate = external_exports.object({
@@ -44426,7 +45113,26 @@ var init_server3 = __esm({
       effective: external_exports.number(),
       blocked: external_exports.boolean(),
       status: external_exports.string().nullable(),
-      statusLabel: external_exports.string().nullable()
+      statusLabel: external_exports.string().nullable(),
+      // `locked` — his game has kicked off, so Sleeper has sealed the slot and NO
+      // move involving him is possible whatever the numbers say. `actualPoints` is
+      // non-null only when the live score also arrived, keeping "he scored 3.2"
+      // distinct from "his game is under way and we could not read the box score".
+      locked: external_exports.boolean().optional(),
+      gameState: external_exports.string().nullable().optional(),
+      actualPoints: external_exports.number().nullable().optional(),
+      injuryBodyPart: external_exports.string().nullable().optional(),
+      injuryNotes: external_exports.string().nullable().optional()
+    });
+    newsItemSchema = external_exports.object({
+      headline: external_exports.string().nullable(),
+      story: external_exports.string().nullable(),
+      source: external_exports.string().nullable(),
+      published: external_exports.string().nullable(),
+      link: external_exports.string().nullable(),
+      multiPlayer: external_exports.boolean(),
+      playersNamed: external_exports.number(),
+      forSleeperId: external_exports.string().nullable()
     });
     tradeAssetSchema = external_exports.object({
       id: external_exports.string(),

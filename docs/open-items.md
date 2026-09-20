@@ -5,7 +5,16 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-09-20 (**MCP-2b** — `analyze_trade`'s last two unwired
+**Last reviewed:** 2026-09-20 (**MCP-2c** — the Optimizer stopped recommending
+moves that cannot be made. Sleeper seals a lineup slot at kickoff and the
+schedule payload has always carried the `status` field that says so; both
+`parseByeTeams` implementations discarded it, so the tool told the owner on a
+Sunday to bench a player whose game had finished on Thursday — and counted the
+points as sitting on his bench. Also shipped: an eighth tool,
+`get_player_news`, and injury detail + beat reporting attached to the flagged
+players in `lineup_advice` and `get_roster`, because "Doubtful" sent the owner
+to Sleeper for something the server already held. Two new TTLs, each with its
+own argument. Previously **MCP-2b** — `analyze_trade`'s last two unwired
 signals are in: `partnerActivity` over a new season-wide transaction feed and
 `myDraftGrade` over a deliberately narrow league-history walk (14 requests
 against the app's ~169). Neither touches a score. Two measured sizing wins —
@@ -101,7 +110,8 @@ is de-risked.
 
 ### MCP-1b — MCP server phase 1b: the remaining five tools **SHIPPED 2026-09-19**
 
-All six tools from `MCP_DISCOVERY.md` §5 now exist, still stdio only.
+All six tools from `MCP_DISCOVERY.md` §5 now exist, still stdio only. (Two
+more shipped later: `get_playoff_odds` in MCP-2a, `get_player_news` in MCP-2c.)
 `find_sell_high`, `recommend_free_agents`, `resolve_assets`, `analyze_trade`
 and `lineup_advice`, each documented with its contract and traps in CLAUDE.md's
 **The MCP Server** section.
@@ -316,6 +326,81 @@ phase-two tools (trade targets / fair packages, manager scouting, rookie
 research); `/league/{id}/winners_bracket`, still never called; `mcp/limit.js`'s
 fixed backoff; and `restKvStore`, still never verified against a live store.
 The two unwired `analyze_trade` signals are **closed by MCP-2b below**.
+
+### MCP-2c — game locks, live scores, and news that arrives unasked **SHIPPED 2026-09-20**
+
+**The bug, in full, because it is the most instructive one this server has
+produced.** Asked for lineup advice on a Sunday lunchtime in Week 2, the tool
+answered:
+
+> `[MUST FIX] SIT DJ Moore → START TreVeyon Henderson · +8.5` ·
+> "DJ Moore is listed Out and will likely score 0" ·
+> **8.4 points sitting on your bench**
+
+Moore's game (DET @ BUF) had finished on **Thursday**. Three claims were false
+at once: he could not be benched, he had not scored 0 — he had banked **−0.1**
+before leaving with an AC joint sprain — and the 8.5 points were reported as
+recoverable when nothing could recover them. Reproduced live with
+`refresh: true`, every source **0 seconds old**, so this was never a staleness
+problem: the schedule payload had carried `status: "complete"` the whole time
+and `parseByeTeams` read only `home`/`away`/`week`.
+
+**What shipped, and where.** The math is in `src/utils`, so the phone's
+Optimizer had the identical bug and is fixed by the same change:
+
+- `parseLockedTeams` (`utils/projections.js`) reads `status`.
+  `getAvailability` gains **`locked`**, orthogonal to `blocked` — one is a
+  claim about the future, the other about whether the transaction is open at
+  all. Moore was both.
+- `selectOptimalStarters` gains a `pinned` option. Locked starters hold their
+  slots at their **real** score; locked bench players leave the pool. The
+  question narrows to *"the best lineup you can still reach"*, which is the
+  better question because the first one has an answer you may not be allowed
+  to act on.
+- Actual points come from `players_points` on the current week's matchups,
+  which `useSleeper` **already fetches** — so the phone pays nothing;
+  `useLeague` exposes `weeklyPlayerPoints`. On the server that is
+  `mcp/liveScores.js`, a fifth TTL at **5 minutes**.
+- `get_player_news` (tool 8) plus injury detail (`injury_body_part`,
+  `injury_notes`, `espn_id` joined the MCP player-DB trim) and beat reporting
+  attached to flagged players in `lineup_advice` and `get_roster`.
+
+**Measured, same roster, minutes apart:** `128.5 → 136.9, 8.4 left on bench,
+1 must-fix` became `76.4 total, 0.0 left, 0 must-fix, 6 slots locked, 9.1
+banked`.
+
+**Three lessons worth carrying forward.**
+
+1. **A payload field nobody reads is not a field nobody needs.** The schedule
+   has three useful fields and the repo documented two. Both `parseByeTeams`
+   copies were written to answer "who is on bye" and never revisited when the
+   question widened.
+2. **`--overflow` cannot see a wrapping failure.** The `FINAL` badge squeezed
+   the name column hard enough to break "DJ Moore" into **seven lines** at
+   390px, and the truncation instrument reported zero clipped elements —
+   correctly, because the name *wraps* rather than clips. The fix was also
+   better information design: a locked row drops the matchup pill, since a
+   rating that forecasts the defense a player is *due to face* is meaningless
+   once his game is over.
+3. **The closed `asOf.sources` schema earned its keep a fourth time** — two new
+   sources (`liveScores`, `news`) had to be declared or a real client rejects
+   the whole response.
+
+**Open, deliberately.**
+
+- **The news feed can be ~35 minutes behind a wire report** (publishes twice an
+  hour through a ~5-minute CDN cache), which is exactly when a late inactive
+  lands. `staleForKickoff` marks the condition and the tools tell the reader to
+  confirm against a live source. **The honest fix is not a shorter TTL** — it
+  is the pipeline's publish interval, and tightening `news.yml`'s cron is a
+  separate, unmeasured change. Revisit only if the warning proves insufficient
+  in practice.
+- **`get_player_news` is the first tool to read a static feed**, and the other
+  three (`values-history`, `trade-values`, `rookie-intel`) remain unread. A
+  second league still gets no news; the tool says so.
+- **The connector's own tool list has not been re-checked since phase 2b**
+  (seven tools, 2026-09-20). Eight is expected after this deploys; that check
+  is the end of the chain no probe can reach, so it is owed.
 
 ### MCP-2b — the last two signals, and the deploy gap **SHIPPED 2026-09-20**
 

@@ -114,7 +114,7 @@ function OffseasonPlaceholder({ league }) {
 
 export default function LineupOptimizer() {
   const navigate = useNavigate()
-  const { league, loading: leagueLoading, error: leagueError, retry: leagueRetry } = useLeagueContext()
+  const { league, weeklyPlayerPoints, loading: leagueLoading, error: leagueError, retry: leagueRetry } = useLeagueContext()
   const { values: fcValues, loading: fcLoading } = useFantasyCalc()
   const lineupData = useLineupData()
 
@@ -149,8 +149,14 @@ export default function LineupOptimizer() {
   const analysis = useMemo(() => {
     if (!league?.myRoster || !lineupData.projMap || !lineup) return null
 
-    const { projMap, playerStatuses, playingTeams, defStatsRaw, statsWeek, nflState, schedule } = lineupData
+    const { projMap, playerStatuses, playingTeams, lockedTeams, defStatsRaw, statsWeek, nflState, schedule } = lineupData
     const currentWeek = nflState?.week ?? 1
+
+    // This week's live scores, free: useSleeper already fetches the current
+    // week's matchups for the League tab, so a player whose game has finished
+    // carries his REAL points here with no extra request. Without it a locked
+    // slot would still be priced at a forecast that can no longer come true.
+    const actualPoints = weeklyPlayerPoints?.[league.myRoster.rosterId] ?? null
 
     const res = buildLineupMoves({
       players: league.myRoster.players,
@@ -158,6 +164,8 @@ export default function LineupOptimizer() {
       projMap,
       playerStatuses,
       playingTeams,
+      lockedTeams,
+      actualPoints,
     })
 
     // `playerStatuses` IS the shared trimmed player DB (position + team), which
@@ -179,7 +187,7 @@ export default function LineupOptimizer() {
     )
 
     return { ...res, currentWeek, matchupsReady, matchupFor }
-  }, [league, lineup, lineupData])
+  }, [league, weeklyPlayerPoints, lineup, lineupData])
 
   // Flash the projected total whenever the lineup changes (Motion spec).
   useEffect(() => {
@@ -208,6 +216,9 @@ export default function LineupOptimizer() {
     : bench.find(b => b.id === swapArm?.playerId)?.player ?? null
 
   const slotState = idx => {
+    // A sealed slot is never a swap target — offering one would let the
+    // sandbox build a lineup Sleeper will not accept.
+    if (slots[idx]?.entry?.locked) return swapArm ? 'muted' : 'idle'
     if (!swapArm) return 'idle'
     if (swapArm.kind === 'slot') {
       if (swapArm.idx === idx) return 'armed'
@@ -220,6 +231,7 @@ export default function LineupOptimizer() {
   }
 
   const benchState = playerId => {
+    if (bench.find(b => b.id === playerId)?.locked) return swapArm ? 'muted' : 'idle'
     if (!swapArm) return 'idle'
     if (swapArm.kind === 'bench') return swapArm.playerId === playerId ? 'armed' : 'muted'
     const p = bench.find(b => b.id === playerId)?.player
@@ -244,6 +256,8 @@ export default function LineupOptimizer() {
         currentTotal={analysis.currentTotal}
         optimalTotal={analysis.optimalTotal}
         pointsLeft={analysis.pointsLeft}
+        lockedSlots={analysis.lockedStarters}
+        pointsBanked={analysis.lockedPoints}
         moves={moves}
         mustFixCount={analysis.mustFixCount}
         upgradeCount={analysis.upgradeCount}

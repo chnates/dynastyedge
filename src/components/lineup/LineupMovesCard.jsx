@@ -79,6 +79,10 @@ function MoveCard({ move: m }) {
 
 export default function LineupMovesCard({
   week, currentTotal, optimalTotal, pointsLeft, moves,
+  // Slots already sealed by kickoff, and what they have banked. Once a game
+  // starts, "projected" stops being the right word for the total — part of it
+  // is a result — and "optimal" stops being something the owner chose.
+  lockedSlots = 0, pointsBanked = 0,
   mustFixCount, upgradeCount, coinFlipCount = 0, dirty, onApplyAll, onReset,
 }) {
   const optimal = moves.length === 0
@@ -112,10 +116,14 @@ export default function LineupMovesCard({
                     inverts and no single green clears AA against both versions
                     of it. The state is carried by a second reversal instead. */}
                 <p className="font-body text-sm font-semibold text-bg-primary leading-snug">
-                  Lineup is <Mark tone="ground">optimal</Mark> — no changes needed.
+                  {lockedSlots
+                    ? <>Nothing <Mark tone="ground">left</Mark> to change.</>
+                    : <>Lineup is <Mark tone="ground">optimal</Mark> — no changes needed.</>}
                 </p>
                 <p className="font-body text-xs text-bg-primary/60 leading-snug mt-0.5">
-                  Nothing on your bench outprojects a starter.
+                  {lockedSlots
+                    ? `${lockedSlots} slot${lockedSlots > 1 ? 's' : ''} locked · ${pointsBanked.toFixed(1)} banked. Every slot you can still move is already the best one.`
+                    : 'Nothing on your bench outprojects a starter.'}
                 </p>
               </div>
               <span className="ml-auto text-right shrink-0">
@@ -123,7 +131,7 @@ export default function LineupMovesCard({
                   {currentTotal.toFixed(1)}
                 </span>
                 <span className="block font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-bg-primary/60 mt-1.5">
-                  Projected
+                  {lockedSlots ? 'Live total' : 'Projected'}
                 </span>
               </span>
             </div>

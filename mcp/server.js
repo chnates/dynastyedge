@@ -26,6 +26,9 @@ import { buildResolveAnswer, renderResolveText, MAX_QUERIES } from './tools/reso
 import { buildTradeAnswer, renderTradeText, isPickId } from './tools/analyzeTrade.js'
 import { buildLineupAnswer, renderLineupText } from './tools/lineupAdvice.js'
 import { buildOddsAnswer, renderOddsText } from './tools/playoffOdds.js'
+import { buildNewsAnswer, renderNewsText, MAX_NEWS_LIMIT } from './tools/playerNews.js'
+import { getLiveScores } from './liveScores.js'
+import { getNews } from './news.js'
 
 export const SERVER_NAME = 'dynastyedge'
 export const SERVER_VERSION = '0.1.0'
@@ -73,6 +76,16 @@ const asOfSchema = z.object({
     // 630 tests and a clean build had all passed.
     transactions: sourceStamp.optional(),
     history: sourceStamp.optional(),
+    // This week's live box score, behind the lock handling in lineup_advice.
+    // It is the fastest-moving source here (5-minute TTL — see
+    // mcp/liveScores.js), so it drags `oldestSourceAt` least, which is
+    // correct: it is the one number that is never stale for long.
+    liveScores: sourceStamp.optional(),
+    // The Actions-published player-news feed. Class B, so a failure leaves it
+    // absent rather than erroring — but when it IS used it is stamped like
+    // everything else, because an answer quoting a beat report has to be
+    // datable.
+    news: sourceStamp.optional(),
   }),
 })
 
@@ -139,6 +152,29 @@ const lineupPlayerSchema = z.object({
   blocked: z.boolean(),
   status: z.string().nullable(),
   statusLabel: z.string().nullable(),
+  // `locked` — his game has kicked off, so Sleeper has sealed the slot and NO
+  // move involving him is possible whatever the numbers say. `actualPoints` is
+  // non-null only when the live score also arrived, keeping "he scored 3.2"
+  // distinct from "his game is under way and we could not read the box score".
+  locked: z.boolean().optional(),
+  gameState: z.string().nullable().optional(),
+  actualPoints: z.number().nullable().optional(),
+  injuryBodyPart: z.string().nullable().optional(),
+  injuryNotes: z.string().nullable().optional(),
+})
+
+// One item off the aggregated news feed. `multiPlayer` is load-bearing: a
+// roundup is tagged with every player it mentions, so an item can surface on a
+// player its headline is not about.
+const newsItemSchema = z.object({
+  headline: z.string().nullable(),
+  story: z.string().nullable(),
+  source: z.string().nullable(),
+  published: z.string().nullable(),
+  link: z.string().nullable(),
+  multiPlayer: z.boolean(),
+  playersNamed: z.number(),
+  forSleeperId: z.string().nullable(),
 })
 
 // An asset as it appears on one side of a graded trade.
@@ -275,6 +311,18 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
           positionRank: z.number().nullable(),
           trend30Day: z.number(),
           slot: z.enum(['STARTER', 'BENCH', 'TAXI', 'IR']),
+          // Present only on a player Sleeper is carrying a status for. Their
+          // ABSENCE is not a claim that he is healthy — it is the absence of a
+          // report, which is a different thing and must not be read as one.
+          injuryStatus: z.string().nullable().optional(),
+          injuryBodyPart: z.string().nullable().optional(),
+          injuryNotes: z.string().nullable().optional(),
+          latestNews: z.object({
+            headline: z.string().nullable(),
+            source: z.string().nullable(),
+            published: z.string().nullable(),
+            multiPlayer: z.boolean(),
+          }).nullable().optional(),
         })).optional(),
         picks: z.array(z.object({
           season: z.string(),
@@ -298,11 +346,18 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
         fetcher: get,
         ...(store ? { store } : {}),
       })
+      // Best-effort: a roster read must never fail because a news branch is
+      // missing, so a rejection here degrades to no headlines and nothing else.
+      const news = await getNews({ force: refresh, fetcher: get, store }).catch(() => null)
       const answer = buildRosterAnswer(snapshot, {
         team,
         defaultRosterId: config.defaultRosterId,
         myRosterId: config.defaultRosterId,
+        news,
       })
+      if (answer.asOf && news?.source && news.available) {
+        answer.asOf = mergeAsOf(answer.asOf, { news: news.source })
+      }
       return {
         content: [{ type: 'text', text: renderRosterText(answer) }],
         structuredContent: answer,
@@ -818,6 +873,13 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
           coinFlipCount: z.number(),
           emptySlots: z.number(),
           isOptimal: z.boolean(),
+          // Slots already sealed by kickoff, and what they have banked. On a
+          // Sunday `currentProjected` is part result and part forecast; these
+          // two split it, so a reader is never shown one number made of two
+          // different kinds of thing.
+          lockedSlots: z.number().optional(),
+          pointsBanked: z.number().optional(),
+          lockedOnBench: z.number().optional(),
         }).optional(),
         moves: z.array(z.object({
           action: z.enum(['swap', 'fill', 'bench']),
@@ -840,18 +902,46 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
           isOptimal: z.boolean(),
         })).optional(),
         bench: z.array(lineupPlayerSchema).optional(),
+        // Beat reporting for the flagged players only, so "why is he
+        // Doubtful?" is answered in the same response instead of sending the
+        // reader to Sleeper. Null when the feed did not load — a missing
+        // source, never an assertion that there is no news.
+        news: z.object({
+          updatedAt: z.string().nullable(),
+          ageMinutes: z.number().nullable(),
+          byPlayer: z.record(z.string(), z.array(newsItemSchema)),
+        }).nullable().optional(),
         notes: z.array(z.string()).optional(),
       },
     },
     async ({ week, team, leagueId, refresh }) => {
       const snapshot = await snapshotFor(leagueId, refresh)
       const weekly = await weeklyFor(snapshot, week, refresh)
+      // Both are best-effort and neither can fail the answer: the LOCKS come
+      // from the schedule (already in `weekly`), so without live scores the
+      // set of moves offered is unchanged — only the banked figure degrades to
+      // a projection. News degrades to absent.
+      const [live, news] = await Promise.all([
+        getLiveScores({
+          leagueId: leagueId || config.defaultLeagueId, week: weekly.week,
+          force: refresh, fetcher: get, store,
+        }).catch(() => null),
+        getNews({ force: refresh, fetcher: get, store }).catch(() => null),
+      ])
       const answer = buildLineupAnswer(snapshot, weekly, {
         team,
         defaultRosterId: config.defaultRosterId,
         myRosterId: config.defaultRosterId,
+        live,
+        news,
       })
-      if (answer.asOf) answer.asOf = mergeAsOf(answer.asOf, weekly.sources)
+      if (answer.asOf) {
+        answer.asOf = mergeAsOf(answer.asOf, {
+          ...weekly.sources,
+          ...(live?.source ? { liveScores: live.source } : {}),
+          ...(news?.source && news.available ? { news: news.source } : {}),
+        })
+      }
       return {
         content: [{ type: 'text', text: renderLineupText(answer) }],
         structuredContent: answer,
@@ -963,6 +1053,108 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
       if (answer.asOf) answer.asOf = mergeAsOf(answer.asOf, season.sources)
       return {
         content: [{ type: 'text', text: renderOddsText(answer) }],
+        structuredContent: answer,
+        isError: !answer.ok,
+      }
+    }
+  )
+
+  // ── Tool 8 — get_player_news ────────────────────────────────────────────
+  //
+  // Why a tool rather than letting the client search the web: the feed's
+  // player ids were resolved server-side against the full player DB, and the
+  // live DB contains two "DJ Moore"s. A model name-matching a headline to a
+  // roster gets one of them wrong eventually. See mcp/news.js for the full
+  // argument, including the case where web search legitimately wins (this feed
+  // publishes twice an hour, so `staleForKickoff` tells the reader when to go
+  // and confirm rather than pretending to be current).
+
+  server.registerTool(
+    'get_player_news',
+    {
+      title: 'Latest player news and injury detail',
+      description:
+        'The latest beat reporting and injury detail for one player, or for every player on a roster ' +
+        'who is hurt or in the news. Combines Sleeper\'s injury status — including body part and notes, ' +
+        'so "Doubtful" becomes "Doubtful, knee/meniscus, surgery" — with an aggregated feed of eleven ' +
+        'sources resolved to Sleeper player ids. Names are matched with the same discipline as ' +
+        'resolve_assets: an ambiguous name returns candidates rather than guessing. The feed republishes ' +
+        'about twice an hour, so it reports its own age and says when to confirm against a live source.',
+      inputSchema: {
+        player: z.string().optional()
+          .describe('A player name. Omit to sweep a whole roster instead. Ambiguous names are refused with candidates, never guessed.'),
+        team: z.string().optional()
+          .describe('Team name, manager username, or roster id, when sweeping a roster. Omit for your own team.'),
+        limit: z.number().int().optional()
+          .describe(`Max players (roster sweep) or items (one player). Default 12, max ${MAX_NEWS_LIMIT}.`),
+        leagueId: z.string().optional()
+          .describe('Sleeper league id. Omit for the configured league.'),
+        refresh: z.boolean().optional()
+          .describe('Bypass the ~10 minute news cache and refetch. Use when a status is about to matter.'),
+      },
+      outputSchema: {
+        ok: z.boolean(),
+        error: z.string().optional(),
+        // The feed is published by GitHub Actions to a data branch, so a miss
+        // is a normal state. `available: false` means "we could not read the
+        // feed", never "this player has no news" — the difference between a
+        // gap in our data and a claim about the world.
+        available: z.boolean(),
+        feed: z.object({
+          updatedAt: z.string().nullable(),
+          ageMinutes: z.number().nullable(),
+          staleForKickoff: z.boolean(),
+        }).nullable().optional(),
+        scope: z.enum(['player', 'roster']).optional(),
+        candidates: z.array(z.any()).optional(),
+        asOf: asOfSchema.optional(),
+        player: z.object({
+          sleeperId: z.string(),
+          name: z.string().nullable(),
+          position: z.string().nullable(),
+          nflTeam: z.string().nullable(),
+          value: z.number().nullable(),
+          unranked: z.boolean(),
+          injuryStatus: z.string().nullable(),
+          injuryBodyPart: z.string().nullable(),
+          injuryNotes: z.string().nullable(),
+          ownerRosterId: z.number().nullable(),
+          ownerTeam: z.string().nullable(),
+          isYours: z.boolean(),
+        }).optional(),
+        items: z.array(newsItemSchema).optional(),
+        team: z.object({
+          rosterId: z.number(), teamName: z.string(), isYou: z.boolean(),
+        }).optional(),
+        players: z.array(z.object({
+          sleeperId: z.string(),
+          name: z.string().nullable(),
+          position: z.string().nullable(),
+          nflTeam: z.string().nullable(),
+          injuryStatus: z.string().nullable(),
+          injuryBodyPart: z.string().nullable(),
+          injuryNotes: z.string().nullable(),
+          items: z.array(newsItemSchema),
+        })).optional(),
+        counts: z.object({
+          rostered: z.number(), withNewsOrInjury: z.number(), returned: z.number(),
+        }).optional(),
+        notes: z.array(z.string()).optional(),
+      },
+    },
+    async ({ player, team, limit, leagueId, refresh }) => {
+      const snapshot = await snapshotFor(leagueId, refresh)
+      const news = await getNews({ force: refresh, fetcher: get, store }).catch(() => null)
+      const answer = buildNewsAnswer(snapshot, news, {
+        player, team, limit,
+        defaultRosterId: config.defaultRosterId,
+        myRosterId: config.defaultRosterId,
+      })
+      if (answer.asOf && news?.source && news.available) {
+        answer.asOf = mergeAsOf(answer.asOf, { news: news.source })
+      }
+      return {
+        content: [{ type: 'text', text: renderNewsText(answer) }],
         structuredContent: answer,
         isError: !answer.ok,
       }

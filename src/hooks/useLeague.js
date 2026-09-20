@@ -87,6 +87,25 @@ export function useLeague() {
       )
   }, [sleeperData, league])
 
+  // rosterId → { sleeperId: pointsScoredThisWeek }, straight off the same
+  // matchups payload `matchups` above is built from — no extra request.
+  //
+  // It is derived SEPARATELY rather than folded into `matchups` because that
+  // memo deliberately keeps only what a MatchupCard renders and drops every
+  // unpaired entry. The Lineup Optimizer needs the opposite: per-player live
+  // scores, for every roster, paired or not. A player whose game has kicked
+  // off can no longer be moved, so his slot must be priced at what he actually
+  // scored rather than at a projection that can no longer come true.
+  const weeklyPlayerPoints = useMemo(() => {
+    if (!sleeperData?.matchups) return null
+    const byRoster = {}
+    sleeperData.matchups.forEach(m => {
+      if (m?.roster_id == null) return
+      byRoster[m.roster_id] = m.players_points ?? {}
+    })
+    return byRoster
+  }, [sleeperData])
+
   const retry = useCallback(() => {
     sleeperRetry()
     fcRetry()
@@ -97,7 +116,7 @@ export function useLeague() {
   // identity on every App render and cascade re-renders through every consumer,
   // so memoize it on its actual inputs.
   return useMemo(() => ({
-    league, nflState, matchups, isOffseason, leagueInfo, tradeDeadline,
+    league, nflState, matchups, weeklyPlayerPoints, isOffseason, leagueInfo, tradeDeadline,
     myRosterId, pickYears,
     loading, error, retry, sleeperFetchedAt, fcFetchedAt, values: fcValues,
     // Per-source refresher for the drawer's granular Refresh coordinator —
@@ -107,7 +126,7 @@ export function useLeague() {
     // Sleeper-scoped sign-in inputs (independent of FantasyCalc).
     signInRosters, sleeperLoading, sleeperError, sleeperRetry,
   }), [
-    league, nflState, matchups, isOffseason, leagueInfo, tradeDeadline,
+    league, nflState, matchups, weeklyPlayerPoints, isOffseason, leagueInfo, tradeDeadline,
     myRosterId, pickYears, loading, error, retry, sleeperFetchedAt, fcFetchedAt, fcValues,
     signInRosters, sleeperLoading, sleeperError, sleeperRetry, fcRetry,
   ])

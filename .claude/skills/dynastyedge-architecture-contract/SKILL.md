@@ -150,6 +150,8 @@ until a full page reload.
 **Player DB trimmed fields** (verified in `usePlayerDB.js` — the raw 5–8 MB
 response is discarded, only these survive): `name`, `position`, `team`, `age`,
 `years_exp`, `injury_status`, `espn_id`, `depth_chart_position`,
+(the MCP server's mirror in `mcp/snapshot.js` also keeps `injury_body_part` and
+`injury_notes`),
 `depth_chart_order`, `news_updated`. If a feature needs another field, add it
 to this trim list — do not fetch `/players/nfl` a second time anywhere.
 

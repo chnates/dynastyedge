@@ -186,8 +186,17 @@ Always use `sleeperId` as the join key (normalized to strings). Players FantasyC
 doesn't rank fall back to the shared player DB for name/position and display `—`
 as their value.
 
-**Critical schedule note:** the NFL schedule is the ONE Sleeper endpoint that
-does **not** live under `/v1` — ``/v1/schedule/nfl/regular/{year}`` 404s for every
+**Critical schedule note — THREE fields, and the third was ignored for a year.**
+The schedule payload is `{ status, date, home, week, game_id, away }`.
+**`status` is what says whether a game has kicked off** (`pre_game` →
+`in_game` → `complete`), and until 2026-09-20 both `parseByeTeams`
+implementations read only `home`/`away`/`week` and discarded it. Sleeper
+**locks a player's lineup slot at kickoff**, so throwing that field away meant
+the Optimizer offered moves that could not be made — see Feature 4's game-lock
+section and `utils/projections.js`'s `parseLockedTeams`.
+
+The other two traps are the original ones: the NFL schedule is the ONE Sleeper
+endpoint that does **not** live under `/v1` — ``/v1/schedule/nfl/regular/{year}`` 404s for every
 season (verified 2026-08-08 against 2024/2025/2026). Use `SLEEPER_ROOT`
 (`https://api.sleeper.app`, no `/v1`). Its payload also uses **`home` / `away`**,
 not `home_team` / `away_team`. Both mistakes fail *silently* — the wrong field
@@ -653,12 +662,15 @@ including mobile, and get answers grounded in live Sleeper data and **this
 app's own analysis code** — not general knowledge. Design spec and the
 owner-confirmed decisions: `MCP_DISCOVERY.md`.
 
-**Status: phase 2b — LIVE and CONNECTED at `https://dynastyedge-mcp.vercel.app/mcp`.**
-**Seven** tools answer over **both** transports: stdio for local runs,
+**Status: phase 2c — LIVE and CONNECTED at `https://dynastyedge-mcp.vercel.app/mcp`.**
+**Eight** tools answer over **both** transports: stdio for local runs,
 streamable HTTP for the Claude apps, authenticated by GitHub against a
 single-account allowlist. Six are `MCP_DISCOVERY.md` §5's set; the seventh,
 `get_playoff_odds`, came with phase 2a (2026-09-20) alongside the wiring that
-put `analyze_trade`'s Layer 3 on live odds.
+put `analyze_trade`'s Layer 3 on live odds. The eighth,
+**`get_player_news`**, came with phase 2c (2026-09-20) alongside game locks in
+`lineup_advice` — the first tools to read one of the Actions-published static
+feeds.
 
 Phase 1 shipped the three prerequisite refactors plus `get_roster`; phase 1b
 added `find_sell_high`, `recommend_free_agents`, `resolve_assets`,
@@ -668,7 +680,8 @@ transport (`http.js`), stateless OAuth 2.1 (`oauth.js` / `oauthRoutes.js` /
 `app.js`) and the Vercel packaging (`api/mcp.js`, `vercel.json`).
 
 **All SEVEN tools confirmed in the connector's own tool list, 2026-09-20** —
-the owner's phone, after phase 2b deployed: Grade a trade · Find a sell-high
+the owner's phone, after phase 2b deployed (phase 2c's `get_player_news` makes
+eight, and the same re-check is owed after it deploys): Grade a trade · Find a sell-high
 candidate · Rest-of-season playoff odds · Get a team roster · Weekly start/sit
 advice · Recommend free agents · Resolve player and pick names to ids. That is
 the end of the chain no probe can reach — what the client actually enumerates
@@ -723,6 +736,8 @@ mcp/
   snapshot.js   league fetch + ~15-min cache + the as-of stamp + mergeAsOf
   weekly.js     projections + schedule, on their OWN ~60-min TTL
   season.js     every regular-season week's matchups, on a THIRD TTL
+  liveScores.js this week's box score, on a FIFTH and DELIBERATELY SHORT TTL
+  news.js       the aggregated player-news feed + the id-only matcher
   teams.js      resolveTeam — shared by get_roster, analyze_trade, lineup_advice
   limit.js      concurrency gate + retry/backoff
   config.js     league / identity / TTLs, env-first
@@ -730,7 +745,7 @@ mcp/
   tools/
     getRoster.js  findSellHigh.js  recommendFreeAgents.js
     resolveAssets.js  analyzeTrade.js  lineupAdvice.js
-    playoffOdds.js
+    playoffOdds.js    playerNews.js
 ```
 
 ### The HTTP transport (phase 2) — stateless, by necessity
@@ -740,7 +755,9 @@ mcp/
 Cloudflare Workers, Deno and Bun all take, so the host stays a *packaging*
 decision rather than a code one. `createServer()` was already
 transport-agnostic, so **no tool was forked**: stdio and HTTP expose the same
-six tools, pinned by test.
+tools, pinned by test — the assertion lists them by name, so adding one to
+`createServer` and forgetting the transport fails the suite rather than
+shipping a fork.
 
 **THE TRAP: a session held in RAM is exactly what serverless cannot keep.**
 The SDK's streamable transport can run session-ful — it mints a session id and
@@ -769,7 +786,8 @@ would defeat the gate.
 
 **Verified over the real transport against the live league** (2026-09-19, a
 real MCP client over `StreamableHTTPClientTransport`): health 200;
-unauthenticated POST 401 with the discovery header; `tools/list` → six tools;
+unauthenticated POST 401 with the discovery header; `tools/list` → the full
+tool set (six at the time; eight since phase 2c);
 `get_roster` 509ms cold / 11,312B, Nix Cage 0-1, 31 players + 12 picks, slots
 STARTER 11 · BENCH 13 · TAXI 5 · IR 2, total 86,090, value rank 3, window
 Middle, all three `asOf` sources stamped and not stale, one unranked player at
@@ -1312,6 +1330,98 @@ Nix Cage 58.1%, projected 6.5-7.5, average seed 5.9 — "On the bubble", which a
 a 60% baseline is exactly what it should read. Σ odds across the field
 **600.3%** against the 600% the field size demands.
 
+### Tool 8 — `get_player_news`
+
+"What's the latest on Bowers?" / "Who on my team is hurt?" Optional `player`,
+`team`, `limit`, `refresh`. Reads Sleeper's injury fields plus the
+Actions-published news feed.
+
+**It exists because of a measured failure.** Asked whether to start Brock
+Bowers, the server answered with the bare word `Doubtful` and advised checking
+Sleeper — while the player DB it already held said **"Knee - Meniscus,
+Surgery"** and the feed it did not read carried a RotoWire item from four hours
+earlier headlined **"Brock Bowers: Trending toward Week 3 return"**. Every part
+of the answer was already in the building.
+
+- **`injury_body_part`, `injury_notes` and `espn_id` joined the player-DB
+  trim.** Three fields, no extra request, and they are what turn a label into
+  an answer: "Doubtful" sends a reader to Sleeper, "Doubtful · Knee - Meniscus
+  · Surgery" tells them the season is the question rather than the afternoon.
+- **A free-text name is allowed here, unlike `analyze_trade`** — asking about
+  Bowers should not cost a round trip — but it resolves through the **same
+  `buildResolveAnswer`**, so an ambiguous name returns candidates and refuses.
+  Verified live: **"Brown" returns six and refuses to match.**
+- **The join is `playerIds`, and there is deliberately NO headline-name
+  fallback.** The pipeline already name-matched server-side with the whole
+  player DB in hand; a weaker second attempt here could only add the errors the
+  first one avoided. The collision is real, not hypothetical: the live player DB
+  holds **two "DJ Moore"s** — `4961` (CB) and `4983` (the WR on this roster).
+- A **roster sweep leads with the hurt players**, then recency — recency alone
+  buries the one name the reader most needs under blurbs about healthy
+  starters. A player with no status and no items is omitted, not padded.
+- **Silence is reported as a gap in coverage, never as good health.** "No
+  covered source has written about him recently" is a statement about our data;
+  "he is fine" would be a statement about the world.
+
+**It rides along in two other tools, which is the point.** `lineup_advice`
+attaches injury detail and the latest items to every **flagged** player (a
+healthy starter needs no beat report, and 24 of them would blow the
+bounded-output rule to say nothing), and `get_roster` carries the detail plus a
+single headline on any player Sleeper has a status for. The reader never has to
+know to ask — which was the complaint that produced the tool.
+
+### Caching the news feed — and WHY A TOOL beats "let the model search"
+
+`mcp/news.js`, **10 minutes** (`NEWS_STALE_MINUTES` governs the warning, not
+the cache): shorter than the ~30-minute publish interval, so the server never
+sits on an edition longer than the pipeline takes to make the next one.
+
+A chat client can search the open web, and the feed is a public
+`raw.githubusercontent.com` URL it could fetch outright. Three things still
+make the tool the right primary source, and **one thing genuinely favours
+search** — which is why the answer is a handoff rather than a choice:
+
+1. **The join is already done, server-side, on purpose** (see the two DJ Moores
+   above). A model matching a headline to a roster gets one of them wrong
+   eventually.
+2. **It arrives unasked.** Search fires only when the model decides to search;
+   news attached to a flagged player inside a lineup answer reaches a reader who
+   did not know to ask.
+3. **Provenance.** Every item carries a source and a publish time, and the feed
+   carries its own age. A search result carries neither.
+4. **AND WHERE IT LOSES:** the feed publishes twice an hour through a CDN that
+   caches ~5 minutes, so it can trail a wire report by ~35 minutes — precisely
+   when a late inactive lands. **`staleForKickoff` marks that condition and the
+   tools print an explicit instruction to confirm against a live source.** A
+   tool that knows its own blind spot is more useful than one silently behind.
+
+Context economy is the quiet fourth reason: the raw feed is 480 items / 141KB,
+and filtered to a roster it is ~2KB.
+
+### Caching the live box score — a FIFTH TTL, and the only SHORT one
+
+`mcp/liveScores.js`, **5 minutes** (`DYNASTYEDGE_LIVE_TTL_MS`). Every TTL
+before it argues for caching *longer* than instinct suggests; this one argues
+the other way, and the argument is not symmetry:
+
+- The snapshot (15 min) changes on an **event**. Projections (60 min) change on
+  a **0.06%-per-10-hours drip**. Season matchups (60 min) change **once a
+  week**. A settled transaction bucket is **frozen**.
+- A live box score changes **every few plays for three hours on a Sunday**, and
+  it is the number that decides whether a slot is still a decision or already a
+  result.
+
+**Not reused from `season.js`**, whose TTL argument is the precise opposite:
+it is long *because* the odds model discards a partially-played week, so its
+output moves only when a whole week lands. Borrowing that cache would mean
+reading a 60-minute-old box score to decide whether a game has finished.
+
+**Strictly best-effort, and the degradation is asymmetric in the right
+direction:** the **locks come from the schedule**, so without live scores the
+set of moves offered is unchanged — only the banked figure degrades to a
+projection, and a note says so. A missing box score can never restore an
+impossible move.
+
 ### Caching the rest of the season — a THIRD TTL, and its own argument
 
 `mcp/season.js` owns every regular-season week's matchups (weeks 1 …
@@ -1475,7 +1585,10 @@ them made a real MCP client reject the entire response with *"must NOT have
 additional properties"*. Lint, **630 tests and a clean build all passed it** —
 the tests call `buildTradeAnswer` directly and never cross the wire. Only
 driving the real transport found it, which is exactly why "verify live" is a
-gate and not a formality. A new source must be added to that schema.
+gate and not a formality. A new source must be added to that schema. Phase 2c
+added two more — `liveScores` and `news` — and declared both; the trap is
+recorded twice now because it is the single easiest way to ship a response no
+client will accept.
 
 ### Prerequisite refactors this shipped with
 
@@ -1534,7 +1647,10 @@ contract `LineupOptimizer` honours.
 `values-history.json`, `trade-values.json` and `rookie-intel.json` are
 published from *this* repo's branches. A second league gets working rosters,
 values, trades, lineups and odds — but no news, sparklines or rookie research.
-No tool reads them yet; the ones that will must degrade cleanly and say so.
+**`news.json` is now read** (by `get_player_news`, `lineup_advice` and
+`get_roster` — see `mcp/news.js`), and it degrades exactly as the contract
+demands: `available: false` with a note, never an error and never an empty
+result dressed up as "there is no news". The other three are still unread.
 
 **"Who won our league in 2023?" is still unanswerable.** It needs
 `/league/{id}/winners_bracket`, an endpoint this app has never called
@@ -2379,7 +2495,8 @@ win window); Season Review remains available on its own tab.*
 |----------------------------|--------------------------------------------------------------------------------------------------|
 |Weekly point projections    |Sleeper `/projections/nfl/regular/{year}/{week}`                                                  |
 |Injury / availability status|Sleeper player data (injury_status field)                                                         |
-|Bye weeks                   |Sleeper `/schedule/nfl/regular/{year}` (off `/v1` — `SLEEPER_ROOT`; fields `home`/`away`)          |
+|Bye weeks **and game locks** |Sleeper `/schedule/nfl/regular/{year}` (off `/v1` — `SLEEPER_ROOT`; fields `home`/`away`, **plus `status`** — see Game locks)|
+|Points already scored        |`players_points` on `/league/{id}/matchups/{week}` — already fetched by `useSleeper`, so no extra request|
 |Matchup quality             |Sleeper `/stats/nfl/regular/{year}/{week}` for points, joined to the player DB (position + team) and the schedule (opponent) — those stats carry no `pos`/`opp`/`tm`|
 |Dynasty value (secondary)   |FantasyCalc (already cached)                                                                      |
 
@@ -2409,6 +2526,65 @@ to the headline** ("points sitting on your bench"), because shuffling a player
 between slots changes no total. `tests/lineupMoves.test.mjs` pins that
 invariant, both original bugs, and the swap algebra.
 
+#### Game locks — the difference between "best lineup" and "best lineup you can still reach"
+
+**Sleeper seals a player's slot the moment his NFL game kicks off.** The engine
+did not know that, and the failure was not cosmetic. Measured live on
+2026-09-20 (Week 2, Sunday lunchtime), it told the owner:
+
+> `[MUST FIX] SIT DJ Moore → START TreVeyon Henderson · +8.5` · "DJ Moore is
+> listed Out and will likely score 0" · **8.4 points sitting on your bench**
+
+Moore's game (DET @ BUF) had finished on **Thursday**. Three of those claims
+were false at once: he could not be benched, he had not scored 0 — he had
+banked **−0.1** before leaving with an AC joint sprain — and the 8.5 points
+were reported as recoverable when nothing could recover them. The schedule
+payload had carried `status: "complete"` for that game the whole time.
+
+So the question the engine answers narrows, and the narrower question is the
+better one:
+
+- **`parseLockedTeams`** (`utils/projections.js`) reads the `status` field.
+  `getAvailability` gains **`locked`**, which is **orthogonal to `blocked`**:
+  `blocked` is a forward-looking claim ("he will score 0, take him out"),
+  `locked` is a claim about the transaction ("you cannot take him out at all").
+  Moore was both, and conflating them is what produced the advice.
+- **Locked starters are PINNED to their slots** (`selectOptimalStarters`'s new
+  `pinned` option) at their real score. **Locked bench players leave the
+  eligible pool** — you cannot start a player whose game is over. Neither can
+  produce a move.
+- **The Σ-gains invariant survives by construction**: a locked contribution
+  appears identically in the current total and the optimal total, so it cancels
+  out of the difference. Pinned by test.
+- **A played game is FACT, and it outranks both the projection and the
+  blocked-scores-0 rule.** Actual points come from `players_points` on the
+  current week's matchups — which the app **already fetches** (`useSleeper`),
+  so the phone pays nothing; `useLeague` exposes them as `weeklyPlayerPoints`.
+  A locked player with no live score falls back to his **projection, never
+  0** — "he will score 0" is a claim about the future and his game is not in
+  the future, so guessing 0 re-manufactures the same overstatement.
+- **An empty locked set means "locks unknown", never "everything locked"** —
+  the same discipline an empty `playingTeams` keeps about byes. An absent or
+  unrecognised `status` does not lock: over-locking would pin a player you can
+  still move and hide a real move, while under-locking merely degrades to the
+  behaviour that shipped before locks existed.
+- **The UI drops the swap handle on a locked row**, refuses to arm or target
+  it, and **replaces the matchup pill with a `FINAL` / `LOCKED` badge** — a
+  matchup rating forecasts the defense a player is due to face, and after
+  kickoff that is not a stale number but a meaningless one. That is also a
+  layout fix: carrying both squeezed the name column hard enough to break
+  "DJ Moore" into **seven lines** at 390px. **`--overflow` cannot see this** —
+  the name *wraps*, it does not clip, so the truncation instrument reports
+  nothing. Look at the screenshot.
+- The moves card reads **"Nothing left to change · 6 slots locked · 9.2
+  banked"** rather than "Lineup is optimal", which would claim credit for a
+  lineup the rules froze, and its figure is labelled **Live total** rather than
+  **Projected** once any slot is sealed.
+
+Measured on the live league, same roster, minutes apart: **`128.5 → 136.9,
+8.4 left on bench, 1 must-fix`** became **`76.4 total, 0.0 left, 0 must-fix,
+6 slots locked, 9.1 banked`**.
+
 Two contracts worth stating:
 
 - **A blocked player is dropped from the eligible pool outright**, not handed a
@@ -2421,7 +2597,10 @@ Two contracts worth stating:
   inflate the total and hide the exact gap this tool exists to surface.
 
 **`getAvailability` (`utils/projections.js`) is the one availability verdict** —
-`{ blocked, status, label, short }` for bye / IR / Out / Questionable / ok.
+`{ blocked, status, label, short, locked }` for bye / IR / Out / Questionable /
+ok, taking `(player, playerStatuses, playingTeams, lockedTeams)`. `locked` is
+orthogonal to `blocked` (see Game locks); omitting the fourth argument means
+"locks unknown" and reproduces the pre-lock behaviour exactly.
 `label` is the full word for prose ("is listed Questionable"); `short` is the
 fantasy shorthand for a row chip, because a full-width badge at 390px squeezes
 the player's own name to "Rach…".
@@ -5072,6 +5251,8 @@ dynastyedge/
 │   ├── store.js                ← THE cache backend boundary + the ONE freshness policy (loadSource). Backend is a parameter (memory for stdio, KV for HTTP); the policy is shared. Owns the two traps: a store-level TTL would break the stale-fallback contract, and the 1.20MB player DB must be gzipped into KV
 │   ├── transactions.js         ← the season-wide transaction feed behind analyze_trade's partner-activity read. A FOURTH TTL and the only SPLIT one: a settled bucket is frozen, the live week rides the SNAPSHOT's 15 minutes because its events are the ones that make a roster wrong. Reads weeks 1..current only — a later bucket is empty by construction (measured: 71/6/0/0/0), so 2 requests where the phone spends 18
 │   ├── history.js              ← the league-history walk, DELIBERATELY narrow: leagues + rosters + drafts + picks, no transactions and no users, so 14 requests against useLeagueHistory's ~169. Feeds ONLY buildDraftGrades — pairing it with buildManagerProfiles would report an empty ledger as "never traded" when the truth is "we did not ask"
+│   ├── liveScores.js           ← this week's box score. A FIFTH TTL and the only SHORT one (5 min): every other layer here caches LONGER than instinct, because their inputs change on an event, a drip, or once a week — a live score changes every few plays. NOT season.js's cache, whose long TTL exists BECAUSE the odds model discards a partially-played week
+│   ├── news.js                 ← the player-news feed + the matcher. `playerIds` only, NO headline-name fallback: the pipeline already name-matched server-side, and the live player DB holds TWO "DJ Moore"s. Carries its own age so a tool can say when to confirm against a live source instead of being silently 30 minutes behind
 │   ├── season.js               ← every regular-season week's matchups, on a THIRD TTL with its own argument (a completed week is frozen forever; the model discards a partially-played one, so the odds move once a WEEK). Owns the state that must never happen: 14 empty weeks and a season that hasn't started are identical, so a total outage is never reported as a preseason
 │   ├── weekly.js               ← projections + the schedule, on their OWN ~60-min TTL (league data changes on an EVENT, projections on a 0.06%/10h DRIP). Owns the two silent traps: the schedule is off /v1 (SLEEPER_ROOT) and its fields are home/away
 │   ├── teams.js                ← resolveTeam, shared by get_roster / analyze_trade / lineup_advice so "which team did they mean?" has one definition. Reads display_name — Sleeper's /users returns NO username
@@ -5079,13 +5260,14 @@ dynastyedge/
 │   ├── config.js               ← league / identity / TTLs, env-first: leagueId and rosterId are parameters, not constants
 │   ├── register.mjs            ← registers loader.mjs (deliberate copy of the test suite's — a runnable server must not depend on .claude/skills/)
 │   ├── loader.mjs              ← the extensionless-import resolver hook
-│   └── tools/                  ← all six are orchestration only, in the shape of TradeAnalyzer.jsx
+│   └── tools/                  ← all EIGHT are orchestration only, in the shape of TradeAnalyzer.jsx
 │       ├── getRoster.js            ← #1 "what's on my team?"
 │       ├── findSellHigh.js         ← #2 "who's my best sell-high?" — names a CONCRETE partner and return
 │       ├── recommendFreeAgents.js  ← #3 "who should I pick up?" — dynasty value AND this week's projection; a defense is never a general pickup
 │       ├── resolveAssets.js        ← #4 (support) "which Bijan?" — an ambiguous name resolves to NOTHING
 │       ├── analyzeTrade.js         ← #5 "grade this trade" — IDS ONLY; a free-text name is rejected, never guessed
-│       └── lineupAdvice.js         ← #6 "what do I start?" — IN-SEASON ONLY; a must-fix carries no confidence
+│       ├── lineupAdvice.js         ← #6 "what do I start?" — IN-SEASON ONLY; a must-fix carries no confidence; a LOCKED slot is never a move
+│       └── playerNews.js           ← #8 "what's the latest on him?" — injury body part + notes + the feed; an ambiguous name is refused, and silence is a gap in coverage, never good health
 ├── public/
 │   └── favicon.ico
 ├── src/
@@ -5271,7 +5453,7 @@ dynastyedge/
 │   ├── tradeContext.test.mjs        ← the five negotiating signals (fair band, scarcity, roster space, weekly impact, partner activity) — and the contract that NONE of them may move the verdict
 │   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
 │   ├── lineupBuild.test.mjs         ← slot-fill order (singles → FLEX → SFLX), IR/taxi excluded, who-starts identity
-│   ├── lineupMoves.test.mjs         ← start/sit engine: Σ gains = headline invariant, the two superseded per-slot bugs (double-count, missed cascade), hard-block exclusion, empty DEF slot, swap algebra, confidence lookup + coin-flip demotion (demoted moves still sum to the headline)
+│   ├── lineupMoves.test.mjs         ← start/sit engine: GAME LOCKS (a sealed slot never yields a move however much better the bench is, a locked bench player is never started, a played game's ACTUAL score outranks both the projection and the blocked-scores-0 rule, a locked player with no live score falls back to his projection and NEVER to 0, the Σ-gains invariant survives locks, and an empty locked set means "unknown" not "everything"); Σ gains = headline invariant, the two superseded per-slot bugs (double-count, missed cascade), hard-block exclusion, empty DEF slot, swap algebra, confidence lookup + coin-flip demotion (demoted moves still sum to the headline)
 │   ├── freeAgents.test.mjs          ← waiver options: the DEF blind spot (FantasyCalc must not gate the list), TEAM_* offense-totals guard, rule-7 `—` for unranked, rostered exclusion, and the one-defense rule (a skill slot never returns a DEF, however it projects)
 │   ├── lineupHistory.test.mjs       ← optimal-lineup slot-fill order (singles → FLEX → SFLX)
 │   ├── matchupWeeks.test.mjs        ← mocked-fetch: one fetch/week across both consumers, all-fail rejection
@@ -5281,7 +5463,7 @@ dynastyedge/
 │   ├── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
 │   ├── leagueState.test.mjs         ← buildLeagueState: string-id normalization across mixed-shape payloads + the '0' sentinel (rule 8), unranked players kept at value 0 and the skip-then-self-heal path (rule 7), a pick at its ORIGINAL owner's slot vs round medians (Feature 1), FAAB read from settings, identity as runtime state, input immutability
 │   ├── mcpOauth.test.mjs            ← the auth layer, written as ATTACKS: a foreign redirect_uri refused without redirecting, lookalike hosts (evil.claude.ai, claude.ai.evil.com) refused, PKCE `plain` refused, a stolen code useless without the verifier, a token for another audience refused, the allowlist re-checked at every request, and the three token kinds never interchangeable
-│   ├── mcpHttp.test.mjs             ← the HTTP transport + its gate: a throwing authenticator is never authorized, EVERY post is authenticated (not initialize-only), 401 advertises RFC 9728 discovery, no session id is ever minted, GET leaks no league data, and the same six tools as stdio
+│   ├── mcpHttp.test.mjs             ← the HTTP transport + its gate: a throwing authenticator is never authorized, EVERY post is authenticated (not initialize-only), 401 advertises RFC 9728 discovery, no session id is ever minted, GET leaks no league data, and the same tools as stdio — asserted BY NAME, so a tool added to createServer and not to the transport fails here instead of shipping a fork
 │   ├── mcpStore.test.mjs            ← the cache backend: fetchedAt round-tripping byte-for-byte (the provenance contract), gzip on a player-DB-shaped payload, the stale-on-failure fallback AND its cold-failure throw, THE TRAP (an evicting store loses the fallback that a keeping store answers with), and a broken store degrading to slower-never-broken on both read and write
 │   ├── mcpLimit.test.mjs            ← the rate discipline fetchJSON does NOT have: concurrency cap, a rejecting job freeing its slot, 429/503 retried with bounded backoff, and a 404 never retried (it is an answer, not a failure)
 │   ├── mcpSnapshot.test.mjs         ← mocked-fetch: the 15-min TTL, values + player DB cached ACROSS leagues (a second league must not re-download 5-8MB), per-source as-of stamps with oldestSourceAt as the STALEST input, serve-cache-and-label-stale on failure vs a cold throw, and the FantasyCalc shape guards
@@ -5295,6 +5477,7 @@ dynastyedge/
 │   ├── mcpHistory.test.mjs          ← the narrow walk: zero transaction URLs and zero user URLs (the ~169-vs-14 claim, proved rather than asserted), '0' as the chain sentinel, a broken hop ending the chain rather than failing it, and a failed drafts LIST reported as unavailable instead of as "this league has never drafted"
 │   ├── mcpSeason.test.mjs           ← the rest-of-season layer: THE contract that a total fetch failure is never reported as a preseason (the two shapes are identical on the wire), one bad bucket degrading alone, the week range read from league settings, per-week + per-league cache keys, and the TTL pinned as its OWN literal so re-deriving weekly.js's can never silently move it
 │   ├── mcpPlayoffOdds.test.mjs      ← get_playoff_odds: the preseason returning a NULL percentage and a labelled PREVIEW (never 0, which reads as eliminated), a POSTED-but-unplayed schedule being ACTIVE rather than preseason, unavailable ≠ preseason, Σ odds === the field size, seedDist computed but not returned, and the stance being getDeadlineVerdict's so a trade grade cannot disagree
+│   ├── mcpNews.test.mjs             ← the news layer + tool 8: `playerIds` as THE join with NO headline-name fallback (the two-DJ-Moores collision, pinned from both sides), athleteIds as the second hop, a roundup FLAGGED as one, Class B degradation stated as a missing source rather than as "no news", and the stale-feed warning near kickoff
 │   ├── mcpLineupAdvice.test.mjs     ← lineup_advice: the offseason returning no summary and no zeros, per-move gains summing EXACTLY to the headline, a must-fix carrying NO confidence, confidencePct being a percentage not a fraction (the ×100 bug that printed "6530%"), and a blocked starter contributing 0
 │   └── helpers/mcpFixtures.mjs      ← ONE synthetic league shared by the six MCP tool suites — four tools read the same object, and four divergent copies is the drift prerequisite C removed from src/
 ├── index.html
@@ -5307,11 +5490,11 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 596 / # pass 591
+honestly:** instead of "cannot find module" it prints `# tests 626 / # pass 621
 / # fail 5`, which reads like a code regression. A file that cannot load never
-runs its tests, so the count silently drops from **639** to 596.
+runs its tests, so the count silently drops from **669** to 626.
 `npm run build` in the same state fails with `sh: 1: vite: not found`.
-**If the test count isn't 639, run `npm ci` before debugging anything.**
+**If the test count isn't 669, run `npm ci` before debugging anything.**
 
 The pair was re-measured 2026-09-19 (MCP phase 1b) by renaming `node_modules`
 aside, and it had drifted seven times before that: 178/130, 177/115, 219/136,
@@ -5333,6 +5516,12 @@ those four raise only the first number. The 2026-09-07 trade-engine work added
 the broken-state count stayed at 152; the 2026-09-12 news-retention work moved
 both, because `newsRetention.test.mjs` imports only a zero-dependency pure
 module. **Re-measure both whenever the suite grows.**
+
+Phase 2c — game locks, live scores and the news layer — moved both by the same
+30 (639/596 → **669/626**), the gap holding at 43. That equality is the check
+that matters here: it proves `mcp/news.js`, `mcp/liveScores.js` and
+`mcp/tools/playerNews.js` reach neither React nor `zod`, which a tool reading a
+new feed could easily have done.
 
 The FAAB normalization (2026-09-20) moved both by the same 9 (630/587 →
 **639/596**), the gap holding at 43 — `managerAnalysis.test.mjs` imports one
@@ -5357,7 +5546,7 @@ regression to the next session, which is the exact confusion the block exists
 to prevent, so re-measure rather than incrementing what is written.
 
 The useful invariant survived the drift and is worth preferring to either
-count: **the gap between them is 43 and has not moved.** 639 − 596 = 43,
+count: **the gap between them is 43 and has not moved.** 669 − 626 = 43, 639 − 596 = 43,
 630 − 587 = 43, 589 − 546 = 43, and 538 − 495 = 43 before that. That is the number of tests living in the five files
 that cannot load, so an unchanged gap means every test added since loads with
 no `node_modules` at all — which is what the equal-delta checks below were
