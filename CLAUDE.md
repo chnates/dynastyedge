@@ -90,6 +90,29 @@ assume 100. Historical bids are on the old scale, so any cross-season bid
 comparison must normalize to **percent of budget**
 (see `docs/analysis/faab-bid-corpus-2026-08.md`).
 
+**IT ALSO RESETS TWICE A LEAGUE YEAR — offseason, then again at the start of
+the regular season, and anything unspent in the offseason is LOST** (owner,
+2026-09-20). So one Sleeper season carries **two** budgets, and two things
+follow that are easy to get backwards:
+
+- **`roster.settings.waiver_budget_used` tracks only the CURRENT period.** That
+  is why `leagueState.js`'s `faabRemaining` / `faabSpent` are correct as
+  written, and must never be "reconciled" against a transaction-log total.
+  Live 2026-09-20: docj11 had spent **$703** in the offseason and his
+  `waiver_budget_used` read **$0** — both numbers true, answering different
+  questions.
+- **A season's transaction log routinely exceeds one budget**, because it spans
+  both periods. Measured across 2023–26: **six manager-seasons exceed one
+  budget and none has ever exceeded two** — which is the signature of exactly
+  two resets. chnates 2025 spent exactly $100 in the offseason and a fresh $30
+  in-season. Anything that caps a season at one budget is discarding real
+  spend.
+
+A *single bid* needs no period split: both periods carry the same
+`waiver_budget` and Sleeper exposes no separate offseason figure, so
+`bid ÷ waiver_budget` is exact either side of the reset. A *total* is therefore
+a **count of budgets committed**, never a percent of an allocation.
+
 **Identity is runtime state, not a constant.** The signed-in roster comes from
 the `useIdentity` store (set on the login screen — see Feature 18), so
 `MY_ROSTER_ID` is no longer the source of truth. Every "is this me?" check
@@ -2892,11 +2915,19 @@ there and profiles cover fewer seasons.
 - **Tendencies:** pick accumulator/shipper, buys youth/veterans (avg age of
   players acquired vs given), position chasing, FAAB aggression vs league
   average — rendered as chips.
-- **FAAB efficiency — measured in PERCENT OF BUDGET, never in raw dollars**
-  (fixed 2026-09-20). `budgetPct` (spend as a share of each season's own
-  budget), `valuePerBudget` (today's value of waiver pickups per one **full
-  budget** spent), `avgBidPct`, claims, FA move count. Every bid is divided by
-  **its own season's `waiver_budget`** before it is aggregated.
+- **FAAB efficiency — measured in BUDGETS, never in raw dollars**
+  (fixed 2026-09-20). `budgetsCommitted` (a **multiple**: 1.73 = one and three
+  quarter budgets), `valuePerBudget` (today's value of waiver pickups per one
+  **full budget** committed), `avgBidPct` (a **percent** — a single bid really
+  is a share of the budget it drew against), claims, FA move count. Every bid
+  is divided by **its own season's `waiver_budget`** before it is aggregated.
+  - **The total is a COUNT, not a percent, because the budget resets twice a
+    league year** (see League Context). "173%" invites *"of what?"*, and with
+    two resets a year across four seasons the honest denominator is ~8 budgets,
+    not one — a number whose unit misreads is the exact bug this fix exists to
+    remove. The per-bid percent is untouched: both periods carry the same
+    `waiver_budget`, so no period split is needed and the bidder tendencies
+    compare like with like.
   - **Why a dollar is not a unit here.** This league's budget went **$100
     (2023–25) → $1000 (2026)**, so a cross-season dollar total is a number in
     no unit at all. The bug was live, not theoretical: measured against the
@@ -2912,19 +2943,20 @@ there and profiles cover fewer seasons.
     are the same number and the fix **restates no pre-2026 history** — verified
     live: all four managers with no 2026 spend scored byte-identically either
     way. Only 2026's dollars stop being counted at 10×.
-  - The `budgetPct >= 20` coaching gate now means what it always said it meant
-    — "spent ≥20% of a budget". On raw dollars it tripped at **2%** of 2026's
-    $1000.
+  - The `budgetsCommitted >= 0.2` coaching gate now means what it always said
+    it meant — "committed ≥20% of a budget". On raw dollars it tripped at **2%**
+    of 2026's $1000.
   - **No raw-dollar field is carried out of `buildFaabStats`**, deliberately
     (`dollars`, `avgBid` and `valuePer100` are gone, not deprecated). Leaving a
     mixed-scale total on the object is what put one on screen for three
-    seasons; a test pins their absence.
+    seasons; a test pins their absence, and pins that no `budgetPct` comes back
+    either.
   - A season with no `waiver_budget` falls back to **100**, matching
     `leagueState.js`'s own `?? 100`. Absence of a budget is not evidence of a
     scale.
-  - The UI reads **"Budget Spent · 173%"** and **"Value / Full Budget"**. Over
-    100% is normal and correct — it is a multi-season total, and the sheet
-    header states the seasons covered directly above it.
+  - The UI reads **"Budgets Used · 1.7×"** and **"Value / Full Budget"**. Over
+    1× is normal and correct — it is a multi-season total across two budgets a
+    year, and the sheet header states the seasons covered directly above it.
   - See `docs/analysis/faab-bid-corpus-2026-08.md`, which works in percent of
     budget throughout for exactly this reason.
 - **Rookie draft grades:** every rookie pick scored as slot vs the player's
@@ -5275,11 +5307,11 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 594 / # pass 589
+honestly:** instead of "cannot find module" it prints `# tests 596 / # pass 591
 / # fail 5`, which reads like a code regression. A file that cannot load never
-runs its tests, so the count silently drops from **637** to 594.
+runs its tests, so the count silently drops from **639** to 596.
 `npm run build` in the same state fails with `sh: 1: vite: not found`.
-**If the test count isn't 637, run `npm ci` before debugging anything.**
+**If the test count isn't 639, run `npm ci` before debugging anything.**
 
 The pair was re-measured 2026-09-19 (MCP phase 1b) by renaming `node_modules`
 aside, and it had drifted seven times before that: 178/130, 177/115, 219/136,
@@ -5302,8 +5334,8 @@ the broken-state count stayed at 152; the 2026-09-12 news-retention work moved
 both, because `newsRetention.test.mjs` imports only a zero-dependency pure
 module. **Re-measure both whenever the suite grows.**
 
-The FAAB normalization (2026-09-20) moved both by the same 7 (630/587 →
-**637/594**), the gap holding at 43 — `managerAnalysis.test.mjs` imports one
+The FAAB normalization (2026-09-20) moved both by the same 9 (630/587 →
+**639/596**), the gap holding at 43 — `managerAnalysis.test.mjs` imports one
 `src/utils` module and nothing else, so its seven new FAAB tests run with no
 `node_modules` at all.
 
@@ -5325,7 +5357,7 @@ regression to the next session, which is the exact confusion the block exists
 to prevent, so re-measure rather than incrementing what is written.
 
 The useful invariant survived the drift and is worth preferring to either
-count: **the gap between them is 43 and has not moved.** 637 − 594 = 43,
+count: **the gap between them is 43 and has not moved.** 639 − 596 = 43,
 630 − 587 = 43, 589 − 546 = 43, and 538 − 495 = 43 before that. That is the number of tests living in the five files
 that cannot load, so an unchanged gap means every test added since loads with
 no `node_modules` at all — which is what the equal-delta checks below were

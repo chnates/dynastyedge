@@ -817,8 +817,12 @@ curl -s 'https://api.sleeper.app/v1/league/1313933520715907072/drafts' | grep -c
 completed bid-bearing claims on the new scale (top bid **$695**), which is the
 live history the fix was waiting on. `buildFaabStats` now divides every bid by
 **its own season's `waiver_budget`** before aggregating, and carries out
-`budgetPct` / `avgBidPct` / `valuePerBudget` — no raw-dollar field survives, so
-the next consumer cannot render a mixed-scale total. CLAUDE.md Feature 11
+`budgetsCommitted` / `avgBidPct` / `valuePerBudget` — no raw-dollar field
+survives, so the next consumer cannot render a mixed-scale total. The total is
+a **count of budgets**, not a percent, because the budget **resets twice a
+league year** (offseason, then at the season start, unspent money lost) —
+confirmed by the owner and measured: six manager-seasons exceed one budget,
+none has ever exceeded two. CLAUDE.md Feature 11
 carries the detail and the live measurement.
 
 **What the bug was actually costing, measured on the live league** (four
