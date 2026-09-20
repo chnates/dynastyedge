@@ -23,23 +23,37 @@
 //
 // ── WHAT IS NOT WIRED, AND WHY ────────────────────────────────────────────
 //
-// analyzeTrade takes eight optional signals. Four are computable from the
-// snapshot alone and ARE passed: opponentTrajectoryRead, curves,
-// replacementLevels, rosterLimits. Three need a fetch this tool does not
-// make, and are passed null, which is their documented degraded state — each
-// block simply does not render:
+// analyzeTrade takes eight optional signals. Six are wired.
 //
-//   myPlayoffPct     needs every regular-season week's matchups (usePlayoffOdds).
-//                    Layer 3 falls back to the win-window TIER, and the
-//                    response says which basis actually scored it, because
-//                    `windowBasis` is exactly the field that exists to stop a
-//                    reader assuming the wrong one.
+// FOUR come free with the snapshot: opponentTrajectoryRead, curves,
+// replacementLevels, rosterLimits. weeklyProjections rides along in season,
+// because recommend_free_agents already fetches it.
+//
+// myPlayoffPct IS NOW WIRED, and it is the one that changes a SCORE.
+// ---------------------------------------------------------------------
+// Layer 3 used to be scored on the win-window TIER here, with the response
+// saying so via `windowBasis: 'tier'`. That was honest but weak, and the
+// measurement says how weak: the tier is a RANKING OF ACCUMULATED ASSETS
+// (bench and picks included) and it tracks the actual STARTING LINEUP — the
+// thing this layer asks about — at Spearman 0.721, where live playoff odds
+// track it at 0.988. The tier also has no `Middle` branch at all, so 40% of
+// this league took no lean whatsoever and scored a flat 0.
+//
+// So in season this tool now runs the same rest-of-season simulation the
+// app's League › Playoffs page runs, off the same `buildPlayoffOutlook`, and
+// `windowBasis` reports 'odds'. The fallback is unchanged and still exact:
+// offseason, or a schedule that would not load, and Layer 3 scores on the
+// tier and says 'tier'. The field exists precisely so a reader never has to
+// assume which one ran.
+//
+// It costs ~14 requests, so it is fetched ONLY in season (the offseason has
+// no schedule to simulate and would be fourteen wasted calls) and its own
+// 60-minute TTL means a conversation pays for it once. See mcp/season.js.
+//
+// STILL NOT WIRED, and the notes still say so:
 //   myDraftGrade     needs the multi-season league-history walk.
 //   partnerActivity  needs the season-wide transaction feed.
-//
-// weeklyProjections IS passed when the caller is in-season and the projections
-// loaded — it is the one of the three that phase 1b already fetches for
-// recommend_free_agents, so it costs nothing extra here.
+// Each removes context, never a number.
 
 import {
   analyzeTrade as runAnalyzeTrade,
@@ -117,7 +131,7 @@ function resolveSide(ids, roster, sideLabel) {
   return errors.length ? { error: errors.join(' ') } : { assets }
 }
 
-export function buildTradeAnswer(snapshot, weekly, { give, get, partner, myRosterId } = {}) {
+export function buildTradeAnswer(snapshot, weekly, { give, get, partner, myRosterId, myPlayoffPct = null } = {}) {
   const { league, values } = snapshot
   if (!league) throw new Error('League state unavailable')
 
@@ -163,9 +177,10 @@ export function buildTradeAnswer(snapshot, weekly, { give, get, partner, myRoste
     : null
 
   const analysis = runAnalyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, league.allRosters, {
-    // Null: needs the full matchup-week fetch. Layer 3 falls back to the tier
-    // and reports `windowBasis: 'tier'` — see the header.
-    myPlayoffPct: null,
+    // Live rest-of-season odds when they exist; null in the offseason or when
+    // the schedule did not load, which is the exact tier fallback this tool
+    // shipped with. `windowBasis` in the response names whichever ran.
+    myPlayoffPct,
     opponentTrajectoryRead,
     curves: ageCurves?.curves ?? null,
     myDraftGrade: null,      // needs the league-history walk
@@ -250,8 +265,9 @@ export function buildTradeAnswer(snapshot, weekly, { give, get, partner, myRoste
     },
     // Layer 3.
     winWindow: {
-      // Names which basis actually scored it. In this tool it is always
-      // 'tier' (no playoff odds fetched) — and saying so is the point.
+      // Names which basis ACTUALLY scored it — 'odds' in season, 'tier' in
+      // the offseason or when the schedule would not load. Saying which is
+      // the point: a reader must never have to assume the stronger one ran.
       basis: analysis.windowBasis ?? null,
       note: analysis.windowNote ?? null,
       score: analysis.windowScore ?? null,
@@ -280,7 +296,7 @@ export function buildTradeAnswer(snapshot, weekly, { give, get, partner, myRoste
     // buildTradePitch returns { text, lines, bullets }; `text` is the copyable
     // message and the bullets are the reasons it is built from.
     pitch: pitch ? { text: pitch.text, bullets: pitch.bullets ?? [] } : null,
-    notes: buildNotes({ snapshot, weekly, bothSides, giveAssets, getAssets }),
+    notes: buildNotes({ snapshot, weekly, bothSides, giveAssets, getAssets, windowBasis: analysis.windowBasis }),
   }
 }
 
@@ -305,7 +321,7 @@ function assetRow(a) {
   }
 }
 
-function buildNotes({ snapshot, weekly, bothSides, giveAssets, getAssets }) {
+function buildNotes({ snapshot, weekly, bothSides, giveAssets, getAssets, windowBasis }) {
   const notes = []
   if (snapshot.asOf.stale) {
     notes.push('At least one source failed to refresh, so this is cached data — see asOf.sources.')
@@ -323,12 +339,24 @@ function buildNotes({ snapshot, weekly, bothSides, giveAssets, getAssets }) {
       'and count 0 toward the totals. That is "unpriced", not "worthless" — the value read is weaker than usual here.'
     )
   }
-  // The honest statement of what did NOT feed the grade.
-  notes.push(
-    'Win window was scored on the win-window TIER, not live playoff odds — this server does not fetch the ' +
-    'rest-of-season simulation. In season the app scores this layer on odds, which track the starting lineup ' +
-    'far more closely, so the window read here is the weaker of the two.'
-  )
+  // What actually scored Layer 3 — never a fixed sentence, because the answer
+  // now depends on whether the simulation ran.
+  if (windowBasis === 'odds') {
+    notes.push(
+      'Win window was scored on LIVE playoff odds from the rest-of-season simulation — the stronger of the ' +
+      'two bases (odds track the starting lineup at Spearman 0.988 against the win-window tier\'s 0.721). ' +
+      'Call get_playoff_odds for the numbers behind it.'
+    )
+  } else {
+    notes.push(
+      'Win window was scored on the win-window TIER, not live playoff odds — ' +
+      (snapshot.isOffseason
+        ? 'it is the offseason, so there is no rest-of-season simulation to run.'
+        : 'the regular-season schedule did not load, so the simulation could not run.') +
+      ' The tier is the weaker basis: it ranks accumulated assets, bench and picks included, and tracks the ' +
+      'starting lineup far less closely than odds do.'
+    )
+  }
   if (!weekly?.available) {
     notes.push(
       snapshot.isOffseason

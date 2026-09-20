@@ -746,6 +746,98 @@ var init_weekly = __esm({
   }
 });
 
+// mcp/season.js
+function regularSeasonWeeks(leagueInfo) {
+  const start = Number(leagueInfo?.settings?.playoff_week_start) || DEFAULT_PLAYOFF_WEEK_START;
+  return Math.max(1, start - 1);
+}
+function playoffFieldSize(leagueInfo) {
+  return Number(leagueInfo?.settings?.playoff_teams) || DEFAULT_PLAYOFF_TEAMS;
+}
+async function getSeasonWeeks({
+  leagueId,
+  leagueInfo,
+  ttlMs = DEFAULT_SEASON_TTL_MS,
+  force = false,
+  fetcher,
+  concurrency = 6,
+  store = defaultStore3
+} = {}) {
+  if (!leagueId) throw new Error("getSeasonWeeks requires a leagueId");
+  const lastWeek = regularSeasonWeeks(leagueInfo);
+  const playoffTeams = playoffFieldSize(leagueInfo);
+  const firstPlayoffWeek = lastWeek + 1;
+  const get = fetcher ?? createFetcher({ concurrency });
+  const ttl = force ? -1 : ttlMs;
+  const weeks = Array.from({ length: lastWeek }, (_, i) => i + 1);
+  const loaded = await Promise.all(weeks.map(
+    (w) => loadSource(
+      store,
+      matchupsKeyFor(leagueId, w),
+      ttl,
+      () => get(`${SLEEPER_BASE}/league/${leagueId}/matchups/${w}`, { label: `Sleeper matchups w${w}` })
+    ).catch((err) => ({ data: null, fetchedAt: null, stale: false, error: err.message }))
+  ));
+  const failedWeeks = weeks.filter((_, i) => !loaded[i].data);
+  const notes = [];
+  if (failedWeeks.length === lastWeek) {
+    return {
+      available: false,
+      reason: "unavailable",
+      perWeek: null,
+      lastWeek,
+      playoffTeams,
+      firstPlayoffWeek,
+      failedWeeks,
+      sources: { matchups: stampSource(loaded[0] ?? {}) },
+      notes: [
+        `None of this league's ${lastWeek} regular-season matchup weeks could be loaded (${loaded[0]?.error ?? "unknown error"}), so the rest-of-season simulation cannot run. This is a data failure, NOT a preseason \u2014 fourteen empty weeks look identical to a season that has not started, and reporting it as one would invent a confident answer out of an outage.`
+      ]
+    };
+  }
+  if (failedWeeks.length) {
+    notes.push(
+      `Week(s) ${failedWeeks.join(", ")} did not load, so those games are absent from the simulation. A missing week reads as "not yet played", which understates completed results and leaves its games out of the remaining schedule \u2014 the odds below are weaker than usual.`
+    );
+  }
+  const fetchedTimes = loaded.map((l) => l.fetchedAt).filter(Boolean);
+  const oldest = fetchedTimes.length ? Math.min(...fetchedTimes) : null;
+  return {
+    available: true,
+    reason: null,
+    perWeek: weeks.map((w, i) => ({
+      week: w,
+      entries: Array.isArray(loaded[i].data) ? loaded[i].data : []
+    })),
+    lastWeek,
+    playoffTeams,
+    firstPlayoffWeek,
+    failedWeeks,
+    sources: {
+      matchups: stampSource({
+        fetchedAt: oldest,
+        stale: loaded.some((l) => l.stale),
+        error: failedWeeks.length ? `${failedWeeks.length} of ${lastWeek} weeks failed` : null
+      })
+    },
+    notes
+  };
+}
+var DEFAULT_SEASON_TTL_MS, DEFAULT_PLAYOFF_WEEK_START, DEFAULT_PLAYOFF_TEAMS, matchupsKeyFor, defaultStore3;
+var init_season = __esm({
+  "mcp/season.js"() {
+    init_constants();
+    init_limit();
+    init_snapshot();
+    init_store();
+    DEFAULT_SEASON_TTL_MS = 60 * 60 * 1e3;
+    DEFAULT_PLAYOFF_WEEK_START = 15;
+    DEFAULT_PLAYOFF_TEAMS = 6;
+    matchupsKeyFor = (leagueId, week) => `matchups:${leagueId}_${week}`;
+    defaultStore3 = memoryStore();
+  }
+});
+
 // mcp/config.js
 function loadConfig(env = process.env) {
   const rosterEnv = env.DYNASTYEDGE_ROSTER_ID;
@@ -761,6 +853,7 @@ function loadConfig(env = process.env) {
     // projections change on a drip (6 of 9,419 entries moved in ten hours).
     // The full argument is in mcp/weekly.js's header.
     weeklyTtlMs: Number(env.DYNASTYEDGE_WEEKLY_TTL_MS) || DEFAULT_WEEKLY_TTL_MS,
+    seasonTtlMs: Number(env.DYNASTYEDGE_SEASON_TTL_MS) || DEFAULT_SEASON_TTL_MS,
     concurrency: Number(env.DYNASTYEDGE_CONCURRENCY) || 6,
     githubClientId: env.GITHUB_CLIENT_ID || DEFAULT_GITHUB_CLIENT_ID,
     // No default, deliberately. A server that starts without this would
@@ -776,6 +869,7 @@ var init_config = __esm({
   "mcp/config.js"() {
     init_constants();
     init_weekly();
+    init_season();
     DEFAULT_GITHUB_CLIENT_ID = "Ov23lipGgde1WRtguwMc";
     DEFAULT_ALLOWED_GITHUB_LOGIN = "chnates";
     DEFAULT_ORIGIN = "https://dynastyedge-mcp.vercel.app";
@@ -39641,6 +39735,260 @@ var init_lineupBuild = __esm({
   }
 });
 
+// src/utils/lineupHistory.js
+function computeOptimalPoints(playerIds, pointsMap, getPosition) {
+  const items = (playerIds ?? []).map((id) => ({ key: id, position: getPosition(id), metric: pointsMap?.[id] ?? 0 })).filter((it) => it.position);
+  return selectOptimalStarters(items).total;
+}
+var init_lineupHistory = __esm({
+  "src/utils/lineupHistory.js"() {
+    init_lineupBuild();
+  }
+});
+
+// src/utils/playoffOdds.js
+function mulberry32(seed) {
+  return function() {
+    seed |= 0;
+    seed = seed + 1831565813 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function normalSample(rng, mean, std) {
+  let u = 0;
+  let v = 0;
+  while (u === 0) u = rng();
+  while (v === 0) v = rng();
+  const z2 = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  return mean + z2 * std;
+}
+function teamStartingStrength(roster) {
+  const active = (roster.players ?? []).filter((p) => !p.isIR && !p.isTaxi);
+  const valueMap = {};
+  const posMap = {};
+  active.forEach((p) => {
+    valueMap[p.sleeperId] = p.value ?? 0;
+    posMap[p.sleeperId] = p.position;
+  });
+  return computeOptimalPoints(active.map((p) => p.sleeperId), valueMap, (id) => posMap[id]);
+}
+function buildScoringModel(allRosters, completedScores, strengths) {
+  strengths = strengths ?? allRosters.map(teamStartingStrength);
+  const meanStrength = strengths.reduce((s, v) => s + v, 0) / (strengths.length || 1);
+  const model = {};
+  allRosters.forEach((r, i) => {
+    const priorMean = meanStrength > 0 ? BASELINE_MEAN * (1 + STRENGTH_SENSITIVITY * (strengths[i] - meanStrength) / meanStrength) : BASELINE_MEAN;
+    const scores = completedScores[r.rosterId] ?? [];
+    const g = scores.length;
+    const empMean = g ? scores.reduce((s, v) => s + v, 0) / g : 0;
+    const mean = g ? (g * empMean + PRIOR_GAMES * priorMean) / (g + PRIOR_GAMES) : priorMean;
+    let std = BASELINE_STD;
+    if (g >= 3) {
+      const variance = scores.reduce((s, v) => s + (v - empMean) ** 2, 0) / (g - 1);
+      const empStd = Math.sqrt(variance);
+      std = (g * empStd + PRIOR_GAMES * BASELINE_STD) / (g + PRIOR_GAMES);
+    }
+    model[r.rosterId] = {
+      mean: Math.max(40, mean),
+      std: Math.max(8, std),
+      priorMean,
+      gamesPlayed: g
+    };
+  });
+  return model;
+}
+function simulatePlayoffs({
+  allRosters,
+  model,
+  remainingSchedule,
+  playoffTeams,
+  iterations = ITERATIONS,
+  seed = 24301
+}) {
+  const rng = mulberry32(seed);
+  const n = allRosters.length;
+  const indexById = /* @__PURE__ */ new Map();
+  allRosters.forEach((r, i) => indexById.set(r.rosterId, i));
+  const meanArr = new Float64Array(n);
+  const stdArr = new Float64Array(n);
+  const baseWins = new Float64Array(n);
+  const basePf = new Float64Array(n);
+  allRosters.forEach((r, i) => {
+    const m = model[r.rosterId];
+    meanArr[i] = m.mean;
+    stdArr[i] = m.std;
+    baseWins[i] = r.record?.wins ?? 0;
+    basePf[i] = r.pointsFor ?? 0;
+  });
+  const games = [];
+  remainingSchedule.forEach((week) => {
+    week.matchups.forEach(([a, b]) => {
+      games.push(indexById.get(a), indexById.get(b));
+    });
+  });
+  const gameCount = games.length >> 1;
+  const remGames = new Int32Array(n);
+  for (let k = 0; k < games.length; k++) remGames[games[k]] += 1;
+  const made = new Float64Array(n);
+  const seedSum = new Float64Array(n);
+  const topSeed = new Float64Array(n);
+  const winSum = new Float64Array(n);
+  const seedCounts = Array.from({ length: n }, () => new Int32Array(n));
+  const w = new Float64Array(n);
+  const pf = new Float64Array(n);
+  const order = new Array(n);
+  const cmp = (x, y) => w[y] - w[x] || pf[y] - pf[x];
+  for (let it = 0; it < iterations; it++) {
+    w.set(baseWins);
+    pf.set(basePf);
+    for (let g = 0; g < gameCount; g++) {
+      const a = games[g * 2];
+      const b = games[g * 2 + 1];
+      const sa = Math.max(0, normalSample(rng, meanArr[a], stdArr[a]));
+      const sb = Math.max(0, normalSample(rng, meanArr[b], stdArr[b]));
+      pf[a] += sa;
+      pf[b] += sb;
+      if (sa > sb) w[a] += 1;
+      else if (sb > sa) w[b] += 1;
+      else {
+        w[a] += 0.5;
+        w[b] += 0.5;
+      }
+    }
+    for (let i = 0; i < n; i++) order[i] = i;
+    order.sort(cmp);
+    for (let idx = 0; idx < n; idx++) {
+      const i = order[idx];
+      const place = idx + 1;
+      seedSum[i] += place;
+      seedCounts[i][idx] += 1;
+      winSum[i] += w[i];
+      if (place <= playoffTeams) made[i] += 1;
+      if (place === 1) topSeed[i] += 1;
+    }
+  }
+  return allRosters.map((r, i) => {
+    const basePlayed = baseWins[i] + (r.record?.losses ?? 0) + (r.record?.ties ?? 0);
+    const projWins = winSum[i] / iterations;
+    const projLosses = Math.max(0, basePlayed + remGames[i] - projWins);
+    return {
+      rosterId: r.rosterId,
+      playoffPct: made[i] / iterations,
+      topSeedPct: topSeed[i] / iterations,
+      avgSeed: seedSum[i] / iterations,
+      seedDist: Array.from(seedCounts[i], (c) => c / iterations),
+      projWins,
+      projLosses,
+      remGames: remGames[i]
+    };
+  });
+}
+function buildStrengthPreview(allRosters, playoffTeams, strengths) {
+  strengths = strengths ?? allRosters.map(teamStartingStrength);
+  return allRosters.map((r, i) => ({ rosterId: r.rosterId, owner: r.owner, strength: strengths[i] })).sort((a, b) => b.strength - a.strength).map((r, i) => ({ ...r, projSeed: i + 1, projectedIn: i < playoffTeams }));
+}
+function getDeadlineVerdict(playoffPct, tier) {
+  if (playoffPct == null) {
+    return { stance: "Wait", text: "Odds activate once the season starts \u2014 revisit this after Week 1." };
+  }
+  if (playoffPct >= 0.7) {
+    return {
+      stance: "Buyer",
+      tone: "success",
+      text: "You're a strong bet to make the playoffs. This is the time to trade future picks for proven win-now help."
+    };
+  }
+  if (playoffPct >= 0.35) {
+    return {
+      stance: "On the bubble",
+      tone: "warning",
+      text: tier === "Rebuilding" ? "You're on the bubble, but your roster skews young \u2014 lean toward picks and youth unless a deal clearly swings your odds." : "You're on the bubble \u2014 one well-aimed move at your biggest weakness could decide your season."
+    };
+  }
+  return {
+    stance: "Seller",
+    tone: "danger",
+    text: "The math says you're a long shot this year. Sell aging veterans now for picks and young players while their value holds."
+  };
+}
+function splitCompletedWeeks(perWeek) {
+  const completedScores = {};
+  const remainingSchedule = [];
+  let completedWeeks = 0;
+  (perWeek ?? []).forEach(({ week, entries }) => {
+    if (!entries?.length) return;
+    const groups = {};
+    entries.forEach((e) => {
+      if (e.matchup_id == null) return;
+      (groups[e.matchup_id] ??= []).push(e);
+    });
+    const pairs = Object.values(groups).filter((g) => g.length === 2);
+    if (!pairs.length) return;
+    const complete = entries.every((e) => (e.points ?? 0) > 0);
+    if (complete) {
+      completedWeeks += 1;
+      entries.forEach((e) => {
+        ;
+        (completedScores[e.roster_id] ??= []).push(e.points ?? 0);
+      });
+    } else {
+      remainingSchedule.push({
+        week,
+        matchups: pairs.map((g) => [g[0].roster_id, g[1].roster_id])
+      });
+    }
+  });
+  return { completedScores, remainingSchedule, completedWeeks };
+}
+function buildPlayoffOutlook({
+  allRosters,
+  perWeek,
+  playoffTeams = 6,
+  firstPlayoffWeek = 15
+}) {
+  if (!allRosters?.length) return null;
+  const { completedScores, remainingSchedule, completedWeeks } = splitCompletedWeeks(perWeek);
+  const strengths = allRosters.map(teamStartingStrength);
+  const model = buildScoringModel(allRosters, completedScores, strengths);
+  const remainingGames = remainingSchedule.reduce((s, w) => s + w.matchups.length, 0);
+  let status;
+  if (remainingSchedule.length === 0 && completedWeeks === 0) status = "preseason";
+  else if (remainingSchedule.length === 0) status = "complete";
+  else status = "active";
+  const results = status === "preseason" ? null : simulatePlayoffs({ allRosters, model, remainingSchedule, playoffTeams });
+  const oddsByRoster = {};
+  (results ?? []).forEach((r) => {
+    oddsByRoster[r.rosterId] = r;
+  });
+  return {
+    status,
+    results,
+    oddsByRoster,
+    model,
+    completedWeeks,
+    remainingWeeks: remainingSchedule.length,
+    remainingGames,
+    // Only the preseason page consumes this — don't solve seeding when the
+    // real simulation already ran.
+    strengthPreview: status === "preseason" ? buildStrengthPreview(allRosters, playoffTeams, strengths) : null,
+    playoffTeams,
+    firstPlayoffWeek
+  };
+}
+var BASELINE_MEAN, BASELINE_STD, STRENGTH_SENSITIVITY, PRIOR_GAMES, ITERATIONS;
+var init_playoffOdds = __esm({
+  "src/utils/playoffOdds.js"() {
+    init_lineupHistory();
+    BASELINE_MEAN = 115;
+    BASELINE_STD = 24;
+    STRENGTH_SENSITIVITY = 0.4;
+    PRIOR_GAMES = 4;
+    ITERATIONS = 1e4;
+  }
+});
+
 // src/utils/rosterAnalysis.js
 function getPositionalStrength(roster) {
   const result = {};
@@ -39950,44 +40298,6 @@ var init_getRoster = __esm({
   }
 });
 
-// src/utils/lineupHistory.js
-var init_lineupHistory = __esm({
-  "src/utils/lineupHistory.js"() {
-    init_lineupBuild();
-  }
-});
-
-// src/utils/playoffOdds.js
-function getDeadlineVerdict(playoffPct, tier) {
-  if (playoffPct == null) {
-    return { stance: "Wait", text: "Odds activate once the season starts \u2014 revisit this after Week 1." };
-  }
-  if (playoffPct >= 0.7) {
-    return {
-      stance: "Buyer",
-      tone: "success",
-      text: "You're a strong bet to make the playoffs. This is the time to trade future picks for proven win-now help."
-    };
-  }
-  if (playoffPct >= 0.35) {
-    return {
-      stance: "On the bubble",
-      tone: "warning",
-      text: tier === "Rebuilding" ? "You're on the bubble, but your roster skews young \u2014 lean toward picks and youth unless a deal clearly swings your odds." : "You're on the bubble \u2014 one well-aimed move at your biggest weakness could decide your season."
-    };
-  }
-  return {
-    stance: "Seller",
-    tone: "danger",
-    text: "The math says you're a long shot this year. Sell aging veterans now for picks and young players while their value holds."
-  };
-}
-var init_playoffOdds = __esm({
-  "src/utils/playoffOdds.js"() {
-    init_lineupHistory();
-  }
-});
-
 // src/utils/peakWindows.js
 var PEAK_WINDOWS;
 var init_peakWindows = __esm({
@@ -40142,9 +40452,9 @@ function buildRosterTrajectory(roster, currentSeasonYear, curves, genericCurve) 
 }
 function seriesDirection(series) {
   if (!series?.length || !series[0]) return "stable";
-  const pct = (series[series.length - 1] - series[0]) / series[0];
-  if (pct > 0.05) return "ascending";
-  if (pct < -0.05) return "declining";
+  const pct2 = (series[series.length - 1] - series[0]) / series[0];
+  if (pct2 > 0.05) return "ascending";
+  if (pct2 < -0.05) return "declining";
   return "stable";
 }
 function getTrajectoryRead(trajectory) {
@@ -41904,8 +42214,8 @@ var init_tradeAnalysis = __esm({
     });
     SEAT_VOICE = {
       them: {
-        valueAhead: (pct) => `They come out ${pct}% ahead on raw dynasty value.`,
-        valueBehind: (pct) => `They'd be giving up ${pct}% more value than they get back.`,
+        valueAhead: (pct2) => `They come out ${pct2}% ahead on raw dynasty value.`,
+        valueBehind: (pct2) => `They'd be giving up ${pct2}% more value than they get back.`,
         benchedStack: (names, positions) => `${names} wouldn't crack their lineup \u2014 they're already above league average at ${positions}.`,
         marginalStack: (positions) => `They're already above league average at ${positions} \u2014 this is a marginal upgrade for them, not a hole filled.`,
         lineupGain: (n) => `Their best starting lineup gains ${n} in value.`,
@@ -41922,8 +42232,8 @@ var init_tradeAnalysis = __esm({
         }
       },
       you: {
-        valueAhead: (pct) => `You come out ${pct}% ahead on raw dynasty value.`,
-        valueBehind: (pct) => `You'd be giving up ${pct}% more value than you get back.`,
+        valueAhead: (pct2) => `You come out ${pct2}% ahead on raw dynasty value.`,
+        valueBehind: (pct2) => `You'd be giving up ${pct2}% more value than you get back.`,
         benchedStack: (names, positions) => `${names} wouldn't crack your lineup \u2014 you're already above league average at ${positions}.`,
         marginalStack: (positions) => `You're already above league average at ${positions} \u2014 this is a marginal upgrade, not a hole filled.`,
         lineupGain: (n) => `Your best starting lineup gains ${n} in value.`,
@@ -41983,7 +42293,7 @@ function resolveSide(ids, roster, sideLabel) {
   });
   return errors.length ? { error: errors.join(" ") } : { assets };
 }
-function buildTradeAnswer(snapshot, weekly, { give, get, partner, myRosterId } = {}) {
+function buildTradeAnswer(snapshot, weekly, { give, get, partner, myRosterId, myPlayoffPct = null } = {}) {
   const { league, values } = snapshot;
   if (!league) throw new Error("League state unavailable");
   if (!league.myRoster) {
@@ -42012,9 +42322,10 @@ function buildTradeAnswer(snapshot, weekly, { give, get, partner, myRosterId } =
   const rosterLimits = getRosterLimits(league.leagueInfo);
   const weeklyProjections = weekly?.available && weekly.projMap ? { projMap: weekly.projMap, week: weekly.week } : null;
   const analysis = analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, league.allRosters, {
-    // Null: needs the full matchup-week fetch. Layer 3 falls back to the tier
-    // and reports `windowBasis: 'tier'` — see the header.
-    myPlayoffPct: null,
+    // Live rest-of-season odds when they exist; null in the offseason or when
+    // the schedule did not load, which is the exact tier fallback this tool
+    // shipped with. `windowBasis` in the response names whichever ran.
+    myPlayoffPct,
     opponentTrajectoryRead,
     curves: ageCurves?.curves ?? null,
     myDraftGrade: null,
@@ -42092,8 +42403,9 @@ function buildTradeAnswer(snapshot, weekly, { give, get, partner, myRosterId } =
     },
     // Layer 3.
     winWindow: {
-      // Names which basis actually scored it. In this tool it is always
-      // 'tier' (no playoff odds fetched) — and saying so is the point.
+      // Names which basis ACTUALLY scored it — 'odds' in season, 'tier' in
+      // the offseason or when the schedule would not load. Saying which is
+      // the point: a reader must never have to assume the stronger one ran.
       basis: analysis.windowBasis ?? null,
       note: analysis.windowNote ?? null,
       score: analysis.windowScore ?? null,
@@ -42118,7 +42430,7 @@ function buildTradeAnswer(snapshot, weekly, { give, get, partner, myRosterId } =
     // buildTradePitch returns { text, lines, bullets }; `text` is the copyable
     // message and the bullets are the reasons it is built from.
     pitch: pitch ? { text: pitch.text, bullets: pitch.bullets ?? [] } : null,
-    notes: buildNotes5({ snapshot, weekly, bothSides, giveAssets, getAssets })
+    notes: buildNotes5({ snapshot, weekly, bothSides, giveAssets, getAssets, windowBasis: analysis.windowBasis })
   };
 }
 function assetRow(a) {
@@ -42146,7 +42458,7 @@ function assetRow(a) {
     trend30Day: a.trend30Day ?? 0
   };
 }
-function buildNotes5({ snapshot, weekly, bothSides, giveAssets, getAssets }) {
+function buildNotes5({ snapshot, weekly, bothSides, giveAssets, getAssets, windowBasis }) {
   const notes = [];
   if (snapshot.asOf.stale) {
     notes.push("At least one source failed to refresh, so this is cached data \u2014 see asOf.sources.");
@@ -42162,9 +42474,15 @@ function buildNotes5({ snapshot, weekly, bothSides, giveAssets, getAssets }) {
       `${unpriced.length} player(s) in this trade carry no FantasyCalc value (${unpriced.map((p) => p.name).join(", ")}) and count 0 toward the totals. That is "unpriced", not "worthless" \u2014 the value read is weaker than usual here.`
     );
   }
-  notes.push(
-    "Win window was scored on the win-window TIER, not live playoff odds \u2014 this server does not fetch the rest-of-season simulation. In season the app scores this layer on odds, which track the starting lineup far more closely, so the window read here is the weaker of the two."
-  );
+  if (windowBasis === "odds") {
+    notes.push(
+      "Win window was scored on LIVE playoff odds from the rest-of-season simulation \u2014 the stronger of the two bases (odds track the starting lineup at Spearman 0.988 against the win-window tier's 0.721). Call get_playoff_odds for the numbers behind it."
+    );
+  } else {
+    notes.push(
+      "Win window was scored on the win-window TIER, not live playoff odds \u2014 " + (snapshot.isOffseason ? "it is the offseason, so there is no rest-of-season simulation to run." : "the regular-season schedule did not load, so the simulation could not run.") + " The tier is the weaker basis: it ranks accumulated assets, bench and picks included, and tracks the starting lineup far less closely than odds do."
+    );
+  }
   if (!weekly?.available) {
     notes.push(
       snapshot.isOffseason ? "Offseason: no weekly lineup-impact read, because Sleeper publishes no projections." : "This week's projections did not load, so the weekly lineup-impact read is absent."
@@ -42635,6 +42953,171 @@ var init_lineupAdvice = __esm({
   }
 });
 
+// mcp/tools/playoffOdds.js
+function buildOddsAnswer(snapshot, season, { team, defaultRosterId, myRosterId } = {}) {
+  const { league } = snapshot;
+  if (!league) throw new Error("League state unavailable");
+  const resolved = resolveTeam(league, team, defaultRosterId);
+  if (resolved.error) {
+    return { ok: false, error: resolved.error, candidates: resolved.candidates ?? [] };
+  }
+  const roster = resolved.roster;
+  if (!season?.available) {
+    return {
+      ok: false,
+      unavailable: true,
+      reason: season?.reason ?? "unavailable",
+      asOf: snapshot.asOf,
+      notes: season?.notes ?? ["The regular-season schedule could not be loaded."]
+    };
+  }
+  const outlook = buildPlayoffOutlook({
+    allRosters: league.allRosters,
+    perWeek: season.perWeek,
+    playoffTeams: season.playoffTeams,
+    firstPlayoffWeek: season.firstPlayoffWeek
+  });
+  if (!outlook) throw new Error("Playoff outlook unavailable \u2014 roster data missing");
+  const myTier = getWinWindowTier(roster.rosterId, league.allRosters);
+  const mine = outlook.oddsByRoster[roster.rosterId] ?? null;
+  const verdict = getDeadlineVerdict(mine ? mine.playoffPct : null, myTier);
+  const ranked = (outlook.results ?? []).slice().sort((a, b) => b.playoffPct - a.playoffPct);
+  const teams = ranked.slice(0, MAX_TEAMS).map((r) => {
+    const rr = league.allRosters.find((x) => x.rosterId === r.rosterId);
+    return {
+      rosterId: r.rosterId,
+      teamName: rr ? getTeamName(rr.owner) : `Roster ${r.rosterId}`,
+      isYou: r.rosterId === myRosterId,
+      playoffPct: pct(r.playoffPct),
+      topSeedPct: pct(r.topSeedPct),
+      avgSeed: Math.round(r.avgSeed * 10) / 10,
+      projWins: Math.round(r.projWins * 10) / 10,
+      projLosses: Math.round(r.projLosses * 10) / 10,
+      remainingGames: r.remGames,
+      winWindow: getWinWindowTier(r.rosterId, league.allRosters),
+      record: rr?.record ? { wins: rr.record.wins ?? 0, losses: rr.record.losses ?? 0, ties: rr.record.ties ?? 0 } : null
+    };
+  });
+  const preview = (outlook.strengthPreview ?? []).slice(0, MAX_TEAMS).map((p) => ({
+    rosterId: p.rosterId,
+    teamName: getTeamName(p.owner),
+    isYou: p.rosterId === myRosterId,
+    projSeed: p.projSeed,
+    projectedIn: p.projectedIn
+  }));
+  return {
+    ok: true,
+    asOf: snapshot.asOf,
+    league: {
+      leagueId: league.leagueId,
+      name: league.leagueInfo?.name ?? null,
+      season: snapshot.nflState?.season ?? null,
+      playoffTeams: outlook.playoffTeams,
+      firstPlayoffWeek: outlook.firstPlayoffWeek,
+      teamCount: league.allRosters.length
+    },
+    status: outlook.status,
+    basis: {
+      completedWeeks: outlook.completedWeeks,
+      remainingWeeks: outlook.remainingWeeks,
+      remainingGames: outlook.remainingGames,
+      iterations: outlook.status === "preseason" ? 0 : 1e4
+    },
+    you: {
+      rosterId: roster.rosterId,
+      teamName: getTeamName(roster.owner),
+      winWindow: myTier,
+      // NULL in the preseason, never a fabricated percentage.
+      playoffPct: mine ? pct(mine.playoffPct) : null,
+      topSeedPct: mine ? pct(mine.topSeedPct) : null,
+      avgSeed: mine ? Math.round(mine.avgSeed * 10) / 10 : null,
+      projWins: mine ? Math.round(mine.projWins * 10) / 10 : null,
+      projLosses: mine ? Math.round(mine.projLosses * 10) / 10 : null,
+      stance: verdict.stance,
+      stanceText: verdict.text
+    },
+    teams,
+    // Present ONLY in the preseason, and it is a preview, not odds.
+    strengthPreview: outlook.status === "preseason" ? preview : null,
+    notes: buildNotes7({ snapshot, season, outlook, teamCount: league.allRosters.length })
+  };
+}
+function buildNotes7({ snapshot, season, outlook, teamCount }) {
+  const notes = [...season.notes ?? []];
+  if (snapshot.asOf.stale) {
+    notes.push("At least one source failed to refresh, so this is cached data \u2014 see asOf.sources.");
+  }
+  if (outlook.status === "preseason") {
+    notes.push(
+      "No games have been played and no schedule has posted, so there is nothing to simulate: playoffPct is NULL rather than a made-up number. What is returned instead is a projected seeding ranked purely by roster strength \u2014 a PREVIEW, not odds."
+    );
+  } else {
+    notes.push(
+      `Based on ${outlook.completedWeeks} completed week(s) and ${outlook.remainingGames} remaining game(s), simulated 10,000 times with a fixed seed \u2014 so these numbers are stable across calls on the same data, not re-rolled each time you ask.`
+    );
+    notes.push(
+      "Each team's weekly score is drawn from a normal distribution whose mean is a shrinkage blend (4-game pseudo-count) of its roster-strength prior and its actual scores so far. Early in the season the roster prior dominates; it gives way to real results as games accumulate."
+    );
+  }
+  if (outlook.status === "complete") {
+    notes.push("The regular season is complete, so these are outcomes rather than odds \u2014 100% or 0%.");
+  }
+  notes.push(
+    `This league seats ${outlook.playoffTeams} of ${teamCount}, so ${Math.round(outlook.playoffTeams / teamCount * 100)}% is the coin-flip baseline, not 50%. The Buyer (>=70%) and Seller (<35%) thresholds separate the top and bottom of the league cleanly and compress the middle \u2014 read a bubble team's number against that baseline, not against 50.`
+  );
+  notes.push(
+    "The full per-seed distribution is computed but not returned, to keep the response bounded; avgSeed and topSeedPct summarise it."
+  );
+  return notes;
+}
+function renderOddsText(a) {
+  if (!a.ok) {
+    if (a.unavailable) return (a.notes ?? []).join("\n");
+    const list = a.candidates?.length ? "\n" + a.candidates.map((c) => `  ${c.rosterId}. ${c.teamName} (@${c.username})`).join("\n") : "";
+    return `${a.error}${list}`;
+  }
+  const L = [];
+  L.push(`PLAYOFF ODDS \u2014 ${a.league.name ?? a.league.leagueId} (${a.league.season ?? "?"})`);
+  L.push(`As of ${a.asOf.oldestSourceAt ?? "unknown"}${a.asOf.stale ? " \u2014 STALE, a source failed to refresh" : ""}`);
+  L.push("");
+  if (a.status === "preseason") {
+    L.push(`${a.you.teamName} \u2014 no odds yet (${a.you.stance}: ${a.you.stanceText})`);
+    L.push("");
+    L.push(`PROJECTED SEEDING BY ROSTER STRENGTH \u2014 a preview, not odds (top ${a.league.playoffTeams} make it)`);
+    (a.strengthPreview ?? []).forEach((p) => {
+      L.push(`  ${String(p.projSeed).padStart(2)}. ${p.teamName}${p.isYou ? " (you)" : ""}${p.projectedIn ? "" : "  \u2014 outside"}`);
+    });
+  } else {
+    L.push(`${a.you.teamName} \u2014 ${n1(a.you.playoffPct)}% to make the playoffs`);
+    L.push(`  Projected ${n1(a.you.projWins)}-${n1(a.you.projLosses)}, average seed ${n1(a.you.avgSeed)}, #1 seed ${n1(a.you.topSeedPct)}%`);
+    L.push(`  ${a.you.stance} \u2014 ${a.you.stanceText}`);
+    L.push("");
+    L.push(`Based on ${a.basis.completedWeeks} completed week(s) + ${a.basis.remainingGames} remaining game(s)`);
+    L.push("");
+    L.push(`THE FIELD (top ${a.league.playoffTeams} of ${a.league.teamCount} make it)`);
+    a.teams.forEach((t, i) => {
+      L.push(
+        `  ${String(i + 1).padStart(2)}. ${t.teamName}${t.isYou ? " (you)" : ""}  ${String(n1(t.playoffPct)).padStart(5)}%  proj ${n1(t.projWins)}-${n1(t.projLosses)}  seed ${n1(t.avgSeed)}  ${t.winWindow}`
+      );
+    });
+  }
+  L.push("");
+  a.notes.forEach((n) => L.push(`Note: ${n}`));
+  return L.join("\n").trimEnd();
+}
+var MAX_TEAMS, pct, n1;
+var init_playoffOdds2 = __esm({
+  "mcp/tools/playoffOdds.js"() {
+    init_playoffOdds();
+    init_rosterAnalysis();
+    init_teamName();
+    init_teams();
+    MAX_TEAMS = 32;
+    pct = (n) => n == null ? null : Math.round(n * 1e3) / 10;
+    n1 = (n) => n == null ? "\u2014" : n.toFixed(1);
+  }
+});
+
 // mcp/server.js
 function createServer({ env = process.env, fetcher, store } = {}) {
   const config2 = loadConfig(env);
@@ -42763,6 +43246,14 @@ function createServer({ env = process.env, fetcher, store } = {}) {
     nflState: snapshot.nflState,
     week,
     ttlMs: config2.weeklyTtlMs,
+    force: !!refresh,
+    fetcher: get,
+    ...store ? { store } : {}
+  });
+  const seasonFor = (snapshot, leagueId, refresh) => getSeasonWeeks({
+    leagueId: leagueId || config2.defaultLeagueId,
+    leagueInfo: snapshot.league?.leagueInfo ?? null,
+    ttlMs: config2.seasonTtlMs,
     force: !!refresh,
     fetcher: get,
     ...store ? { store } : {}
@@ -43067,13 +43558,29 @@ function createServer({ env = process.env, fetcher, store } = {}) {
     async ({ give, get: getIds, partner, leagueId, week, refresh }) => {
       const snapshot = await snapshotFor(leagueId, refresh);
       const weekly = await weeklyFor(snapshot, week, refresh);
+      let myPlayoffPct = null;
+      let seasonSources = null;
+      if (!snapshot.isOffseason) {
+        const season = await seasonFor(snapshot, leagueId, refresh);
+        if (season.available) {
+          const outlook = buildPlayoffOutlook({
+            allRosters: snapshot.league.allRosters,
+            perWeek: season.perWeek,
+            playoffTeams: season.playoffTeams,
+            firstPlayoffWeek: season.firstPlayoffWeek
+          });
+          myPlayoffPct = outlook?.oddsByRoster?.[config2.defaultRosterId]?.playoffPct ?? null;
+          seasonSources = season.sources;
+        }
+      }
       const answer = buildTradeAnswer(snapshot, weekly, {
         give,
         get: getIds,
         partner,
-        myRosterId: config2.defaultRosterId
+        myRosterId: config2.defaultRosterId,
+        myPlayoffPct
       });
-      if (answer.ok) answer.asOf = mergeAsOf(answer.asOf, weekly.sources);
+      if (answer.ok) answer.asOf = mergeAsOf(answer.asOf, { ...weekly.sources, ...seasonSources ?? {} });
       return {
         content: [{ type: "text", text: renderTradeText(answer) }],
         structuredContent: answer,
@@ -43163,6 +43670,98 @@ function createServer({ env = process.env, fetcher, store } = {}) {
       };
     }
   );
+  server.registerTool(
+    "get_playoff_odds",
+    {
+      title: "Rest-of-season playoff odds",
+      description: "Simulates the rest of the regular season 10,000 times and reports your playoff odds, projected record and seed, the whole field ranked, and whether you should be buying or selling at the deadline. Each team's weekly score is drawn from a model that blends its roster strength with its actual scores so far, so it is useful from Week 1. Fixed seed, so the numbers are stable across calls. Before any game is played it returns a roster-strength PREVIEW and a null percentage rather than inventing odds.",
+      inputSchema: {
+        team: external_exports.string().optional().describe('Team name, manager username, or roster id to report "you" for. Omit for your own team.'),
+        leagueId: external_exports.string().optional().describe("Sleeper league id. Omit for the configured league."),
+        refresh: external_exports.boolean().optional().describe("Bypass the caches and refetch. Worth it just after a week completes, which is the only time these numbers move.")
+      },
+      outputSchema: {
+        ok: external_exports.boolean(),
+        error: external_exports.string().optional(),
+        // True when the schedule could not be loaded at all — distinct from a
+        // preseason, which is ok:true with a null percentage.
+        unavailable: external_exports.boolean().optional(),
+        reason: external_exports.enum(["unavailable"]).optional(),
+        candidates: external_exports.array(teamCandidate).optional(),
+        asOf: asOfSchema.optional(),
+        league: external_exports.object({
+          leagueId: external_exports.string().nullable(),
+          name: external_exports.string().nullable(),
+          season: external_exports.string().nullable(),
+          playoffTeams: external_exports.number(),
+          firstPlayoffWeek: external_exports.number(),
+          teamCount: external_exports.number()
+        }).optional(),
+        status: external_exports.enum(["preseason", "active", "complete"]).optional(),
+        basis: external_exports.object({
+          completedWeeks: external_exports.number(),
+          remainingWeeks: external_exports.number(),
+          remainingGames: external_exports.number(),
+          iterations: external_exports.number()
+        }).optional(),
+        you: external_exports.object({
+          rosterId: external_exports.number(),
+          teamName: external_exports.string(),
+          winWindow: external_exports.string(),
+          // NULL in the preseason. Never 0, never a guess — a 0 would read as
+          // "eliminated" and a guess would read as a measurement.
+          playoffPct: external_exports.number().nullable(),
+          topSeedPct: external_exports.number().nullable(),
+          avgSeed: external_exports.number().nullable(),
+          projWins: external_exports.number().nullable(),
+          projLosses: external_exports.number().nullable(),
+          stance: external_exports.string(),
+          stanceText: external_exports.string()
+        }).optional(),
+        teams: external_exports.array(external_exports.object({
+          rosterId: external_exports.number(),
+          teamName: external_exports.string(),
+          isYou: external_exports.boolean(),
+          playoffPct: external_exports.number().nullable(),
+          topSeedPct: external_exports.number().nullable(),
+          avgSeed: external_exports.number(),
+          projWins: external_exports.number(),
+          projLosses: external_exports.number(),
+          remainingGames: external_exports.number(),
+          winWindow: external_exports.string(),
+          record: external_exports.object({
+            wins: external_exports.number(),
+            losses: external_exports.number(),
+            ties: external_exports.number()
+          }).nullable()
+        })).optional(),
+        // Preseason only, and it is a PREVIEW, not odds.
+        strengthPreview: external_exports.array(external_exports.object({
+          rosterId: external_exports.number(),
+          teamName: external_exports.string(),
+          isYou: external_exports.boolean(),
+          projSeed: external_exports.number(),
+          projectedIn: external_exports.boolean()
+        })).nullable().optional(),
+        notes: external_exports.array(external_exports.string()).optional()
+      }
+    },
+    async ({ team, leagueId, refresh }) => {
+      const snapshot = await snapshotFor(leagueId, refresh);
+      const season = await seasonFor(snapshot, leagueId, refresh);
+      const answer = buildOddsAnswer(snapshot, season, {
+        team,
+        defaultRosterId: config2.defaultRosterId,
+        myRosterId: config2.defaultRosterId
+      });
+      if (answer.asOf) answer.asOf = mergeAsOf(answer.asOf, season.sources);
+      return {
+        content: [{ type: "text", text: renderOddsText(answer) }],
+        structuredContent: answer,
+        isError: !answer.ok
+      };
+    }
+  );
   return { server, config: config2 };
 }
 var SERVER_NAME, SERVER_VERSION, sourceStamp, asOfSchema, teamCandidate, playerRowSchema, playerCandidateSchema, pickCandidateSchema, lineupPlayerSchema, tradeAssetSchema, sideFitSchema;
@@ -43174,6 +43773,8 @@ var init_server3 = __esm({
     init_snapshot();
     init_limit();
     init_weekly();
+    init_season();
+    init_playoffOdds();
     init_snapshot();
     init_getRoster();
     init_findSellHigh();
@@ -43181,6 +43782,7 @@ var init_server3 = __esm({
     init_resolveAssets();
     init_analyzeTrade();
     init_lineupAdvice();
+    init_playoffOdds2();
     SERVER_NAME = "dynastyedge";
     SERVER_VERSION = "0.1.0";
     sourceStamp = external_exports.object({
@@ -43201,7 +43803,12 @@ var init_server3 = __esm({
         // which RECOMPUTES oldestSourceAt and stale over the union — a 50-minute
         // -old projection has to drag the whole answer's stated age down with it.
         projections: sourceStamp.optional(),
-        schedule: sourceStamp.optional()
+        schedule: sourceStamp.optional(),
+        // Present on the tools that run the rest-of-season simulation. It stamps
+        // the OLDEST of the ~14 matchup weeks, for the same reason
+        // oldestSourceAt is the stalest source: an answer assembled from fourteen
+        // fetches is only as fresh as the oldest one of them.
+        matchups: sourceStamp.optional()
       })
     });
     teamCandidate = external_exports.object({

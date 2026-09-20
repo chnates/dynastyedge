@@ -631,9 +631,11 @@ app's own analysis code** — not general knowledge. Design spec and the
 owner-confirmed decisions: `MCP_DISCOVERY.md`.
 
 **Status: phase 2 — LIVE and CONNECTED at `https://dynastyedge-mcp.vercel.app/mcp`.**
-All six tools from `MCP_DISCOVERY.md` §5 answer over **both** transports: stdio
-for local runs, streamable HTTP for the Claude apps, authenticated by GitHub
-against a single-account allowlist.
+**Seven** tools answer over **both** transports: stdio for local runs,
+streamable HTTP for the Claude apps, authenticated by GitHub against a
+single-account allowlist. Six are `MCP_DISCOVERY.md` §5's set; the seventh,
+`get_playoff_odds`, came with phase 2a (2026-09-20) alongside the wiring that
+put `analyze_trade`'s Layer 3 on live odds.
 
 Phase 1 shipped the three prerequisite refactors plus `get_roster`; phase 1b
 added `find_sell_high`, `recommend_free_agents`, `resolve_assets`,
@@ -690,6 +692,7 @@ mcp/
   server.js     the McpServer: tool schemas + wiring, no domain math
   snapshot.js   league fetch + ~15-min cache + the as-of stamp + mergeAsOf
   weekly.js     projections + schedule, on their OWN ~60-min TTL
+  season.js     every regular-season week's matchups, on a THIRD TTL
   teams.js      resolveTeam — shared by get_roster, analyze_trade, lineup_advice
   limit.js      concurrency gate + retry/backoff
   config.js     league / identity / TTLs, env-first
@@ -697,6 +700,7 @@ mcp/
   tools/
     getRoster.js  findSellHigh.js  recommendFreeAgents.js
     resolveAssets.js  analyzeTrade.js  lineupAdvice.js
+    playoffOdds.js
 ```
 
 ### The HTTP transport (phase 2) — stateless, by necessity
@@ -1228,9 +1232,101 @@ before `analyze_trade`.**
   but the headline is optimal − current, so hiding one would leave points
   unexplained. They ship with `meaningful: false`.
 
+### Tool 7 — `get_playoff_odds`
+
+"Am I making the playoffs, and should I be buying or selling?" Optional `team`,
+`leagueId`, `refresh`. `playoffOdds.buildPlayoffOutlook` — the same
+rest-of-season Monte Carlo League › Playoffs runs, over `mcp/season.js`'s
+matchup weeks.
+
+- **THREE STATES, AND ONLY ONE OF THEM HAS ODDS.** `active` is the real thing.
+  `complete` is deterministic 100%/0% and says so. **`preseason` returns
+  `playoffPct: null` and a strength-ranked PREVIEW**, never a fabricated
+  percentage and never 0 — a 0 reads as "eliminated". Same discipline
+  `lineup_advice` keeps about the offseason.
+- **A posted-but-unplayed schedule is `active`, not `preseason`**, and the
+  distinction is load-bearing: the model simulates Week 1 off the
+  roster-strength prior alone, which is what makes this useful before a game is
+  played. Conflating the two would replace real odds with a ranking. Only a
+  season with **no schedule at all** is preseason.
+- **A total matchup-fetch failure is NOT a preseason** — fourteen empty weeks
+  and a season that has not started are identical on the wire. The tool returns
+  `ok: false` with `reason: 'unavailable'`, mirroring the app's rejection that
+  makes League › Playoffs show `ErrorState` instead of a fake preseason.
+- **`seedDist` is computed and deliberately not returned** (n² numbers), and
+  the notes say it was dropped — absence must not read as "the model does not
+  compute it". `avgSeed` and `topSeedPct` summarise it.
+- `getDeadlineVerdict` supplies the stance, so this tool **cannot disagree with
+  `analyze_trade` about your own buyer/seller read**.
+- The notes state the baseline: this league seats **6 of 10, so 60% is the
+  coin-flip number, not 50%** — a bubble team's percentage has to be read
+  against that.
+
+Measured live 2026-09-20 (2026 Week 2): **948ms cold, 71ms cached, 6,152B**.
+Nix Cage 58.1%, projected 6.5-7.5, average seed 5.9 — "On the bubble", which at
+a 60% baseline is exactly what it should read. Σ odds across the field
+**600.3%** against the 600% the field size demands.
+
+### Caching the rest of the season — a THIRD TTL, and its own argument
+
+`mcp/season.js` owns every regular-season week's matchups (weeks 1 …
+`playoff_week_start − 1`, read from league settings, never assumed) and caches
+them for **60 minutes** (`DYNASTYEDGE_SEASON_TTL_MS`). One pass yields **both**
+halves of the model's input — the remaining schedule and every completed week's
+actual score.
+
+It is the same number as `weekly.js`'s and it is **not the same argument**,
+which is why it is its own constant rather than an alias:
+
+- **A completed week is frozen forever.** Most of what this fetch returns is
+  immutable history.
+- **The current week's scores move live through Sunday — and the model throws
+  them away.** `splitCompletedWeeks` counts a week only when *every* team in it
+  has scored, so a partially-played week is simulated fresh rather than
+  counted. The consequence sets the TTL: **the odds output only changes when a
+  whole week lands**, which happens once a week. What *does* change on an event
+  — a roster, and so the strength prior — comes from the 15-minute snapshot.
+
+Per-week cache keys, so a failed week degrades alone. **A single failed bucket
+contributes empty entries and a disclosed note** (a missing week understates
+completed results *and* drops its games from the remaining schedule); **all of
+them failing is the one state that must never be reported as a preseason**. The
+stamp is the **oldest** of the weeks, for the same reason `oldestSourceAt` is
+the stalest source.
+
+### Layer 3 now scores on LIVE ODDS in `analyze_trade`
+
+`myPlayoffPct` was the first of the three unwired signals and the only one that
+moves a **score**. It is wired (2026-09-20).
+
+- **Why it was worth ~14 requests.** The win-window tier is a *ranking of
+  accumulated assets* — bench and picks included — and it tracks the actual
+  **starting lineup**, which is what Layer 3 asks about, at Spearman **0.721**.
+  Live playoff odds track it at **0.988**. The tier also has no `Middle` branch
+  at all, so 40% of this league took no lean and scored a flat 0.
+- **`windowBasis` still names which one ran, and that has not become
+  decoration** — it now reports `'odds'` in season and `'tier'` in the
+  offseason or when the schedule would not load, and the note says *which*
+  ("it is the offseason" vs "the schedule did not load" — "nothing to
+  simulate" and "we could not find out" are different answers).
+- **The season fetch is in-season only.** The offseason has no schedule to
+  simulate, so fetching would be fourteen calls to learn nothing; the tier
+  fallback there is byte-for-byte the behaviour this tool shipped with.
+- **A missing odds entry falls back to the tier; a genuine 0% scores.** The
+  `?? null` guard matters — reading an absent entry as 0% would grade every
+  trade as a fire sale.
+- Verified live: `windowBasis: 'odds'`, the note quoting *"on the bubble at 58%
+  playoff odds"*, and `asOf.sources` carrying **matchups** alongside the other
+  five.
+
+**Two of the three signals are still unwired, and the notes still say so:**
+`myDraftGrade` (needs the multi-season league-history walk) and
+`partnerActivity` (needs the transaction feed). Each removes context, never a
+number.
+
 ### Prerequisite refactors this shipped with
 
-Three changes inside `src/`, each of which stands on its own merit:
+Four changes inside `src/`, each of which stands on its own merit:
 
 - **`src/utils/teamName.js` + `src/utils/valueHistory.js`.** `getTeamName` and
   `MIN_SPARKLINE_POINTS` moved out of hooks. Three import lines in
@@ -1251,6 +1347,17 @@ Three changes inside `src/`, each of which stands on its own merit:
   lifted verbatim from the previous commit and run beside the new function on
   live payloads (10 rosters / 295 players / 120 picks) at three identity
   settings plus the null-gate cases — `deepStrictEqual` on every one.
+- **`src/utils/playoffOdds.js` — `splitCompletedWeeks` + `buildPlayoffOutlook`
+  (2026-09-20).** The whole odds composition — split the weeks, build the
+  scoring model, run the 10,000-iteration simulation, decide which of the
+  three season states applies — lived only inside `usePlayoffOdds`'s
+  `processWeeks` and `deriveOdds`, so it could not be produced outside a
+  browser. Same shape as the three below. The hook now holds the **memo and
+  nothing else**, which is the right split: caching by input identity is a
+  rendering concern. Equivalence was **proved, not inspected** — the
+  pre-extraction body lifted verbatim from the previous commit and run beside
+  the new function across preseason / active / complete / partially-played /
+  no-schedule at two field sizes each, `deepStrictEqual` on all **20**.
 - **`buildFreeAgentPool` / `buildAvailableDefenses` in
   `src/utils/freeAgents.js`.** "Who is a free agent?" was built independently
   in `FreeAgentsView.jsx` and `edgeBriefing.js`. The standing rule travels with
@@ -4779,6 +4886,7 @@ dynastyedge/
 │   ├── oauthRoutes.js          ← the five OAuth endpoints. Owns THE load-bearing check: redirect-URI origin allowlist, exact-hostname, checked BEFORE anything is minted, failing to an error page because redirecting an unvalidated URI IS the attack
 │   ├── http.js                 ← THE streamable-HTTP transport: a Web-standard (Request) => Response, so the host is a packaging decision. STATELESS by necessity (a serverless instance cannot hold a session — the failure is intermittent, warm-passes/cold-fails). Owns the auth gate, which fails CLOSED
 │   ├── store.js                ← THE cache backend boundary + the ONE freshness policy (loadSource). Backend is a parameter (memory for stdio, KV for HTTP); the policy is shared. Owns the two traps: a store-level TTL would break the stale-fallback contract, and the 1.20MB player DB must be gzipped into KV
+│   ├── season.js               ← every regular-season week's matchups, on a THIRD TTL with its own argument (a completed week is frozen forever; the model discards a partially-played one, so the odds move once a WEEK). Owns the state that must never happen: 14 empty weeks and a season that hasn't started are identical, so a total outage is never reported as a preseason
 │   ├── weekly.js               ← projections + the schedule, on their OWN ~60-min TTL (league data changes on an EVENT, projections on a 0.06%/10h DRIP). Owns the two silent traps: the schedule is off /v1 (SLEEPER_ROOT) and its fields are home/away
 │   ├── teams.js                ← resolveTeam, shared by get_roster / analyze_trade / lineup_advice so "which team did they mean?" has one definition. Reads display_name — Sleeper's /users returns NO username
 │   ├── limit.js                ← concurrency gate + backoff. Lives here, NEVER in fetchJSON — that would change the app's behaviour to fix a server problem
@@ -4944,7 +5052,7 @@ dynastyedge/
 │   │   ├── lineupConfidence.js  ← the MEASURED hit-rate curve behind "61% likely to be the right call" — regenerate, never hand-edit
 │   │   ├── freeAgents.js        ← THE waiver-options list (never gated on FantasyCalc; carries the TEAM_* guard) AND the one dynasty free-agent pool (buildFreeAgentPool / buildAvailableDefenses), which by construction can never return a defense as a general pickup
 │   │   ├── lineupHistory.js     ← optimal-lineup POINTS math for efficiency review (delegates to lineupBuild)
-│   │   ├── playoffOdds.js       ← scoring model + Monte Carlo + deadline verdict
+│   │   ├── playoffOdds.js       ← scoring model + Monte Carlo + deadline verdict; also buildPlayoffOutlook, THE whole composition — extracted from usePlayoffOdds so the MCP server runs the same model the phone does (the hook keeps only the memo)
 │   │   └── projections.js       ← lineup optimization, matchup quality
 │   ├── context/
 │   │   └── LeagueContext.jsx
@@ -4966,7 +5074,7 @@ dynastyedge/
 │   ├── draftLive.test.mjs           ← draft live path: order resolution (both tiers), real traded-pick replay, on-the-clock/countdown at all 40 board positions, Best Available, capital, recap steal/reach banding, and the recap GRADE — VOE sums to zero league-wide, volume never earns a better grade, per-pick/hits banding, the unpriced-class no-grade contract, board-order-not-argument-order pairing
 │   ├── sleeperDraft.test.mjs        ← mocked-fetch: single-draft endpoint merged over the list (slot_to_roster_id), session cache, best-effort sub-fetch degradation
 │   ├── projections.test.mjs         ← Week 1 lineup engine: defense rankings joined via player DB + schedule, home/away fields, Week-1 empty-stats contract, red/yellow/green flags, best bench
-│   ├── playoffOdds.test.mjs         ← fixed-seed determinism, Σ odds = playoff teams, verdict thresholds
+│   ├── playoffOdds.test.mjs         ← fixed-seed determinism, Σ odds = playoff teams, verdict thresholds; plus buildPlayoffOutlook's three states — a week counted only when EVERY team has scored, a posted-but-unplayed schedule being ACTIVE (odds off the strength prior alone), and the preseason returning no results rather than a fabricated percentage
 │   ├── seasonWindow.test.mjs        ← the draft-completion boundary: pre_draft/drafting/paused keep a season current, `complete` rolls it, an auction never counts, a past season's draft never rolls it; the Tracker prefers the upcoming draft and falls back to the most recent completed one; no NFL state degrades to the seed
 │   ├── pickCapital.test.mjs         ← pick ownership resolution, round-median pick values, year weights BY DISTANCE from the upcoming draft (a rolled year is never scored 0), and the spent-pick ladder (slot→player join incl. the string-roster-id trap and the draft_order fallback; season-agnostic round medians)
 │   ├── pickTrades.test.mjs          ← slot tiers (as coded), slot pricing fallback, package constraints
@@ -4997,6 +5105,8 @@ dynastyedge/
 │   ├── mcpRecommendFreeAgents.test.mjs ← recommend_free_agents: no defense in the general list EVER, the DEF refusal still naming the incumbent, the ranking being by dynasty value not projection, and the offseason reporting projectedPoints null — never 0
 │   ├── mcpResolveAssets.test.mjs    ← resolve_assets: an ambiguous name resolving to NOTHING (never the higher-valued of two), pick parsing to the season-round-originalOwner id analyze_trade accepts, rule 7 keeping unranked players findable
 │   ├── mcpAnalyzeTrade.test.mjs     ← analyze_trade: a free-text name REJECTED even when unambiguous (the tool does no name matching at all), an id on the wrong roster refused, the price read from the owning roster not the caller, both seats graded, concerns as a subset of reasons, and windowBasis naming the tier
+│   ├── mcpSeason.test.mjs           ← the rest-of-season layer: THE contract that a total fetch failure is never reported as a preseason (the two shapes are identical on the wire), one bad bucket degrading alone, the week range read from league settings, per-week + per-league cache keys, and the TTL pinned as its OWN literal so re-deriving weekly.js's can never silently move it
+│   ├── mcpPlayoffOdds.test.mjs      ← get_playoff_odds: the preseason returning a NULL percentage and a labelled PREVIEW (never 0, which reads as eliminated), a POSTED-but-unplayed schedule being ACTIVE rather than preseason, unavailable ≠ preseason, Σ odds === the field size, seedDist computed but not returned, and the stance being getDeadlineVerdict's so a trade grade cannot disagree
 │   ├── mcpLineupAdvice.test.mjs     ← lineup_advice: the offseason returning no summary and no zeros, per-move gains summing EXACTLY to the headline, a must-fix carrying NO confidence, confidencePct being a percentage not a fraction (the ×100 bug that printed "6530%"), and a blocked starter contributing 0
 │   └── helpers/mcpFixtures.mjs      ← ONE synthetic league shared by the six MCP tool suites — four tools read the same object, and four divergent copies is the drift prerequisite C removed from src/
 ├── index.html
@@ -5009,11 +5119,11 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 495 / # pass 490
+honestly:** instead of "cannot find module" it prints `# tests 546 / # pass 541
 / # fail 5`, which reads like a code regression. A file that cannot load never
-runs its tests, so the count silently drops from **538** to 495.
+runs its tests, so the count silently drops from **589** to 546.
 `npm run build` in the same state fails with `sh: 1: vite: not found`.
-**If the test count isn't 538, run `npm ci` before debugging anything.**
+**If the test count isn't 589, run `npm ci` before debugging anything.**
 
 The pair was re-measured 2026-09-19 (MCP phase 1b) by renaming `node_modules`
 aside, and it had drifted seven times before that: 178/130, 177/115, 219/136,
@@ -5035,6 +5145,24 @@ those four raise only the first number. The 2026-09-07 trade-engine work added
 the broken-state count stayed at 152; the 2026-09-12 news-retention work moved
 both, because `newsRetention.test.mjs` imports only a zero-dependency pure
 module. **Re-measure both whenever the suite grows.**
+
+Phase 2a — `get_playoff_odds` plus the Layer 3 wiring — moved both by the same
+46 (543/500 → **589/546**). 589 and 546 were measured; **500 is derived**, not
+run — the 5 commits-after-phase-2 tests went into `mcpOauth.test.mjs`, which
+loads dependency-free, so `main`'s broken count was its 543 less the same 43.
+Note the starting point: `main` was at **543**, not
+the 538 recorded below, because the dynamic-client-registration commit added 5
+tests after phase 2's PR merged and this block was not updated with it. **The
+drift is the lesson, not the numbers** — a stale count here reads as a code
+regression to the next session, which is the exact confusion the block exists
+to prevent, so re-measure rather than incrementing what is written.
+
+The useful invariant survived the drift and is worth preferring to either
+count: **the gap between them is 43 and has not moved.** 589 − 546 = 43, and
+538 − 495 = 43 before it. That is the number of tests living in the five files
+that cannot load, so an unchanged gap means every test added since loads with
+no `node_modules` at all — which is what the equal-delta checks below were
+reaching for, stated as one number instead of a subtraction per change.
 
 Phase 2's OAuth layer moved both by the same 25 (513/470 → **538/495**) —
 the equality check passing again, and here it proves something specific:

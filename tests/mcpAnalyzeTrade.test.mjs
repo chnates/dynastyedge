@@ -170,14 +170,71 @@ test('a counter is surfaced only when the verdict is Counter', () => {
 
 // ── Layer 3's basis is NAMED, not assumed ────────────────────────────────
 
-test('windowBasis says "tier" because this server fetches no playoff odds', () => {
+// Layer 3 is scored on LIVE playoff odds when the server could run the
+// rest-of-season simulation, and on the win-window TIER when it could not.
+// The tier tracks the starting lineup at Spearman 0.721 against odds' 0.988,
+// so which one ran is a real difference in the strength of the answer — and
+// `windowBasis` exists precisely so a reader never has to assume the stronger
+// one did.
+
+test('windowBasis says "odds" when live playoff odds are passed', () => {
+  const a = grade({ ...FAIR, myPlayoffPct: 0.82 })
+  assert.equal(a.winWindow.basis, 'odds')
+  assert.match(a.winWindow.note, /82% playoff odds/, 'the note quotes the number that scored it')
+})
+
+test('windowBasis falls back to "tier" when no odds are available', () => {
   const a = grade(FAIR)
   assert.equal(a.winWindow.basis, 'tier')
 })
 
-test('the notes state that the weaker window basis was used', () => {
-  const a = grade(FAIR)
-  assert.ok(a.notes.some(n => /playoff odds/i.test(n) && /tier/i.test(n)))
+test('the odds basis and the tier basis can score the SAME trade differently', () => {
+  // The point of the wiring. The tier has no `Middle` branch at all, so a
+  // mid-table team takes no lean and scores a flat 0; odds give it a real
+  // buyer or seller stance. Live, windowScore was 0 on 20 of 20 suggested
+  // trades under the tier.
+  const buyer = grade({ ...FAIR, myPlayoffPct: 0.9 })
+  const seller = grade({ ...FAIR, myPlayoffPct: 0.1 })
+  assert.equal(buyer.winWindow.basis, 'odds')
+  assert.equal(seller.winWindow.basis, 'odds')
+  assert.notEqual(
+    buyer.winWindow.note, seller.winWindow.note,
+    'a 90%-odds buyer and a 10%-odds seller must not read the same'
+  )
+})
+
+test('the notes state which basis actually scored the window, both ways', () => {
+  const odds = grade({ ...FAIR, myPlayoffPct: 0.6 })
+  assert.ok(
+    odds.notes.some(n => /LIVE playoff odds/.test(n)),
+    'and it points at get_playoff_odds for the numbers behind it'
+  )
+  assert.ok(odds.notes.some(n => /get_playoff_odds/.test(n)))
+  assert.ok(
+    !odds.notes.some(n => /scored on the win-window TIER/.test(n)),
+    'the old fixed sentence must not survive alongside the odds one'
+  )
+
+  const tier = grade(FAIR)
+  assert.ok(tier.notes.some(n => /scored on the win-window TIER/.test(n)))
+})
+
+test('the tier note names WHY the odds were unavailable — offseason vs a failed fetch', () => {
+  const off = grade(FAIR, makeOffseasonWeekly(), { isOffseason: true })
+  assert.ok(
+    off.notes.some(n => /offseason, so there is no rest-of-season simulation/.test(n)),
+    '"there is nothing to simulate" and "we could not fetch it" are different answers'
+  )
+  const inSeason = grade(FAIR)
+  assert.ok(inSeason.notes.some(n => /schedule did not load/.test(n)))
+})
+
+test('odds of 0 are honoured as a real Seller stance, not treated as missing', () => {
+  // The `?? null` guard in server.js exists so a MISSING entry falls back to
+  // the tier; a genuine 0% must still score, or an eliminated team would be
+  // graded as though its window were unknown.
+  const a = grade({ ...FAIR, myPlayoffPct: 0 })
+  assert.equal(a.winWindow.basis, 'odds')
 })
 
 test('the notes name what is NOT wired, so absence is never read as zero', () => {

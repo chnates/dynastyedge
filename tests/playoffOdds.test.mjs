@@ -21,7 +21,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { simulatePlayoffs, getDeadlineVerdict } from '../src/utils/playoffOdds.js'
+import { simulatePlayoffs, getDeadlineVerdict, splitCompletedWeeks, buildPlayoffOutlook } from '../src/utils/playoffOdds.js'
 
 // Synthetic 4-team fixture: distinct strengths, 3 remaining weeks, one team
 // with a nonzero base record so "on top of current standings" is exercised.
@@ -94,4 +94,114 @@ test('getDeadlineVerdict thresholds: Buyer ≥ 0.70, Seller < 0.35, bubble betwe
 test('getDeadlineVerdict with null odds → "Wait" (Feature 14: consumers degrade silently in the offseason)', () => {
   assert.equal(getDeadlineVerdict(null, 'Middle').stance, 'Wait')
   assert.equal(getDeadlineVerdict(undefined, 'Contending').stance, 'Wait')
+})
+
+// ── splitCompletedWeeks + buildPlayoffOutlook ────────────────────────────
+//
+// Both were the body of usePlayoffOdds' `processWeeks` and `deriveOdds` and
+// were extracted here (2026-09-19) so the MCP server's get_playoff_odds runs
+// exactly the model the app runs — the same prerequisite shape as
+// getTeamName, buildLeagueState and buildFreeAgentPool. Equivalence to the
+// pre-extraction memo body was proved by running the two side by side on
+// preseason / active / complete / partially-played / no-schedule inputs at
+// two field sizes each, deepStrictEqual on all 20.
+//
+// Behaviours pinned (with their source):
+//  - usePlayoffOdds' own comment: "a week counts as complete only when EVERY
+//    team in it has scored — so a partially-played current week is simulated
+//    fresh instead of contaminating the model".
+//  - CLAUDE.md Feature 14's three page states, and specifically that
+//    preseason returns NO results rather than a fabricated percentage.
+
+const WEEK_ROSTERS = [1, 2, 3, 4].map(id => ({
+  rosterId: id,
+  owner: { user_id: String(id), display_name: `o${id}` },
+  record: { wins: 1, losses: 1, ties: 0 },
+  pointsFor: 200 + id * 10,
+  players: ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'DEF'].map((p, i) => ({
+    sleeperId: `${id}_${i}`, position: p, value: 1000 + id * 100 + i * 50,
+  })),
+}))
+
+const wk = (week, played) => ({
+  week,
+  entries: [1, 2, 3, 4].map((r, i) => ({
+    roster_id: r, matchup_id: i < 2 ? 1 : 2, points: played ? 100 + r * 5 : 0,
+  })),
+})
+
+test('splitCompletedWeeks counts a week only when EVERY team in it has scored', () => {
+  const partial = {
+    week: 2,
+    entries: [
+      { roster_id: 1, matchup_id: 1, points: 110 },
+      { roster_id: 2, matchup_id: 1, points: 0 }, // still playing
+      { roster_id: 3, matchup_id: 2, points: 95 },
+      { roster_id: 4, matchup_id: 2, points: 88 },
+    ],
+  }
+  const r = splitCompletedWeeks([wk(1, true), partial])
+  assert.equal(r.completedWeeks, 1, 'week 2 is not complete')
+  assert.equal(r.completedScores[1].length, 1, 'only week 1 contributed a score')
+  assert.equal(r.remainingSchedule.length, 1, 'week 2 goes back into the schedule to be simulated fresh')
+  assert.equal(r.remainingSchedule[0].week, 2)
+})
+
+test('splitCompletedWeeks ignores a week with no matchup_id — no schedule posted yet', () => {
+  const r = splitCompletedWeeks([{ week: 1, entries: [{ roster_id: 1, matchup_id: null, points: 0 }] }])
+  assert.equal(r.completedWeeks, 0)
+  assert.equal(r.remainingSchedule.length, 0, 'an unpaired entry is not a game')
+})
+
+test('splitCompletedWeeks tolerates missing and empty weeks', () => {
+  assert.equal(splitCompletedWeeks(null).completedWeeks, 0)
+  assert.equal(splitCompletedWeeks([{ week: 1, entries: [] }]).remainingSchedule.length, 0)
+})
+
+test('buildPlayoffOutlook: no schedule at all is PRESEASON, with null results', () => {
+  const o = buildPlayoffOutlook({
+    allRosters: WEEK_ROSTERS,
+    perWeek: [1, 2, 3].map(w => ({ week: w, entries: [] })),
+    playoffTeams: 2,
+  })
+  assert.equal(o.status, 'preseason')
+  assert.equal(o.results, null, 'nothing to simulate — a percentage here would be invented')
+  assert.deepEqual(o.oddsByRoster, {})
+  assert.ok(o.strengthPreview.length === 4, 'a strength-ranked preview stands in')
+})
+
+test('buildPlayoffOutlook: a posted, unplayed schedule is ACTIVE and produces real odds', () => {
+  const o = buildPlayoffOutlook({
+    allRosters: WEEK_ROSTERS,
+    perWeek: [1, 2, 3].map(w => wk(w, false)),
+    playoffTeams: 2,
+  })
+  assert.equal(o.status, 'active')
+  assert.equal(o.completedWeeks, 0)
+  assert.equal(o.remainingGames, 6)
+  assert.equal(o.strengthPreview, null, 'the real simulation ran, so no preview')
+  const total = Object.values(o.oddsByRoster).reduce((s, r) => s + r.playoffPct, 0)
+  assert.ok(Math.abs(total - 2) < 0.001, 'Σ odds === the field size')
+})
+
+test('buildPlayoffOutlook: every week played is COMPLETE, and deterministic', () => {
+  const o = buildPlayoffOutlook({
+    allRosters: WEEK_ROSTERS,
+    perWeek: [1, 2, 3].map(w => wk(w, true)),
+    playoffTeams: 2,
+  })
+  assert.equal(o.status, 'complete')
+  assert.equal(o.remainingGames, 0)
+  Object.values(o.oddsByRoster).forEach(r => {
+    assert.ok(r.playoffPct === 1 || r.playoffPct === 0, 'no games left means no uncertainty')
+  })
+})
+
+test('buildPlayoffOutlook is deterministic — the same input gives the same odds', () => {
+  const input = { allRosters: WEEK_ROSTERS, perWeek: [1, 2, 3].map(w => wk(w, false)), playoffTeams: 2 }
+  assert.deepEqual(buildPlayoffOutlook(input), buildPlayoffOutlook(input))
+})
+
+test('buildPlayoffOutlook returns null without rosters rather than an empty answer', () => {
+  assert.equal(buildPlayoffOutlook({ allRosters: [], perWeek: [] }), null)
 })
