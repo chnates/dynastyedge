@@ -22,6 +22,35 @@ export function buildOpponentMap(schedule, week) {
   return opp
 }
 
+// Teams whose game this week has already kicked off — Sleeper LOCKS a player
+// the moment his game starts, so nobody on these teams can be moved into or
+// out of a lineup any more, whatever his projection or injury status now says.
+//
+// THIS IS READ OFF A FIELD THE SCHEDULE ALREADY CARRIES. `parseByeTeams` above
+// reads only `home`/`away`/`week` and throws `status` away, which is why the
+// Optimizer used to recommend sitting a Thursday-night player on Sunday
+// morning — a move that cannot be made, advertising points that cannot be won.
+//
+// A game is locked when we POSITIVELY know it is past `pre_game`. An absent or
+// unrecognised status means NOT locked, deliberately: over-locking would pin a
+// player you can still move and hide a real move, while under-locking merely
+// degrades to the behaviour that shipped before this existed. Same discipline
+// as an empty `playingTeams` meaning "byes unknown" rather than "everyone is
+// on bye".
+export const LOCKED_GAME_STATUSES = new Set(['in_game', 'complete', 'post_game', 'final'])
+
+export function parseLockedTeams(schedule, week) {
+  const locked = new Set()
+  ;(Array.isArray(schedule) ? schedule : []).forEach(g => {
+    if (g.week !== week) return
+    const status = typeof g.status === 'string' ? g.status.toLowerCase() : null
+    if (!status || status === 'pre_game' || !LOCKED_GAME_STATUSES.has(status)) return
+    if (g.home) locked.add(g.home)
+    if (g.away) locked.add(g.away)
+  })
+  return locked
+}
+
 // Rank each NFL defense vs each position by the fantasy points it allowed in
 // the given week. Returns { QB: { 'NE': 'Easy'|'Neutral'|'Tough', ... }, ... }.
 //
@@ -104,9 +133,18 @@ const SHORT_LABEL = {
   'NFI-R': 'NFI', NA: 'NA',
 }
 
-export function getAvailability(player, playerStatuses, playingTeams) {
+// `locked` is ORTHOGONAL to `blocked`, and conflating the two is the bug this
+// parameter exists to fix. `blocked` is a forward-looking claim — "he will
+// score 0, take him out". `locked` is a claim about the transaction — "you
+// cannot take him out at all". DJ Moore was both Out and locked: the engine
+// saw only `blocked`, told the owner to bench a player whose game had finished
+// three days earlier, and counted the 10.9 it had just zeroed as points
+// recoverable from the bench. They were not recoverable; he had already scored
+// -0.1 and the slot was sealed.
+export function getAvailability(player, playerStatuses, playingTeams, lockedTeams) {
+  const locked = !!(lockedTeams?.size > 0 && player?.team && lockedTeams.has(player.team))
   const done = (blocked, status, label) =>
-    ({ blocked, status, label, short: label ? (SHORT_LABEL[label] ?? label) : null })
+    ({ blocked, status, label, short: label ? (SHORT_LABEL[label] ?? label) : null, locked })
 
   if (!player) return done(true, 'out', 'Empty')
 
@@ -124,8 +162,8 @@ export function getAvailability(player, playerStatuses, playingTeams) {
   return done(false, 'ok', null)
 }
 
-function isHardBlocked(player, playerStatuses, playingTeams) {
-  return getAvailability(player, playerStatuses, playingTeams).blocked
+function isHardBlocked(player, playerStatuses, playingTeams, lockedTeams) {
+  return getAvailability(player, playerStatuses, playingTeams, lockedTeams).blocked
 }
 
 // Determine the flag for a starter slot.

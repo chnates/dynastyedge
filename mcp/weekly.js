@@ -42,6 +42,7 @@
 // copy of the app's, right down to the field names.
 
 import { SLEEPER_BASE, SLEEPER_ROOT } from '../src/constants.js'
+import { parseLockedTeams } from '../src/utils/projections.js'
 import { createFetcher } from './limit.js'
 import { stampSource } from './snapshot.js'
 import { memoryStore, loadSource } from './store.js'
@@ -68,6 +69,19 @@ export function resetWeeklyCache() {
 // treats a player as on bye when `playingTeams.size > 0`, so a failed schedule
 // fetch degrades to "we cannot know who is on bye" rather than inventing a
 // league-wide bye week.
+// team → this week's game status, straight off the schedule payload. The same
+// fetch that yields byes yields locks; `status` was simply being thrown away.
+export function parseGameStatus(schedule, week) {
+  const byTeam = {}
+  ;(Array.isArray(schedule) ? schedule : []).forEach(g => {
+    if (g.week !== week) return
+    const status = typeof g.status === 'string' ? g.status.toLowerCase() : null
+    if (g.home) byTeam[g.home] = status
+    if (g.away) byTeam[g.away] = status
+  })
+  return byTeam
+}
+
 export function parseByeTeams(schedule, week) {
   const games = Array.isArray(schedule) ? schedule.filter(g => g.week === week) : []
   const playing = new Set()
@@ -99,7 +113,7 @@ export async function getWeekly({
     return {
       available: false, isOffseason: true,
       season: nflState?.season ?? null, week: null,
-      projMap: null, playingTeams: new Set(), scheduleGames: [],
+      projMap: null, playingTeams: new Set(), lockedTeams: new Set(), gameStatus: {}, scheduleGames: [],
       sources: {}, requestedWeek: week ?? null,
       notes: ['It is the offseason, so Sleeper publishes no weekly projections. ' +
               'Weekly advice is unavailable until the regular season starts — there are no numbers to report, not zeros.'],
@@ -114,7 +128,7 @@ export async function getWeekly({
   if (!Number.isFinite(targetWeek) || targetWeek < 1) {
     return {
       available: false, isOffseason: false, season, week: null,
-      projMap: null, playingTeams: new Set(), scheduleGames: [],
+      projMap: null, playingTeams: new Set(), lockedTeams: new Set(), gameStatus: {}, scheduleGames: [],
       sources: {}, requestedWeek: week ?? null,
       notes: [`Sleeper reports no current week for ${season}, so there is nothing to project.`],
     }
@@ -150,6 +164,11 @@ export async function getWeekly({
   }
   const scheduleGames = Array.isArray(schedule.data) ? schedule.data : []
   const playingTeams = parseByeTeams(scheduleGames, targetWeek)
+  // Teams whose game has kicked off. Sleeper seals a player's lineup slot at
+  // kickoff, so a tool that ignores this offers moves that cannot be made —
+  // which is exactly what lineup_advice did until it read this field.
+  const lockedTeams = parseLockedTeams(scheduleGames, targetWeek)
+  const gameStatus = parseGameStatus(scheduleGames, targetWeek)
   if (!playingTeams.size) {
     notes.push(
       'The NFL schedule did not load, so bye weeks cannot be detected. ' +
@@ -165,6 +184,8 @@ export async function getWeekly({
     requestedWeek: week ?? null,
     projMap: proj.data,
     playingTeams,
+    lockedTeams,
+    gameStatus,
     scheduleGames,
     sources: {
       projections: stampSource(proj),

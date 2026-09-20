@@ -35,6 +35,8 @@ import {
   getProjPts,
   getPlayerFlag,
   getBestBench,
+  parseLockedTeams,
+  getAvailability,
 } from '../src/utils/projections.js'
 
 // Six teams, three games — shaped exactly like the live payload.
@@ -208,4 +210,59 @@ test('getBestBench: slot-eligible, not hard-blocked, highest projection first', 
   assert.equal(getBestBench(['RB'], 's1', onBye, proj, {}, PLAYING).sleeperId, 'b2')
   assert.equal(getBestBench(['TE'], 's1', bench, proj, {}, PLAYING), null)
   assert.equal(getBestBench(['RB'], 's1', null, proj, {}, PLAYING), null)
+})
+
+
+// ── GAME LOCKS ────────────────────────────────────────────────────────────
+//
+// The schedule payload has always carried `status` per game; parseByeTeams
+// read only home/away/week and threw it away. That is why the Optimizer told
+// the owner on a Sunday to bench a player whose Thursday game had finished.
+
+const GAMES = [
+  { week: 2, status: 'complete', home: 'BUF', away: 'DET' },
+  { week: 2, status: 'in_game', home: 'KC', away: 'IND' },
+  { week: 2, status: 'pre_game', home: 'LAR', away: 'NYG' },
+  { week: 2, home: 'TB', away: 'CLE' },              // no status at all
+  { week: 3, status: 'complete', home: 'SEA', away: 'ARI' }, // another week
+]
+
+test('a finished or in-progress game locks both teams', () => {
+  const locked = parseLockedTeams(GAMES, 2)
+  assert.ok(locked.has('BUF') && locked.has('DET'), 'a completed game is sealed')
+  assert.ok(locked.has('KC') && locked.has('IND'), 'so is one under way')
+})
+
+test('a pre-game, an unknown status and another week are NOT locked', () => {
+  const locked = parseLockedTeams(GAMES, 2)
+  assert.ok(!locked.has('LAR') && !locked.has('NYG'), 'kickoff has not happened')
+  assert.ok(!locked.has('TB') && !locked.has('CLE'),
+    'an absent status means NOT locked, deliberately: over-locking pins a player you can ' +
+    'still move and hides a real move, while under-locking merely degrades to the ' +
+    'behaviour that shipped before locks existed')
+  assert.ok(!locked.has('SEA'), 'week 3 is a different question')
+})
+
+test('no schedule yields no locks rather than locking everyone', () => {
+  assert.equal(parseLockedTeams(null, 2).size, 0)
+  assert.equal(parseLockedTeams([], 2).size, 0,
+    'same discipline as an empty playingTeams meaning "byes unknown", not "everyone on bye"')
+})
+
+test('locked is ORTHOGONAL to blocked', () => {
+  const p = { sleeperId: '1', team: 'BUF', position: 'WR' }
+  const playing = new Set(['BUF'])
+  const locked = new Set(['BUF'])
+
+  const healthy = getAvailability(p, {}, playing, locked)
+  assert.equal(healthy.locked, true)
+  assert.equal(healthy.blocked, false, 'a locked healthy player is not blocked — he played')
+
+  const out = getAvailability(p, { 1: { injury_status: 'Out' } }, playing, locked)
+  assert.equal(out.locked, true)
+  assert.equal(out.blocked, true,
+    'DJ Moore was BOTH. Conflating them is what produced advice to bench a sealed slot')
+
+  const open = getAvailability(p, {}, playing, new Set())
+  assert.equal(open.locked, false, 'and with no locks known, nobody is locked')
 })

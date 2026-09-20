@@ -39,6 +39,10 @@ export default function LineupRow({
   const player  = entry?.player
   const avail   = entry?.availability
   const blocked = avail?.blocked
+  // His game has kicked off, so Sleeper has sealed this slot. The row stops
+  // offering a swap it cannot perform, and its number stops being a forecast.
+  const locked  = !!entry?.locked
+  const banked  = locked && entry?.actualPts != null
   const isTarget = state === 'target'
   const isArmed  = state === 'armed'
 
@@ -48,7 +52,7 @@ export default function LineupRow({
 
   const bodyAction = isTarget
     ? onSelectTarget
-    : (player ? onOpenProfile : onArm)
+    : (player ? onOpenProfile : (locked ? undefined : onArm))
 
   return (
     <div
@@ -57,7 +61,8 @@ export default function LineupRow({
         isTarget && 'bg-accent/10',
         isArmed  && 'bg-brand/10',
         state === 'muted' && 'opacity-35',
-        blocked && state === 'idle' && 'bg-danger/5',
+        blocked && !locked && state === 'idle' && 'bg-danger/5',
+        locked && state === 'idle' && 'bg-bg-secondary/60',
       )}
     >
       <button
@@ -88,6 +93,7 @@ export default function LineupRow({
             {avail?.short && (
               <Badge tone={AVAIL_TONE[avail.status] ?? 'neutral'} soft title={avail.label}>{avail.short}</Badge>
             )}
+
           </span>
           {isArmed && (
             <span className="block font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-brand-bright mt-0.5">
@@ -111,17 +117,30 @@ export default function LineupRow({
           {player?.team ?? ''}
         </span>
 
-        {/* Projection — a blocked player shows 0.0, not the projection Sleeper
-            still carries for him, because 0 is what he will actually score. */}
+        {/* The number. A blocked player shows 0.0, not the projection Sleeper
+            still carries for him, because 0 is what he will actually score —
+            EXCEPT once his game has started, when the honest number is what he
+            has already banked. DJ Moore read 0.0 here while sitting on a real
+            -0.1 that nothing could change. */}
         <span className={cn(
           'font-mono text-sm font-semibold shrink-0 w-10 text-right tabular-nums',
-          blocked ? 'text-text-tertiary' : 'text-text-primary',
+          blocked && !locked ? 'text-text-tertiary' : 'text-text-primary',
         )}>
-          {player ? (entry.effPts > 0 ? entry.effPts.toFixed(1) : '0.0') : '—'}
+          {player ? (Number.isFinite(entry.effPts) ? entry.effPts.toFixed(1) : '0.0') : '—'}
         </span>
 
-        {/* Matchup — hidden entirely when rankings don't exist yet (Week 1) */}
-        {matchupQuality && MATCHUP_TONE[matchupQuality] && (
+        {/* Matchup — hidden entirely when rankings don't exist yet (Week 1),
+            and REPLACED by the lock marker once the game has been played. A
+            matchup rating forecasts the defense a player is due to face; after
+            kickoff that is not a stale number but a meaningless one, so the row
+            spends the slot on the fact that actually applies. Keeping both also
+            squeezed the name column hard enough to break "DJ Moore" into seven
+            lines at 390px — the one column a lineup row must never lose. */}
+        {locked ? (
+          <Badge tone="neutral" soft title="His game has started — Sleeper has locked this slot">
+            {banked ? 'FINAL' : 'LOCKED'}
+          </Badge>
+        ) : matchupQuality && MATCHUP_TONE[matchupQuality] && (
           <Badge tone={MATCHUP_TONE[matchupQuality]} soft pill title={`${matchupQuality} matchup`}>
             {matchupQuality}
           </Badge>
@@ -131,7 +150,7 @@ export default function LineupRow({
             typographic mark rather than an icon set, and legible at 12px where
             a stroked glyph is not. */}
         <span className="shrink-0 w-4 flex items-center justify-center">
-          {isOptimal && !blocked && player && (
+          {isOptimal && !blocked && !locked && player && (
             <span className="font-mono text-[12px] leading-none text-success/70" aria-label="Optimal">✓</span>
           )}
         </span>
@@ -143,7 +162,7 @@ export default function LineupRow({
           <IconButton size="sm" label="Cancel swap" onClick={onCancel}>
             <span className="font-mono text-[13px] leading-none text-brand-bright">✕</span>
           </IconButton>
-        ) : state === 'idle' && player ? (
+        ) : state === 'idle' && player && !locked ? (
           <IconButton size="sm" label={`Swap ${player.name}`} onClick={onArm}>
             <span className="font-mono text-[13px] leading-none text-text-tertiary">⇄</span>
           </IconButton>

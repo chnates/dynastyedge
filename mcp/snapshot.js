@@ -112,6 +112,17 @@ function trimPlayerDB(data) {
       age: p.age ?? null,
       years_exp: p.years_exp ?? null,
       injury_status: p.injury_status ?? null,
+      // The three fields that turn a bare label into an answer. "Doubtful"
+      // tells a reader to go and look something up; "Doubtful — Knee/Meniscus,
+      // surgery" tells them the season is the question, not the afternoon.
+      // Measured on the live payload: Brock Bowers carried exactly that, and
+      // the tool that had it in hand reported only the word "Doubtful" and
+      // advised checking Sleeper.
+      injury_body_part: p.injury_body_part ?? null,
+      injury_notes: p.injury_notes || null,
+      // ESPN's athlete id, the secondary join into the news feed for items
+      // that carry `athleteIds` but no resolved Sleeper id.
+      espn_id: p.espn_id ?? null,
     }
   })
   return meta
