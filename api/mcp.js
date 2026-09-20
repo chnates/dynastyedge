@@ -231,6 +231,36 @@ function buildDraftSlots(draft, rosters) {
   }
   return null;
 }
+function buildDraftPickIndex(draft, picks, rosters) {
+  const idx = {};
+  if (!draft || !picks?.length) return idx;
+  const byRoster = buildDraftSlots(draft, rosters);
+  if (!byRoster || !Object.keys(byRoster).length) return idx;
+  const slotToRoster = {};
+  Object.entries(byRoster).forEach(([rid, slot]) => {
+    slotToRoster[slot] = String(rid);
+  });
+  picks.forEach((p) => {
+    if (!p?.player_id || p.draft_slot == null || p.round == null) return;
+    const originalRoster = slotToRoster[p.draft_slot];
+    if (originalRoster == null) return;
+    idx[`${draft.season}-${p.round}-${originalRoster}`] = {
+      playerId: String(p.player_id),
+      overall: p.pick_no,
+      slotLabel: `${p.round}.${String(p.draft_slot).padStart(2, "0")}`
+    };
+  });
+  return idx;
+}
+function buildGenericRoundValues(pickEntries) {
+  const byRound = {};
+  for (let round = 1; round < ROUND_SUFFIX.length; round++) {
+    const suffix = ROUND_SUFFIX[round];
+    const matches = (pickEntries ?? []).filter((e) => e.name.includes(suffix)).sort((a, b) => a.value - b.value);
+    byRound[round] = matches.length ? matches[Math.floor(matches.length / 2)].value : 0;
+  }
+  return byRound;
+}
 function computePickCapitalScore(picks, pickEntries, years) {
   const window = years ?? [];
   return picks.reduce((total, pick2) => {
@@ -838,6 +868,193 @@ var init_season = __esm({
   }
 });
 
+// mcp/transactions.js
+function lastTransactionWeek(nflState) {
+  const week = Number(nflState?.week);
+  if (!Number.isFinite(week)) return MAX_TRANSACTION_WEEK;
+  return Math.min(MAX_TRANSACTION_WEEK, Math.max(1, week));
+}
+async function getTransactions({
+  leagueId,
+  nflState,
+  ttlMs = DEFAULT_TRANSACTIONS_TTL_MS,
+  frozenTtlMs = DEFAULT_FROZEN_TTL_MS,
+  force = false,
+  fetcher,
+  concurrency = 6,
+  store = defaultStore4
+} = {}) {
+  if (!leagueId) throw new Error("getTransactions requires a leagueId");
+  const lastWeek = lastTransactionWeek(nflState);
+  const get = fetcher ?? createFetcher({ concurrency });
+  const weeks = Array.from({ length: lastWeek }, (_, i) => i + 1);
+  const loaded = await Promise.all(weeks.map((w) => {
+    const ttl = force ? -1 : w < lastWeek ? frozenTtlMs : ttlMs;
+    return loadSource(
+      store,
+      txKeyFor(leagueId, w),
+      ttl,
+      () => get(`${SLEEPER_BASE}/league/${leagueId}/transactions/${w}`, { label: `Sleeper transactions w${w}` })
+    ).catch((err) => ({ data: null, fetchedAt: null, stale: false, error: err.message }));
+  }));
+  const failedWeeks = weeks.filter((_, i) => !Array.isArray(loaded[i].data));
+  const notes = [];
+  if (failedWeeks.length === lastWeek) {
+    return {
+      available: false,
+      reason: "unavailable",
+      transactions: null,
+      weeks: lastWeek,
+      failedWeeks,
+      sources: { transactions: stampSource(loaded[0] ?? {}) },
+      notes: [
+        `None of this league's ${lastWeek} transaction week(s) could be loaded (${loaded[0]?.error ?? "unknown error"}), so there is no activity read. This is a data failure, NOT a quiet league \u2014 an empty feed and an outage look identical, and reporting one as the other would state "they have made no moves" on no evidence.`
+      ]
+    };
+  }
+  if (failedWeeks.length) {
+    notes.push(
+      `Transaction week(s) ${failedWeeks.join(", ")} did not load, so any moves made in them are absent from the activity read below \u2014 it understates how active a manager has been.`
+    );
+  }
+  const transactions = loaded.flatMap((l) => Array.isArray(l.data) ? l.data : []).filter((tx) => tx?.status === "complete").sort((a, b) => (b.status_updated ?? 0) - (a.status_updated ?? 0));
+  const fetchedTimes = loaded.map((l) => l.fetchedAt).filter(Boolean);
+  const oldest = fetchedTimes.length ? Math.min(...fetchedTimes) : null;
+  return {
+    available: true,
+    reason: null,
+    transactions,
+    weeks: lastWeek,
+    failedWeeks,
+    sources: {
+      transactions: stampSource({
+        fetchedAt: oldest,
+        stale: loaded.some((l) => l.stale),
+        error: failedWeeks.length ? `${failedWeeks.length} of ${lastWeek} weeks failed` : null
+      })
+    },
+    notes
+  };
+}
+var DEFAULT_TRANSACTIONS_TTL_MS, DEFAULT_FROZEN_TTL_MS, MAX_TRANSACTION_WEEK, txKeyFor, defaultStore4;
+var init_transactions = __esm({
+  "mcp/transactions.js"() {
+    init_constants();
+    init_limit();
+    init_snapshot();
+    init_store();
+    DEFAULT_TRANSACTIONS_TTL_MS = 15 * 60 * 1e3;
+    DEFAULT_FROZEN_TTL_MS = 12 * 60 * 60 * 1e3;
+    MAX_TRANSACTION_WEEK = 18;
+    txKeyFor = (leagueId, week) => `transactions:${leagueId}_${week}`;
+    defaultStore4 = memoryStore();
+  }
+});
+
+// mcp/history.js
+async function fetchDrafts(get, leagueId) {
+  const drafts = await get(`${SLEEPER_BASE}/league/${leagueId}/drafts`, { label: "Sleeper drafts" });
+  return Promise.all(
+    (drafts ?? []).map(async (draft) => ({
+      draft,
+      picks: await get(`${SLEEPER_BASE}/draft/${draft.draft_id}/picks`, { label: "Draft picks" }).catch(() => []) ?? []
+    }))
+  );
+}
+async function fetchPastSeason(get, leagueInfo) {
+  const id = leagueInfo.league_id;
+  const [rosters, drafts] = await Promise.all([
+    get(`${SLEEPER_BASE}/league/${id}/rosters`, { label: "Sleeper rosters" }).catch(() => []),
+    // One bad PAST season degrades the record rather than sinking the walk —
+    // the same per-item contract the app keeps. Only losing everything is
+    // unavailable, which the caller decides.
+    fetchDrafts(get, id).catch(() => [])
+  ]);
+  return {
+    season: String(leagueInfo.season),
+    leagueId: id,
+    leagueInfo,
+    users: [],
+    // not fetched — normalizeSeasons maps over it
+    rosters: rosters ?? [],
+    transactions: [],
+    // not fetched — see the header
+    drafts
+  };
+}
+async function getLeagueHistory({
+  leagueId,
+  leagueInfo,
+  ttlMs = DEFAULT_HISTORY_TTL_MS,
+  force = false,
+  fetcher,
+  concurrency = 6,
+  store = defaultStore5
+} = {}) {
+  if (!leagueId) throw new Error("getLeagueHistory requires a leagueId");
+  const get = fetcher ?? createFetcher({ concurrency });
+  const ttl = force ? -1 : ttlMs;
+  const loaded = await loadSource(store, historyKeyFor(leagueId), ttl, async () => {
+    const pastLeagues = [];
+    let prevId = leagueInfo?.previous_league_id;
+    while (prevId && prevId !== "0" && pastLeagues.length < MAX_SEASONS_BACK) {
+      const info = await get(`${SLEEPER_BASE}/league/${prevId}`, { label: "Sleeper league" }).catch(() => null);
+      if (!info) break;
+      pastLeagues.push(info);
+      prevId = info.previous_league_id;
+    }
+    let currentDraftsFailed = false;
+    const [currentDrafts, ...pastSeasons] = await Promise.all([
+      fetchDrafts(get, leagueId).catch(() => {
+        currentDraftsFailed = true;
+        return [];
+      }),
+      ...pastLeagues.map((info) => fetchPastSeason(get, info))
+    ]);
+    if (currentDraftsFailed && pastSeasons.length === 0) {
+      throw new Error("no league history could be loaded (drafts list failed, no past seasons reachable)");
+    }
+    return {
+      currentSeason: String(leagueInfo?.season ?? ""),
+      currentDrafts,
+      pastSeasons
+      // newest → oldest
+    };
+  }).catch((err) => ({ data: null, fetchedAt: null, stale: false, error: err.message }));
+  if (!loaded.data) {
+    return {
+      available: false,
+      reason: "unavailable",
+      history: null,
+      sources: { history: stampSource(loaded) },
+      notes: [
+        `This league's past seasons could not be loaded (${loaded.error ?? "unknown error"}), so the rookie-draft hindsight record is absent. That removes context from the pick read below, never a number from the grade.`
+      ]
+    };
+  }
+  return {
+    available: true,
+    reason: null,
+    history: loaded.data,
+    seasonsBack: loaded.data.pastSeasons?.length ?? 0,
+    sources: { history: stampSource(loaded) },
+    notes: []
+  };
+}
+var DEFAULT_HISTORY_TTL_MS, MAX_SEASONS_BACK, historyKeyFor, defaultStore5;
+var init_history = __esm({
+  "mcp/history.js"() {
+    init_constants();
+    init_limit();
+    init_snapshot();
+    init_store();
+    DEFAULT_HISTORY_TTL_MS = 6 * 60 * 60 * 1e3;
+    MAX_SEASONS_BACK = 8;
+    historyKeyFor = (leagueId) => `history:${leagueId}`;
+    defaultStore5 = memoryStore();
+  }
+});
+
 // mcp/config.js
 function loadConfig(env = process.env) {
   const rosterEnv = env.DYNASTYEDGE_ROSTER_ID;
@@ -854,6 +1071,14 @@ function loadConfig(env = process.env) {
     // The full argument is in mcp/weekly.js's header.
     weeklyTtlMs: Number(env.DYNASTYEDGE_WEEKLY_TTL_MS) || DEFAULT_WEEKLY_TTL_MS,
     seasonTtlMs: Number(env.DYNASTYEDGE_SEASON_TTL_MS) || DEFAULT_SEASON_TTL_MS,
+    // The transaction feed is TWO domains under one name (mcp/transactions.js):
+    // the live week changes on an event — the very events that make a roster
+    // wrong — so it rides the SNAPSHOT's freshness, not season.js's 60 minutes.
+    // A settled bucket is frozen, so its number is eviction pressure.
+    transactionsTtlMs: Number(env.DYNASTYEDGE_TRANSACTIONS_TTL_MS) || DEFAULT_TRANSACTIONS_TTL_MS,
+    frozenTtlMs: Number(env.DYNASTYEDGE_FROZEN_TTL_MS) || DEFAULT_FROZEN_TTL_MS,
+    // Past seasons never change. The longest TTL here, and for that reason.
+    historyTtlMs: Number(env.DYNASTYEDGE_HISTORY_TTL_MS) || DEFAULT_HISTORY_TTL_MS,
     concurrency: Number(env.DYNASTYEDGE_CONCURRENCY) || 6,
     githubClientId: env.GITHUB_CLIENT_ID || DEFAULT_GITHUB_CLIENT_ID,
     // No default, deliberately. A server that starts without this would
@@ -870,6 +1095,8 @@ var init_config = __esm({
     init_constants();
     init_weekly();
     init_season();
+    init_transactions();
+    init_history();
     DEFAULT_GITHUB_CLIENT_ID = "Ov23lipGgde1WRtguwMc";
     DEFAULT_ALLOWED_GITHUB_LOGIN = "chnates";
     DEFAULT_ORIGIN = "https://dynastyedge-mcp.vercel.app";
@@ -39689,6 +39916,177 @@ var init_mcp = __esm({
   }
 });
 
+// src/utils/managerAnalysis.js
+function normalizeSeasons(history, currentLeague) {
+  const seasons = [];
+  const currentOwnerByRoster = {};
+  const currentRecordByOwner = {};
+  currentLeague.allRosters.forEach((r) => {
+    const ownerId = r.owner?.user_id;
+    if (!ownerId) return;
+    currentOwnerByRoster[r.rosterId] = ownerId;
+    currentRecordByOwner[ownerId] = r.record;
+  });
+  seasons.push({
+    season: currentLeague.season,
+    ownerByRoster: currentOwnerByRoster,
+    userById: Object.fromEntries(
+      currentLeague.allRosters.filter((r) => r.owner).map((r) => [r.owner.user_id, r.owner])
+    ),
+    transactions: currentLeague.transactions ?? [],
+    drafts: history?.currentDrafts ?? [],
+    recordByOwner: currentRecordByOwner
+  });
+  (history?.pastSeasons ?? []).forEach((ps) => {
+    const ownerByRoster = {};
+    const recordByOwner = {};
+    ps.rosters.forEach((r) => {
+      if (!r.owner_id) return;
+      ownerByRoster[r.roster_id] = r.owner_id;
+      const s = r.settings ?? {};
+      recordByOwner[r.owner_id] = {
+        wins: s.wins ?? 0,
+        losses: s.losses ?? 0,
+        ties: s.ties ?? 0
+      };
+    });
+    seasons.push({
+      season: ps.season,
+      ownerByRoster,
+      userById: Object.fromEntries(ps.users.map((u) => [u.user_id, u])),
+      transactions: ps.transactions,
+      drafts: ps.drafts,
+      recordByOwner
+    });
+  });
+  return seasons;
+}
+function buildPickIndex(seasons) {
+  const idx = {};
+  seasons.forEach((s) => {
+    const rosters = Object.entries(s.ownerByRoster).map(([roster_id, owner_id]) => ({ roster_id, owner_id }));
+    s.drafts.forEach(({ draft, picks }) => {
+      if (!picks?.length) return;
+      const forDraft = buildDraftPickIndex(draft, picks, rosters);
+      if (!Object.keys(forDraft).length) {
+        console.warn(`managerAnalysis: no draft order for ${draft?.season} draft \u2014 its picks can't resolve to players`);
+        return;
+      }
+      Object.assign(idx, forDraft);
+    });
+  });
+  return idx;
+}
+function makeResolvers(playerMap, playerDB, pickEntries, pickIndex) {
+  const genericRoundValues = buildGenericRoundValues(pickEntries);
+  function playerAsset(pid) {
+    const id = String(pid);
+    const fc = playerMap[id];
+    const meta3 = playerDB?.[id];
+    return {
+      type: "player",
+      id,
+      label: fc?.name ?? meta3?.name ?? `Player #${id}`,
+      position: fc?.position ?? meta3?.position ?? null,
+      age: fc?.age ?? meta3?.age ?? null,
+      value: fc?.value ?? 0,
+      ranked: !!fc,
+      player: fc ?? null
+    };
+  }
+  function pickAsset(pk) {
+    const season = String(pk.season);
+    const roundLabel = ROUND_LABELS[pk.round] ?? `R${pk.round}`;
+    const pickKey = `${season}-${pk.round}-${pk.roster_id}`;
+    const resolved = pickIndex[pickKey];
+    if (resolved) {
+      const became = playerAsset(resolved.playerId);
+      return {
+        type: "pick",
+        resolved: true,
+        pickKey,
+        label: `${season} ${roundLabel} \u2192 ${became.label}`,
+        position: became.position,
+        age: null,
+        value: became.value,
+        player: became.player
+      };
+    }
+    const market = findPickValue({ season, round: pk.round }, pickEntries);
+    const value = market > 0 ? market : genericRoundValues[pk.round] ?? 0;
+    return {
+      type: "pick",
+      resolved: false,
+      approx: market === 0 && value > 0,
+      pickKey,
+      label: `${season} ${roundLabel}`,
+      position: null,
+      age: null,
+      value,
+      player: null
+    };
+  }
+  return { playerAsset, pickAsset };
+}
+function buildDraftRecords(seasons, resolvers) {
+  const byOwner = {};
+  seasons.forEach((s) => {
+    s.drafts.forEach(({ draft, picks }) => {
+      if (!picks?.length) return;
+      if ((draft.settings?.rounds ?? 0) > STARTUP_ROUNDS) return;
+      const graded = picks.filter((p) => p?.player_id).map((p) => ({ pick: p, asset: resolvers.playerAsset(p.player_id) }));
+      const valueOrder = [...graded].sort((a, b) => b.asset.value - a.asset.value);
+      const valueRank = new Map(valueOrder.map((g, i) => [g.pick.player_id, i + 1]));
+      graded.forEach(({ pick: pick2, asset }) => {
+        const ownerId = pick2.picked_by || s.ownerByRoster[pick2.roster_id];
+        if (!ownerId) return;
+        if (!byOwner[ownerId]) byOwner[ownerId] = [];
+        byOwner[ownerId].push({
+          season: String(draft.season),
+          overall: pick2.pick_no,
+          slotLabel: `${pick2.round}.${String(pick2.draft_slot).padStart(2, "0")}`,
+          player: asset,
+          delta: pick2.pick_no - (valueRank.get(pick2.player_id) ?? pick2.pick_no),
+          hit: asset.value >= DRAFT_HIT_VALUE
+        });
+      });
+    });
+  });
+  const result = {};
+  Object.entries(byOwner).forEach(([ownerId, rows]) => {
+    rows.sort((a, b) => b.season.localeCompare(a.season) || a.overall - b.overall);
+    const totalValue = rows.reduce((sum, r) => sum + r.player.value, 0);
+    const hits = rows.filter((r) => r.hit).length;
+    const avgDelta = rows.length ? rows.reduce((sum, r) => sum + r.delta, 0) / rows.length : 0;
+    const best = [...rows].sort((a, b) => b.delta - a.delta)[0] ?? null;
+    result[ownerId] = {
+      picks: rows,
+      count: rows.length,
+      totalValue,
+      hits,
+      avgDelta: Math.round(avgDelta * 10) / 10,
+      best: best && best.delta >= STEAL_DELTA ? best : null
+    };
+  });
+  return result;
+}
+function buildDraftGrades({ history, currentLeague, playerMap, pickEntries, playerDB }) {
+  if (!currentLeague?.allRosters) return {};
+  const seasons = normalizeSeasons(history, currentLeague);
+  const resolvers = makeResolvers(playerMap, playerDB ?? {}, pickEntries ?? [], buildPickIndex(seasons));
+  return buildDraftRecords(seasons, resolvers);
+}
+var ROUND_LABELS, STARTUP_ROUNDS, DRAFT_HIT_VALUE, STEAL_DELTA;
+var init_managerAnalysis = __esm({
+  "src/utils/managerAnalysis.js"() {
+    init_pickCapital();
+    ROUND_LABELS = ["", "1st", "2nd", "3rd", "4th", "5th"];
+    STARTUP_ROUNDS = 6;
+    DRAFT_HIT_VALUE = 1e3;
+    STEAL_DELTA = 5;
+  }
+});
+
 // src/utils/lineupBuild.js
 function selectOptimalStarters(items) {
   const byPos = {};
@@ -42255,6 +42653,45 @@ var init_tradeAnalysis = __esm({
   }
 });
 
+// src/utils/partnerActivity.js
+function buildPartnerActivity(transactions, rosterId, { playerMap, playerDB, now = Date.now(), windowDays = ACTIVITY_WINDOW_DAYS } = {}) {
+  if (!transactions?.length || rosterId == null) return null;
+  const cutoff = now - windowDays * DAY;
+  const rid = Number(rosterId);
+  const resolve = (id) => {
+    const fc = playerMap?.get?.(String(id)) ?? playerMap?.[String(id)];
+    if (fc) return { name: fc.name, position: fc.position };
+    const db = playerDB?.[String(id)];
+    if (db) return { name: db.full_name ?? `${db.first_name ?? ""} ${db.last_name ?? ""}`.trim(), position: db.position };
+    return null;
+  };
+  const recent = transactions.filter((tx) => (tx.status_updated ?? 0) >= cutoff && (tx.roster_ids ?? []).map(Number).includes(rid));
+  if (!recent.length) return { count: 0, windowDays, acquired: [], trades: 0, positionsAdded: [], summary: null };
+  const acquired = [];
+  let trades = 0;
+  recent.forEach((tx) => {
+    if (tx.type === "trade") trades += 1;
+    Object.entries(tx.adds ?? {}).forEach(([playerId, toRoster]) => {
+      if (Number(toRoster) !== rid) return;
+      const p = resolve(playerId);
+      if (p?.name) acquired.push({ ...p, via: tx.type, when: tx.status_updated });
+    });
+  });
+  acquired.sort((a, b) => (b.when ?? 0) - (a.when ?? 0));
+  const positionsAdded = [...new Set(acquired.map((a) => a.position).filter(Boolean))];
+  const weeks = Math.max(1, Math.round(windowDays / 7));
+  const named = acquired.slice(0, 3).map((a) => a.position ? `${a.name} (${a.position})` : a.name);
+  const summary = named.length ? `Added ${named.join(", ")}${acquired.length > named.length ? ` +${acquired.length - named.length} more` : ""} in the last ${weeks} weeks.` : `${recent.length} move${recent.length > 1 ? "s" : ""} in the last ${weeks} weeks \u2014 no additions.`;
+  return { count: recent.length, windowDays, acquired, trades, positionsAdded, summary };
+}
+var DAY, ACTIVITY_WINDOW_DAYS;
+var init_partnerActivity = __esm({
+  "src/utils/partnerActivity.js"() {
+    DAY = 864e5;
+    ACTIVITY_WINDOW_DAYS = 21;
+  }
+});
+
 // mcp/tools/analyzeTrade.js
 function resolveAssetId(id, roster, sideLabel) {
   const raw = String(id).trim();
@@ -42293,7 +42730,19 @@ function resolveSide(ids, roster, sideLabel) {
   });
   return errors.length ? { error: errors.join(" ") } : { assets };
 }
-function buildTradeAnswer(snapshot, weekly, { give, get, partner, myRosterId, myPlayoffPct = null } = {}) {
+function buildTradeAnswer(snapshot, weekly, {
+  give,
+  get,
+  partner,
+  myRosterId,
+  myPlayoffPct = null,
+  transactions = null,
+  draftGrades = null,
+  // null = not attempted (an ordinary grade that needed neither);
+  // false = attempted and failed, which the notes must say out loud.
+  activityAvailable = null,
+  historyAvailable = null
+} = {}) {
   const { league, values } = snapshot;
   if (!league) throw new Error("League state unavailable");
   if (!league.myRoster) {
@@ -42321,6 +42770,12 @@ function buildTradeAnswer(snapshot, weekly, { give, get, partner, myRosterId, my
   const replacementLevels = buildReplacementLevels(league.allRosters)?.levels ?? null;
   const rosterLimits = getRosterLimits(league.leagueInfo);
   const weeklyProjections = weekly?.available && weekly.projMap ? { projMap: weekly.projMap, week: weekly.week } : null;
+  const partnerActivity = transactions?.length ? buildPartnerActivity(transactions, opponentRoster.rosterId, {
+    playerMap: values?.playerMap ?? null,
+    playerDB: snapshot.playerDB ?? null
+  }) : null;
+  const myOwnerId = myRoster?.owner?.user_id ?? null;
+  const myDraftGrade = draftGrades && myOwnerId ? draftGrades[myOwnerId] ?? null : null;
   const analysis = analyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, league.allRosters, {
     // Live rest-of-season odds when they exist; null in the offseason or when
     // the schedule did not load, which is the exact tier fallback this tool
@@ -42328,13 +42783,11 @@ function buildTradeAnswer(snapshot, weekly, { give, get, partner, myRosterId, my
     myPlayoffPct,
     opponentTrajectoryRead,
     curves: ageCurves?.curves ?? null,
-    myDraftGrade: null,
-    // needs the league-history walk
+    myDraftGrade,
     replacementLevels,
     rosterLimits,
     weeklyProjections,
-    partnerActivity: null
-    // needs the transaction feed
+    partnerActivity
   });
   if (!analysis) throw new Error("Trade analysis unavailable \u2014 roster or league data missing");
   const verdict = getTradeVerdict(analysis);
@@ -42430,7 +42883,18 @@ function buildTradeAnswer(snapshot, weekly, { give, get, partner, myRosterId, my
     // buildTradePitch returns { text, lines, bullets }; `text` is the copyable
     // message and the bullets are the reasons it is built from.
     pitch: pitch ? { text: pitch.text, bullets: pitch.bullets ?? [] } : null,
-    notes: buildNotes5({ snapshot, weekly, bothSides, giveAssets, getAssets, windowBasis: analysis.windowBasis })
+    notes: buildNotes5({
+      snapshot,
+      weekly,
+      bothSides,
+      giveAssets,
+      getAssets,
+      windowBasis: analysis.windowBasis,
+      partnerActivity,
+      myDraftGrade,
+      activityAvailable,
+      historyAvailable
+    })
   };
 }
 function assetRow(a) {
@@ -42458,7 +42922,18 @@ function assetRow(a) {
     trend30Day: a.trend30Day ?? 0
   };
 }
-function buildNotes5({ snapshot, weekly, bothSides, giveAssets, getAssets, windowBasis }) {
+function buildNotes5({
+  snapshot,
+  weekly,
+  bothSides,
+  giveAssets,
+  getAssets,
+  windowBasis,
+  partnerActivity,
+  myDraftGrade,
+  activityAvailable,
+  historyAvailable
+}) {
   const notes = [];
   if (snapshot.asOf.stale) {
     notes.push("At least one source failed to refresh, so this is cached data \u2014 see asOf.sources.");
@@ -42488,9 +42963,31 @@ function buildNotes5({ snapshot, weekly, bothSides, giveAssets, getAssets, windo
       snapshot.isOffseason ? "Offseason: no weekly lineup-impact read, because Sleeper publishes no projections." : "This week's projections did not load, so the weekly lineup-impact read is absent."
     );
   }
-  notes.push(
-    "Not wired in this server: your rookie-draft hindsight record (the pick-confidence nudge) and the partner's recent transactions. Both need fetches beyond the league snapshot; their absence removes context, never a number."
-  );
+  if (activityAvailable === false) {
+    notes.push(
+      'The transaction feed did not load, so there is no read on what this partner has been doing lately. That is "we could not find out", which is a different answer from a quiet manager \u2014 do not read this silence as evidence about their activity either way.'
+    );
+  } else if (partnerActivity) {
+    notes.push(
+      partnerActivity.count > 0 ? `Partner activity (descriptive only, never scored): ${partnerActivity.summary}` : `This partner has made no moves in the last ${partnerActivity.windowDays} days.`
+    );
+  }
+  const acquiringPicks = getAssets.some((a) => a.type === "pick");
+  if (acquiringPicks) {
+    if (historyAvailable === false) {
+      notes.push(
+        "Your rookie-draft hindsight record could not be loaded, so the pick-confidence nudge is absent from the read on this capital. It removes context, never a number."
+      );
+    } else if (myDraftGrade && (myDraftGrade.count ?? 0) >= 5) {
+      notes.push(
+        `Pick-confidence context: ${myDraftGrade.hits} of your ${myDraftGrade.count} graded rookie picks are now worth starting-caliber dynasty value. That is a record, not durable skill \u2014 the sample is small \u2014 and it adjusts confidence in this pick capital, never its raw value.`
+      );
+    } else if (myDraftGrade) {
+      notes.push(
+        `Your rookie-draft record is only ${myDraftGrade.count} graded pick(s), below the 5 this nudge requires, so the pick capital here is read at market with no confidence adjustment.`
+      );
+    }
+  }
   notes.push(
     "This grades the ROSTER logic. Whether the other manager would accept is deliberately not modelled \u2014 per-manager behavioural profiling was tested on this league's full 95-trade corpus and disconfirmed."
   );
@@ -42555,17 +43052,19 @@ function renderTradeText(a) {
   a.notes.forEach((n) => L.push(`Note: ${n}`));
   return L.join("\n").trimEnd();
 }
-var MAX_ASSETS_PER_SIDE, PICK_ID_RE, PLAYER_ID_RE, num4;
+var MAX_ASSETS_PER_SIDE, PICK_ID_RE, isPickId, PLAYER_ID_RE, num4;
 var init_analyzeTrade = __esm({
   "mcp/tools/analyzeTrade.js"() {
     init_tradeAnalysis();
     init_dynastyTrajectory();
     init_positionalValue();
     init_rosterSpace();
+    init_partnerActivity();
     init_teamName();
     init_teams();
     MAX_ASSETS_PER_SIDE = 12;
     PICK_ID_RE = /^(20\d{2})-(\d)-(\d+)$/;
+    isPickId = (id) => PICK_ID_RE.test(String(id ?? "").trim());
     PLAYER_ID_RE = /^\d+$/;
     num4 = (n) => n == null ? "\u2014" : n.toLocaleString("en-US");
   }
@@ -43258,6 +43757,23 @@ function createServer({ env = process.env, fetcher, store } = {}) {
     fetcher: get,
     ...store ? { store } : {}
   });
+  const transactionsFor = (snapshot, leagueId, refresh) => getTransactions({
+    leagueId: leagueId || config2.defaultLeagueId,
+    nflState: snapshot.nflState ?? null,
+    ttlMs: config2.transactionsTtlMs,
+    frozenTtlMs: config2.frozenTtlMs,
+    force: !!refresh,
+    fetcher: get,
+    ...store ? { store } : {}
+  });
+  const historyFor = (snapshot, leagueId, refresh) => getLeagueHistory({
+    leagueId: leagueId || config2.defaultLeagueId,
+    leagueInfo: snapshot.league?.leagueInfo ?? null,
+    ttlMs: config2.historyTtlMs,
+    force: !!refresh,
+    fetcher: get,
+    ...store ? { store } : {}
+  });
   server.registerTool(
     "find_sell_high",
     {
@@ -43573,14 +44089,42 @@ function createServer({ env = process.env, fetcher, store } = {}) {
           seasonSources = season.sources;
         }
       }
+      const activity = await transactionsFor(snapshot, leagueId, refresh).catch(() => ({ available: false, transactions: null, sources: null }));
+      const wantsDraftNudge = (getIds ?? []).some(isPickId);
+      const history = wantsDraftNudge ? await historyFor(snapshot, leagueId, refresh).catch(() => ({ available: false, history: null, sources: null })) : null;
+      let draftGrades = null;
+      if (history?.available && history.history) {
+        try {
+          draftGrades = buildDraftGrades({
+            history: history.history,
+            currentLeague: snapshot.league,
+            playerMap: snapshot.values?.playerMap ?? null,
+            pickEntries: snapshot.values?.pickEntries ?? [],
+            playerDB: snapshot.playerDB ?? null
+          });
+        } catch {
+          draftGrades = null;
+        }
+      }
       const answer = buildTradeAnswer(snapshot, weekly, {
         give,
         get: getIds,
         partner,
         myRosterId: config2.defaultRosterId,
-        myPlayoffPct
+        myPlayoffPct,
+        transactions: activity.available ? activity.transactions : null,
+        draftGrades,
+        activityAvailable: activity.available,
+        historyAvailable: history ? history.available : null
       });
-      if (answer.ok) answer.asOf = mergeAsOf(answer.asOf, { ...weekly.sources, ...seasonSources ?? {} });
+      if (answer.ok) {
+        answer.asOf = mergeAsOf(answer.asOf, {
+          ...weekly.sources,
+          ...seasonSources ?? {},
+          ...activity.sources ?? {},
+          ...history?.sources ?? {}
+        });
+      }
       return {
         content: [{ type: "text", text: renderTradeText(answer) }],
         structuredContent: answer,
@@ -43774,6 +44318,9 @@ var init_server3 = __esm({
     init_limit();
     init_weekly();
     init_season();
+    init_transactions();
+    init_history();
+    init_managerAnalysis();
     init_playoffOdds();
     init_snapshot();
     init_getRoster();
@@ -43808,7 +44355,19 @@ var init_server3 = __esm({
         // the OLDEST of the ~14 matchup weeks, for the same reason
         // oldestSourceAt is the stalest source: an answer assembled from fourteen
         // fetches is only as fresh as the oldest one of them.
-        matchups: sourceStamp.optional()
+        matchups: sourceStamp.optional(),
+        // Present on analyze_trade's two CONTEXT signals. Neither reaches a
+        // score, but both still carry provenance and both still feed
+        // oldestSourceAt — non-negotiable 1 is about every source an answer was
+        // assembled from, not only the ones that changed a number.
+        //
+        // This object is CLOSED, and that is load-bearing: adding a source
+        // without adding it here makes a real client reject the whole response
+        // with "must NOT have additional properties". That is the schema doing
+        // its job — it caught exactly this during live verification, where lint,
+        // 630 tests and a clean build had all passed.
+        transactions: sourceStamp.optional(),
+        history: sourceStamp.optional()
       })
     });
     teamCandidate = external_exports.object({

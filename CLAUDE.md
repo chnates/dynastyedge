@@ -630,7 +630,7 @@ including mobile, and get answers grounded in live Sleeper data and **this
 app's own analysis code** — not general knowledge. Design spec and the
 owner-confirmed decisions: `MCP_DISCOVERY.md`.
 
-**Status: phase 2 — LIVE and CONNECTED at `https://dynastyedge-mcp.vercel.app/mcp`.**
+**Status: phase 2b — LIVE and CONNECTED at `https://dynastyedge-mcp.vercel.app/mcp`.**
 **Seven** tools answer over **both** transports: stdio for local runs,
 streamable HTTP for the Claude apps, authenticated by GitHub against a
 single-account allowlist. Six are `MCP_DISCOVERY.md` §5's set; the seventh,
@@ -1188,10 +1188,13 @@ before `analyze_trade`.**
   simulation, and in season the app scores that layer on live playoff odds,
   which track the starting lineup far more closely (Spearman 0.988 vs 0.721).
   Naming the basis is what stops a reader assuming the stronger one.
-- Three of `analyzeTrade`'s optional signals are **not wired** and the notes
-  name them: `myPlayoffPct`, `myDraftGrade` and `partnerActivity`, each
-  needing a fetch beyond the league snapshot. Their absence removes context,
-  never a number.
+- **All eight of `analyzeTrade`'s optional signals are now wired** (phase 2b,
+  2026-09-20). `myPlayoffPct` came with phase 2a and is the only one that
+  moves a **score**; `partnerActivity` and `myDraftGrade` are context, and the
+  notes carry each one's own disclaimer so a reader cannot mistake either for
+  a factor. Each is fetched **only when it can matter** — the activity read
+  needs a partner, the draft nudge only ever speaks when picks are coming
+  back — so an ordinary player-for-player grade costs what it always did.
 - A **one-sided** trade is a valid state, not an error: totals render and the
   verdict is `null`, the app's own gate.
 
@@ -1319,10 +1322,118 @@ moves a **score**. It is wired (2026-09-20).
   playoff odds"*, and `asOf.sources` carrying **matchups** alongside the other
   five.
 
-**Two of the three signals are still unwired, and the notes still say so:**
-`myDraftGrade` (needs the multi-season league-history walk) and
-`partnerActivity` (needs the transaction feed). Each removes context, never a
-number.
+### Caching the transaction feed — a FOURTH TTL, and it is SPLIT
+
+`mcp/transactions.js` owns the season-wide transaction feed. It is the only
+layer here whose TTL is **two numbers**, because it is genuinely two freshness
+domains wearing one name:
+
+- **A settled week is FROZEN.** Week 1 stopped receiving entries the moment
+  week 2 began — measured on this league, its newest entry is 2026-09-16 and
+  week 2's oldest is 09-17. Re-fetching it is re-fetching history, so it sits
+  on a long TTL that is eviction pressure rather than freshness.
+- **The live week changes on an EVENT** — a waiver clears, a trade executes —
+  and those are the *very events that make a roster wrong*. So it rides the
+  **snapshot's** 15 minutes, deliberately, not `season.js`'s 60. Inheriting 60
+  would let this layer disagree with the snapshot for 45 of them: a roster
+  showing a player the activity read swears they never acquired.
+
+The payoff is that after the first pass **a refresh costs ONE request, not one
+per week** (measured: 0 requests on a cached repeat).
+
+**IT DOES NOT FETCH 18 WEEKS, and that is measured rather than assumed.**
+CLAUDE.md describes the app's feed as "all 18 weekly buckets in parallel",
+which is right for a phone paying once per session and wrong for a server.
+Sleeper buckets a transaction by the week it was **processed**, so a bucket
+past the current week is empty *by construction*. Measured 2026-09-20 at week
+2: week 1 → **71** complete, week 2 → **6**, weeks 3 / 17 / 18 → **0**. So the
+server reads weeks 1..current — **2 requests, 63ms, all 77 moves** — where the
+phone's path would spend 18. Note the distribution too: the bulk of a season
+sits in week 1, which is also the first bucket to freeze, which is what makes
+the split TTL worth having rather than a micro-optimisation.
+
+An **unknown** week reads all 18 rather than guessing low: absence of NFL
+state is not evidence the season is young, and guessing would silently drop
+most of the feed.
+
+### The league-history walk — DELIBERATELY narrower than the app's
+
+`mcp/history.js` walks `previous_league_id` for one signal: the rookie-draft
+hindsight record. The app's `useLeagueHistory` fires **~169 concurrent
+requests** (see the rate-discipline section), and almost all of them are
+weekly **transaction** buckets that draft grading never reads.
+
+`buildDraftRecords` needs exactly two things per season: the drafts with their
+picks, and a roster→owner map for the fallback when a pick carries no
+`picked_by`. So this walk fetches leagues + rosters + drafts + picks and
+nothing else — measured **14 requests, 199ms** across this league's three past
+seasons, against ~169, with **zero** transaction URLs and **zero** user URLs.
+`tests/mcpHistory.test.mjs` asserts both zeros, so the narrowness is proved
+rather than claimed.
+
+**The consequence is stated rather than buried:** a profile built from this
+history would have a real `.draft` and an **empty** trade ledger and FAAB
+record — which would read as "this manager has never traded" when the truth is
+"we did not ask". That is precisely why the walk is paired with
+**`buildDraftGrades`**, which returns *only* draft records, and never with
+`buildManagerProfiles`. A future manager-scouting tool needs the ledger and
+must widen this walk with its own argument for the cost; **do not quietly
+widen it here.**
+
+**The drafts LIST error is not swallowed, while a per-draft picks error is**,
+and the asymmetry is the whole degradation contract. A draft with no picks yet
+genuinely contributes `[]`. A failed drafts *list* returning `[]` would be
+indistinguishable from "this league has never drafted", which downstream reads
+as "you have no rookie record" — an outage rendering as a fact about the
+owner. Learning nothing at all returns `available: false` instead. The first
+cut got this wrong and reported an outage as an empty history; the test caught
+it.
+
+**`buildDraftGrades` is a prerequisite refactor in the A–D shape**
+(`src/utils/managerAnalysis.js`). It calls the **same** `buildDraftRecords`
+the app's Manager Scouting runs, so a grade means exactly one thing on the
+phone and on the server and the two cannot drift — and equivalence is
+**proved, not inspected**: `tests/managerAnalysis.test.mjs` asserts it equals
+`buildManagerProfiles`'s own `.draft` field for field, and that dropping the
+transactions the server never fetches changes no grade.
+
+### The last two signals — context, wired without touching a score (phase 2b)
+
+`myDraftGrade` and `partnerActivity` were the two remaining unwired signals.
+Both landed 2026-09-20, and **neither reaches a verdict** — the rule they keep
+is the app's own: *roster facts may score; second opinions describe.*
+
+- **`partnerActivity`** (`mcp/transactions.js`) — a 21-day window over the
+  season feed. "They traded for a tight end last week" changes how you read
+  their TE surplus: it is not spare depth, it is the thing they just went and
+  bought. Descriptive **only**, because modelling manager behaviour was tested
+  on this league's full 95-trade corpus and **disconfirmed**.
+- **`myDraftGrade`** (`mcp/history.js` + `buildDraftGrades`) — my rookie-draft
+  hindsight record, which adjusts **confidence** in pick capital I am
+  acquiring, never its value. Gated at ≥ 5 graded picks, and the copy states
+  the record as a record rather than as durable skill.
+
+**A failure of either says "we could not find out", never the absence itself.**
+This is the same discipline `lineup_advice` keeps between `offseason` and
+`projections-unavailable`, and here it is sharper: "they have made no moves"
+is a **real answer about a quiet manager**, so an outage rendering as one
+would state a fact about someone on no evidence. Pinned by test from both
+directions — a failed feed never prints it, and a genuinely quiet partner
+still does.
+
+**Measured live, 2026 week 2:** `analyze_trade` acquiring a pick — **512ms
+cold, 78ms cached**, with `transactions` and `history` stamped into `asOf`
+alongside the other six sources. Partner activity read *"Added Raheim Sanders
+(RB), Michael Mayer (TE), Garrett Nussmeier (QB) +1 more in the last 3
+weeks"*; the nudge read *"7 of your 11 graded rookie picks"*.
+
+**THE ZOD OUTPUT SCHEMA CAUGHT THIS ONE TOO, and it is the third time.**
+`asOf.sources` is a **closed** object, so adding two sources without declaring
+them made a real MCP client reject the entire response with *"must NOT have
+additional properties"*. Lint, **630 tests and a clean build all passed it** —
+the tests call `buildTradeAnswer` directly and never cross the wire. Only
+driving the real transport found it, which is exactly why "verify live" is a
+gate and not a formality. A new source must be added to that schema.
 
 ### Prerequisite refactors this shipped with
 
@@ -4886,6 +4997,8 @@ dynastyedge/
 │   ├── oauthRoutes.js          ← the five OAuth endpoints. Owns THE load-bearing check: redirect-URI origin allowlist, exact-hostname, checked BEFORE anything is minted, failing to an error page because redirecting an unvalidated URI IS the attack
 │   ├── http.js                 ← THE streamable-HTTP transport: a Web-standard (Request) => Response, so the host is a packaging decision. STATELESS by necessity (a serverless instance cannot hold a session — the failure is intermittent, warm-passes/cold-fails). Owns the auth gate, which fails CLOSED
 │   ├── store.js                ← THE cache backend boundary + the ONE freshness policy (loadSource). Backend is a parameter (memory for stdio, KV for HTTP); the policy is shared. Owns the two traps: a store-level TTL would break the stale-fallback contract, and the 1.20MB player DB must be gzipped into KV
+│   ├── transactions.js         ← the season-wide transaction feed behind analyze_trade's partner-activity read. A FOURTH TTL and the only SPLIT one: a settled bucket is frozen, the live week rides the SNAPSHOT's 15 minutes because its events are the ones that make a roster wrong. Reads weeks 1..current only — a later bucket is empty by construction (measured: 71/6/0/0/0), so 2 requests where the phone spends 18
+│   ├── history.js              ← the league-history walk, DELIBERATELY narrow: leagues + rosters + drafts + picks, no transactions and no users, so 14 requests against useLeagueHistory's ~169. Feeds ONLY buildDraftGrades — pairing it with buildManagerProfiles would report an empty ledger as "never traded" when the truth is "we did not ask"
 │   ├── season.js               ← every regular-season week's matchups, on a THIRD TTL with its own argument (a completed week is frozen forever; the model discards a partially-played one, so the odds move once a WEEK). Owns the state that must never happen: 14 empty weeks and a season that hasn't started are identical, so a total outage is never reported as a preseason
 │   ├── weekly.js               ← projections + the schedule, on their OWN ~60-min TTL (league data changes on an EVENT, projections on a 0.06%/10h DRIP). Owns the two silent traps: the schedule is off /v1 (SLEEPER_ROOT) and its fields are home/away
 │   ├── teams.js                ← resolveTeam, shared by get_roster / analyze_trade / lineup_advice so "which team did they mean?" has one definition. Reads display_name — Sleeper's /users returns NO username
@@ -5032,7 +5145,7 @@ dynastyedge/
 │   │   ├── rankColors.js        ← gold/silver/bronze medal colors for rank ordinals
 │   │   ├── tradeAnalysis.js     ← trade scoring, verdict logic; buildSideFit is ONE fit engine called from BOTH seats (buildPartnerFit = the `them` wrapper, myFit = my seat, display-only)
 │   │   ├── edgeBriefing.js      ← The Edge: signals, briefing items, GM line
-│   │   ├── managerAnalysis.js   ← manager scouting: ledgers, tendencies, draft grades
+│   │   ├── managerAnalysis.js   ← manager scouting: ledgers, tendencies, draft grades. buildDraftGrades exposes the draft record WITHOUT the ledger beside it, so the MCP server can reach it on a 14-request walk instead of ~169 — same buildDraftRecords both ways, equivalence proved by test
 │   │   ├── rosterAnalysis.js    ← positional strength, win window tiers, Targets ranking (need × value × movability)
 │   │   ├── recommendations.js   ← THE assistant-GM brain: keep/givability scores (round-priced picks, past-peak age tilt), FA pickups, two-sided sell moves, the cash-out board
 │   │   ├── fairBand.js          ← THE definition of "fair" (±5%), shared by the Analyzer's verdict and every surface that PREDICTS it
@@ -5105,6 +5218,8 @@ dynastyedge/
 │   ├── mcpRecommendFreeAgents.test.mjs ← recommend_free_agents: no defense in the general list EVER, the DEF refusal still naming the incumbent, the ranking being by dynasty value not projection, and the offseason reporting projectedPoints null — never 0
 │   ├── mcpResolveAssets.test.mjs    ← resolve_assets: an ambiguous name resolving to NOTHING (never the higher-valued of two), pick parsing to the season-round-originalOwner id analyze_trade accepts, rule 7 keeping unranked players findable
 │   ├── mcpAnalyzeTrade.test.mjs     ← analyze_trade: a free-text name REJECTED even when unambiguous (the tool does no name matching at all), an id on the wrong roster refused, the price read from the owning roster not the caller, both seats graded, concerns as a subset of reasons, and windowBasis naming the tier
+│   ├── mcpTransactions.test.mjs     ← the transaction feed: weeks 1..current only (a later bucket is empty by construction), the SPLIT TTL proved by a cached refresh costing ONE request, and the degradation contract from BOTH sides — an outage is never reported as "they made no moves", and a genuinely quiet partner still is
+│   ├── mcpHistory.test.mjs          ← the narrow walk: zero transaction URLs and zero user URLs (the ~169-vs-14 claim, proved rather than asserted), '0' as the chain sentinel, a broken hop ending the chain rather than failing it, and a failed drafts LIST reported as unavailable instead of as "this league has never drafted"
 │   ├── mcpSeason.test.mjs           ← the rest-of-season layer: THE contract that a total fetch failure is never reported as a preseason (the two shapes are identical on the wire), one bad bucket degrading alone, the week range read from league settings, per-week + per-league cache keys, and the TTL pinned as its OWN literal so re-deriving weekly.js's can never silently move it
 │   ├── mcpPlayoffOdds.test.mjs      ← get_playoff_odds: the preseason returning a NULL percentage and a labelled PREVIEW (never 0, which reads as eliminated), a POSTED-but-unplayed schedule being ACTIVE rather than preseason, unavailable ≠ preseason, Σ odds === the field size, seedDist computed but not returned, and the stance being getDeadlineVerdict's so a trade grade cannot disagree
 │   ├── mcpLineupAdvice.test.mjs     ← lineup_advice: the offseason returning no summary and no zeros, per-move gains summing EXACTLY to the headline, a must-fix carrying NO confidence, confidencePct being a percentage not a fraction (the ×100 bug that printed "6530%"), and a blocked starter contributing 0
@@ -5119,11 +5234,11 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 546 / # pass 541
+honestly:** instead of "cannot find module" it prints `# tests 587 / # pass 582
 / # fail 5`, which reads like a code regression. A file that cannot load never
-runs its tests, so the count silently drops from **589** to 546.
+runs its tests, so the count silently drops from **630** to 587.
 `npm run build` in the same state fails with `sh: 1: vite: not found`.
-**If the test count isn't 589, run `npm ci` before debugging anything.**
+**If the test count isn't 630, run `npm ci` before debugging anything.**
 
 The pair was re-measured 2026-09-19 (MCP phase 1b) by renaming `node_modules`
 aside, and it had drifted seven times before that: 178/130, 177/115, 219/136,
@@ -5146,6 +5261,12 @@ the broken-state count stayed at 152; the 2026-09-12 news-retention work moved
 both, because `newsRetention.test.mjs` imports only a zero-dependency pure
 module. **Re-measure both whenever the suite grows.**
 
+Phase 2b — `partnerActivity` and `myDraftGrade`, the last two unwired signals —
+moved both by the same 41 (589/546 → **630/587**), the gap holding at 43: the
+two new data layers and the `buildDraftGrades` equivalence tests all load with
+no `node_modules` at all, which is the check that would have caught either
+reaching React or pulling `zod` down out of `mcp/server.js`.
+
 Phase 2a — `get_playoff_odds` plus the Layer 3 wiring — moved both by the same
 46 (543/500 → **589/546**). 589 and 546 were measured; **500 is derived**, not
 run — the 5 commits-after-phase-2 tests went into `mcpOauth.test.mjs`, which
@@ -5158,8 +5279,8 @@ regression to the next session, which is the exact confusion the block exists
 to prevent, so re-measure rather than incrementing what is written.
 
 The useful invariant survived the drift and is worth preferring to either
-count: **the gap between them is 43 and has not moved.** 589 − 546 = 43, and
-538 − 495 = 43 before it. That is the number of tests living in the five files
+count: **the gap between them is 43 and has not moved.** 630 − 587 = 43,
+589 − 546 = 43, and 538 − 495 = 43 before that. That is the number of tests living in the five files
 that cannot load, so an unchanged gap means every test added since loads with
 no `node_modules` at all — which is what the equal-delta checks below were
 reaching for, stated as one number instead of a subtraction per change.

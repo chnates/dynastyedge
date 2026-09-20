@@ -7,7 +7,8 @@ knowledge.
 Design spec: [`../MCP_DISCOVERY.md`](../MCP_DISCOVERY.md). Read it first — this
 file covers only what is built.
 
-**Phase 2a (this): seven tools, over stdio AND streamable HTTP.** Phase 1
+**Phase 2b (this): seven tools, over stdio AND streamable HTTP, with every
+one of `analyze_trade`'s eight optional signals wired.** Phase 1
 shipped three prerequisite refactors plus `get_roster`; 1b added the other four
 of `MCP_DISCOVERY.md` §5's set and the weekly data layer; phase 2 added the
 HTTP transport, stateless OAuth and the Vercel packaging, and is **live at
@@ -216,6 +217,20 @@ first live call, before either reached a reader — which is the concrete payoff
   are `home`/`away`, not `home_team`/`away_team`. Both mistakes fail
   **silently** as "no games", which reads as "every team is on bye".
   `weekly.js` owns both and `tests/mcpWeekly.test.mjs` pins each.
+- **The history walk is narrow, and a future tool must widen it deliberately.**
+  `mcp/history.js` fetches leagues + rosters + drafts + picks — 14 requests
+  against `useLeagueHistory`'s ~169 — because draft grading reads none of the
+  weekly transaction buckets that make up the difference. A manager-scouting
+  tool needs the trade ledger and therefore needs those buckets; widen it
+  there with its own argument for the cost, and keep pairing this walk with
+  `buildDraftGrades` rather than `buildManagerProfiles`, whose empty ledger
+  would read as "this manager has never traded".
+- **`asOf.sources` is a CLOSED zod schema.** A new source that is not declared
+  in `server.js`'s `asOfSchema` makes a real MCP client reject the whole
+  response with *"must NOT have additional properties"* — and lint, the full
+  test suite and a clean build all pass it, because the tests call the tool
+  builders directly and never cross the wire. It has now caught three real
+  bugs; verify over the transport, not only under test.
 - **The four static feeds are not parameterized.** `news.json`,
   `values-history.json`, `trade-values.json` and `rookie-intel.json` are
   published from this repo's own branches. A second league gets working

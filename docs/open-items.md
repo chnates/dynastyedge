@@ -5,7 +5,16 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-09-20 (**MCP-2a** — a seventh tool, `get_playoff_odds`,
+**Last reviewed:** 2026-09-20 (**MCP-2b** — `analyze_trade`'s last two unwired
+signals are in: `partnerActivity` over a new season-wide transaction feed and
+`myDraftGrade` over a deliberately narrow league-history walk (14 requests
+against the app's ~169). Neither touches a score. Two measured sizing wins —
+the transaction feed reads weeks 1..current, because a later bucket is empty
+by construction (2 requests, not 18), on the server's only SPLIT TTL. Also
+closed: PR #59's unmet 390px sweep (never actually blocked — the visual-capture
+skill sanctions `playwright-core` in a throwaway dir), and the discovery that
+**the Vercel project has no GitHub integration at all**, so merging to `main`
+has never deployed the MCP server. Previously **MCP-2a** — a seventh tool, `get_playoff_odds`,
 and `analyze_trade`'s Layer 3 moved off the win-window tier onto live playoff
 odds (0.988 vs 0.721 against the starting lineup). Prerequisite D extracted the
 odds model out of `usePlayoffOdds` so the server runs the same one the phone
@@ -302,12 +311,98 @@ registration commit added 5 tests after phase 2's PR merged without updating
 the block. A stale count there reads as a code regression to the next session,
 which is the exact confusion it exists to prevent.
 
-**Still open from MCP-2's carry-over list:** `myDraftGrade` (needs the
-multi-season league-history walk) and `partnerActivity` (needs the transaction
-feed) on `analyze_trade`; `MCP_DISCOVERY.md` §5's remaining phase-two tools
-(trade targets / fair packages, manager scouting, rookie research);
-`/league/{id}/winners_bracket`, still never called; `mcp/limit.js`'s fixed
-backoff; and `restKvStore`, still never verified against a live store.
+**Still open from MCP-2's carry-over list:** `MCP_DISCOVERY.md` §5's remaining
+phase-two tools (trade targets / fair packages, manager scouting, rookie
+research); `/league/{id}/winners_bracket`, still never called; `mcp/limit.js`'s
+fixed backoff; and `restKvStore`, still never verified against a live store.
+The two unwired `analyze_trade` signals are **closed by MCP-2b below**.
+
+### MCP-2b — the last two signals, and the deploy gap **SHIPPED 2026-09-20**
+
+`partnerActivity` and `myDraftGrade` — the two signals `analyze_trade` had
+been naming in its own notes as absent — are wired. **Neither touches a
+score**, which is the rule this app runs on: *roster facts may score; second
+opinions describe.*
+
+**Two new data layers, each sized by measurement rather than by copying the
+app's:**
+
+- **`mcp/transactions.js`** — a **FOURTH TTL, and the only SPLIT one**. A
+  settled bucket is frozen (week 1's newest entry is 2026-09-16, week 2's
+  oldest 09-17); the live week changes on an **event**, and those are the very
+  events that make a roster wrong, so it rides the **snapshot's** 15 minutes
+  rather than inheriting `season.js`'s 60. A cached refresh costs **0**
+  requests. It also reads weeks 1..current only: Sleeper buckets by the week a
+  move was *processed*, so a later bucket is empty by construction — measured
+  71 / 6 / 0 / 0 / 0, i.e. **2 requests, 63ms, all 77 moves** where the phone's
+  path spends 18.
+- **`mcp/history.js`** — the league-history walk, **deliberately narrower**
+  than `useLeagueHistory`'s ~169 concurrent requests. Draft grading reads no
+  transactions and no users, so it fetches leagues + rosters + drafts + picks:
+  **14 requests, 199ms** over three past seasons, with zero transaction URLs
+  and zero user URLs *asserted by test* rather than claimed.
+
+**`buildDraftGrades` is a prerequisite refactor in the A–D shape** — the draft
+record reachable without the ledger beside it, calling the same
+`buildDraftRecords` the app runs, equivalence **proved** field for field
+against `buildManagerProfiles`. Pairing the narrow walk with the full profile
+builder would have reported an empty ledger as "this manager has never
+traded"; that is why the narrow function exists.
+
+**The degradation contract is the sharpest thing here, and it cuts both ways.**
+"They have made no moves" is a **real answer about a quiet manager**, so an
+outage must never render as one — and a genuinely quiet partner must still be
+reported as quiet. Both directions are pinned. The first cut of the history
+walk got the mirror case wrong: everything failing produced an *empty* history,
+which reads as "you have no rookie-draft record" — a claim about the owner made
+on no evidence. The test caught it; the drafts **list** error is no longer
+swallowed while a per-draft picks error still is.
+
+**THE ZOD OUTPUT SCHEMA CAUGHT A BUG LINT, 630 TESTS AND A CLEAN BUILD ALL
+MISSED.** `asOf.sources` is closed, so two undeclared sources made a real MCP
+client reject the entire response. The tests call `buildTradeAnswer` directly
+and never cross the wire — only driving the real transport found it. Third
+time this schema has paid for itself.
+
+**Verified live over the real transport** (2026 week 2): 7 tools;
+`analyze_trade` acquiring a pick **512ms cold / 78ms cached**, `windowBasis:
+'odds'` intact, `transactions` and `history` stamped into `asOf` beside the
+other six. Partner activity read *"Added Raheim Sanders (RB), Michael Mayer
+(TE), Garrett Nussmeier (QB) +1 more in the last 3 weeks"* — which
+cross-validates against the live transaction feed — and the nudge read *"7 of
+your 11 graded rookie picks"*. The nudge stays silent on a player-for-player
+trade, as designed.
+
+Tests 589 → **630**; without `node_modules` **587**, the same five failing
+files, **the gap holding at 43**.
+
+**Also closed here — two findings about phase 2a that were not about code:**
+
+1. **PR #59's one unmet gate is now met.** The 390px route sweep was recorded
+   as blocked on `playwright-core`. It was not: the `dynastyedge-visual-capture`
+   skill **sanctions** installing it in a throwaway `/tmp/pw`, explicitly never
+   in `package.json`, and Chromium is already on disk. All four
+   `usePlayoffOdds` consumers were swept against live data — `/league/playoffs`
+   (Nix Cage 58%, matching the MCP number), `/edge`, `/trade` (odds-driven
+   buyer/seller flags on all nine partner cards) and `/trade/analyze` — with
+   **zero page errors**. *Read a skill before recording something as blocked.*
+
+2. **THE VERCEL PROJECT HAS NO GITHUB INTEGRATION — merging to `main` has
+   never deployed the MCP server, and never will on its own.** Phase 2a sat
+   merged and undeployed; production was still serving the six-tool build from
+   `9051ea6`, whose committed bundle contains **zero** occurrences of
+   `get_playoff_odds`. Proof it is absence rather than a broken hook: `main`
+   HEAD carries **0** commit statuses (no Vercel check at all), the only
+   GitHub deployment environment is `github-pages`, and a **feature-branch**
+   commit had deployed to `target: production` — which git integration never
+   does, since it sends non-default branches to *preview*. Every deploy so far
+   was a manual CLI push from a session checkout, which stamps git metadata and
+   *looks* like auto-deploy in the dashboard.
+   **Deploying is therefore a manual step until an integration is added.** A
+   `gitSource` deployment against the public repo works and needs no
+   integration, which is how phase 2a was shipped. **[owner ask required]** to
+   connect the repo in Vercel — it needs a browser login.
+
 
 ### ACTIVE-3 — the September 2026 build plan (owner-approved 2026-09-04)
 

@@ -50,10 +50,29 @@
 // no schedule to simulate and would be fourteen wasted calls) and its own
 // 60-minute TTL means a conversation pays for it once. See mcp/season.js.
 //
-// STILL NOT WIRED, and the notes still say so:
-//   myDraftGrade     needs the multi-season league-history walk.
-//   partnerActivity  needs the season-wide transaction feed.
-// Each removes context, never a number.
+// THE LAST TWO ARE NOW WIRED TOO, and neither touches a score.
+// ---------------------------------------------------------------------
+//   partnerActivity  the season-wide transaction feed (mcp/transactions.js).
+//                    "They traded for a tight end last week" changes how you
+//                    read their TE surplus: it is not spare depth, it is the
+//                    thing they just went and bought. Descriptive ONLY —
+//                    modelling manager behaviour was tested on this league's
+//                    full 95-trade corpus and DISCONFIRMED, so this describes
+//                    intent and never scores it.
+//
+//   myDraftGrade     my rookie-draft hindsight record (mcp/history.js), which
+//                    adjusts CONFIDENCE in pick capital when I am acquiring
+//                    picks — never the raw value. Gated at >= 5 graded picks,
+//                    because on a ~7-picks-per-owner sample anything less is
+//                    noise, and keyed to HIT RATE rather than slot delta for
+//                    the reason recorded in Feature 3.
+//
+// Both are fetched ONLY when they can matter — the activity read needs a
+// partner, the draft nudge needs picks on the `get` side — so an ordinary
+// player-for-player grade costs exactly what it did before.
+//
+// The rule they both keep is the one this app runs on: roster facts may
+// score; second opinions describe.
 
 import {
   analyzeTrade as runAnalyzeTrade,
@@ -65,12 +84,18 @@ import {
 import { buildAgeCurves, buildRosterTrajectory, getTrajectoryRead } from '../../src/utils/dynastyTrajectory.js'
 import { buildReplacementLevels } from '../../src/utils/positionalValue.js'
 import { getRosterLimits } from '../../src/utils/rosterSpace.js'
+import { buildPartnerActivity } from '../../src/utils/partnerActivity.js'
 import { getTeamName } from '../../src/utils/teamName.js'
 import { resolveTeam } from '../teams.js'
 
 export const MAX_ASSETS_PER_SIDE = 12
 
 const PICK_ID_RE = /^(20\d{2})-(\d)-(\d+)$/
+
+// Exported so the server can answer "is there pick capital on this side?"
+// WITHOUT resolving the trade first — that is the gate on the ~14-request
+// history walk, and it has to be decidable before the fetch.
+export const isPickId = id => PICK_ID_RE.test(String(id ?? '').trim())
 const PLAYER_ID_RE = /^\d+$/
 
 // Turn one id into the asset object tradeAnalysis expects, taken from the
@@ -131,7 +156,13 @@ function resolveSide(ids, roster, sideLabel) {
   return errors.length ? { error: errors.join(' ') } : { assets }
 }
 
-export function buildTradeAnswer(snapshot, weekly, { give, get, partner, myRosterId, myPlayoffPct = null } = {}) {
+export function buildTradeAnswer(snapshot, weekly, {
+  give, get, partner, myRosterId, myPlayoffPct = null,
+  transactions = null, draftGrades = null,
+  // null = not attempted (an ordinary grade that needed neither);
+  // false = attempted and failed, which the notes must say out loud.
+  activityAvailable = null, historyAvailable = null,
+} = {}) {
   const { league, values } = snapshot
   if (!league) throw new Error('League state unavailable')
 
@@ -176,6 +207,27 @@ export function buildTradeAnswer(snapshot, weekly, { give, get, partner, myRoste
     ? { projMap: weekly.projMap, week: weekly.week }
     : null
 
+  // ── The two signals that DO cost a fetch ──────────────────────────────
+  //
+  // Both are orchestration over src/utils, never math written here, and
+  // neither reaches a score: the activity read is descriptive, and the draft
+  // record moves CONFIDENCE in pick capital, not its value.
+  //
+  // A caller that did not fetch them passes null and every field below is
+  // exactly what this tool returned before they existed.
+  const partnerActivity = transactions?.length
+    ? buildPartnerActivity(transactions, opponentRoster.rosterId, {
+        playerMap: values?.playerMap ?? null,
+        playerDB: snapshot.playerDB ?? null,
+      })
+    : null
+
+  // My OWN record, indexed by owner id — the profile field the app reads as
+  // `useManagerProfiles().my.draft`. Keyed off the signed-in roster rather
+  // than a constant, per non-negotiable 3.
+  const myOwnerId = myRoster?.owner?.user_id ?? null
+  const myDraftGrade = (draftGrades && myOwnerId) ? (draftGrades[myOwnerId] ?? null) : null
+
   const analysis = runAnalyzeTrade(giveAssets, getAssets, myRoster, opponentRoster, league.allRosters, {
     // Live rest-of-season odds when they exist; null in the offseason or when
     // the schedule did not load, which is the exact tier fallback this tool
@@ -183,11 +235,11 @@ export function buildTradeAnswer(snapshot, weekly, { give, get, partner, myRoste
     myPlayoffPct,
     opponentTrajectoryRead,
     curves: ageCurves?.curves ?? null,
-    myDraftGrade: null,      // needs the league-history walk
+    myDraftGrade,
     replacementLevels,
     rosterLimits,
     weeklyProjections,
-    partnerActivity: null,   // needs the transaction feed
+    partnerActivity,
   })
   if (!analysis) throw new Error('Trade analysis unavailable — roster or league data missing')
 
@@ -296,7 +348,11 @@ export function buildTradeAnswer(snapshot, weekly, { give, get, partner, myRoste
     // buildTradePitch returns { text, lines, bullets }; `text` is the copyable
     // message and the bullets are the reasons it is built from.
     pitch: pitch ? { text: pitch.text, bullets: pitch.bullets ?? [] } : null,
-    notes: buildNotes({ snapshot, weekly, bothSides, giveAssets, getAssets, windowBasis: analysis.windowBasis }),
+    notes: buildNotes({
+      snapshot, weekly, bothSides, giveAssets, getAssets,
+      windowBasis: analysis.windowBasis,
+      partnerActivity, myDraftGrade, activityAvailable, historyAvailable,
+    }),
   }
 }
 
@@ -321,7 +377,10 @@ function assetRow(a) {
   }
 }
 
-function buildNotes({ snapshot, weekly, bothSides, giveAssets, getAssets, windowBasis }) {
+function buildNotes({
+  snapshot, weekly, bothSides, giveAssets, getAssets, windowBasis,
+  partnerActivity, myDraftGrade, activityAvailable, historyAvailable,
+}) {
   const notes = []
   if (snapshot.asOf.stale) {
     notes.push('At least one source failed to refresh, so this is cached data — see asOf.sources.')
@@ -364,11 +423,44 @@ function buildNotes({ snapshot, weekly, bothSides, giveAssets, getAssets, window
         : 'This week\'s projections did not load, so the weekly lineup-impact read is absent.'
     )
   }
-  notes.push(
-    'Not wired in this server: your rookie-draft hindsight record (the pick-confidence nudge) and the ' +
-    'partner\'s recent transactions. Both need fetches beyond the league snapshot; their absence removes ' +
-    'context, never a number.'
-  )
+  // The partner's recent moves. "No moves" is a real answer about a quiet
+  // manager and must never be printed when the feed simply failed.
+  if (activityAvailable === false) {
+    notes.push(
+      'The transaction feed did not load, so there is no read on what this partner has been doing lately. ' +
+      'That is "we could not find out", which is a different answer from a quiet manager — do not read ' +
+      'this silence as evidence about their activity either way.'
+    )
+  } else if (partnerActivity) {
+    notes.push(
+      partnerActivity.count > 0
+        ? `Partner activity (descriptive only, never scored): ${partnerActivity.summary}`
+        : `This partner has made no moves in the last ${partnerActivity.windowDays} days.`
+    )
+  }
+
+  // The pick-confidence nudge. It only ever speaks when I am ACQUIRING picks,
+  // so silence on a player-for-player trade is correct, not a gap.
+  const acquiringPicks = getAssets.some(a => a.type === 'pick')
+  if (acquiringPicks) {
+    if (historyAvailable === false) {
+      notes.push(
+        'Your rookie-draft hindsight record could not be loaded, so the pick-confidence nudge is absent ' +
+        'from the read on this capital. It removes context, never a number.'
+      )
+    } else if (myDraftGrade && (myDraftGrade.count ?? 0) >= 5) {
+      notes.push(
+        `Pick-confidence context: ${myDraftGrade.hits} of your ${myDraftGrade.count} graded rookie picks ` +
+        'are now worth starting-caliber dynasty value. That is a record, not durable skill — the sample ' +
+        'is small — and it adjusts confidence in this pick capital, never its raw value.'
+      )
+    } else if (myDraftGrade) {
+      notes.push(
+        `Your rookie-draft record is only ${myDraftGrade.count} graded pick(s), below the 5 this nudge ` +
+        'requires, so the pick capital here is read at market with no confidence adjustment.'
+      )
+    }
+  }
   notes.push(
     'This grades the ROSTER logic. Whether the other manager would accept is deliberately not modelled — ' +
     'per-manager behavioural profiling was tested on this league\'s full 95-trade corpus and disconfirmed.'

@@ -15,7 +15,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { buildManagerProfiles } from '../src/utils/managerAnalysis.js'
+import { buildManagerProfiles, buildDraftGrades } from '../src/utils/managerAnalysis.js'
 
 const PLAYER_MAP = {
   p1: { name: 'Player One', position: 'WR', age: 24, value: 2000 },
@@ -129,4 +129,89 @@ test('ledger nets are computed at today\'s prices from each side\'s perspective 
   assert.equal(t1.gaveValue, 1500)
   assert.equal(t1.net, 2000)
   assert.equal(t1.result, 'win') // 2000 / 3500 ≫ 5%
+})
+
+// ── buildDraftGrades — the narrow path, proved equivalent to the wide one ──
+//
+// The MCP server needs one thing from a manager's history: the rookie-draft
+// hindsight record. Reaching it through buildManagerProfiles would mean
+// fetching every past season's weekly transaction buckets (~169 requests,
+// CLAUDE.md) that draft grading never reads. buildDraftGrades is the same
+// buildDraftRecords reached without them.
+//
+// The contract that makes that safe is EQUIVALENCE, proved rather than
+// inspected — the discipline prerequisites A-D each used.
+
+// A league whose owners actually drafted, so there is a record to compare.
+function draftFixture() {
+  const drafts = [{
+    draft: { draft_id: 'd1', season: '2025', settings: { rounds: 4 } },
+    picks: [
+      { player_id: 'p1', pick_no: 1, round: 1, draft_slot: 1, roster_id: 1, picked_by: 'ownerA' },
+      { player_id: 'p2', pick_no: 2, round: 1, draft_slot: 2, roster_id: 2, picked_by: 'ownerB' },
+      { player_id: 'p3', pick_no: 3, round: 1, draft_slot: 3, roster_id: 1, picked_by: 'ownerA' },
+      { player_id: 'p5', pick_no: 4, round: 1, draft_slot: 4, roster_id: 2, picked_by: 'ownerB' },
+    ],
+  }]
+  const currentLeague = {
+    season: '2026',
+    allRosters: [
+      { rosterId: 1, owner: { user_id: 'ownerA', display_name: 'A' }, record: { wins: 0, losses: 0, ties: 0 } },
+      { rosterId: 2, owner: { user_id: 'ownerB', display_name: 'B' }, record: { wins: 0, losses: 0, ties: 0 } },
+    ],
+    transactions: [],
+  }
+  // The WIDE history the app walks, and the NARROW one mcp/history.js builds:
+  // identical but for the transactions and users the server never fetches.
+  const wide = {
+    currentDrafts: drafts,
+    pastSeasons: [{
+      season: '2025',
+      users: [{ user_id: 'ownerA' }, { user_id: 'ownerB' }],
+      rosters: [{ roster_id: 1, owner_id: 'ownerA' }, { roster_id: 2, owner_id: 'ownerB' }],
+      transactions: [{ type: 'trade', transaction_id: 'x', status_updated: 1, roster_ids: [1, 2], adds: { p1: 1 }, drops: { p1: 2 } }],
+      drafts,
+    }],
+  }
+  const narrow = {
+    currentDrafts: drafts,
+    pastSeasons: [{ ...wide.pastSeasons[0], users: [], transactions: [] }],
+  }
+  const common = { currentLeague, playerMap: PLAYER_MAP, pickEntries: PICK_ENTRIES, playerDB: {} }
+  return { wide, narrow, common }
+}
+
+test('buildDraftGrades equals buildManagerProfiles\'s own .draft, field for field', () => {
+  const { wide, common } = draftFixture()
+  const grades = buildDraftGrades({ history: wide, ...common })
+  const { profiles } = buildManagerProfiles({ history: wide, ...common, myOwnerId: 'ownerA' })
+
+  assert.ok(profiles.length, 'the fixture must produce profiles at all')
+  profiles.forEach(p => {
+    assert.deepEqual(grades[p.ownerId], p.draft,
+      `draft record for ${p.ownerId} must be identical on both paths`)
+  })
+})
+
+test('dropping the transactions the server never fetches does not change a grade', () => {
+  // This is the load-bearing claim of mcp/history.js's narrow walk: the ~169
+  // requests it skips genuinely cannot affect the number it is fetching for.
+  const { wide, narrow, common } = draftFixture()
+  assert.deepEqual(
+    buildDraftGrades({ history: narrow, ...common }),
+    buildDraftGrades({ history: wide, ...common })
+  )
+})
+
+test('a grade carries the fields the pick-confidence nudge gates on', () => {
+  const { wide, common } = draftFixture()
+  const a = buildDraftGrades({ history: wide, ...common }).ownerA
+  assert.equal(typeof a.count, 'number')
+  assert.equal(typeof a.hits, 'number')
+  assert.equal(typeof a.avgDelta, 'number')
+  assert.ok(a.count > 0)
+})
+
+test('no league is an empty record, not a crash', () => {
+  assert.deepEqual(buildDraftGrades({ history: null, currentLeague: null }), {})
 })

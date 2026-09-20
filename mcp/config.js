@@ -11,6 +11,8 @@
 import { LEAGUE_ID, MY_ROSTER_ID } from '../src/constants.js'
 import { DEFAULT_WEEKLY_TTL_MS } from './weekly.js'
 import { DEFAULT_SEASON_TTL_MS } from './season.js'
+import { DEFAULT_TRANSACTIONS_TTL_MS, DEFAULT_FROZEN_TTL_MS } from './transactions.js'
+import { DEFAULT_HISTORY_TTL_MS } from './history.js'
 
 // The GitHub OAuth App this server authenticates against. A client ID is
 // PUBLIC by design — it travels in the browser's address bar on every
@@ -50,6 +52,14 @@ export function loadConfig(env = process.env) {
     // The full argument is in mcp/weekly.js's header.
     weeklyTtlMs: Number(env.DYNASTYEDGE_WEEKLY_TTL_MS) || DEFAULT_WEEKLY_TTL_MS,
     seasonTtlMs: Number(env.DYNASTYEDGE_SEASON_TTL_MS) || DEFAULT_SEASON_TTL_MS,
+    // The transaction feed is TWO domains under one name (mcp/transactions.js):
+    // the live week changes on an event — the very events that make a roster
+    // wrong — so it rides the SNAPSHOT's freshness, not season.js's 60 minutes.
+    // A settled bucket is frozen, so its number is eviction pressure.
+    transactionsTtlMs: Number(env.DYNASTYEDGE_TRANSACTIONS_TTL_MS) || DEFAULT_TRANSACTIONS_TTL_MS,
+    frozenTtlMs: Number(env.DYNASTYEDGE_FROZEN_TTL_MS) || DEFAULT_FROZEN_TTL_MS,
+    // Past seasons never change. The longest TTL here, and for that reason.
+    historyTtlMs: Number(env.DYNASTYEDGE_HISTORY_TTL_MS) || DEFAULT_HISTORY_TTL_MS,
     concurrency: Number(env.DYNASTYEDGE_CONCURRENCY) || 6,
     githubClientId: env.GITHUB_CLIENT_ID || DEFAULT_GITHUB_CLIENT_ID,
     // No default, deliberately. A server that starts without this would

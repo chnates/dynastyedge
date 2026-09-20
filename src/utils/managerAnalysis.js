@@ -485,6 +485,34 @@ export function buildMyInsights(profiles, me) {
   return { strengths: strengths.slice(0, 3), workOn: workOn.slice(0, 3) }
 }
 
+// ── Draft grades on their own ────────────────────────────────────────────────
+
+// Rookie-draft hindsight records, keyed by owner id — the same `draft` field
+// buildManagerProfiles attaches to every profile, reachable WITHOUT the trade
+// ledger and FAAB record beside it.
+//
+// It exists because the MCP server's `analyze_trade` wants one thing from a
+// manager's history: the pick-confidence nudge's `{ count, hits, avgDelta }`.
+// Draft grading reads only each season's drafts and its roster→owner map,
+// while the ledger and FAAB stats read every weekly transaction bucket of
+// every past season — which is ~169 requests the app can afford once per
+// session on a phone and a server should not spend on a signal that ignores
+// them (see mcp/history.js).
+//
+// Both paths call the SAME buildDraftRecords, so a grade means exactly one
+// thing app-side and server-side and the two cannot drift.
+//
+// Calling this with a history whose transactions were never fetched is
+// therefore correct and safe, which is the point: it returns nothing that
+// depends on them, so nothing here can read as "this manager has never
+// traded" when the truth is "we did not ask".
+export function buildDraftGrades({ history, currentLeague, playerMap, pickEntries, playerDB }) {
+  if (!currentLeague?.allRosters) return {}
+  const seasons = normalizeSeasons(history, currentLeague)
+  const resolvers = makeResolvers(playerMap, playerDB ?? {}, pickEntries ?? [], buildPickIndex(seasons))
+  return buildDraftRecords(seasons, resolvers)
+}
+
 // ── Main entry ───────────────────────────────────────────────────────────────
 
 export function buildManagerProfiles({ history, currentLeague, playerMap, pickEntries, playerDB, myOwnerId }) {

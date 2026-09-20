@@ -14,13 +14,16 @@ import { getSnapshot } from './snapshot.js'
 import { createFetcher } from './limit.js'
 import { getWeekly } from './weekly.js'
 import { getSeasonWeeks } from './season.js'
+import { getTransactions } from './transactions.js'
+import { getLeagueHistory } from './history.js'
+import { buildDraftGrades } from '../src/utils/managerAnalysis.js'
 import { buildPlayoffOutlook } from '../src/utils/playoffOdds.js'
 import { mergeAsOf } from './snapshot.js'
 import { buildRosterAnswer, renderRosterText } from './tools/getRoster.js'
 import { buildSellHighAnswer, renderSellHighText } from './tools/findSellHigh.js'
 import { buildFreeAgentAnswer, renderFreeAgentText, MAX_LIMIT } from './tools/recommendFreeAgents.js'
 import { buildResolveAnswer, renderResolveText, MAX_QUERIES } from './tools/resolveAssets.js'
-import { buildTradeAnswer, renderTradeText } from './tools/analyzeTrade.js'
+import { buildTradeAnswer, renderTradeText, isPickId } from './tools/analyzeTrade.js'
 import { buildLineupAnswer, renderLineupText } from './tools/lineupAdvice.js'
 import { buildOddsAnswer, renderOddsText } from './tools/playoffOdds.js'
 
@@ -58,6 +61,18 @@ const asOfSchema = z.object({
     // oldestSourceAt is the stalest source: an answer assembled from fourteen
     // fetches is only as fresh as the oldest one of them.
     matchups: sourceStamp.optional(),
+    // Present on analyze_trade's two CONTEXT signals. Neither reaches a
+    // score, but both still carry provenance and both still feed
+    // oldestSourceAt — non-negotiable 1 is about every source an answer was
+    // assembled from, not only the ones that changed a number.
+    //
+    // This object is CLOSED, and that is load-bearing: adding a source
+    // without adding it here makes a real client reject the whole response
+    // with "must NOT have additional properties". That is the schema doing
+    // its job — it caught exactly this during live verification, where lint,
+    // 630 tests and a clean build had all passed.
+    transactions: sourceStamp.optional(),
+    history: sourceStamp.optional(),
   }),
 })
 
@@ -326,6 +341,31 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
     leagueId: leagueId || config.defaultLeagueId,
     leagueInfo: snapshot.league?.leagueInfo ?? null,
     ttlMs: config.seasonTtlMs,
+    force: !!refresh,
+    fetcher: get,
+    ...(store ? { store } : {}),
+  })
+
+  // The season-wide transaction feed — weeks 1..current only, because a
+  // bucket past the current week is empty by construction (measured; see
+  // transactions.js). The settled buckets are frozen, so after the first pass
+  // a refresh costs ONE request rather than one per week.
+  const transactionsFor = (snapshot, leagueId, refresh) => getTransactions({
+    leagueId: leagueId || config.defaultLeagueId,
+    nflState: snapshot.nflState ?? null,
+    ttlMs: config.transactionsTtlMs,
+    frozenTtlMs: config.frozenTtlMs,
+    force: !!refresh,
+    fetcher: get,
+    ...(store ? { store } : {}),
+  })
+
+  // The league-history walk, deliberately narrower than the app's ~169-request
+  // one: leagues + rosters + drafts + picks, no transactions (see history.js).
+  const historyFor = (snapshot, leagueId, refresh) => getLeagueHistory({
+    leagueId: leagueId || config.defaultLeagueId,
+    leagueInfo: snapshot.league?.leagueInfo ?? null,
+    ttlMs: config.historyTtlMs,
     force: !!refresh,
     fetcher: get,
     ...(store ? { store } : {}),
@@ -666,10 +706,58 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
         }
       }
 
+      // ── The two context signals, each fetched ONLY when it can matter ──
+      //
+      // Neither touches a score, so neither may ever fail the grade: both are
+      // wrapped, and a failure is reported in the notes as "we could not find
+      // out" rather than as an absence the reader would misread.
+      //
+      // The activity read needs the partner's moves, so it is fetched for
+      // every graded trade. The draft nudge only ever speaks when I am
+      // ACQUIRING picks, so `isPickId` gates the ~14-request history walk on
+      // the ids themselves — decidable before the fetch, which is why that
+      // predicate is exported rather than the trade being resolved first.
+      const activity = await transactionsFor(snapshot, leagueId, refresh)
+        .catch(() => ({ available: false, transactions: null, sources: null }))
+
+      const wantsDraftNudge = (getIds ?? []).some(isPickId)
+      const history = wantsDraftNudge
+        ? await historyFor(snapshot, leagueId, refresh)
+            .catch(() => ({ available: false, history: null, sources: null }))
+        : null
+
+      // buildDraftGrades is the SAME buildDraftRecords the app's Manager
+      // Scouting runs, so a grade cannot mean two things (src/utils).
+      let draftGrades = null
+      if (history?.available && history.history) {
+        try {
+          draftGrades = buildDraftGrades({
+            history: history.history,
+            currentLeague: snapshot.league,
+            playerMap: snapshot.values?.playerMap ?? null,
+            pickEntries: snapshot.values?.pickEntries ?? [],
+            playerDB: snapshot.playerDB ?? null,
+          })
+        } catch {
+          draftGrades = null
+        }
+      }
+
       const answer = buildTradeAnswer(snapshot, weekly, {
         give, get: getIds, partner, myRosterId: config.defaultRosterId, myPlayoffPct,
+        transactions: activity.available ? activity.transactions : null,
+        draftGrades,
+        activityAvailable: activity.available,
+        historyAvailable: history ? history.available : null,
       })
-      if (answer.ok) answer.asOf = mergeAsOf(answer.asOf, { ...weekly.sources, ...(seasonSources ?? {}) })
+      if (answer.ok) {
+        answer.asOf = mergeAsOf(answer.asOf, {
+          ...weekly.sources,
+          ...(seasonSources ?? {}),
+          ...(activity.sources ?? {}),
+          ...(history?.sources ?? {}),
+        })
+      }
       return {
         content: [{ type: 'text', text: renderTradeText(answer) }],
         structuredContent: answer,
