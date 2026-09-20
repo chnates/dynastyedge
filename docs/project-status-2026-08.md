@@ -88,7 +88,17 @@ showing a dead season and never surface the new third year. **Not yet stale —
 do not roll it before the draft runs.** Documented in CLAUDE.md's Constants
 File section.
 
-## 5. Known issue found this session — FAAB scale mixing (not yet fixed)
+## 5. Known issue found this session — FAAB scale mixing ~~(not yet fixed)~~
+
+> **FIXED 2026-09-20.** The trigger this section was waiting on fired (2026
+> week 1 alone carried 21 bid-bearing claims, top bid $695), and
+> `buildFaabStats` now divides every bid by its own season's `waiver_budget`.
+> Measured on the live league, the bug was moving **four of ten** tendency
+> chips and **inverting two**. The same investigation established a fact this
+> section did not know — **the budget resets TWICE a league year** — so the
+> aggregate is a count of budgets committed, not a percent of one. Detail:
+> CLAUDE.md League Context + Feature 11, `docs/open-items.md` OPEN-1.
+> The section below is kept as the record of the deferral.
 
 The league's FAAB budget changed **$100 → $1000 for 2026**.
 `useLeague` reads it from league settings correctly, so roster-level FAAB

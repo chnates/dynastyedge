@@ -109,7 +109,12 @@ League ID: `1313933520715907072` (constant `LEAGUE_ID`).
 
 ### Response fields the code actually consumes
 
-- **`/league/{id}`**: `settings.waiver_budget` (default 100),
+- **`/league/{id}`**: `settings.waiver_budget` (default 100; **$1000 for 2026,
+  $100 for 2023–25 — always read it, never assume**, and note it **RESETS
+  TWICE A LEAGUE YEAR**: offseason, then again at the regular-season start,
+  unspent offseason money lost. Sleeper exposes ONE number for both periods,
+  so `bid ÷ waiver_budget` is exact either side of the reset, but a season
+  TOTAL spans two budgets — see CLAUDE.md League Context),
   `settings.trade_deadline`, `settings.playoff_week_start` (default 15),
   `settings.playoff_teams` (default 6), `previous_league_id`, `season`.
 - **`/rosters`**: `roster_id`, `owner_id`, `players[]`, `starters[]`
@@ -117,6 +122,11 @@ League ID: `1313933520715907072` (constant `LEAGUE_ID`).
   `reserve[]` (IR), `taxi[]`, and `settings.{wins, losses, ties, fpts,
   fpts_decimal, fpts_against, fpts_against_decimal, waiver_budget_used}`.
   **Records and points come from `roster.settings` — no extra call.**
+  **`waiver_budget_used` is the CURRENT PERIOD ONLY**, which is why
+  `leagueState.js`'s `faabRemaining = waiver_budget − waiver_budget_used` is
+  correct and must never be "reconciled" against a transaction-log total.
+  Measured live 2026-09-20: one owner had spent **$703** in the offseason and
+  his `waiver_budget_used` read **$0** — both true, different questions.
   Points-for = `fpts + fpts_decimal/100`.
 - **`/users`**: `user_id`, `username`, `display_name`, `avatar`,
   `metadata.team_name`, `metadata.avatar` (custom team avatar URL).

@@ -5926,7 +5926,11 @@ Do not implement them until explicitly asked.
   spec live in `docs/analysis/faab-bid-corpus-2026-08.md` (re-runnable via
   `node scripts/dev/faab-corpus.mjs`). Do not build it without an explicit ask.
   Note for whoever does: the league's FAAB budget changed **$100 → $1000 for
-  2026**, so all historical bids must be normalized to percent-of-budget.
+  2026**, so all historical bids must be normalized to percent-of-budget — the
+  app's own aggregation was fixed that way on 2026-09-20 (Feature 11). And the
+  budget **resets twice a league year** (League Context), so a recommender must
+  know which period it is bidding in: unspent offseason money is lost, which
+  changes the whole "preserve budget" half of §6's Part A.
 - Push notifications for trade offers (requires backend — out of scope for v1;
   note Sleeper's API is read-only and may not even expose *pending* trade
   offers, so this is blocked on data availability, not just architecture)

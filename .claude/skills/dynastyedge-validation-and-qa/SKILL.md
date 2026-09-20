@@ -234,7 +234,10 @@ curl -s "https://api.sleeper.app/v1/league/1313933520715907072/rosters" \
 Then: `npm run dev`, open the app in devtools at 390px, and check the
 displayed record/FAAB (free-agent bidding budget)/player list against the
 curl output. FAAB remaining =
-league `waiver_budget` (from `/league/{id}`) minus `waiver_budget_used`, and
+league `waiver_budget` (from `/league/{id}`) minus `waiver_budget_used` —
+**this is the CURRENT PERIOD, and that is correct**: the budget resets twice a
+league year, so a roster showing `$1000` remaining after a big offseason spend
+is right, not a bug (see CLAUDE.md League Context) — and
 must display as `$XXX`.
 
 ### Recipe C — changed a per-player value join or trend display

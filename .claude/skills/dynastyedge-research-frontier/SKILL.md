@@ -180,6 +180,13 @@ feature without an explicit owner ask**.
 - **The pre-registered bar failed** on held-out 2025 — and was **mis-specified**
   (winning 80% of sealed-bid auctions at ≤ the *median winner's* price is a
   contradiction). Corrected bars are in the memo's §6.
+- **The budget RESETS TWICE A LEAGUE YEAR** (offseason, then again at the
+  regular-season start, unspent offseason money lost — owner, 2026-09-20). A
+  season's claim counts in the corpus therefore span *two* budgets. Per-bid
+  percentiles are unaffected (both periods carry the same `waiver_budget`), but
+  any rule reasoning about "budget remaining" must know which period it is in,
+  and a recommender must not spend against an allocation that is about to be
+  wiped. Measured: six manager-seasons exceed one budget, none ever exceeds two.
 - **The league's FAAB budget changed $100 → $1000 for 2026.** All history is on
   the old scale; percentages port, behavior may not.
 - Conditioning on value tier or week did not beat flat-percent at this N.
@@ -200,7 +207,10 @@ currently offers no bid guidance at all.
 **This project's specific asset (verified).**
 - `managerAnalysis.js` → `buildFaabStats` already aggregates, per owner across
   every season: dollars spent, claims, `avgBid`, hindsight `valueAcquired`,
-  `valuePer100`; `buildTendencies` derives "Aggressive bidder" /
+  `valuePerBudget` (renamed from `valuePer100` on 2026-09-20, when the
+  aggregation was fixed to divide every bid by its own season's budget —
+  `budgetsCommitted` / `avgBidPct` / `valuePerBudget`, no raw-dollar field
+  survives); `buildTendencies` derives "Aggressive bidder" /
   "Bargain hunter" labels vs. league average.
 - The raw material is richer than the aggregate: every completed waiver claim
   with its winning `settings.waiver_bid`, timestamp, and player, across all
