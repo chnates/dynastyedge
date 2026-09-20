@@ -5,7 +5,11 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-09-19 (**MCP-1b** — all six MCP tools now ship over
+**Last reviewed:** 2026-09-20 (**MCP-2a** — a seventh tool, `get_playoff_odds`,
+and `analyze_trade`'s Layer 3 moved off the win-window tier onto live playoff
+odds (0.988 vs 0.721 against the starting lineup). Prerequisite D extracted the
+odds model out of `usePlayoffOdds` so the server runs the same one the phone
+does. Previously **MCP-1b** — all six MCP tools shipped over
 stdio; see MCP-1b. Previously **MCP-1** — the MCP server's phase 1 shipped:
 the three prerequisite refactors plus `get_roster` over stdio. Phase 2 (remote
 transport, OAuth, deployment) is **MCP-2**, deferred with its trigger, and
@@ -244,6 +248,66 @@ One user makes this academic; a hosted endpoint may not.
 `MCP_DISCOVERY.md` §5, in build order). They work over stdio today and need no
 host. Treat them as phase 1b if the owner wants more capability before more
 infrastructure.
+
+### MCP-2a — playoff odds, and Layer 3 on live odds **SHIPPED 2026-09-20**
+
+A seventh tool, `get_playoff_odds`, and the thing it was really for: wiring
+`myPlayoffPct` so `analyze_trade`'s Layer 3 scores on **live playoff odds**
+instead of the win-window tier. Done together because they share one fetch —
+which is why MCP-2's carry-over list called the odds signal "most valuable and
+most expensive".
+
+**Why it was worth ~14 requests.** The tier ranks *accumulated assets*, bench
+and picks included, and tracks the actual **starting lineup** — the question
+Layer 3 asks — at Spearman **0.721**, against odds' **0.988**. It also has no
+`Middle` branch, so 40% of this league took no lean and scored a flat 0.
+
+**Prerequisite D, in the shape of A/B/C.** The whole odds composition lived
+inside `usePlayoffOdds`, so no tool could reach it. `splitCompletedWeeks` and
+`buildPlayoffOutlook` moved to `src/utils/playoffOdds.js`; the hook keeps the
+**memo and nothing else**, which is the right split (caching by input identity
+is a rendering concern). Equivalence **proved, not inspected** — the
+pre-extraction body run beside the new function across five season shapes at
+two field sizes, `deepStrictEqual` on all 20.
+
+**`mcp/season.js` is a THIRD TTL with its own argument**, deliberately not an
+alias of `weekly.js`'s equal number: a completed week is frozen forever, and
+the model *discards* a partially-played one, so the odds output moves once a
+**week**. It owns the state that must never happen — fourteen empty weeks and a
+season that has not started are identical on the wire, so a total outage is
+reported `unavailable`, never as a preseason.
+
+**One distinction the fixtures got wrong first and the code got right:** a
+**posted but unplayed** schedule is `active`, not `preseason` — the model runs
+Week 1 off the roster-strength prior alone. Only *no schedule at all* is
+preseason. Both are now pinned.
+
+**Verified live over the real transport** (2026 Week 2, a real MCP client on
+`StreamableHTTPClientTransport`): 7 tools; `get_playoff_odds` 948ms cold /
+71ms cached / 6,152B; Nix Cage **58.1%**, projected 6.5-7.5, seed 5.9, "On the
+bubble" — which at this league's 60% baseline is what it should read; Σ odds
+across the field **600.3%** against the 600% the field size demands; identical
+across repeat calls (fixed seed); `matchups` stamped into `asOf`; `seedDist`
+absent as designed. Then `analyze_trade` returning **`windowBasis: 'odds'`**
+with the note quoting *"on the bubble at 58% playoff odds"*.
+
+Tests 543 → **589**; without `node_modules` **546**, the same five failing
+files. **The gap between the two counts is 43 and did not move**, which is the
+cleaner form of the equal-delta check this repo has been doing by subtraction:
+an unchanged gap means every test added loads with no `node_modules`.
+
+**Doc drift found and fixed on the way:** CLAUDE.md, the PR template and this
+file all said **538** when `main` was at **543** — the dynamic-client-
+registration commit added 5 tests after phase 2's PR merged without updating
+the block. A stale count there reads as a code regression to the next session,
+which is the exact confusion it exists to prevent.
+
+**Still open from MCP-2's carry-over list:** `myDraftGrade` (needs the
+multi-season league-history walk) and `partnerActivity` (needs the transaction
+feed) on `analyze_trade`; `MCP_DISCOVERY.md` §5's remaining phase-two tools
+(trade targets / fair packages, manager scouting, rookie research);
+`/league/{id}/winners_bracket`, still never called; `mcp/limit.js`'s fixed
+backoff; and `restKvStore`, still never verified against a live store.
 
 ### ACTIVE-3 — the September 2026 build plan (owner-approved 2026-09-04)
 

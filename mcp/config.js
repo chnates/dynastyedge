@@ -10,6 +10,7 @@
 
 import { LEAGUE_ID, MY_ROSTER_ID } from '../src/constants.js'
 import { DEFAULT_WEEKLY_TTL_MS } from './weekly.js'
+import { DEFAULT_SEASON_TTL_MS } from './season.js'
 
 // The GitHub OAuth App this server authenticates against. A client ID is
 // PUBLIC by design — it travels in the browser's address bar on every
@@ -48,6 +49,7 @@ export function loadConfig(env = process.env) {
     // projections change on a drip (6 of 9,419 entries moved in ten hours).
     // The full argument is in mcp/weekly.js's header.
     weeklyTtlMs: Number(env.DYNASTYEDGE_WEEKLY_TTL_MS) || DEFAULT_WEEKLY_TTL_MS,
+    seasonTtlMs: Number(env.DYNASTYEDGE_SEASON_TTL_MS) || DEFAULT_SEASON_TTL_MS,
     concurrency: Number(env.DYNASTYEDGE_CONCURRENCY) || 6,
     githubClientId: env.GITHUB_CLIENT_ID || DEFAULT_GITHUB_CLIENT_ID,
     // No default, deliberately. A server that starts without this would

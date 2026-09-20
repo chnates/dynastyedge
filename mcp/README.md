@@ -7,10 +7,14 @@ knowledge.
 Design spec: [`../MCP_DISCOVERY.md`](../MCP_DISCOVERY.md). Read it first — this
 file covers only what is built.
 
-**Phase 1b (this): all six tools over stdio.** Phase 1 shipped the three
-prerequisite refactors plus `get_roster`; 1b added the other five and the
-weekly data layer. Remote transport, OAuth and deployment are phase 2 and
-deliberately absent.
+**Phase 2a (this): seven tools, over stdio AND streamable HTTP.** Phase 1
+shipped three prerequisite refactors plus `get_roster`; 1b added the other four
+of `MCP_DISCOVERY.md` §5's set and the weekly data layer; phase 2 added the
+HTTP transport, stateless OAuth and the Vercel packaging, and is **live at
+`https://dynastyedge-mcp.vercel.app/mcp`**. Phase 2a added `get_playoff_odds`
+and the rest-of-season layer behind it, and used the same fetch to put
+`analyze_trade`'s Layer 3 on **live playoff odds** instead of the win-window
+tier.
 
 ## Run it
 
@@ -47,6 +51,7 @@ Everything is a parameter with a default, never a constant
 | `DYNASTYEDGE_ROSTER_ID` | `MY_ROSTER_ID` | Whose team "mine" means |
 | `DYNASTYEDGE_SNAPSHOT_TTL_MS` | `900000` (15 min) | League snapshot cache TTL |
 | `DYNASTYEDGE_WEEKLY_TTL_MS` | `3600000` (60 min) | Projections + schedule TTL — deliberately LONGER; see below |
+| `DYNASTYEDGE_SEASON_TTL_MS` | `3600000` (60 min) | Regular-season matchup weeks — the same number, a different argument |
 | `DYNASTYEDGE_CONCURRENCY` | `6` | Max in-flight upstream requests |
 
 Every tool also takes `leagueId` per call; these are only the fallbacks.
@@ -61,9 +66,20 @@ Every tool also takes `leagueId` per call; these are only the fallbacks.
 | `resolve_assets` | "Which Bijan?" | Support — **call before `analyze_trade`** |
 | `analyze_trade` | "Grade this trade." | **Resolved ids only**; a name is rejected, never guessed |
 | `lineup_advice` | "What do I start, and what's it costing me?" | **In-season only** — the offseason says so, never zeros |
+| `get_playoff_odds` | "Am I making the playoffs — buying or selling?" | The preseason returns a **null** percentage and a labelled preview, never a made-up one |
 
-All six are documented with their contracts and traps in CLAUDE.md's
+All seven are documented with their contracts and traps in CLAUDE.md's
 **The MCP Server** section. Read that before changing one.
+
+### The in-season-only tools, and the one that is season-aware
+
+`get_playoff_odds` is the third member of this family and it answers a
+**different** condition, so it does not say "in-season only": before a schedule
+posts there is nothing to simulate and it returns `playoffPct: null` with a
+strength-ranked PREVIEW, and a **posted but unplayed** schedule is `active`
+(the model runs off the roster-strength prior alone, which is what makes it
+useful in Week 1). Conflating those two would put a ranking on screen when real
+odds were available.
 
 ### The two in-season-only tools
 
@@ -87,6 +103,7 @@ mcp/
   store.js        THE cache backend boundary + the one freshness policy
   snapshot.js     league fetch + cache + the as-of stamp + mergeAsOf
   weekly.js       projections + schedule, on their own longer TTL
+  season.js       every regular-season week's matchups, on a third TTL
   teams.js        resolveTeam — one definition, three tools
   limit.js        concurrency gate + retry/backoff
   config.js       league / identity / TTLs, env-first
@@ -95,15 +112,18 @@ mcp/
   tools/
     getRoster.js  findSellHigh.js  recommendFreeAgents.js
     resolveAssets.js  analyzeTrade.js  lineupAdvice.js
+    playoffOdds.js
 ```
 
 Tests live with the rest of the suite: `mcpLimit`, `mcpSnapshot`, `mcpWeekly`,
-and one file per tool (`mcpGetRoster`, `mcpFindSellHigh`,
-`mcpRecommendFreeAgents`, `mcpResolveAssets`, `mcpAnalyzeTrade`,
-`mcpLineupAdvice`), plus `tests/leagueState.test.mjs` for the join this all
-rests on. The six tool suites share `tests/helpers/mcpFixtures.mjs` — one
-synthetic league, because four tools read the same object and four divergent
-copies is the drift prerequisite C removed from `src/`. `npm run lint` covers
+`mcpSeason`, `mcpStore`, `mcpHttp`, `mcpOauth`, and one file per tool
+(`mcpGetRoster`, `mcpFindSellHigh`, `mcpRecommendFreeAgents`,
+`mcpResolveAssets`, `mcpAnalyzeTrade`, `mcpLineupAdvice`, `mcpPlayoffOdds`),
+plus `tests/leagueState.test.mjs` and `tests/playoffOdds.test.mjs` for the join
+and the model this all rests on. The tool suites share
+`tests/helpers/mcpFixtures.mjs` — one synthetic league, because several tools
+read the same object and divergent copies is the drift prerequisite C removed
+from `src/`. `npm run lint` covers
 `mcp/`, and `npm test` / `npm run build` gate it exactly as they gate `src/`.
 
 ## The three rules a new tool must keep
@@ -150,6 +170,17 @@ first live call, before either reached a reader — which is the concrete payoff
   change that measurably almost never happens. `mergeAsOf` recomputes
   `oldestSourceAt` over the union so a stale projection cannot hide behind a
   fresh roster fetch, and `refresh: true` is the near-kickoff escape hatch.
+- **Season TTL ~60 min — a THIRD domain, not an alias of the weekly one.** A
+  completed week is frozen forever, and the model *discards* a partially-played
+  one (a week counts only when every team has scored), so the odds output moves
+  **once a week**. It is its own constant so that re-deriving `weekly.js`'s
+  number — which is argued from projection drift — can never silently move
+  this one. Per-week cache keys, so one bad bucket degrades alone.
+- **Fourteen empty weeks and a season that has not started are identical on
+  the wire.** So a total matchup-fetch failure is reported as
+  `available: false` / `reason: 'unavailable'`, never as a preseason. The app
+  rejects for the same reason, so League › Playoffs shows an `ErrorState`
+  instead of a confident "the season hasn't started".
 - **On an upstream failure the cache is served and labelled stale**, per
   source, with the error attached. A *cold* failure still throws — that is a
   real "I don't know".
@@ -199,11 +230,13 @@ OAuth-only — there is no static-token path — and the MCP spec requires RFC
 9728 discovery, PKCE and audience-bound tokens.
 
 **It is stateless**, because serverless has nowhere to keep state. Two facts
-make that possible: there is **no dynamic client registration** (one
-pre-registered public client in `config.js`, which the spec explicitly allows
-as the alternative to RFC 7591), and **everything else is signed rather than
-stored** (an HMAC over a payload; any instance verifies what any other
-minted). The signing key is HKDF-derived from `GITHUB_CLIENT_SECRET`, so
+make that possible: **the signed `client_id` IS the registration** — dynamic
+client registration exists (RFC 7591, and Claude's connector uses it: without
+it the connector reported *"Couldn't start sign-in"* before a browser ever
+opened), but `mintClientId` signs the redirect URIs into the id, so any
+instance honours what any other issued with nothing stored — and **everything
+else is signed rather than stored** (an HMAC over a payload; any instance
+verifies what any other minted). The signing key is HKDF-derived from `GITHUB_CLIENT_SECRET`, so
 there is no second secret to manage, and no JWT library is used — the token
 has no `alg` header, so there is no algorithm confusion to defend against.
 All 25 auth tests run with no `node_modules`.
@@ -257,6 +290,13 @@ endpoint.
   skips the concurrency limiter: that gate protects Sleeper's rate budget, and
   a cache read queueing behind the API calls the cache exists to avoid would
   be backwards.
-- Remaining phase-2 unknowns: host choice, OAuth registration, whether
-  projections deserve a shorter TTL than the league snapshot
-  (`weeklyProjections.js:13-15` notes Sleeper rewrites that endpoint in place).
+- **Phase 2 is done and connected.** Host: Vercel (`api/mcp.js` is a committed
+  esbuild bundle, because Vercel *traces* rather than bundles and detects
+  functions from the **source** tree — `ci.yml` rebuilds and diffs it, so a
+  stale bundle fails CI). The three findings that each cost a deploy cycle are
+  in CLAUDE.md's Deployment section; read them before touching the packaging.
+- Still open: `myDraftGrade` and `partnerActivity` on `analyze_trade` (each
+  needs a fetch beyond the snapshot — the league-history walk and the
+  transaction feed), `MCP_DISCOVERY.md` §5's remaining phase-two tools (trade
+  targets, manager scouting, rookie research), and `/league/{id}/winners_bracket`,
+  which no code here has ever called.

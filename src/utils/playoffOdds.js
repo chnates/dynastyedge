@@ -248,3 +248,111 @@ export function getDeadlineVerdict(playoffPct, tier) {
     text: "The math says you're a long shot this year. Sell aging veterans now for picks and young players while their value holds.",
   }
 }
+
+// ── The composition, extracted from usePlayoffOdds (2026-09-19) ─────────────
+//
+// `splitCompletedWeeks` and `buildPlayoffOutlook` below were the body of the
+// hook's `processWeeks` and `deriveOdds`. Both are pure — no React, no fetch —
+// and they were the only thing standing between the MCP server and this
+// model: a tool cannot import a hook, and the standing rule is that any math
+// a tool needs is written HERE, where the app gets it too. Same shape as the
+// phase-1 prerequisites (`getTeamName`, `buildLeagueState`,
+// `buildFreeAgentPool`): the hook now calls this and does nothing else, so
+// there is one definition of "what are my odds" and the phone and the server
+// cannot disagree about it.
+//
+// The hook keeps the MEMO (see usePlayoffOdds) — caching by input identity is
+// a rendering concern, and a module-level cache here would be a second one.
+
+// Split fetched weeks into completed scores (real results) and a remaining
+// schedule (future pairings).
+//
+// A week counts as complete only when EVERY team in it has scored. A
+// partially-played current week is therefore simulated fresh rather than
+// contaminating the model with half a week of points — which also means the
+// odds only move when a whole week lands, not continuously through Sunday.
+export function splitCompletedWeeks(perWeek) {
+  const completedScores = {}
+  const remainingSchedule = []
+  let completedWeeks = 0
+
+  ;(perWeek ?? []).forEach(({ week, entries }) => {
+    if (!entries?.length) return
+
+    const groups = {}
+    entries.forEach(e => {
+      if (e.matchup_id == null) return
+      ;(groups[e.matchup_id] ??= []).push(e)
+    })
+    const pairs = Object.values(groups).filter(g => g.length === 2)
+    if (!pairs.length) return // no schedule posted for this week yet
+
+    const complete = entries.every(e => (e.points ?? 0) > 0)
+    if (complete) {
+      completedWeeks += 1
+      entries.forEach(e => {
+        ;(completedScores[e.roster_id] ??= []).push(e.points ?? 0)
+      })
+    } else {
+      remainingSchedule.push({
+        week,
+        matchups: pairs.map(g => [g[0].roster_id, g[1].roster_id]),
+      })
+    }
+  })
+
+  return { completedScores, remainingSchedule, completedWeeks }
+}
+
+// The whole model in one call: split the weeks, build the scoring model, run
+// the simulation, and report which of the three states the season is in.
+//
+// `status` is the load-bearing field. **preseason means there is nothing to
+// simulate, and it returns `results: null` rather than a fabricated
+// percentage** — the same discipline the weekly tools keep about the
+// offseason. A strength-ranked preview is offered instead, and it is labelled
+// a preview because that is what it is.
+export function buildPlayoffOutlook({
+  allRosters, perWeek, playoffTeams = 6, firstPlayoffWeek = 15,
+}) {
+  if (!allRosters?.length) return null
+
+  const { completedScores, remainingSchedule, completedWeeks } = splitCompletedWeeks(perWeek)
+  // Roster strength is the costliest piece of the model (an optimal-lineup
+  // solve per team). Compute it once and feed both the scoring model and the
+  // preseason preview, instead of solving every roster twice.
+  const strengths = allRosters.map(teamStartingStrength)
+  const model = buildScoringModel(allRosters, completedScores, strengths)
+  const remainingGames = remainingSchedule.reduce((s, w) => s + w.matchups.length, 0)
+
+  let status
+  if (remainingSchedule.length === 0 && completedWeeks === 0) status = 'preseason'
+  else if (remainingSchedule.length === 0) status = 'complete'
+  else status = 'active'
+
+  const results = status === 'preseason'
+    ? null
+    : simulatePlayoffs({ allRosters, model, remainingSchedule, playoffTeams })
+
+  // Keyed by roster for consumers that need one team's odds without re-running
+  // the sim (Trade Analyzer / Partner Finder / The Edge / analyze_trade).
+  const oddsByRoster = {}
+  ;(results ?? []).forEach(r => { oddsByRoster[r.rosterId] = r })
+
+  return {
+    status,
+    results,
+    oddsByRoster,
+    model,
+    completedWeeks,
+    remainingWeeks: remainingSchedule.length,
+    remainingGames,
+    // Only the preseason page consumes this — don't solve seeding when the
+    // real simulation already ran.
+    strengthPreview: status === 'preseason'
+      ? buildStrengthPreview(allRosters, playoffTeams, strengths)
+      : null,
+    playoffTeams,
+    firstPlayoffWeek,
+  }
+}

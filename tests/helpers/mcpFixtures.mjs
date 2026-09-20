@@ -190,3 +190,53 @@ export function makeOffseasonWeekly() {
     sources: {}, notes: ['It is the offseason, so Sleeper publishes no weekly projections.'],
   }
 }
+
+// The rest-of-season block, as mcp/season.js returns it. Three rosters and a
+// 3-week regular season with a 2-team field, so the simulated odds actually
+// discriminate — with the league default of 6 playoff spots for 3 teams,
+// every team would make it and every assertion would be 100%.
+//
+// `played` is how many of the three weeks have complete scores.
+//
+// `posted: false` is the DEEP-OFFSEASON case and it is a different state from
+// `played: 0`: no schedule has been published at all, so every week comes back
+// with no entries. `played: 0` means the schedule IS posted and week 1 has not
+// kicked off — which is `active`, not `preseason`, because the model can
+// simulate all three weeks off the roster-strength prior alone. That is the
+// documented "seeded from projections early, real data later" behaviour, and
+// conflating the two would put a strength PREVIEW on screen in Week 1 when
+// real odds were available.
+export function makeSeason({ played = 2, posted = true, over = {} } = {}) {
+  const pairs = [[6, 3], [6, 7], [3, 7]] // one per week
+  const perWeek = pairs.map(([a, b], i) => ({
+    week: i + 1,
+    entries: posted ? [
+      { roster_id: a, matchup_id: 1, points: i < played ? 120 + i * 5 : 0 },
+      { roster_id: b, matchup_id: 1, points: i < played ? 95 + i * 3 : 0 },
+    ] : [],
+  }))
+  return {
+    available: true,
+    reason: null,
+    perWeek,
+    lastWeek: 3,
+    playoffTeams: 2,
+    firstPlayoffWeek: 4,
+    failedWeeks: [],
+    sources: {
+      matchups: { fetchedAt: '2027-09-19T13:45:00.000Z', ageSeconds: 1020, stale: false, error: null },
+    },
+    notes: [],
+    ...over,
+  }
+}
+
+// The total-outage block — NOT a preseason, and the difference is the point.
+export function makeUnavailableSeason() {
+  return {
+    available: false, reason: 'unavailable', perWeek: null, lastWeek: 3,
+    playoffTeams: 2, firstPlayoffWeek: 4, failedWeeks: [1, 2, 3],
+    sources: { matchups: { fetchedAt: null, ageSeconds: null, stale: false, error: 'Sleeper 500' } },
+    notes: ['None of this league\'s 3 regular-season matchup weeks could be loaded — this is a data failure, NOT a preseason.'],
+  }
+}

@@ -106,14 +106,15 @@ test('with no authenticator the endpoint is OPEN — the documented local/protec
     'omitting authenticate is only correct behind host-level protection or on localhost')
 })
 
-test('tools/list answers over the transport with all six tools', async () => {
+test('tools/list answers over the transport with every tool stdio has', async () => {
   const res = await createMcpHandler({})(post(rpc('tools/list')))
   const body = await res.json()
   const names = body.result.tools.map(t => t.name).sort()
   assert.deepEqual(names, [
-    'analyze_trade', 'find_sell_high', 'get_roster',
+    'analyze_trade', 'find_sell_high', 'get_playoff_odds', 'get_roster',
     'lineup_advice', 'recommend_free_agents', 'resolve_assets',
-  ], 'the HTTP transport exposes the SAME six tools as stdio — only transport differs')
+  ], 'the HTTP transport exposes the SAME tools as stdio — only transport differs, ' +
+     'so a tool added to createServer must appear here without being forked')
 })
 
 test('the transport is STATELESS — no session id is minted', async () => {
@@ -136,5 +137,5 @@ test('an authorized request carries authInfo through to the server', async () =>
   const res = await handler(post(rpc('tools/list')))
   assert.equal(res.status, 200)
   const body = await res.json()
-  assert.equal(body.result.tools.length, 6)
+  assert.equal(body.result.tools.length, 7)
 })

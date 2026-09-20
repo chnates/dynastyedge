@@ -13,6 +13,8 @@ import { loadConfig } from './config.js'
 import { getSnapshot } from './snapshot.js'
 import { createFetcher } from './limit.js'
 import { getWeekly } from './weekly.js'
+import { getSeasonWeeks } from './season.js'
+import { buildPlayoffOutlook } from '../src/utils/playoffOdds.js'
 import { mergeAsOf } from './snapshot.js'
 import { buildRosterAnswer, renderRosterText } from './tools/getRoster.js'
 import { buildSellHighAnswer, renderSellHighText } from './tools/findSellHigh.js'
@@ -20,6 +22,7 @@ import { buildFreeAgentAnswer, renderFreeAgentText, MAX_LIMIT } from './tools/re
 import { buildResolveAnswer, renderResolveText, MAX_QUERIES } from './tools/resolveAssets.js'
 import { buildTradeAnswer, renderTradeText } from './tools/analyzeTrade.js'
 import { buildLineupAnswer, renderLineupText } from './tools/lineupAdvice.js'
+import { buildOddsAnswer, renderOddsText } from './tools/playoffOdds.js'
 
 export const SERVER_NAME = 'dynastyedge'
 export const SERVER_VERSION = '0.1.0'
@@ -50,6 +53,11 @@ const asOfSchema = z.object({
     // -old projection has to drag the whole answer's stated age down with it.
     projections: sourceStamp.optional(),
     schedule: sourceStamp.optional(),
+    // Present on the tools that run the rest-of-season simulation. It stamps
+    // the OLDEST of the ~14 matchup weeks, for the same reason
+    // oldestSourceAt is the stalest source: an answer assembled from fourteen
+    // fetches is only as fresh as the oldest one of them.
+    matchups: sourceStamp.optional(),
   }),
 })
 
@@ -306,6 +314,18 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
     nflState: snapshot.nflState,
     week,
     ttlMs: config.weeklyTtlMs,
+    force: !!refresh,
+    fetcher: get,
+    ...(store ? { store } : {}),
+  })
+
+  // The rest-of-season matchup weeks — ~14 requests, so it is loaded only by
+  // the tools that genuinely need the simulation, and its own TTL (60 min,
+  // see season.js) means a conversation pays for it once.
+  const seasonFor = (snapshot, leagueId, refresh) => getSeasonWeeks({
+    leagueId: leagueId || config.defaultLeagueId,
+    leagueInfo: snapshot.league?.leagueInfo ?? null,
+    ttlMs: config.seasonTtlMs,
     force: !!refresh,
     fetcher: get,
     ...(store ? { store } : {}),
@@ -617,10 +637,39 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
     async ({ give, get: getIds, partner, leagueId, week, refresh }) => {
       const snapshot = await snapshotFor(leagueId, refresh)
       const weekly = await weeklyFor(snapshot, week, refresh)
+
+      // Layer 3 scores on LIVE playoff odds when they exist — the ~14-request
+      // season fetch is worth it, because the tier it replaces tracks the
+      // starting lineup at 0.721 against odds' 0.988 (see tools/analyzeTrade.js).
+      //
+      // IN SEASON ONLY. The offseason has no schedule to simulate, so fetching
+      // would be fourteen calls to learn nothing; Layer 3 falls back to the
+      // tier and the response says `windowBasis: 'tier'`, which is exactly the
+      // behaviour this tool shipped with. A schedule that fails to load lands
+      // in the same fallback rather than failing the grade.
+      let myPlayoffPct = null
+      let seasonSources = null
+      if (!snapshot.isOffseason) {
+        const season = await seasonFor(snapshot, leagueId, refresh)
+        if (season.available) {
+          const outlook = buildPlayoffOutlook({
+            allRosters: snapshot.league.allRosters,
+            perWeek: season.perWeek,
+            playoffTeams: season.playoffTeams,
+            firstPlayoffWeek: season.firstPlayoffWeek,
+          })
+          // A preseason outlook has no results at all — `?? null` keeps the
+          // tier fallback rather than reading a missing entry as 0% odds,
+          // which would score every trade as a fire sale.
+          myPlayoffPct = outlook?.oddsByRoster?.[config.defaultRosterId]?.playoffPct ?? null
+          seasonSources = season.sources
+        }
+      }
+
       const answer = buildTradeAnswer(snapshot, weekly, {
-        give, get: getIds, partner, myRosterId: config.defaultRosterId,
+        give, get: getIds, partner, myRosterId: config.defaultRosterId, myPlayoffPct,
       })
-      if (answer.ok) answer.asOf = mergeAsOf(answer.asOf, weekly.sources)
+      if (answer.ok) answer.asOf = mergeAsOf(answer.asOf, { ...weekly.sources, ...(seasonSources ?? {}) })
       return {
         content: [{ type: 'text', text: renderTradeText(answer) }],
         structuredContent: answer,
@@ -717,6 +766,115 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
       if (answer.asOf) answer.asOf = mergeAsOf(answer.asOf, weekly.sources)
       return {
         content: [{ type: 'text', text: renderLineupText(answer) }],
+        structuredContent: answer,
+        isError: !answer.ok,
+      }
+    }
+  )
+
+  // ── Tool 7 — get_playoff_odds ───────────────────────────────────────────
+  //
+  // THREE STATES, AND ONLY ONE OF THEM HAS ODDS. The preseason returns
+  // `you.playoffPct: null` and a strength-ranked PREVIEW rather than a
+  // fabricated percentage — same discipline lineup_advice keeps about the
+  // offseason. A total matchup-fetch failure is NOT a preseason and says so
+  // (`reason: 'unavailable'`), because fourteen empty weeks and a season that
+  // has not started look identical on the wire.
+
+  server.registerTool(
+    'get_playoff_odds',
+    {
+      title: 'Rest-of-season playoff odds',
+      description:
+        'Simulates the rest of the regular season 10,000 times and reports your playoff odds, ' +
+        'projected record and seed, the whole field ranked, and whether you should be buying or ' +
+        'selling at the deadline. Each team\'s weekly score is drawn from a model that blends its ' +
+        'roster strength with its actual scores so far, so it is useful from Week 1. Fixed seed, so ' +
+        'the numbers are stable across calls. Before any game is played it returns a roster-strength ' +
+        'PREVIEW and a null percentage rather than inventing odds.',
+      inputSchema: {
+        team: z.string().optional()
+          .describe('Team name, manager username, or roster id to report "you" for. Omit for your own team.'),
+        leagueId: z.string().optional()
+          .describe('Sleeper league id. Omit for the configured league.'),
+        refresh: z.boolean().optional()
+          .describe('Bypass the caches and refetch. Worth it just after a week completes, which is the only time these numbers move.'),
+      },
+      outputSchema: {
+        ok: z.boolean(),
+        error: z.string().optional(),
+        // True when the schedule could not be loaded at all — distinct from a
+        // preseason, which is ok:true with a null percentage.
+        unavailable: z.boolean().optional(),
+        reason: z.enum(['unavailable']).optional(),
+        candidates: z.array(teamCandidate).optional(),
+        asOf: asOfSchema.optional(),
+        league: z.object({
+          leagueId: z.string().nullable(),
+          name: z.string().nullable(),
+          season: z.string().nullable(),
+          playoffTeams: z.number(),
+          firstPlayoffWeek: z.number(),
+          teamCount: z.number(),
+        }).optional(),
+        status: z.enum(['preseason', 'active', 'complete']).optional(),
+        basis: z.object({
+          completedWeeks: z.number(),
+          remainingWeeks: z.number(),
+          remainingGames: z.number(),
+          iterations: z.number(),
+        }).optional(),
+        you: z.object({
+          rosterId: z.number(),
+          teamName: z.string(),
+          winWindow: z.string(),
+          // NULL in the preseason. Never 0, never a guess — a 0 would read as
+          // "eliminated" and a guess would read as a measurement.
+          playoffPct: z.number().nullable(),
+          topSeedPct: z.number().nullable(),
+          avgSeed: z.number().nullable(),
+          projWins: z.number().nullable(),
+          projLosses: z.number().nullable(),
+          stance: z.string(),
+          stanceText: z.string(),
+        }).optional(),
+        teams: z.array(z.object({
+          rosterId: z.number(),
+          teamName: z.string(),
+          isYou: z.boolean(),
+          playoffPct: z.number().nullable(),
+          topSeedPct: z.number().nullable(),
+          avgSeed: z.number(),
+          projWins: z.number(),
+          projLosses: z.number(),
+          remainingGames: z.number(),
+          winWindow: z.string(),
+          record: z.object({
+            wins: z.number(), losses: z.number(), ties: z.number(),
+          }).nullable(),
+        })).optional(),
+        // Preseason only, and it is a PREVIEW, not odds.
+        strengthPreview: z.array(z.object({
+          rosterId: z.number(),
+          teamName: z.string(),
+          isYou: z.boolean(),
+          projSeed: z.number(),
+          projectedIn: z.boolean(),
+        })).nullable().optional(),
+        notes: z.array(z.string()).optional(),
+      },
+    },
+    async ({ team, leagueId, refresh }) => {
+      const snapshot = await snapshotFor(leagueId, refresh)
+      const season = await seasonFor(snapshot, leagueId, refresh)
+      const answer = buildOddsAnswer(snapshot, season, {
+        team,
+        defaultRosterId: config.defaultRosterId,
+        myRosterId: config.defaultRosterId,
+      })
+      if (answer.asOf) answer.asOf = mergeAsOf(answer.asOf, season.sources)
+      return {
+        content: [{ type: 'text', text: renderOddsText(answer) }],
         structuredContent: answer,
         isError: !answer.ok,
       }

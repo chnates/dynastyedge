@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useLeagueContext } from '../context/LeagueContext'
 import { loadMatchupWeeks, peekMatchupWeeks, resetMatchupWeeks } from './matchupWeeks'
-import { buildScoringModel, simulatePlayoffs, buildStrengthPreview, teamStartingStrength } from '../utils/playoffOdds'
+import { buildPlayoffOutlook } from '../utils/playoffOdds'
 
 // The one new fetch this feature needs: every regular-season week's matchups.
 // A single pass gives us BOTH the remaining schedule (who still plays whom) and
@@ -9,43 +9,6 @@ import { buildScoringModel, simulatePlayoffs, buildStrengthPreview, teamStarting
 // shared matchupWeeks cache (lazy + session-cached) so lineup history reads
 // the same weeks without refetching them. A total outage rejects there, so
 // the Playoffs page shows ErrorState instead of a fake "preseason".
-
-// Split the fetched weeks into completed scores (real results) and a remaining
-// schedule (future pairings). A week counts as complete only when every team in
-// it has scored — so a partially-played current week is simulated fresh rather
-// than contaminating the model with half a week of points.
-function processWeeks(perWeek) {
-  const completedScores = {}
-  const remainingSchedule = []
-  let completedWeeks = 0
-
-  perWeek.forEach(({ week, entries }) => {
-    if (!entries.length) return
-
-    const groups = {}
-    entries.forEach(e => {
-      if (e.matchup_id == null) return
-      ;(groups[e.matchup_id] ??= []).push(e)
-    })
-    const pairs = Object.values(groups).filter(g => g.length === 2)
-    if (!pairs.length) return // no schedule posted for this week yet
-
-    const complete = entries.every(e => (e.points ?? 0) > 0)
-    if (complete) {
-      completedWeeks += 1
-      entries.forEach(e => {
-        ;(completedScores[e.roster_id] ??= []).push(e.points ?? 0)
-      })
-    } else {
-      remainingSchedule.push({
-        week,
-        matchups: pairs.map(g => [g[0].roster_id, g[1].roster_id]),
-      })
-    }
-  })
-
-  return { completedScores, remainingSchedule, completedWeeks }
-}
 
 // The scoring model + 10,000-iteration simulation are the heaviest compute in
 // the app (~50–200ms of main-thread work). Four consumers mount this hook (The
@@ -69,44 +32,12 @@ function deriveOdds(league, perWeek, playoffTeams, firstPlayoffWeek) {
     return c.value
   }
 
-  const { completedScores, remainingSchedule, completedWeeks } = processWeeks(perWeek)
-  // Roster strength is the costliest piece of the model (an optimal-lineup
-  // solve per team). Compute it once and feed both the scoring model and the
-  // preseason preview, instead of solving every roster twice.
-  const strengths = league.allRosters.map(teamStartingStrength)
-  const model = buildScoringModel(league.allRosters, completedScores, strengths)
-  const remainingGames = remainingSchedule.reduce((s, w) => s + w.matchups.length, 0)
-
-  let status
-  if (remainingSchedule.length === 0 && completedWeeks === 0) status = 'preseason'
-  else if (remainingSchedule.length === 0) status = 'complete'
-  else status = 'active'
-
-  const results = status === 'preseason'
-    ? null
-    : simulatePlayoffs({ allRosters: league.allRosters, model, remainingSchedule, playoffTeams })
-
-  // Keyed by roster for consumers (Trade Analyzer / Partner Finder / The Edge)
-  // that need one team's odds without re-running the sim.
-  const oddsByRoster = {}
-  ;(results ?? []).forEach(r => { oddsByRoster[r.rosterId] = r })
-
-  const value = {
-    status,
-    results,
-    oddsByRoster,
-    model,
-    completedWeeks,
-    remainingWeeks: remainingSchedule.length,
-    remainingGames,
-    // Only the preseason page consumes this — don't solve seeding when the
-    // real simulation already ran.
-    strengthPreview: status === 'preseason'
-      ? buildStrengthPreview(league.allRosters, playoffTeams, strengths)
-      : null,
-    playoffTeams,
-    firstPlayoffWeek,
-  }
+  // The model itself lives in src/utils/playoffOdds.js (buildPlayoffOutlook),
+  // so the MCP server's get_playoff_odds runs exactly this composition under
+  // plain Node. What stays here is the memo and nothing else.
+  const value = buildPlayoffOutlook({
+    allRosters: league.allRosters, perWeek, playoffTeams, firstPlayoffWeek,
+  })
   derivedCache = { league, perWeek, playoffTeams, firstPlayoffWeek, value }
   return value
 }
