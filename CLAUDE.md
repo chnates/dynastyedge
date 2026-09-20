@@ -644,6 +644,13 @@ share. Phase 2 added the swappable cache backend (`store.js`), the HTTP
 transport (`http.js`), stateless OAuth 2.1 (`oauth.js` / `oauthRoutes.js` /
 `app.js`) and the Vercel packaging (`api/mcp.js`, `vercel.json`).
 
+**All SEVEN tools confirmed in the connector's own tool list, 2026-09-20** —
+the owner's phone, after phase 2b deployed: Grade a trade · Find a sell-high
+candidate · Rest-of-season playoff odds · Get a team roster · Weekly start/sit
+advice · Recommend free agents · Resolve player and pick names to ids. That is
+the end of the chain no probe can reach — what the client actually enumerates
+after discovery, registration and OAuth.
+
 **Verified through Claude's own connector, 2026-09-19** — not a probe, the real
 client: added as a custom connector, GitHub login completed in a browser, and
 `find_sell_high` returned the live answer (sell Jaxson Dart to Crippled Gang

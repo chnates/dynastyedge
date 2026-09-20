@@ -364,6 +364,10 @@ client reject the entire response. The tests call `buildTradeAnswer` directly
 and never cross the wire — only driving the real transport found it. Third
 time this schema has paid for itself.
 
+**The connector itself lists all seven, confirmed on the owner's phone
+2026-09-20** — the one check no probe can make, since it needs the GitHub
+browser login. MCP-2b is closed end to end.
+
 **Verified live over the real transport** (2026 week 2): 7 tools;
 `analyze_trade` acquiring a pick **512ms cold / 78ms cached**, `windowBasis:
 'odds'` intact, `transactions` and `history` stamped into `asOf` beside the
