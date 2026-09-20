@@ -89,8 +89,8 @@ function MyReportCard({ profile, tier, insights, onOpen }) {
           value={profile.draft.count > 0 ? `${profile.draft.hits}/${profile.draft.count}` : '—'}
         />
         <ReportStat
-          label="Value / $100 FAAB"
-          value={profile.faab.valuePer100 != null ? profile.faab.valuePer100.toLocaleString() : '—'}
+          label="Value / Full Budget"
+          value={profile.faab.valuePerBudget != null ? profile.faab.valuePerBudget.toLocaleString() : '—'}
         />
       </div>
 

@@ -20,12 +20,55 @@ const STARTUP_ROUNDS = 6       // drafts longer than this are startup drafts
 // against the same bar; two copies of the number would drift.
 export const DRAFT_HIT_VALUE = 1000
 export const STEAL_DELTA = 5   // slots beaten (pick no. vs class value rank)
+// Minimum FAAB commitment before the report card grades efficiency: a fifth of
+// one budget. In budgets, because dollars do not port across seasons.
+const FAAB_COACHING_MIN_BUDGETS = 0.2
+
+// FAAB IS MEASURED IN BUDGETS, NEVER IN RAW DOLLARS — this league's budget
+// went $100 (2023-25) -> $1000 (2026), so a dollar is not a portable unit here
+// and summing across seasons mixes two scales. A budget is the only unit that
+// ports, and it is the unit the corpus memo works in
+// (docs/analysis/faab-bid-corpus-2026-08.md).
+//
+// THE BUDGET RESETS TWICE A LEAGUE YEAR — offseason, then again at the start
+// of the regular season, with anything unspent in the offseason LOST. So a
+// manager has TWO budgets to spend inside one Sleeper season, and the
+// transaction log routinely shows a season total above one budget. Measured on
+// this league (2023-26): six manager-seasons exceed one budget and **none has
+// ever exceeded two**, which is the signature. chnates 2025 spent exactly $100
+// in the offseason and a fresh $30 in-season; docj11 spent $703 in the 2026
+// offseason and his in-season allocation reads untouched.
+//
+// Two consequences, and only the second needed any code:
+//
+// 1. A SINGLE BID is unaffected, because both periods carry the SAME
+//    `waiver_budget` and Sleeper exposes no separate offseason figure. So
+//    `bid / waiver_budget` is exact either side of the reset, and `avgBidPct`
+//    — the number the bidder tendencies compare — needs no period split.
+// 2. A TOTAL is a count of budgets COMMITTED, not a share of an allocation.
+//    Hence `budgetsCommitted` is a multiple (1.73) and never a percent: "173%"
+//    invites "of what?", and with two resets a year over four seasons the
+//    honest denominator is ~8 budgets, not one. A number whose unit misreads
+//    is the whole bug this fix exists to remove.
+//
+// `roster.settings.waiver_budget_used` tracks only the CURRENT period, which is
+// why `leagueState.js`'s `faabRemaining` is correct as written and must not be
+// "fixed" against these totals — the two answer different questions.
+//
+// A season with no `waiver_budget` falls back to this, matching
+// leagueState.js's own `?? 100`. Absence of a budget is not evidence of a
+// scale, and the historical default is the least-surprising assumption.
+const DEFAULT_FAAB_BUDGET = 100
 
 // ── Season normalization ─────────────────────────────────────────────────────
 
 // Each season → { season, ownerByRoster, userById, transactions, drafts,
 // rosterSettingsByOwner }. Owner IDs are the stable cross-season identity;
 // roster IDs are only meaningful within their own season.
+function faabBudgetOf(budget) {
+  return Number.isFinite(budget) && budget > 0 ? budget : DEFAULT_FAAB_BUDGET
+}
+
 function normalizeSeasons(history, currentLeague) {
   const seasons = []
 
@@ -40,6 +83,7 @@ function normalizeSeasons(history, currentLeague) {
 
   seasons.push({
     season: currentLeague.season,
+    faabBudget: faabBudgetOf(currentLeague.faabBudget),
     ownerByRoster: currentOwnerByRoster,
     userById: Object.fromEntries(
       currentLeague.allRosters
@@ -66,6 +110,7 @@ function normalizeSeasons(history, currentLeague) {
     })
     seasons.push({
       season: ps.season,
+      faabBudget: faabBudgetOf(ps.leagueInfo?.settings?.waiver_budget),
       ownerByRoster,
       userById: Object.fromEntries(ps.users.map(u => [u.user_id, u])),
       transactions: ps.transactions,
@@ -274,26 +319,32 @@ function buildTradeLedgers(seasons, resolvers) {
 
 // ── Waivers / free agency ────────────────────────────────────────────────────
 
+// Every bid is divided by ITS OWN SEASON'S BUDGET before it is aggregated (see
+// DEFAULT_FAAB_BUDGET above, including why the twice-yearly reset does not need
+// a period split). Raw dollars are deliberately not carried out of here: a
+// cross-season dollar total is a number in no unit at all, and leaving one on
+// the object invites the next consumer to display it.
 function buildFaabStats(seasons, resolvers) {
   const byOwner = {}
   function entry(ownerId) {
     if (!byOwner[ownerId]) {
-      byOwner[ownerId] = { dollars: 0, claims: 0, valueAcquired: 0, faMoves: 0, bids: [] }
+      byOwner[ownerId] = { budgetsCommitted: 0, claims: 0, valueAcquired: 0, faMoves: 0, bids: [] }
     }
     return byOwner[ownerId]
   }
 
   seasons.forEach(s => {
+    const budget = faabBudgetOf(s.faabBudget)
     s.transactions.forEach(tx => {
       const ownerId = s.ownerByRoster[tx.roster_ids?.[0]]
       if (!ownerId) return
       const adds = Object.keys(tx.adds ?? {})
       if (tx.type === 'waiver' && adds.length > 0) {
         const e = entry(ownerId)
-        const bid = tx.settings?.waiver_bid ?? 0
+        const share = (tx.settings?.waiver_bid ?? 0) / budget   // fraction of one budget
         e.claims += 1
-        e.dollars += bid
-        if (bid > 0) e.bids.push(bid)
+        e.budgetsCommitted += share
+        if (share > 0) e.bids.push(share * 100)                 // avgBidPct is a PERCENT
         adds.forEach(pid => { e.valueAcquired += resolvers.playerAsset(pid).value })
       } else if (tx.type === 'free_agent' && adds.length > 0) {
         entry(ownerId).faMoves += 1
@@ -302,11 +353,24 @@ function buildFaabStats(seasons, resolvers) {
   })
 
   Object.values(byOwner).forEach(e => {
-    e.avgBid = e.bids.length ? e.bids.reduce((a, b) => a + b, 0) / e.bids.length : null
-    e.valuePer100 = e.dollars > 0 ? Math.round((e.valueAcquired / e.dollars) * 100) : null
+    // A single bid IS a percent of the budget it drew against — that unit is
+    // exact, reset or no reset, and it is what the bidder tendencies compare.
+    e.avgBidPct = e.bids.length ? e.bids.reduce((a, b) => a + b, 0) / e.bids.length : null
+    // Value acquired per ONE FULL BUDGET committed. Continuous with the old
+    // "value per $100": on a $100 budget a full budget WAS $100, so every
+    // pre-2026 season's number is unchanged and no history is restated.
+    e.valuePerBudget = e.budgetsCommitted > 0
+      ? Math.round(e.valueAcquired / e.budgetsCommitted)
+      : null
     delete e.bids
   })
   return byOwner
+}
+
+// The zero-history FAAB record. Exported shape must match buildFaabStats's.
+const EMPTY_FAAB = {
+  budgetsCommitted: 0, claims: 0, valueAcquired: 0, faMoves: 0,
+  avgBidPct: null, valuePerBudget: null,
 }
 
 // ── Rookie draft grading ─────────────────────────────────────────────────────
@@ -370,7 +434,7 @@ function avg(arr) {
   return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null
 }
 
-function buildTendencies(ledger, faab, leagueAvgBid) {
+function buildTendencies(ledger, faab, leagueAvgBidPct) {
   const labels = []
   let picksGot = 0
   let picksGave = 0
@@ -405,9 +469,9 @@ function buildTendencies(ledger, faab, leagueAvgBid) {
   const topPos = Object.entries(posGot).sort((a, b) => b[1] - a[1])[0]
   if (topPos && topPos[1] >= 3) labels.push(`Chases ${topPos[0]}s`)
 
-  if (faab?.avgBid != null && leagueAvgBid != null && leagueAvgBid > 0) {
-    if (faab.avgBid >= leagueAvgBid * 1.5) labels.push('Aggressive bidder')
-    else if (faab.avgBid <= leagueAvgBid * 0.5 && faab.claims >= 3) labels.push('Bargain hunter')
+  if (faab?.avgBidPct != null && leagueAvgBidPct != null && leagueAvgBidPct > 0) {
+    if (faab.avgBidPct >= leagueAvgBidPct * 1.5) labels.push('Aggressive bidder')
+    else if (faab.avgBidPct <= leagueAvgBidPct * 0.5 && faab.claims >= 3) labels.push('Bargain hunter')
   }
 
   return { labels: labels.slice(0, 3), picksGot, picksGave, ageGot, ageGave, posGot }
@@ -463,12 +527,18 @@ export function buildMyInsights(profiles, me) {
     workOn.push(`You haven't completed a trade yet — the most active managers are reshaping their rosters around you.`)
   }
 
-  // FAAB efficiency
-  if (me.faab.dollars >= 20 && me.faab.valuePer100 != null) {
-    const r = rankOf(profiles, me.ownerId, p => p.faab.valuePer100 ?? -1, p => (p.faab.dollars ?? 0) >= 20)
+  // FAAB efficiency. The gate has always MEANT "has committed a fifth of a
+  // budget"; on raw dollars it tripped at 2% of 2026's $1000, which is why it
+  // is written in budgets now rather than in a dollar figure.
+  if (me.faab.budgetsCommitted >= FAAB_COACHING_MIN_BUDGETS && me.faab.valuePerBudget != null) {
+    const r = rankOf(
+      profiles, me.ownerId,
+      p => p.faab.valuePerBudget ?? -1,
+      p => (p.faab.budgetsCommitted ?? 0) >= FAAB_COACHING_MIN_BUDGETS,
+    )
     if (r && r.of >= 3) {
-      if (r.rank === 1) strengths.push(`Best FAAB efficiency in the league — ${me.faab.valuePer100.toLocaleString()} value per $100 spent.`)
-      else if (r.rank === r.of) workOn.push(`Lowest FAAB efficiency in the league (${me.faab.valuePer100.toLocaleString()} value per $100) — save your dollars for real targets.`)
+      if (r.rank === 1) strengths.push(`Best FAAB efficiency in the league — ${me.faab.valuePerBudget.toLocaleString()} value per full budget spent.`)
+      else if (r.rank === r.of) workOn.push(`Lowest FAAB efficiency in the league (${me.faab.valuePerBudget.toLocaleString()} value per full budget) — save your dollars for real targets.`)
     }
   }
 
@@ -524,8 +594,8 @@ export function buildManagerProfiles({ history, currentLeague, playerMap, pickEn
   const faabStats = buildFaabStats(seasons, resolvers)
   const draftRecords = buildDraftRecords(seasons, resolvers)
 
-  const allBids = Object.values(faabStats).flatMap(f => (f.avgBid != null ? [f.avgBid] : []))
-  const leagueAvgBid = avg(allBids)
+  const allBids = Object.values(faabStats).flatMap(f => (f.avgBidPct != null ? [f.avgBidPct] : []))
+  const leagueAvgBidPct = avg(allBids)
 
   const seasonList = seasons.map(s => s.season)
   const currentSeason = seasonList[0]
@@ -545,8 +615,8 @@ export function buildManagerProfiles({ history, currentLeague, playerMap, pickEn
       const losses = ledger.filter(t => t.result === 'loss').length
       const netValue = ledger.reduce((sum, t) => sum + t.net, 0)
       const byNet = [...ledger].sort((a, b) => b.net - a.net)
-      const faab = faabStats[ownerId] ?? { dollars: 0, claims: 0, valueAcquired: 0, faMoves: 0, avgBid: null, valuePer100: null }
-      const tendencies = buildTendencies(ledger, faab, leagueAvgBid)
+      const faab = faabStats[ownerId] ?? { ...EMPTY_FAAB }
+      const tendencies = buildTendencies(ledger, faab, leagueAvgBidPct)
 
       const aggRecord = { wins: 0, losses: 0, ties: 0 }
       seasons.forEach(s => {

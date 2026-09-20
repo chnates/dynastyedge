@@ -203,6 +203,24 @@ Both are measurable against live 2026 data with no hindsight.
 - **One league, one bidding culture.** Ten specific managers. Nothing here
   generalizes, and per frontier Item 6 that is by design.
 
+> **UPDATE 2026-09-20 — the app now works in this document's unit.** The
+> §1 budget-scale warning had a live consequence beyond this memo:
+> `buildFaabStats` was summing raw dollars across seasons, so Manager
+> Scouting's efficiency stat and bidder chips mixed the two scales the moment
+> 2026 waiver spend landed. Fixed — every bid is divided by its own season's
+> `waiver_budget` before aggregating (CLAUDE.md Feature 11). **The bid
+> recommender in §6 is still not built** and still needs an owner ask; nothing
+> about its gate changed.
+>
+> **The same day also established a fact this memo did not know: the budget
+> RESETS TWICE A LEAGUE YEAR** — offseason, then again at the regular-season
+> start, with unspent offseason money lost. §1's per-season claim counts
+> therefore span *two* budgets each, and §5's percentile tables are unaffected
+> (they are per-bid, and both periods carry the same budget) but any future
+> work reading a *season total* as a share of one allocation would be wrong.
+> Measured 2026-09-20: six manager-seasons exceed one budget, none has ever
+> exceeded two.
+
 ## 8. What this changes
 
 - **Frontier Item 2's blocking question is answered** (§2) and its framing is

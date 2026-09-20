@@ -215,3 +215,166 @@ test('a grade carries the fields the pick-confidence nudge gates on', () => {
 test('no league is an empty record, not a crash', () => {
   assert.deepEqual(buildDraftGrades({ history: null, currentLeague: null }), {})
 })
+
+// ── FAAB normalization ───────────────────────────────────────────────────────
+//
+// CLAUDE.md Feature 11: "normalize bids to percent-of-budget using each
+// season's waiver_budget before aggregating." This league's budget went $100
+// (2023-25) → $1000 (2026), so a raw-dollar sum across seasons is a number in
+// no unit at all. Measured live 2026-09-20 on this league: it moved four of ten
+// tendency chips, two of them inverted, and understated one manager's FAAB
+// efficiency by 4.6×.
+//
+// The budget also RESETS TWICE A LEAGUE YEAR (offseason, then again at the
+// regular-season start, unspent offseason money lost), so a season's log total
+// routinely exceeds one budget — which is why the total is a COUNT of budgets
+// committed rather than a percent of an allocation.
+
+const FAAB_PLAYERS = {
+  w1: { name: 'Waiver One', position: 'WR', age: 24, value: 1000 },
+  w2: { name: 'Waiver Two', position: 'RB', age: 24, value: 1000 },
+}
+
+function waiver(rosterId, playerId, bid, id) {
+  return {
+    type: 'waiver', transaction_id: id, week: 1, status_updated: 100,
+    roster_ids: [rosterId], adds: { [playerId]: rosterId }, drops: null,
+    settings: { waiver_bid: bid },
+  }
+}
+
+// Two seasons, two budget scales. `oldBids` are $100-scale, `newBids` $1000.
+function faabFixture({ oldBids = [], newBids = [], oldBudget = 100, newBudget = 1000 } = {}) {
+  const roster = (id, owner) => ({
+    roster_id: id, owner_id: owner, settings: { wins: 0, losses: 0, ties: 0 },
+  })
+  return buildManagerProfiles({
+    history: {
+      currentSeason: '2026',
+      currentDrafts: [],
+      pastSeasons: [{
+        season: '2025',
+        leagueInfo: { season: '2025', settings: { waiver_budget: oldBudget } },
+        users: [{ user_id: 'ownerA', display_name: 'A' }, { user_id: 'ownerB', display_name: 'B' }],
+        rosters: [roster(1, 'ownerA'), roster(2, 'ownerB')],
+        transactions: oldBids.map((b, i) => waiver(b.roster, b.player ?? 'w1', b.bid, `o${i}`)),
+        drafts: [],
+      }],
+    },
+    currentLeague: {
+      season: '2026',
+      faabBudget: newBudget,
+      allRosters: [
+        { rosterId: 1, owner: { user_id: 'ownerA', display_name: 'A' }, record: { wins: 0, losses: 0, ties: 0 } },
+        { rosterId: 2, owner: { user_id: 'ownerB', display_name: 'B' }, record: { wins: 0, losses: 0, ties: 0 } },
+      ],
+      transactions: newBids.map((b, i) => waiver(b.roster, b.player ?? 'w1', b.bid, `n${i}`)),
+    },
+    playerMap: FAAB_PLAYERS,
+    pickEntries: [],
+    playerDB: {},
+    myOwnerId: 'ownerA',
+  })
+}
+
+const faabOf = (res, ownerId) => res.profiles.find(p => p.ownerId === ownerId).faab
+
+test('a bid is normalized by ITS OWN season\'s budget, so the 10× scale change cannot inflate a total', () => {
+  // $20 of $100 and $200 of $1000 are the same 20% commitment. Summing raw
+  // dollars would have read the second as ten times the first.
+  const res = faabFixture({
+    oldBids: [{ roster: 1, bid: 20 }],
+    newBids: [{ roster: 2, bid: 200 }],
+  })
+  assert.equal(faabOf(res, 'ownerA').budgetsCommitted, 0.2)
+  assert.equal(faabOf(res, 'ownerB').budgetsCommitted, 0.2)
+  assert.equal(faabOf(res, 'ownerA').avgBidPct, faabOf(res, 'ownerB').avgBidPct)
+})
+
+test('valuePerBudget is UNCHANGED for a history entirely on the $100 scale', () => {
+  // The continuity property the unit was chosen for: on a $100 budget a full
+  // budget WAS $100, so `valuePerBudget` equals the old `valuePer100` exactly
+  // and the fix restates no pre-2026 history. Verified live on this league —
+  // all four managers with no 2026 spend scored identically either way.
+  const res = faabFixture({ oldBids: [{ roster: 1, bid: 25 }] })  // $25 of $100
+  // 1000 value acquired for $25 of a $100 budget = 4000 per full budget,
+  // which is the same number the old `valueAcquired / dollars * 100` gave.
+  assert.equal(faabOf(res, 'ownerA').valuePerBudget, 4000)
+})
+
+test('the coaching gate means a FIFTH OF A BUDGET, not twenty dollars', () => {
+  // The documented intent was "spent ≥20% of a budget". On raw dollars it
+  // tripped at $20 of 2026's $1000 — 2%.
+  const twoPct = faabFixture({ newBids: [{ roster: 1, bid: 20 }] })   // $20 of $1000
+  assert.ok(faabOf(twoPct, 'ownerA').budgetsCommitted < 0.2, '$20 of $1000 is 2%, under the gate')
+
+  const twentyPct = faabFixture({ oldBids: [{ roster: 1, bid: 20 }] }) // $20 of $100
+  assert.ok(faabOf(twentyPct, 'ownerA').budgetsCommitted >= 0.2, '$20 of $100 is 20%, at the gate')
+})
+
+test('tendency chips compare percent, so the biggest raw spender can be the quieter bidder', () => {
+  // A bids $300+$300 of $1000 (30% each). B bids $50+$50 of $100 (50% each).
+  // In raw dollars A looks 6× the bidder; in budget terms B is the aggressor.
+  const res = faabFixture({
+    oldBids: [{ roster: 2, bid: 50 }, { roster: 2, bid: 50, player: 'w2' }],
+    newBids: [{ roster: 1, bid: 300 }, { roster: 1, bid: 300, player: 'w2' }],
+  })
+  assert.equal(faabOf(res, 'ownerA').avgBidPct, 30)
+  assert.equal(faabOf(res, 'ownerB').avgBidPct, 50)
+  assert.ok(!res.profiles.find(p => p.ownerId === 'ownerA').tendencies.includes('Aggressive bidder'),
+    'the larger raw-dollar spender must not be labelled the aggressive bidder')
+})
+
+test('a missing or zero waiver_budget falls back to 100, never divides by zero', () => {
+  // Absence of a budget is not evidence of a scale; 100 is the historical
+  // default and matches leagueState.js\'s own `?? 100`.
+  const res = faabFixture({ oldBids: [{ roster: 1, bid: 30 }], oldBudget: 0, newBudget: undefined })
+  assert.equal(faabOf(res, 'ownerA').budgetsCommitted, 0.3)
+  assert.ok(Number.isFinite(faabOf(res, 'ownerA').valuePerBudget))
+})
+
+test('no raw-dollar field escapes buildFaabStats', () => {
+  // A cross-season dollar total has no unit. Leaving one on the object is
+  // what invited the UI to render it for three seasons.
+  const res = faabFixture({ oldBids: [{ roster: 1, bid: 10 }], newBids: [{ roster: 2, bid: 100 }] })
+  for (const owner of ['ownerA', 'ownerB']) {
+    const faab = faabOf(res, owner)
+    assert.ok(!('dollars' in faab), 'raw dollars must not be carried out of the FAAB stats')
+    assert.ok(!('budgetPct' in faab), 'the total is a count of budgets, never a percent of one')
+    assert.ok(!('avgBid' in faab), 'a raw-dollar average must not be carried out either')
+    assert.ok(!('valuePer100' in faab), 'the $100-denominated metric is superseded by valuePerBudget')
+  }
+})
+
+test('a manager with no waiver claims gets the empty record, not a crash', () => {
+  const res = faabFixture({ oldBids: [{ roster: 1, bid: 10 }] })
+  const b = faabOf(res, 'ownerB')
+  assert.equal(b.budgetsCommitted, 0)
+  assert.equal(b.avgBidPct, null)
+  assert.equal(b.valuePerBudget, null)
+})
+
+test('a season total may EXCEED one budget, because the budget resets twice a year', () => {
+  // Offseason, then again at the regular-season start, unspent money lost. So
+  // one Sleeper season carries two budgets and its log routinely shows more
+  // than one spent. Measured on this league 2026-09-20: six manager-seasons
+  // exceed one budget and NONE has ever exceeded two — chnates 2025 spent
+  // exactly $100 in the offseason and a fresh $30 in-season. A model that
+  // capped a season at one budget would have to discard real spend.
+  const res = faabFixture({
+    oldBids: [{ roster: 1, bid: 100 }, { roster: 1, bid: 30, player: 'w2' }],  // $130 of a $100 budget
+  })
+  assert.equal(faabOf(res, 'ownerA').budgetsCommitted, 1.3)
+  assert.equal(faabOf(res, 'ownerA').claims, 2, 'neither claim is dropped for busting one budget')
+})
+
+test('avgBidPct stays a PERCENT of one budget, and the reset cannot distort it', () => {
+  // Both periods carry the same waiver_budget and Sleeper exposes no separate
+  // offseason figure, so bid ÷ budget is exact either side of the reset. This
+  // is the number the bidder tendencies compare, so it must not drift with the
+  // total's unit.
+  const res = faabFixture({ oldBids: [{ roster: 1, bid: 40 }, { roster: 1, bid: 60, player: 'w2' }] })
+  const faab = faabOf(res, 'ownerA')
+  assert.equal(faab.avgBidPct, 50, 'mean of 40% and 60% of a $100 budget')
+  assert.equal(faab.budgetsCommitted, 1, 'the same two bids are one whole budget')
+})

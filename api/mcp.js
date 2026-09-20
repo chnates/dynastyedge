@@ -39917,6 +39917,9 @@ var init_mcp = __esm({
 });
 
 // src/utils/managerAnalysis.js
+function faabBudgetOf(budget) {
+  return Number.isFinite(budget) && budget > 0 ? budget : DEFAULT_FAAB_BUDGET;
+}
 function normalizeSeasons(history, currentLeague) {
   const seasons = [];
   const currentOwnerByRoster = {};
@@ -39929,6 +39932,7 @@ function normalizeSeasons(history, currentLeague) {
   });
   seasons.push({
     season: currentLeague.season,
+    faabBudget: faabBudgetOf(currentLeague.faabBudget),
     ownerByRoster: currentOwnerByRoster,
     userById: Object.fromEntries(
       currentLeague.allRosters.filter((r) => r.owner).map((r) => [r.owner.user_id, r.owner])
@@ -39952,6 +39956,7 @@ function normalizeSeasons(history, currentLeague) {
     });
     seasons.push({
       season: ps.season,
+      faabBudget: faabBudgetOf(ps.leagueInfo?.settings?.waiver_budget),
       ownerByRoster,
       userById: Object.fromEntries(ps.users.map((u) => [u.user_id, u])),
       transactions: ps.transactions,
@@ -40076,7 +40081,7 @@ function buildDraftGrades({ history, currentLeague, playerMap, pickEntries, play
   const resolvers = makeResolvers(playerMap, playerDB ?? {}, pickEntries ?? [], buildPickIndex(seasons));
   return buildDraftRecords(seasons, resolvers);
 }
-var ROUND_LABELS, STARTUP_ROUNDS, DRAFT_HIT_VALUE, STEAL_DELTA;
+var ROUND_LABELS, STARTUP_ROUNDS, DRAFT_HIT_VALUE, STEAL_DELTA, DEFAULT_FAAB_BUDGET;
 var init_managerAnalysis = __esm({
   "src/utils/managerAnalysis.js"() {
     init_pickCapital();
@@ -40084,6 +40089,7 @@ var init_managerAnalysis = __esm({
     STARTUP_ROUNDS = 6;
     DRAFT_HIT_VALUE = 1e3;
     STEAL_DELTA = 5;
+    DEFAULT_FAAB_BUDGET = 100;
   }
 });
 

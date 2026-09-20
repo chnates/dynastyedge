@@ -226,13 +226,17 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
                 value={profile.tradeCount > 0 ? fmtNet(profile.netValue) : '—'}
                 valueClass={profile.netValue > 0 ? 'text-success' : profile.netValue < 0 ? 'text-danger' : 'text-text-primary dark:text-text-primary'}
               />
+              {/* Budgets, not dollars and not a percent. Dollars do not port
+                  ($100 -> $1000 for 2026), and a percent invites "of what?" —
+                  the budget resets twice a league year, so a multi-season total
+                  is a COUNT of budgets committed, never a share of one. */}
               <StatCard
-                label="FAAB Spent"
-                value={`$${faab.dollars}`}
+                label="Budgets Used"
+                value={`${faab.budgetsCommitted.toFixed(1)}×`}
               />
               <StatCard
-                label="Value / $100 FAAB"
-                value={faab.valuePer100 != null ? faab.valuePer100.toLocaleString() : '—'}
+                label="Value / Full Budget"
+                value={faab.valuePerBudget != null ? faab.valuePerBudget.toLocaleString() : '—'}
               />
             </div>
 

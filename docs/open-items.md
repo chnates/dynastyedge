@@ -811,11 +811,35 @@ curl -s 'https://api.sleeper.app/v1/league/1313933520715907072/drafts' | grep -c
 
 ## 2. Deferred — waiting on a trigger
 
-### OPEN-1 — Normalize FAAB stats to percent-of-budget
+### OPEN-1 — ~~Normalize FAAB stats to percent-of-budget~~ **CLOSED 2026-09-20**
 
-**Status:** known bug, documented, deliberately not fixed.
-**Trigger:** enough 2026 waiver history to verify against — roughly 4–6 weeks
-of regular-season waivers. (11 claims existed as of 2026-08-08, far too few.)
+**The trigger fired and the fix shipped.** 2026 week 1 alone carried 21
+completed bid-bearing claims on the new scale (top bid **$695**), which is the
+live history the fix was waiting on. `buildFaabStats` now divides every bid by
+**its own season's `waiver_budget`** before aggregating, and carries out
+`budgetsCommitted` / `avgBidPct` / `valuePerBudget` — no raw-dollar field
+survives, so the next consumer cannot render a mixed-scale total. The total is
+a **count of budgets**, not a percent, because the budget **resets twice a
+league year** (offseason, then at the season start, unspent money lost) —
+confirmed by the owner and measured: six manager-seasons exceed one budget,
+none has ever exceeded two. CLAUDE.md Feature 11
+carries the detail and the live measurement.
+
+**What the bug was actually costing, measured on the live league** (four
+seasons, 287 bid-bearing claims): **four of ten** tendency chips were wrong and
+**two were inverted** — the biggest raw spender ($1,071, avg bid 26.1) wore
+"Aggressive bidder" while bidding 10.7% of budget, *below* the league's 12.5%;
+a manager reading mid-pack at $132 was really a 4.8%-average "Bargain hunter",
+with his efficiency understated **4.6×**. The acceptance bar ("a manager's
+efficiency doesn't jump 10× on the same behavior") is met by construction and
+verified: every manager with no 2026 spend scores **byte-identically** before
+and after, because a full budget on the old scale *was* $100.
+
+The original entry is kept below as the record of the deferral.
+
+**Status:** ~~known bug, documented, deliberately not fixed.~~
+**Trigger:** ~~enough 2026 waiver history to verify against — roughly 4–6 weeks
+of regular-season waivers. (11 claims existed as of 2026-08-08, far too few.)~~
 
 The league's FAAB budget changed **$100 → $1000 for 2026**. `useLeague` reads
 it from league settings, so roster-level FAAB display is correct. But
@@ -1254,6 +1278,7 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 | OPEN-6 — push Layer 4 into Targets and the fair-package builder | 2026-09-06 | Layer 4 extracted as `buildPartnerFit` and shared; `suggestFairPackage` made two-phase; Targets ranked by `need × value × movability`; `suggestSellMove` partner pick made two-sided. Detail retained in §1 |
 | July 2026 repo-review backlog B1–B11 | 2026-07/08 | All eleven landed — mapping in `docs/repo-review-2026-07.md`'s status banner |
 | Navigation Refactor Phases 1–3 | 2026-07-20 | Consolidation → `/my-team` + `/league` rename → "Primetime Blackout" visual pass |
+| OPEN-1 — FAAB stats mixed two budget scales | 2026-09-20 | The $100 → $1000 change went live, so the trigger fired. Bids are now normalized to percent-of-budget per season; `valuePerBudget` replaces "value per $100" and is continuous with it, so no pre-2026 history is restated. Measured on the live league: four of ten tendency chips corrected, two inverted. Detail retained in §2 |
 | Frontier Item 2 blocking question (are losing FAAB bids visible?) | 2026-08-08 | Verified yes; see `docs/analysis/faab-bid-corpus-2026-08.md`. Superseded by OPEN-3 |
 | ACTIVE-1 — season-readiness tests (draft day + Week 1) | 2026-08-08 | Three live contract breaks found and fixed (schedule endpoint, draft `slot_to_roster_id`, stats `pos`/`opp`); 35 new tests (72 → 107) + `scripts/dev/replay-live.mjs`. Detail retained in §1 |
 | ACTIVE-2 — Draft › Research: verify the first pipeline run | 2026-08-14 | Pipeline published 2026-08-14 11:12Z; feed shape, Market vs Model output, and the drawer's Rookies row all verified against live data. Detail retained in §1 |
