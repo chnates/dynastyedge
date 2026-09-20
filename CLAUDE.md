@@ -2892,19 +2892,41 @@ there and profiles cover fewer seasons.
 - **Tendencies:** pick accumulator/shipper, buys youth/veterans (avg age of
   players acquired vs given), position chasing, FAAB aggression vs league
   average — rendered as chips.
-- **FAAB efficiency:** dollars spent vs today's value of waiver pickups
-  (value per $100), claims, FA move count.
-  > ⚠ **Known issue — activates during 2026.** `buildFaabStats` sums **raw
-  > dollars across seasons with no budget normalization**
-  > (`managerAnalysis.js` — `e.dollars += bid`). The league's budget went
-  > $100 → $1000 for 2026, so as 2026 waiver spend accumulates, `valuePer100`
-  > collapses ~10× for active managers, `avgBid` (and the "Aggressive bidder"
-  > / "Bargain hunter" tendency chips that compare against `leagueAvgBid`)
-  > mixes two scales, and the `faab.dollars >= 20` coaching gate — meant as
-  > "spent ≥20% of a budget" — now trips at 2%. **Fix is to normalize bids to
-  > percent-of-budget** using each season's `waiver_budget` before
-  > aggregating. Not yet done; no live 2026 waiver history to verify against
-  > yet (11 claims as of 2026-08-08).
+- **FAAB efficiency — measured in PERCENT OF BUDGET, never in raw dollars**
+  (fixed 2026-09-20). `budgetPct` (spend as a share of each season's own
+  budget), `valuePerBudget` (today's value of waiver pickups per one **full
+  budget** spent), `avgBidPct`, claims, FA move count. Every bid is divided by
+  **its own season's `waiver_budget`** before it is aggregated.
+  - **Why a dollar is not a unit here.** This league's budget went **$100
+    (2023–25) → $1000 (2026)**, so a cross-season dollar total is a number in
+    no unit at all. The bug was live, not theoretical: measured against the
+    live league on 2026-09-20 (four seasons, 287 bid-bearing claims, 2026 top
+    bid **$695**), summing raw dollars moved **four of ten** tendency chips and
+    **inverted two** — the league's largest raw spender ($1,071, avg bid 26.1)
+    wore "Aggressive bidder" while actually bidding **10.7%** of budget,
+    *below* the league's 12.5%; and a manager whose raw $132 read mid-pack was
+    in truth a 4.8%-average **"Bargain hunter"**. His FAAB efficiency was
+    understated **4.6×** (832 → 3,853).
+  - **`valuePerBudget` is the successor to the old "value per $100", and it is
+    continuous with it.** On a $100 budget a full budget *was* $100, so the two
+    are the same number and the fix **restates no pre-2026 history** — verified
+    live: all four managers with no 2026 spend scored byte-identically either
+    way. Only 2026's dollars stop being counted at 10×.
+  - The `budgetPct >= 20` coaching gate now means what it always said it meant
+    — "spent ≥20% of a budget". On raw dollars it tripped at **2%** of 2026's
+    $1000.
+  - **No raw-dollar field is carried out of `buildFaabStats`**, deliberately
+    (`dollars`, `avgBid` and `valuePer100` are gone, not deprecated). Leaving a
+    mixed-scale total on the object is what put one on screen for three
+    seasons; a test pins their absence.
+  - A season with no `waiver_budget` falls back to **100**, matching
+    `leagueState.js`'s own `?? 100`. Absence of a budget is not evidence of a
+    scale.
+  - The UI reads **"Budget Spent · 173%"** and **"Value / Full Budget"**. Over
+    100% is normal and correct — it is a multi-season total, and the sheet
+    header states the seasons covered directly above it.
+  - See `docs/analysis/faab-bid-corpus-2026-08.md`, which works in percent of
+    budget throughout for exactly this reason.
 - **Rookie draft grades:** every rookie pick scored as slot vs the player's
   current-value rank within that draft class (delta ≥ +5 = Steal, ≤ −5 =
   Reach; value ≥ 1000 today = "hit"). Startup drafts (> 6 rounds) excluded.
@@ -5253,11 +5275,11 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 587 / # pass 582
+honestly:** instead of "cannot find module" it prints `# tests 594 / # pass 589
 / # fail 5`, which reads like a code regression. A file that cannot load never
-runs its tests, so the count silently drops from **630** to 587.
+runs its tests, so the count silently drops from **637** to 594.
 `npm run build` in the same state fails with `sh: 1: vite: not found`.
-**If the test count isn't 630, run `npm ci` before debugging anything.**
+**If the test count isn't 637, run `npm ci` before debugging anything.**
 
 The pair was re-measured 2026-09-19 (MCP phase 1b) by renaming `node_modules`
 aside, and it had drifted seven times before that: 178/130, 177/115, 219/136,
@@ -5280,6 +5302,11 @@ the broken-state count stayed at 152; the 2026-09-12 news-retention work moved
 both, because `newsRetention.test.mjs` imports only a zero-dependency pure
 module. **Re-measure both whenever the suite grows.**
 
+The FAAB normalization (2026-09-20) moved both by the same 7 (630/587 →
+**637/594**), the gap holding at 43 — `managerAnalysis.test.mjs` imports one
+`src/utils` module and nothing else, so its seven new FAAB tests run with no
+`node_modules` at all.
+
 Phase 2b — `partnerActivity` and `myDraftGrade`, the last two unwired signals —
 moved both by the same 41 (589/546 → **630/587**), the gap holding at 43: the
 two new data layers and the `buildDraftGrades` equivalence tests all load with
@@ -5298,8 +5325,8 @@ regression to the next session, which is the exact confusion the block exists
 to prevent, so re-measure rather than incrementing what is written.
 
 The useful invariant survived the drift and is worth preferring to either
-count: **the gap between them is 43 and has not moved.** 630 − 587 = 43,
-589 − 546 = 43, and 538 − 495 = 43 before that. That is the number of tests living in the five files
+count: **the gap between them is 43 and has not moved.** 637 − 594 = 43,
+630 − 587 = 43, 589 − 546 = 43, and 538 − 495 = 43 before that. That is the number of tests living in the five files
 that cannot load, so an unchanged gap means every test added since loads with
 no `node_modules` at all — which is what the equal-delta checks below were
 reaching for, stated as one number instead of a subtraction per change.

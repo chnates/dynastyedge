@@ -24,6 +24,9 @@ export function useManagerProfiles() {
       history,
       currentLeague: {
         season: String(leagueInfo?.season ?? history.currentSeason),
+        // Read the budget from league settings, never assumed — it went
+        // $100 -> $1000 for 2026 and FAAB is aggregated as percent of it.
+        faabBudget: leagueInfo?.settings?.waiver_budget,
         allRosters: league.allRosters,
         transactions,
       },

@@ -226,13 +226,16 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
                 value={profile.tradeCount > 0 ? fmtNet(profile.netValue) : '—'}
                 valueClass={profile.netValue > 0 ? 'text-success' : profile.netValue < 0 ? 'text-danger' : 'text-text-primary dark:text-text-primary'}
               />
+              {/* Percent, not dollars: the budget went $100 -> $1000 for 2026,
+                  so a cross-season dollar total is in no unit at all. Over 100%
+                  is normal here — the header above states the seasons covered. */}
               <StatCard
-                label="FAAB Spent"
-                value={`$${faab.dollars}`}
+                label="Budget Spent"
+                value={`${Math.round(faab.budgetPct)}%`}
               />
               <StatCard
-                label="Value / $100 FAAB"
-                value={faab.valuePer100 != null ? faab.valuePer100.toLocaleString() : '—'}
+                label="Value / Full Budget"
+                value={faab.valuePerBudget != null ? faab.valuePerBudget.toLocaleString() : '—'}
               />
             </div>
 
