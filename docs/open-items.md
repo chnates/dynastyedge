@@ -387,21 +387,34 @@ files, **the gap holding at 43**.
    buyer/seller flags on all nine partner cards) and `/trade/analyze` — with
    **zero page errors**. *Read a skill before recording something as blocked.*
 
-2. **THE VERCEL PROJECT HAS NO GITHUB INTEGRATION — merging to `main` has
-   never deployed the MCP server, and never will on its own.** Phase 2a sat
-   merged and undeployed; production was still serving the six-tool build from
-   `9051ea6`, whose committed bundle contains **zero** occurrences of
-   `get_playoff_odds`. Proof it is absence rather than a broken hook: `main`
-   HEAD carries **0** commit statuses (no Vercel check at all), the only
-   GitHub deployment environment is `github-pages`, and a **feature-branch**
-   commit had deployed to `target: production` — which git integration never
-   does, since it sends non-default branches to *preview*. Every deploy so far
-   was a manual CLI push from a session checkout, which stamps git metadata and
-   *looks* like auto-deploy in the dashboard.
-   **Deploying is therefore a manual step until an integration is added.** A
-   `gitSource` deployment against the public repo works and needs no
-   integration, which is how phase 2a was shipped. **[owner ask required]** to
-   connect the repo in Vercel — it needs a browser login.
+2. **The Vercel project had NO GitHub integration — so merging to `main` had
+   never once deployed the MCP server. FIXED 2026-09-20: the owner connected
+   the repo.** Phase 2a sat merged and undeployed for an hour; production was
+   still serving the six-tool build from `9051ea6`, whose committed bundle
+   contains **zero** occurrences of `get_playoff_odds`.
+
+   **The diagnosis is the durable part, because the failure is silent** — the
+   dashboard shows deploys with branch names and commit messages on them, so it
+   reads exactly like auto-deploy. Three signals said otherwise, and any one of
+   them is enough to check next time:
+   - `main` HEAD carried **0** commit statuses — no Vercel check at all.
+   - The only GitHub deployment environment was `github-pages`.
+   - A **feature-branch** commit had deployed to `target: production`, which
+     git integration never does — it sends non-default branches to *preview*.
+
+   Every deploy before this was a manual CLI/API push from a session checkout,
+   which stamps git metadata and therefore *looks* auto-deployed.
+
+   **The manual path still works and is the fallback**: a `gitSource`
+   deployment against the public repo needs no integration at all (that is how
+   phase 2a and 2b were both shipped). Keep it in mind if the integration is
+   ever disconnected.
+
+   **A connection is not a proof.** Connecting does not backfill: commits
+   pushed before it keep their zero statuses, so the first push *after*
+   connecting is the real test — a Vercel check on the commit and a
+   `Production` deployment environment appearing on GitHub. Verified by the
+   doc-fix commit that carries this paragraph.
 
 
 ### ACTIVE-3 — the September 2026 build plan (owner-approved 2026-09-04)

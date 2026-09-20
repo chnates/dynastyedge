@@ -864,6 +864,18 @@ token 401s → an unknown path 404s without reaching the transport.
 Vercel project `dynastyedge-mcp` in team `dynastyedge`, deployed from this
 repo. `api/mcp.js` is the function; `vercel.json` rewrites every path to it.
 
+**The GitHub integration was connected 2026-09-20, and before that date it did
+not exist** — so every deploy through phase 2b was a manual push, and merging
+to `main` deployed the app and left the server on old code. Phase 2a shipped
+that way for an hour. It matters here because the failure is **silent**: a
+manual API deploy stamps branch and commit metadata, so the dashboard reads
+exactly like auto-deploy. The three tells, if it is ever disconnected again:
+`main` carries **no Vercel commit status**, `github-pages` is the only GitHub
+deployment environment, and a **feature-branch** commit shows
+`target: production` (integration sends non-default branches to *preview*).
+The manual path — a `gitSource` deployment against the public repo, which
+needs no integration — remains the fallback. See `docs/open-items.md` MCP-2b.
+
 **Three findings cost a deploy cycle each, and none was guessable from the
 docs. They are recorded because the next person will hit the same three.**
 
