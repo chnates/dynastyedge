@@ -419,14 +419,28 @@ Schema (verified in writer + `useTradeTimeValues`):
     "<transaction_id>": {
       "date": "YYYY-MM-DD",
       "players": { "<sleeperId>": 3550 },
-      "picks": { "<season>-<round>-<originalRosterId>": 900 }
+      "picks": { "<season>-<round>-<originalRosterId>": 900 or null }
     }
   }
 }
 ```
 
-Pick key format matches `pickCapital.js` ownership keys. Pick values are
-median-of-round from named FantasyCalc pick entries at archive time. Reader:
+Pick key format matches `pickCapital.js` ownership keys. Pick values walk the
+app's ladder at archive time — that season's round median, then the generic
+round median across every season listed, then **`null`**.
+
+> **A pick value is NEVER 0, and a 0 you find in this file is a known bug's
+> output.** Classification and pricing live in `scripts/fantasyCalcValues.mjs`
+> (shared by all three snapshot scripts, pinned by
+> `tests/fantasyCalcValues.test.mjs`). Before 2026-09-21 this script
+> classified FantasyCalc entries by `if (sid)`, which stopped recognising
+> picks the moment FantasyCalc gave them synthetic non-numeric ids — so every
+> pick archived as 0 for two months. The reader's "any missing asset hides the
+> line" guard catches a `null` and **does not catch a 0**, so a 0 renders as a
+> confident wrong total. The script now rewrites any archived 0 to null on the
+> next run. See failure-archaeology §3d.
+
+Reader:
 `useTradeTimeValues.getTradeTimeTotals(trade)` returns `{gotThen, gaveThen}`
 or `null` when the trade isn't archived **or any non-FAAB asset is missing**
 (partial totals would mislead). FAAB assets skip valuation.

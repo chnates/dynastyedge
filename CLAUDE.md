@@ -290,14 +290,27 @@ News sources block browser/CORS access, so news is aggregated **server-side in
 GitHub Actions** and served as a static file — keeping the no-backend
 architecture:
 
-- `.github/workflows/news.yml` runs twice an hour (cron `17,47 * * * *`,
-  plus manual `workflow_dispatch`). It runs `scripts/fetch-news.mjs`, which
+- `.github/workflows/news.yml` **asks** to run twice an hour (cron
+  `17,47 * * * *`, plus manual `workflow_dispatch`). It runs `scripts/fetch-news.mjs`, which
   pulls **eleven** sources, merges them into the **previously published
   feed**, resolves each item to the players it names, ranks player news above
   general news, and **force-pushes a single-commit `news-data` branch**
   containing `news.json`. Each item carries `headline`, `story` (≤600 chars),
   `published`, `source`, `link` (validated http(s) article URL or null),
   `athleteIds`, `playerIds`, and `isPlayerNews`.
+- **THE CRON IS A REQUEST, NOT A SCHEDULE — measured 2026-09-21, GitHub
+  delivers ~7.4 runs/day at a 3.26h mean gap, not 48 at 0.5h.** Over runs
+  1205–1220 (consecutive run numbers, so nothing is missing from the list)
+  the gaps ran **1.8h to 5.0h**, and **not one run fired at :17 or :47** —
+  the observed minutes are scattered across the hour. GitHub defers scheduled
+  workflows under load and does **not** make up the skipped occurrences.
+  Three documented claims were sized off the cron line rather than off
+  reality and are corrected in place: the feed's staleness worst case (below,
+  in the MCP news section), the "~48 preview builds a day" this caused on
+  Vercel (Deployment section), and the retention window's arrival-rate
+  assumptions. **Anything that matters to freshness must be measured from
+  run timestamps, never read off the cron.** Tightening the cron is not a
+  fix — the requested cadence is already 6× what is delivered.
 - **Sources, in priority order** (each probed and parsed server-side before
   adoption — see `docs/analysis/news-sources-2026-09.md` for the full probe,
   including the ten rejected candidates): ESPN news API (the only source that
@@ -498,6 +511,20 @@ architecture as the news pipeline:
   fails, the publish step carries the previous archive forward from the
   branch via git — and aborts the publish entirely if it can't, so the
   archive is never erased.
+  **A pick it cannot price archives as `null`, never 0** — the §3 invariant
+  (a pick's value is never 0 just because its market listing is missing),
+  applied here because the archive is *permanent*: a wrong number written
+  today can never be recomputed, since trade-time prices do not exist in
+  hindsight. `useTradeTimeValues` skips a null and hides the whole "at trade
+  time" line, which is the honest outcome; a 0 would instead count into the
+  total and render as fact. Pricing walks the same ladder the app does —
+  that season's round median, then the generic round median across every
+  season FantasyCalc lists ("a 2nd is a 2nd"), then null. The script also
+  **self-heals the published archive**: any pick value of exactly 0 is
+  rewritten to null on the next run, because FantasyCalc never prices a pick
+  at 0, so a stored 0 can only be the pre-2026-09-21 classifier's output.
+  Idempotent, and it goes through the normal publish path rather than a
+  hand-edit of the data branch.
 - The same workflow also runs `scripts/snapshot-values-archive.mjs`
   (`continue-on-error`), which keeps a **permanent MONTHLY archive** of values
   in `values-archive.json` on the same branch — one column per UTC calendar
@@ -646,6 +673,18 @@ GET https://api.fantasycalc.com/values/current
   pick (into `pickEntries`). Classifying on presence alone (the pre-2026-07
   bug) dumped every pick into `playerMap` under a key no roster references,
   left `pickEntries` empty, and priced every pick at 0 app-wide.
+  **The same rule binds the Actions pipelines, where it was wrong for two
+  months longer.** `useFantasyCalc` and `mcp/snapshot.js` were fixed in
+  2026-07; the three `scripts/snapshot-*.mjs` were not, and
+  `snapshot-trade-values.mjs` archived **every pick at 0** until 2026-09-21.
+  The classifier and the pick pricer now live once, in
+  **`scripts/fantasyCalcValues.mjs`** — pure, shared by all three scripts and
+  pinned by `tests/fantasyCalcValues.test.mjs` (which keeps the old
+  presence-based classifier as an executable regression statement). **Do not
+  inline it back into a fetch script**, for the same reason
+  `scripts/newsRetention.mjs` exists. Measured live 2026-09-21: **0 of 418
+  entries carry a falsy `sleeperId`**, so `if (sid)` recognises no picks at
+  all.
 
 **Rookie ADP rule:** FantasyCalc has no rookie-specific ADP field, and its
 `rookiesOnly` endpoint returns non-rookies — never use it. The Draft section's
@@ -959,6 +998,36 @@ naming the cause — message only, never a stack, which on a public endpoint
 leaks paths and module layout for no benefit. That mattered concretely:
 **Vercel's runtime logs return 403 to the deploy tooling**, so an opaque 500
 is a dead end, and the server had to be made to explain itself.
+
+**THE GITHUB INTEGRATION DEPLOYS EVERY BRANCH, INCLUDING THE DATA BRANCHES —
+and that cost is invisible until you look at the deployment list.** Connecting
+the integration on 2026-09-20 fixed the silent no-deploy problem below and
+immediately created a new one: `news.yml` force-pushes `news-data` **twice an
+hour**, so the project started building a preview deployment on every push —
+serving a JSON file nobody requests — plus one each for `values-history` and
+`rookie-intel`. Measured 2026-09-21: three of the last four deployments were
+`news-data` "Update news feed" commits, each a ~2-second no-op build.
+**Volume is ~9 a day, not the ~48 the cron implies**, because GitHub delivers
+that schedule at ~7.4 runs/day (see the news pipeline section). Smaller than
+it first looked, and still pure waste.
+
+**The fix is a PROJECT-LEVEL Ignored Build Step, not `vercel.json`, and the
+reason is worth keeping.** `git.deploymentEnabled` is the documented way to
+turn a branch off — but Vercel reads `vercel.json` from **the branch being
+pushed**, and the three data branches are single-commit force-pushes carrying
+**only their JSON file** (verified: `news-data` holds `news.json` and nothing
+else). A `git` block on `main` would therefore be a **dead no-op that reads
+like a fix**. So the rule lives in the project's `commandForIgnoringBuildStep`
+instead, where no branch can fail to carry it:
+
+```sh
+case "$VERCEL_GIT_COMMIT_REF" in news-data|values-history|rookie-intel) exit 0 ;; *) exit 1 ;; esac
+```
+
+Exit 0 skips the build, exit 1 proceeds — so `main` and every `claude/*`
+feature branch are untouched. **It is a Vercel dashboard setting, so it is
+invisible in this repo and this paragraph is its only record.** If data-branch
+builds ever reappear in the deployment list, that setting is what was lost.
 
 **Vercel's deployment protection does NOT cover the production alias.**
 Deployment-specific URLs redirect to a Vercel login; `dynastyedge-mcp.vercel.app`
@@ -1389,9 +1458,11 @@ search** — which is why the answer is a handoff rather than a choice:
    did not know to ask.
 3. **Provenance.** Every item carries a source and a publish time, and the feed
    carries its own age. A search result carries neither.
-4. **AND WHERE IT LOSES:** the feed publishes twice an hour through a CDN that
-   caches ~5 minutes, so it can trail a wire report by ~35 minutes — precisely
-   when a late inactive lands. **`staleForKickoff` marks that condition and the
+4. **AND WHERE IT LOSES, by MORE than this used to say:** the feed *asks* to
+   publish twice an hour through a CDN that caches ~5 minutes, but GitHub
+   delivers ~7.4 runs/day at a **3.26h mean gap and 5.0h worst observed**
+   (measured 2026-09-21). The real worst case is **hours, not the ~35 minutes
+   recorded here before** — precisely when a late inactive lands. **`staleForKickoff` marks that condition and the
    tools print an explicit instruction to confirm against a live source.** A
    tool that knows its own blind spot is more useful than one silently behind.
 
@@ -5218,6 +5289,7 @@ dynastyedge/
 ├── scripts/
 │   ├── fetch-news.mjs          ← multi-source news fetcher (runs in Actions)
 │   ├── newsRetention.mjs       ← THE feed's retention policy, pure + tested: diversity-aware eviction, so the item cap can never again bind before the 7-day time window (which is what silently collapsed the feed to 30h)
+│   ├── fantasyCalcValues.mjs   ← THE snapshot pipelines' FantasyCalc reader, pure + tested: classify by id SHAPE (picks carry synthetic non-numeric ids since 2026-07) and price a pick down the app's own ladder, ending in NULL rather than 0. Three scripts each carried a copy; two were wrong, and the trade archive wrote every pick as 0 for two months
 │   ├── snapshot-values.mjs     ← daily FantasyCalc snapshot appender (runs in Actions)
 │   ├── snapshot-values-archive.mjs ← permanent MONTHLY values archive for trajectory back-testing (app never fetches it)
 │   ├── snapshot-trade-values.mjs ← permanent trade-time value archiver (runs in Actions)
@@ -5459,6 +5531,7 @@ dynastyedge/
 │   ├── matchupWeeks.test.mjs        ← mocked-fetch: one fetch/week across both consumers, all-fail rejection
 │   ├── rookieResearch.test.mjs      ← opportunity blend, shared points scale (the backup-TE trap), within-position divergence, roster-fit re-ranking (need/window bonuses, score untouched), drawer hand-off fields, best-effort feed degradation, and the measurables NULL (age/combine can never move a score)
 │   ├── recommendations.test.mjs     ← suggestSellMove's two-sided partner pick (a concrete return beats a needier team with nothing, the neediest-team fallback, startsForThem, nav-ready shape); pick keep-scores by round (strict ordering under every tier, nothing auto-excluded, unknown round falls back); the past-peak age tilt (decline-only, per-position, saturating, never positive, cliff protection survives it); and the cash-out board (value-at-risk selection, the reach/premium labels, and the pin that its gap equals buildFairBand's)
+│   ├── fantasyCalcValues.test.mjs   ← the pipelines' FantasyCalc reader: a synthetic non-numeric id is a PICK (the live bug), a pick with no id still is (the pre-2026-07 shape), the season-median → generic-median → NULL ladder, a slot entry never polluting a round median, and the old presence-based classifier kept as an executable regression statement
 │   ├── newsRetention.test.mjs       ← the news window's retention policy: newest-N-per-player, a redundant item losing to an OLDER item about an uncovered player, breadth preserved at every k, roundups charging every player they name, and an id-less item never dropped by quota
 │   ├── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
 │   ├── leagueState.test.mjs         ← buildLeagueState: string-id normalization across mixed-shape payloads + the '0' sentinel (rule 8), unranked players kept at value 0 and the skip-then-self-heal path (rule 7), a pick at its ORIGINAL owner's slot vs round medians (Feature 1), FAAB read from settings, identity as runtime state, input immutability
@@ -5490,11 +5563,11 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 626 / # pass 621
+honestly:** instead of "cannot find module" it prints `# tests 636 / # pass 631
 / # fail 5`, which reads like a code regression. A file that cannot load never
-runs its tests, so the count silently drops from **669** to 626.
+runs its tests, so the count silently drops from **679** to 636.
 `npm run build` in the same state fails with `sh: 1: vite: not found`.
-**If the test count isn't 669, run `npm ci` before debugging anything.**
+**If the test count isn't 679, run `npm ci` before debugging anything.**
 
 The pair was re-measured 2026-09-19 (MCP phase 1b) by renaming `node_modules`
 aside, and it had drifted seven times before that: 178/130, 177/115, 219/136,
@@ -5516,6 +5589,11 @@ those four raise only the first number. The 2026-09-07 trade-engine work added
 the broken-state count stayed at 152; the 2026-09-12 news-retention work moved
 both, because `newsRetention.test.mjs` imports only a zero-dependency pure
 module. **Re-measure both whenever the suite grows.**
+
+The snapshot-pipeline fix (2026-09-21) moved both by the same 10
+(669/626 → **679/636**), the gap holding at 43 — `fantasyCalcValues.test.mjs`
+imports one zero-dependency script module and nothing else, which is the check
+that the extraction did not accidentally reach into `src/`.
 
 Phase 2c — game locks, live scores and the news layer — moved both by the same
 30 (639/596 → **669/626**), the gap holding at 43. That equality is the check
@@ -5546,7 +5624,8 @@ regression to the next session, which is the exact confusion the block exists
 to prevent, so re-measure rather than incrementing what is written.
 
 The useful invariant survived the drift and is worth preferring to either
-count: **the gap between them is 43 and has not moved.** 669 − 626 = 43, 639 − 596 = 43,
+count: **the gap between them is 43 and has not moved.** 679 − 636 = 43,
+669 − 626 = 43, 639 − 596 = 43,
 630 − 587 = 43, 589 − 546 = 43, and 538 − 495 = 43 before that. That is the number of tests living in the five files
 that cannot load, so an unchanged gap means every test added since loads with
 no `node_modules` at all — which is what the equal-delta checks below were

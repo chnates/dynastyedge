@@ -25,6 +25,7 @@
 // the archived value for a month is that month's latest daily snapshot.
 
 import { writeFileSync } from 'node:fs'
+import { splitFantasyCalcEntries } from './fantasyCalcValues.mjs'
 
 const VALUES_URL =
   'https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=2&numTeams=10&ppr=0.5'
@@ -61,11 +62,11 @@ if (!Array.isArray(data) || data.length === 0) {
   process.exit(1)
 }
 
-const todayValues = {}
-data.forEach(entry => {
-  const sid = entry.player?.sleeperId
-  if (sid) todayValues[String(sid)] = Math.round(entry.value ?? 0)
-})
+// Players only. Classification lives in fantasyCalcValues.mjs — an `if (sid)`
+// test here would spend rows of the MAX_PLAYERS window on FantasyCalc's pick
+// entries, which carry synthetic non-numeric ids and which no consumer of
+// this file ever looks up (getSeries is called with a real Sleeper id).
+const { playerValues: todayValues } = splitFantasyCalcEntries(data)
 
 const topIds = new Set(
   Object.entries(todayValues)

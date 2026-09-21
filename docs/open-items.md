@@ -5,7 +5,20 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-09-20 (**MCP-2c** — the Optimizer stopped recommending
+**Last reviewed:** 2026-09-21 (**the backlog audit + day 1 of the week plan** —
+this file had drifted two weeks behind the code, and the audit that caught up
+with it also turned up three things no doc knew about. Two were bugs and are
+fixed here: **PIPE-1**, the trade-value archive writing every pick as 0 into a
+*permanent* file, and **OPS-1**, ~9 junk Vercel builds a day created the
+moment the GitHub integration was connected. Verifying OPS-1's fix turned up
+a fourth thing nobody had measured — **NEWS-5**: GitHub delivers the news
+cron at **~7.4 runs/day, not 48**, which had silently inflated three
+documented claims (including OPS-1's own first draft). The third was good news —
+**NEWS-3**'s trigger fired and it **PASSED at 18 of 31**, against a target of
+12 and this file's own prediction of 9–11 — though the item cap is binding
+again at 78h, which is **NEWS-4**. Also closed on paper: **DESIGN-4**, whose
+items 2–5 all shipped 2026-09-13 while this file still called them pending.
+The week's plan is §0. Previously **MCP-2c** — the Optimizer stopped recommending
 moves that cannot be made. Sleeper seals a lineup slot at kickoff and the
 schedule payload has always carried the `status` field that says so; both
 `parseByeTeams` implementations discarded it, so the tool told the owner on a
@@ -68,6 +81,32 @@ deleted. The active work queue remains `docs/build-plan-2026-09.md`).
   request, per CLAUDE.md's Future Features gate.
 - When you close an item, move it to §3 with the date and commit. Don't delete
   it — the record is why nobody re-litigates it.
+
+---
+
+## 0. The plan (set 2026-09-21 — read this first)
+
+**A one-week plan, ordered by irreversibility × cheapness rather than by
+size.** The reasoning is worth more than the order: two of these items cost
+something *every day they are not done* and cannot be recovered afterwards,
+which beats any amount of feature value.
+
+| Day | Work | Why it sits here |
+|---|---|---|
+| **1** | **PIPE-1 + OPS-1 + this catch-up** — **DONE 2026-09-21** | Both were actively bleeding. The archive wrote unrecoverable wrong data on every run; the Vercel builds were pure waste |
+| **2** | **Phase 4a — archive all three valuation sources daily** (`docs/build-plan-2026-09.md` §10) | **The only item on this list where waiting has a permanent cost.** 4a's own instruction is "do this first and immediately", and it has been sitting since 2026-09-04. It starts the clock on 4d ("when sources disagree, which one moves?"), which is unanswerable forever without an archive. Pipeline-only, no UI |
+| **3–4** | **One substantial thing:** either the MCP trade-targets tool (**MCP-CARRY**) or **OPEN-10** | New capability vs. fixing the thing that makes the Targets board read wrong on 17 of 20 cards. Owner's call |
+| **5** | **NEWS-4** (the cap decision) + **NEWS-5** (cron cadence — pick option 1 or 2) + the **MCP connector re-check** on the phone | All small; the last needs the owner's GitHub login and no sandbox can do it |
+
+**What is deliberately NOT in the week**, so nobody picks it up by accident:
+OPEN-8 (trigger: autumn 2028), OPEN-9 (trigger: ~2027-07, needs 12 monthly
+archive columns and currently holds 3), OPEN-3 (owner ask required), and the
+two device checks in DESIGN-4 (owner-only, uncheckable in any sandbox).
+
+**The single biggest unbuilt approved item is Phase 4**, and it is worth
+naming plainly: FantasyCalc is still the app's only valuation source, so every
+trade verdict, roster total, trajectory curve and pick price traces to one
+provider's opinion.
 
 ---
 
@@ -390,7 +429,8 @@ banked`.
 
 - **The news feed can be ~35 minutes behind a wire report** (publishes twice an
   hour through a ~5-minute CDN cache), which is exactly when a late inactive
-  lands. `staleForKickoff` marks the condition and the tools tell the reader to
+  lands. **[SUPERSEDED 2026-09-21 — the real figure is HOURS; see NEWS-5.
+  The cron asks for twice hourly; GitHub delivers ~7.4 runs/day.]** `staleForKickoff` marks the condition and the tools tell the reader to
   confirm against a live source. **The honest fix is not a shorter TTL** — it
   is the pipeline's publish interval, and tightening `news.yml`'s cron is a
   separate, unmeasured change. Revisit only if the warning proves insufficient
@@ -506,6 +546,226 @@ files, **the gap holding at 43**.
    doc-fix commit that carries this paragraph.
 
 
+### PIPE-1 — the trade-value archive priced every pick at 0 **SHIPPED 2026-09-21**
+
+**Found by reading the published feed, not the code** — which is the
+transferable half. `scripts/snapshot-trade-values.mjs` looked entirely
+reasonable; its output did not. Both archived trades carried picks valued
+`0`, including a four-pick trade rendering *"at trade time: got 0 ⇄ gave 0"*.
+
+**Root cause:** the script classified FantasyCalc entries with `if (sid)`.
+FantasyCalc began stamping pick entries with **synthetic non-numeric
+`sleeperId`s** (`FP_2027_1`, `DP_0_8`) in 2026-07 — verified live 2026-09-21,
+**0 of 418 entries carry a falsy id** — so `pickEntries` was always empty and
+`pickValue()` returned 0 for every pick, on every run, for two months.
+
+**This is the same bug CLAUDE.md documents as FIXED.** `useFantasyCalc` and
+`mcp/snapshot.js` were corrected in 2026-07; the three `scripts/snapshot-*.mjs`
+carry their own copies (Actions cannot resolve `src/utils`' extensionless
+imports) and were not. **A fix to the app is not a fix to the pipelines** —
+recorded as failure-archaeology §3d, the fourth member of the pick-valuation
+family and the first outside `src/`.
+
+**Why it mattered more here than in the app.** The archive is **permanent and
+never pruned**, and trade-time prices cannot be recomputed in hindsight — so
+every run wrote data that could never be corrected, only deleted. And
+`useTradeTimeValues` already had the right guard (any missing asset hides the
+line, because a partial total misleads): a `null` trips it, a **0 sails
+through it** and renders as fact.
+
+**Shipped:**
+- **`scripts/fantasyCalcValues.mjs`** — one pure classifier + pick pricer,
+  shared by all three snapshot scripts, pinned by
+  `tests/fantasyCalcValues.test.mjs` (10 tests, including the old
+  presence-based classifier kept as an **executable** regression statement so
+  nobody "simplifies" the shape check back to a truthiness test). Same
+  precedent as `scripts/newsRetention.mjs`.
+- **The ladder ends in `null`, never 0** — that season's round median, then
+  the generic round median across every season listed, then null.
+- **A self-heal for the published archive:** any pick value of exactly 0 is
+  rewritten to null on the next run. FantasyCalc never prices a pick at 0, so
+  a stored 0 can only be this bug's output. It goes through the **normal
+  publish path**, not a hand-edit of the data branch.
+
+**Verified against live data**, not fixtures: the fixed script reads
+**394 players + 24 pick entries** (was 418 + 0), healed the 5 archived zeros,
+and prices every round in the live window — 2027 1st **3204**, 2nd 1655,
+3rd 1098, 4th 898, 2028 1st 2203, 2029 1st 1961 — with the **retired** 2026
+season correctly falling back to the generic median (3022) rather than 0 or
+null. Both other scripts run clean and their stale pick rows now age out of
+the window by themselves. Tests 669 → **679**, without `node_modules`
+**636**, the gap holding at **43**.
+
+**The two harmless copies were fixed too**, for consistency rather than
+damage: `snapshot-values.mjs` / `snapshot-values-archive.mjs` merely spent
+rows on pick entries no consumer looks up, and their 500-row cap never binds
+because FantasyCalc lists only ~418.
+
+### OPS-1 — the Vercel integration was building every data-branch push **SHIPPED 2026-09-21**
+
+**MCP-2b's win created this, and the two belong together.** Connecting the
+GitHub integration on 2026-09-20 fixed the silent no-deploy problem — and
+immediately started deploying **every branch**, including the three
+force-pushed data branches, which build a JSON file nobody requests. Measured
+2026-09-21: three of the last four deployments were `news-data` "Update news
+feed" commits.
+
+**Volume: ~9 a day, and the correction is the interesting part.** The first
+draft of this item said **~48**, reasoning from `news.yml`'s `17,47` cron. That
+number was never measured — and when the fix was verified against the next
+cron window, the window did not arrive, which is what uncovered **NEWS-5**:
+GitHub delivers this schedule at ~7.4 runs/day. So the waste is real and worth
+removing, but it is ~6× smaller than first claimed. **Recorded rather than
+quietly edited**, because reasoning from a cron line instead of from run
+timestamps is the mistake, and it had already produced two other wrong numbers
+in this repo.
+
+**The fix is a PROJECT-LEVEL Ignored Build Step, and the rejected option is
+the durable lesson.** `git.deploymentEnabled` in `vercel.json` is the
+documented way to disable a branch — and it would have been a **dead no-op
+that reads like a fix**, because Vercel reads `vercel.json` from *the branch
+being pushed* and these branches carry only their JSON payload (verified:
+`news-data` holds `news.json` and nothing else). It was written, then
+reverted before commit. What shipped instead:
+
+```sh
+case "$VERCEL_GIT_COMMIT_REF" in news-data|values-history|rookie-intel) exit 0 ;; *) exit 1 ;; esac
+```
+
+Exit 0 skips the build, exit 1 proceeds — `main` and every `claude/*` branch
+are untouched, so feature-branch previews still work.
+
+**It is a Vercel dashboard setting, so it is invisible in this repo.** Its
+only records are CLAUDE.md's Deployment section and
+`dynastyedge-run-and-operate` §3. **A fourth data branch must be added to that
+`case`**, and if data-branch builds ever reappear in the deployment list, that
+setting is what was lost.
+
+**Post-merge check owed:** confirm the next `news-data` push produces no
+deployment (or a skipped one). The setting was applied 2026-09-21 and the
+cron fires at :17 and :47 UTC.
+
+### NEWS-4 — the news item cap is binding again, at 78h
+
+**Status:** open, and it is a **decision, not a bug**. **Trigger: fired** —
+measured 2026-09-21 while closing NEWS-3.
+
+Live `coverage`: `playerItems 400 / playerCap 400`, `spanHours 78`,
+`distinctPlayers 198`, 480 items total. **The cap is binding before the time
+window does** — the same signature as the 2026-09 collapse, one level up (400
+instead of 240) — against a documented 7-day/168h window that has now never
+bound at either cap.
+
+**What is different this time, and why it is not the same failure.** The 2026-09
+collapse was a *breadth* failure: 240 items resolving to 97 distinct players,
+3.14 each, one carrying 23. Diversity-aware eviction fixed that and it has
+held — **198 distinct players** now, double the collapse figure. So the cap is
+buying breadth as intended; there is simply more qualifying news than 400
+slots at the current arrival rate.
+
+**The decision:**
+- **Raise the cap.** The feed is 210KB raw, and CLAUDE.md's own rule is to
+  size it by **wire** bytes (~114 B/item gzipped), which puts 400 items around
+  55KB and leaves real headroom. This is the option the evidence favours.
+- **Or accept 78h as the honest operating depth** and correct the 7-day claim
+  in CLAUDE.md, which has now been aspirational for two cap settings running.
+
+**Do not "fix" it by adding sources** — NEWS-1's standing ruling, unchanged.
+Whichever way it goes, `spanHours` stays the number to watch: `playerItems`
+sitting at its cap is exactly what a healthy full feed looks like, which is
+how the last collapse ran for days unnoticed.
+
+### NEWS-5 — the news cron is delivered at ~7.4 runs/day, not 48
+
+**Status:** open. **Trigger: fired** — measured 2026-09-21 while verifying
+OPS-1's fix. The verification is how it was found: the next cron window simply
+did not arrive.
+
+`news.yml` asks for `17,47 * * * *` — twice an hour, 48 runs a day. **GitHub
+delivers ~7.4 runs a day at a 3.26h mean gap**, range 1.8h–5.0h, measured over
+runs **1205–1220** (consecutive run numbers, so nothing is missing from the
+list). **Not one run fired at :17 or :47**; the observed minutes are scattered
+across the hour. GitHub defers scheduled workflows under load and does not make
+up the skipped occurrences.
+
+**This is not a new regression** — the run history shows the same pattern going
+back as far as it was sampled. It is a **long-standing gap between the cron
+line and reality that every doc reading the cron line inherited.** Three
+claims were sized off it and are corrected in place:
+
+| Claim | Was | Is |
+|---|---|---|
+| Feed staleness worst case near kickoff | ~35 minutes | **hours** (3.26h mean, 5.0h worst observed) |
+| Vercel junk builds from data branches (OPS-1) | ~48/day | **~9/day** |
+| "news alone would add ~48 commits/day" (ops skill) | ~48/day | one per run, ~7/day |
+
+**The staleness one is the only one that changes a decision.**
+`staleForKickoff` and the tools' "confirm against a live source" instruction
+were written as a hedge against a ~35-minute gap; at a 3–5 hour gap they are
+load-bearing. Nothing needs to change in the code — the warning already
+exists and already fires — but the *copy* around it was calibrated to a
+freshness the pipeline does not have.
+
+**Options, none of them obviously right:**
+
+1. **Accept it and keep the docs honest** (what this PR does). Costs nothing.
+   The feed is a best-effort surface and the tools already warn.
+2. **Reduce the cron's ambition to match reality** (e.g. hourly). Does not
+   *improve* anything — GitHub is already declining to run it 6× more often —
+   but it stops the cron line from lying to the next reader. Cheap, cosmetic.
+3. **Trigger the run some other way** if freshness near kickoff ever matters
+   enough: a `repository_dispatch` from something that already runs, or
+   accepting the gap only outside game windows. Unmeasured, and worth doing
+   only if the warning proves insufficient in practice.
+
+**What NOT to do: tighten the cron.** The requested cadence is already 6×
+what is delivered; asking for more of something being throttled is not a fix,
+and it is the obvious wrong move for the next person who reads this.
+
+**How to re-measure:** list `news.yml`'s recent runs and diff the
+`run_started_at` timestamps. **Never read the cadence off the cron line** —
+that is the mistake this item exists to prevent.
+
+### MCP-CARRY — what the MCP server still owes
+
+**Status:** open, consolidated 2026-09-21 from the tails of MCP-2a/2b/2c,
+which had scattered it across three items. Nothing here is a correctness bug;
+it is the honest remainder.
+
+**Capability not built:**
+- **Three of `MCP_DISCOVERY.md` §5's phase-two tools** — trade targets / fair
+  packages (note: the ~730ms path in-app), manager scouting (the biggest fetch
+  burst), rookie research.
+- **Three of the four static feeds are still unread** — `values-history`,
+  `trade-values`, `rookie-intel`. `get_player_news` was the first to read one.
+  So a second league gets no sparklines, no at-trade-time values and no rookie
+  research, and the tools say so.
+- **`/league/{id}/winners_bracket` has still never been called**, so *"who won
+  our league in 2023?"* remains unanswerable. One endpoint.
+
+**Known limits, stated rather than hidden:**
+- **`mcp/limit.js` backs off on a fixed schedule.** `fetchJSON` throws an
+  `Error` that embeds the status and discards the `Response`, so a 429's
+  `Retry-After` is unreachable. One user makes this academic; a hosted
+  endpoint may not. **Do not fix it by adding retry logic to `fetchJSON`** —
+  that changes the app's behaviour to solve a server problem.
+- **`restKvStore` has never been verified against a live store.** KV was not
+  needed (a warm instance holds the cache; the second request measured 21ms),
+  so the code path exists untested.
+- **The news feed can trail a wire report by HOURS near kickoff — not the
+  ~35 minutes previously recorded.** It *asks* to publish twice an hour
+  through a ~5-minute CDN cache, but GitHub delivers ~7.4 runs/day at a 3.26h
+  mean gap and 5.0h worst observed (NEWS-5). `staleForKickoff` marks the
+  condition and the tools tell the reader to confirm against a live source,
+  which matters a great deal more at this cadence than at the one the docs
+  assumed. **Tightening `news.yml`'s cron is NOT the fix** — the requested
+  cadence is already 6× what is delivered.
+
+**Owed, and owner-only:** re-confirm the connector lists all **eight** tools
+on the phone. Phase 2c's deploy *did* land (`bcf5c6a` is `target: production`,
+verified 2026-09-21), but the tool list is the end of the chain no probe can
+reach — it needs the GitHub browser login.
+
 ### ACTIVE-3 — the September 2026 build plan (owner-approved 2026-09-04)
 
 **`docs/build-plan-2026-09.md` is the active work queue.** It carries four
@@ -555,9 +815,43 @@ overturned.
   against a +0.98 control (n=318). Sleeper had already raised their projections.
   See the plan's §9c.
 
-### NEWS-3 — re-measure news coverage once the window fills to 7 days
+### NEWS-3 — ~~re-measure news coverage once the window fills to 7 days~~ **CLOSED 2026-09-21 — PASS**
 
-**Trigger:** on or after **2026-09-19** (the retention fix landed 2026-09-12
+**The trigger fired and the measurement beat both its target and this file's
+own prediction.** `node scripts/dev/news-coverage.mjs` against the live feed:
+
+```
+resolved by the app:            18 / 31   <- the acceptance number
+ceiling (headline+story match): 18 / 31
+items: 480 · span: 77.5h · resolved to playerIds: 381 (79%)
+RESULT: PASS
+```
+
+**18 of 31 against a target of ≥12**, where the pre-registered prediction
+below was **9–11**. Recording the beat as carefully as a miss: the target was
+set at 25 rostered players and the denominator is now 31, but the *rate* moved
+too — 58% against the 40% the old 10-of-25 represented.
+
+**Matching is still saturated** (achieved == ceiling, 18 == 18), which is the
+same finding as before and still means **no matching work can move this
+number**. What changed is volume: accumulation finally had time to run. The
+13 uncovered are the same *kind* the memo identified — healthy starters on a
+quiet week, plus a team defense and taxi rookies the player index cannot
+reach.
+
+**NEWS-1's standing ruling is unchanged and now has a second data point
+behind it: do not bolt on low-signal feeds to chase this number.** The lever
+that worked was retention, twice.
+
+**What the measurement also surfaced is NEWS-4** — the item cap is binding
+again at 78h against a documented 168h window. Coverage passing and the
+window being short are not in tension: the cap is buying breadth (198 distinct
+players, double the collapse figure), there is just more qualifying news than
+400 slots hold.
+
+The original entry is kept below as the record of the deferral.
+
+**Trigger (original):** on or after **2026-09-19** (the retention fix landed 2026-09-12
 with the window at 112h of its 168h target).
 
 NEWS-1 fired, found a **regression**, and the cause was a retention bug rather
@@ -1314,11 +1608,36 @@ verified against the live league.
    threshold is doing less work than its name suggests, and anyone reading
    "protected" should know it means "deficit or cliff", not "starter".
 
-### DESIGN-4 — finish the Matchday cleanup (the debt DESIGN-1 handed on)
+### DESIGN-4 — ~~finish the Matchday cleanup~~ **CLOSED 2026-09-21 (code); two DEVICE checks remain**
 
-**Status:** in progress. **Trigger: fired** — the owner asked for it directly
-after the post-merge review. Four items, landing as separate PRs so the two
-carrying a layout decision stay reviewable.
+**Closed on paper by an audit, not by new work — every code item had already
+shipped 2026-09-13 while this file still called three of them "pending".**
+Verified in the tree 2026-09-21: `MarketMovers` renders the split row (no
+nested `<button>`), `SectionContents` carries `railLabel` and stays
+`flex-wrap`, `src/components/ui/Textarea.jsx` exists, and a static probe over
+every `<button>`/`<input>`/`<select>`/`<textarea>` in `src` finds **no control
+missing `.focus-ring`** (item 5's 46 are all fixed). That drift is the lesson
+worth keeping: **this file is only as good as its last review, and a "pending"
+that shipped a week ago costs the next session a wasted investigation.**
+
+**What genuinely remains, and it is the owner's to run — neither is checkable
+in any sandbox:**
+
+1. **Verify the PWA metas and the app icon on device.** Carried since step 4.
+   A meta or icon change is **silent** until the home-screen app is removed
+   and re-added (failure-archaeology §1). `index.html`'s icon `?v=` is at 4.
+   Note the Matchday repaint moved both `theme-color` metas (light `#E8E5DC`,
+   dark `#141413`), so this is checking a real change, not a no-op.
+2. **Bricolage Grotesque on glass.** Step 3 measured that the spec's
+   `wdth 125` is not executable (the axis tops out at 100), so the face has
+   never been seen doing what the brief asked. If it doesn't earn its keep on
+   a real phone, the recorded swap candidate is **Big Shoulders Display**.
+
+The original entry is kept below as the record.
+
+**Status (original):** in progress. **Trigger: fired** — the owner asked for
+it directly after the post-merge review. Four items, landing as separate PRs
+so the two carrying a layout decision stay reviewable.
 
 1. **The hand-rolled panels — DONE 2026-09-13.** 27 converted (the handoff said
    21; the sweep found six more the note never named). Detail in §3.
@@ -1334,10 +1653,32 @@ carrying a layout decision stay reviewable.
 `main`, plus a seventh truncation of a load-bearing value that the crash had
 been hiding.
 
+### SMALL-1 — `packageRationale` claims it protected your starters when it didn't
+
+**Status:** open, small, and **blocked on nothing.** **Trigger: fired** — it
+has been ready since it was recorded on 2026-09-06 and was simply never
+picked up.
+
+`packageRationale` says *"protects your starters"* unconditionally whenever a
+suggested package draws from a surplus. On the live board it said that while
+spending the owner's **RB2, who starts** in `buildValueLineup`. What it
+actually means is "touched nothing scoring ≥ 0.9" — which is not what it says,
+and `PROTECT_THRESHOLD` protects less than its name suggests anyway (core
+starters land on exactly 0.85; only a deficit or a cliff crosses 0.9).
+
+**The honest fix:** check the package against
+`buildValueLineup(myRoster).starterIds` and name the starter when one is in
+it. It is a copy fix over a fact the engine already has — no model change, no
+recalibration.
+
+Recorded in §1's 2026-09-06 entry as "found but not acted on"; promoted here
+so it stops living inside another item's write-up.
+
 ### OPEN-5 — Model calibration (open research)
 
-**Status:** open. **Trigger:** live regular-season data — Week 1 starts the
-clock.
+**Status:** open. **Trigger: FIRED** — the regular season is under way
+(2026 Week 3 as of this review), so the clock Week 1 started is running and
+completed weeks are accumulating.
 
 The models are verified *correct* (deterministic, threshold-accurate) but not
 verified *accurate*: nobody can yet say whether 72% playoff odds means 72%.
@@ -1352,6 +1693,10 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 
 | Item | Closed | How |
 |---|---|---|
+| PIPE-1 — the trade-value archive priced every pick at 0 | 2026-09-21 | The snapshot scripts kept the `if (sid)` classifier the app fixed in 2026-07, so `pickEntries` was empty and every pick archived as 0 into a **permanent** file. One shared `scripts/fantasyCalcValues.mjs` (pure, 10 tests), a ladder ending in **null not 0**, and a self-heal that rewrites the archived zeros through the normal publish path. Found by reading the published feed, not the code. Detail in §1 |
+| OPS-1 — Vercel built every data-branch push | 2026-09-21 | MCP-2b's integration fix started ~9 junk preview builds a day (first drafted as ~48 from the cron line — corrected by NEWS-5). Fixed with a project-level Ignored Build Step; `git.deploymentEnabled` in `vercel.json` was written and **reverted** as a dead no-op (Vercel reads that file from the pushed branch, and the data branches carry only JSON). Detail in §1 |
+| NEWS-3 — re-measure coverage at a 7-day window | 2026-09-21 | **PASS, 18 of 31** against a ≥12 target and a 9–11 prediction. Matching still saturated (achieved == ceiling); volume was the lever, as NEWS-1 ruled. Surfaced NEWS-4. Detail in §1 |
+| DESIGN-4 — finish the Matchday cleanup | 2026-09-21 | Closed by audit: all four code items (plus item 5's 46 focus rings) had shipped 2026-09-13 while this file still said "pending". Two owner-only device checks remain. Detail in §2 |
 | NEWS-1 — re-measure news coverage after accumulation | 2026-09-12 | **Measured, and it was a REGRESSION: 6 of 30, worse than the 10 of 26 it was opened on, with span collapsed 159h → 27.5h.** Cause was retention, not coverage: eviction was recency-only, so the 240-item cap bound at ~30h and the 7-day window had never once bound; the cap was also spent on redundancy (240 items → just 97 distinct players, one carrying 23). Fixed with diversity-aware eviction (≤3 per player, soft) + cap 240 → 400, sized off **wire** bytes (37KB gzipped, not the 141KB raw the docs assumed). One published run: span **112h**, cap unpinned **186/400**, distinct players **97 → 119**, feed *smaller* on the wire, acceptance **6 → 8 of 30**. Still a MISS; matching is saturated (achieved = ceiling) and the residual is source-*kind*, not source-count. Re-measure at 7 days = **NEWS-3**. Detail retained in §3 below |
 | DESIGN-1 — build the "Matchday" visual direction | 2026-09-12 | All five steps shipped. Step 5 (motion) landed the GLOBAL `prefers-reduced-motion` guard first, one easing token (`--ez`) emitted as Tailwind's DEFAULT so all 69 transitions moved at once, a duration ladder scaled to element size, the press run replacing `.edge-rise`'s fade-up and linear stagger, `.press` as the third control-level contract (one definition replacing 41 `active:` states at three values across 20 files), `Loading` replacing every spinner, the sheet entrance, and a written four-moment budget. **0 of 12 slop markers**, re-scored from scratch. Detail retained in §3 below |
 | DESIGN-3 — the navigation rebuild | 2026-09-11 | Primary navigation is a bottom tab bar (Today · Squad · Trade · League · Index); the drawer keeps its utilities and carries zero destinations. `SubTabBar` → `SectionContents`, which wraps instead of scrolling, so "Pick Trades" no longer clips. New `/index` route is the complete map and holds the four consulted views. All three copies of the nav payload collapsed into `src/navigation.js`. Draft and News lost top-level rank, not reachability. The four orphans each got a content-level inbound link, and Rookie Research entered global search. No path moved, so no redirect was needed. Detail retained in §3 below |
