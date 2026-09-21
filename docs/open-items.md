@@ -9,8 +9,11 @@ with a reason belongs here, or it will be forgotten.
 this file had drifted two weeks behind the code, and the audit that caught up
 with it also turned up three things no doc knew about. Two were bugs and are
 fixed here: **PIPE-1**, the trade-value archive writing every pick as 0 into a
-*permanent* file, and **OPS-1**, ~48 junk Vercel builds a day created the
-moment the GitHub integration was connected. The third was good news —
+*permanent* file, and **OPS-1**, ~9 junk Vercel builds a day created the
+moment the GitHub integration was connected. Verifying OPS-1's fix turned up
+a fourth thing nobody had measured — **NEWS-5**: GitHub delivers the news
+cron at **~7.4 runs/day, not 48**, which had silently inflated three
+documented claims (including OPS-1's own first draft). The third was good news —
 **NEWS-3**'s trigger fired and it **PASSED at 18 of 31**, against a target of
 12 and this file's own prediction of 9–11 — though the item cap is binding
 again at 78h, which is **NEWS-4**. Also closed on paper: **DESIGN-4**, whose
@@ -93,7 +96,7 @@ which beats any amount of feature value.
 | **1** | **PIPE-1 + OPS-1 + this catch-up** — **DONE 2026-09-21** | Both were actively bleeding. The archive wrote unrecoverable wrong data on every run; the Vercel builds were pure waste |
 | **2** | **Phase 4a — archive all three valuation sources daily** (`docs/build-plan-2026-09.md` §10) | **The only item on this list where waiting has a permanent cost.** 4a's own instruction is "do this first and immediately", and it has been sitting since 2026-09-04. It starts the clock on 4d ("when sources disagree, which one moves?"), which is unanswerable forever without an archive. Pipeline-only, no UI |
 | **3–4** | **One substantial thing:** either the MCP trade-targets tool (**MCP-CARRY**) or **OPEN-10** | New capability vs. fixing the thing that makes the Targets board read wrong on 17 of 20 cards. Owner's call |
-| **5** | **NEWS-4** (the cap decision) + the **MCP connector re-check** on the phone | Both small; the second needs the owner's GitHub login and no sandbox can do it |
+| **5** | **NEWS-4** (the cap decision) + **NEWS-5** (cron cadence — pick option 1 or 2) + the **MCP connector re-check** on the phone | All small; the last needs the owner's GitHub login and no sandbox can do it |
 
 **What is deliberately NOT in the week**, so nobody picks it up by accident:
 OPEN-8 (trigger: autumn 2028), OPEN-9 (trigger: ~2027-07, needs 12 monthly
@@ -426,7 +429,8 @@ banked`.
 
 - **The news feed can be ~35 minutes behind a wire report** (publishes twice an
   hour through a ~5-minute CDN cache), which is exactly when a late inactive
-  lands. `staleForKickoff` marks the condition and the tools tell the reader to
+  lands. **[SUPERSEDED 2026-09-21 — the real figure is HOURS; see NEWS-5.
+  The cron asks for twice hourly; GitHub delivers ~7.4 runs/day.]** `staleForKickoff` marks the condition and the tools tell the reader to
   confirm against a live source. **The honest fix is not a shorter TTL** — it
   is the pipeline's publish interval, and tightening `news.yml`'s cron is a
   separate, unmeasured change. Revisit only if the warning proves insufficient
@@ -602,11 +606,19 @@ because FantasyCalc lists only ~418.
 **MCP-2b's win created this, and the two belong together.** Connecting the
 GitHub integration on 2026-09-20 fixed the silent no-deploy problem — and
 immediately started deploying **every branch**, including the three
-force-pushed data branches. `news.yml` pushes twice an hour, so the project
-was producing **~48 junk preview deployments a day** (plus one each for
-values-history and rookie-intel) that build a JSON file nobody requests.
-Measured 2026-09-21: three of the last four deployments were `news-data`
-"Update news feed" commits.
+force-pushed data branches, which build a JSON file nobody requests. Measured
+2026-09-21: three of the last four deployments were `news-data` "Update news
+feed" commits.
+
+**Volume: ~9 a day, and the correction is the interesting part.** The first
+draft of this item said **~48**, reasoning from `news.yml`'s `17,47` cron. That
+number was never measured — and when the fix was verified against the next
+cron window, the window did not arrive, which is what uncovered **NEWS-5**:
+GitHub delivers this schedule at ~7.4 runs/day. So the waste is real and worth
+removing, but it is ~6× smaller than first claimed. **Recorded rather than
+quietly edited**, because reasoning from a cron line instead of from run
+timestamps is the mistake, and it had already produced two other wrong numbers
+in this repo.
 
 **The fix is a PROJECT-LEVEL Ignored Build Step, and the rejected option is
 the durable lesson.** `git.deploymentEnabled` in `vercel.json` is the
@@ -663,6 +675,57 @@ Whichever way it goes, `spanHours` stays the number to watch: `playerItems`
 sitting at its cap is exactly what a healthy full feed looks like, which is
 how the last collapse ran for days unnoticed.
 
+### NEWS-5 — the news cron is delivered at ~7.4 runs/day, not 48
+
+**Status:** open. **Trigger: fired** — measured 2026-09-21 while verifying
+OPS-1's fix. The verification is how it was found: the next cron window simply
+did not arrive.
+
+`news.yml` asks for `17,47 * * * *` — twice an hour, 48 runs a day. **GitHub
+delivers ~7.4 runs a day at a 3.26h mean gap**, range 1.8h–5.0h, measured over
+runs **1205–1220** (consecutive run numbers, so nothing is missing from the
+list). **Not one run fired at :17 or :47**; the observed minutes are scattered
+across the hour. GitHub defers scheduled workflows under load and does not make
+up the skipped occurrences.
+
+**This is not a new regression** — the run history shows the same pattern going
+back as far as it was sampled. It is a **long-standing gap between the cron
+line and reality that every doc reading the cron line inherited.** Three
+claims were sized off it and are corrected in place:
+
+| Claim | Was | Is |
+|---|---|---|
+| Feed staleness worst case near kickoff | ~35 minutes | **hours** (3.26h mean, 5.0h worst observed) |
+| Vercel junk builds from data branches (OPS-1) | ~48/day | **~9/day** |
+| "news alone would add ~48 commits/day" (ops skill) | ~48/day | one per run, ~7/day |
+
+**The staleness one is the only one that changes a decision.**
+`staleForKickoff` and the tools' "confirm against a live source" instruction
+were written as a hedge against a ~35-minute gap; at a 3–5 hour gap they are
+load-bearing. Nothing needs to change in the code — the warning already
+exists and already fires — but the *copy* around it was calibrated to a
+freshness the pipeline does not have.
+
+**Options, none of them obviously right:**
+
+1. **Accept it and keep the docs honest** (what this PR does). Costs nothing.
+   The feed is a best-effort surface and the tools already warn.
+2. **Reduce the cron's ambition to match reality** (e.g. hourly). Does not
+   *improve* anything — GitHub is already declining to run it 6× more often —
+   but it stops the cron line from lying to the next reader. Cheap, cosmetic.
+3. **Trigger the run some other way** if freshness near kickoff ever matters
+   enough: a `repository_dispatch` from something that already runs, or
+   accepting the gap only outside game windows. Unmeasured, and worth doing
+   only if the warning proves insufficient in practice.
+
+**What NOT to do: tighten the cron.** The requested cadence is already 6×
+what is delivered; asking for more of something being throttled is not a fix,
+and it is the obvious wrong move for the next person who reads this.
+
+**How to re-measure:** list `news.yml`'s recent runs and diff the
+`run_started_at` timestamps. **Never read the cadence off the cron line** —
+that is the mistake this item exists to prevent.
+
 ### MCP-CARRY — what the MCP server still owes
 
 **Status:** open, consolidated 2026-09-21 from the tails of MCP-2a/2b/2c,
@@ -689,11 +752,14 @@ it is the honest remainder.
 - **`restKvStore` has never been verified against a live store.** KV was not
   needed (a warm instance holds the cache; the second request measured 21ms),
   so the code path exists untested.
-- **The news feed can trail a wire report by ~35 minutes** near kickoff — it
-  publishes twice an hour through a ~5-minute CDN cache. `staleForKickoff`
-  marks the condition and the tools tell the reader to confirm against a live
-  source. **The honest fix is the publish interval, not a shorter TTL**, and
-  tightening `news.yml`'s cron is a separate, unmeasured change.
+- **The news feed can trail a wire report by HOURS near kickoff — not the
+  ~35 minutes previously recorded.** It *asks* to publish twice an hour
+  through a ~5-minute CDN cache, but GitHub delivers ~7.4 runs/day at a 3.26h
+  mean gap and 5.0h worst observed (NEWS-5). `staleForKickoff` marks the
+  condition and the tools tell the reader to confirm against a live source,
+  which matters a great deal more at this cadence than at the one the docs
+  assumed. **Tightening `news.yml`'s cron is NOT the fix** — the requested
+  cadence is already 6× what is delivered.
 
 **Owed, and owner-only:** re-confirm the connector lists all **eight** tools
 on the phone. Phase 2c's deploy *did* land (`bcf5c6a` is `target: production`,
@@ -1628,7 +1694,7 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 | Item | Closed | How |
 |---|---|---|
 | PIPE-1 — the trade-value archive priced every pick at 0 | 2026-09-21 | The snapshot scripts kept the `if (sid)` classifier the app fixed in 2026-07, so `pickEntries` was empty and every pick archived as 0 into a **permanent** file. One shared `scripts/fantasyCalcValues.mjs` (pure, 10 tests), a ladder ending in **null not 0**, and a self-heal that rewrites the archived zeros through the normal publish path. Found by reading the published feed, not the code. Detail in §1 |
-| OPS-1 — Vercel built every data-branch push | 2026-09-21 | MCP-2b's integration fix started ~48 junk preview builds a day. Fixed with a project-level Ignored Build Step; `git.deploymentEnabled` in `vercel.json` was written and **reverted** as a dead no-op (Vercel reads that file from the pushed branch, and the data branches carry only JSON). Detail in §1 |
+| OPS-1 — Vercel built every data-branch push | 2026-09-21 | MCP-2b's integration fix started ~9 junk preview builds a day (first drafted as ~48 from the cron line — corrected by NEWS-5). Fixed with a project-level Ignored Build Step; `git.deploymentEnabled` in `vercel.json` was written and **reverted** as a dead no-op (Vercel reads that file from the pushed branch, and the data branches carry only JSON). Detail in §1 |
 | NEWS-3 — re-measure coverage at a 7-day window | 2026-09-21 | **PASS, 18 of 31** against a ≥12 target and a 9–11 prediction. Matching still saturated (achieved == ceiling); volume was the lever, as NEWS-1 ruled. Surfaced NEWS-4. Detail in §1 |
 | DESIGN-4 — finish the Matchday cleanup | 2026-09-21 | Closed by audit: all four code items (plus item 5's 46 focus rings) had shipped 2026-09-13 while this file still said "pending". Two owner-only device checks remain. Detail in §2 |
 | NEWS-1 — re-measure news coverage after accumulation | 2026-09-12 | **Measured, and it was a REGRESSION: 6 of 30, worse than the 10 of 26 it was opened on, with span collapsed 159h → 27.5h.** Cause was retention, not coverage: eviction was recency-only, so the 240-item cap bound at ~30h and the 7-day window had never once bound; the cap was also spent on redundancy (240 items → just 97 distinct players, one carrying 23). Fixed with diversity-aware eviction (≤3 per player, soft) + cap 240 → 400, sized off **wire** bytes (37KB gzipped, not the 141KB raw the docs assumed). One published run: span **112h**, cap unpinned **186/400**, distinct players **97 → 119**, feed *smaller* on the wire, acceptance **6 → 8 of 30**. Still a MISS; matching is saturated (achieved = ceiling) and the residual is source-*kind*, not source-count. Re-measure at 7 days = **NEWS-3**. Detail retained in §3 below |

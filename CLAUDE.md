@@ -290,14 +290,27 @@ News sources block browser/CORS access, so news is aggregated **server-side in
 GitHub Actions** and served as a static file — keeping the no-backend
 architecture:
 
-- `.github/workflows/news.yml` runs twice an hour (cron `17,47 * * * *`,
-  plus manual `workflow_dispatch`). It runs `scripts/fetch-news.mjs`, which
+- `.github/workflows/news.yml` **asks** to run twice an hour (cron
+  `17,47 * * * *`, plus manual `workflow_dispatch`). It runs `scripts/fetch-news.mjs`, which
   pulls **eleven** sources, merges them into the **previously published
   feed**, resolves each item to the players it names, ranks player news above
   general news, and **force-pushes a single-commit `news-data` branch**
   containing `news.json`. Each item carries `headline`, `story` (≤600 chars),
   `published`, `source`, `link` (validated http(s) article URL or null),
   `athleteIds`, `playerIds`, and `isPlayerNews`.
+- **THE CRON IS A REQUEST, NOT A SCHEDULE — measured 2026-09-21, GitHub
+  delivers ~7.4 runs/day at a 3.26h mean gap, not 48 at 0.5h.** Over runs
+  1205–1220 (consecutive run numbers, so nothing is missing from the list)
+  the gaps ran **1.8h to 5.0h**, and **not one run fired at :17 or :47** —
+  the observed minutes are scattered across the hour. GitHub defers scheduled
+  workflows under load and does **not** make up the skipped occurrences.
+  Three documented claims were sized off the cron line rather than off
+  reality and are corrected in place: the feed's staleness worst case (below,
+  in the MCP news section), the "~48 preview builds a day" this caused on
+  Vercel (Deployment section), and the retention window's arrival-rate
+  assumptions. **Anything that matters to freshness must be measured from
+  run timestamps, never read off the cron.** Tightening the cron is not a
+  fix — the requested cadence is already 6× what is delivered.
 - **Sources, in priority order** (each probed and parsed server-side before
   adoption — see `docs/analysis/news-sources-2026-09.md` for the full probe,
   including the ten rejected candidates): ESPN news API (the only source that
@@ -990,10 +1003,13 @@ is a dead end, and the server had to be made to explain itself.
 and that cost is invisible until you look at the deployment list.** Connecting
 the integration on 2026-09-20 fixed the silent no-deploy problem below and
 immediately created a new one: `news.yml` force-pushes `news-data` **twice an
-hour**, so the project started building ~48 preview deployments a day that
-serve a JSON file nobody requests, plus one each for `values-history` and
+hour**, so the project started building a preview deployment on every push —
+serving a JSON file nobody requests — plus one each for `values-history` and
 `rookie-intel`. Measured 2026-09-21: three of the last four deployments were
 `news-data` "Update news feed" commits, each a ~2-second no-op build.
+**Volume is ~9 a day, not the ~48 the cron implies**, because GitHub delivers
+that schedule at ~7.4 runs/day (see the news pipeline section). Smaller than
+it first looked, and still pure waste.
 
 **The fix is a PROJECT-LEVEL Ignored Build Step, not `vercel.json`, and the
 reason is worth keeping.** `git.deploymentEnabled` is the documented way to
@@ -1442,9 +1458,11 @@ search** — which is why the answer is a handoff rather than a choice:
    did not know to ask.
 3. **Provenance.** Every item carries a source and a publish time, and the feed
    carries its own age. A search result carries neither.
-4. **AND WHERE IT LOSES:** the feed publishes twice an hour through a CDN that
-   caches ~5 minutes, so it can trail a wire report by ~35 minutes — precisely
-   when a late inactive lands. **`staleForKickoff` marks that condition and the
+4. **AND WHERE IT LOSES, by MORE than this used to say:** the feed *asks* to
+   publish twice an hour through a CDN that caches ~5 minutes, but GitHub
+   delivers ~7.4 runs/day at a **3.26h mean gap and 5.0h worst observed**
+   (measured 2026-09-21). The real worst case is **hours, not the ~35 minutes
+   recorded here before** — precisely when a late inactive lands. **`staleForKickoff` marks that condition and the
    tools print an explicit instruction to confirm against a live source.** A
    tool that knows its own blind spot is more useful than one silently behind.
 
