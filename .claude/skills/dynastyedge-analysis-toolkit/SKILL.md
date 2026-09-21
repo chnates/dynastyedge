@@ -235,7 +235,7 @@ const score = total =>
   total >= targetValue ? total - targetValue : (targetValue - total) * 1.6
 ```
 
-Packages live in **[80%, 145%]** of the target, and undershoot is penalized **1.6×** per point vs overshoot. (Don't confuse with `suggestFairPackage` in tradeAnalysis.js, which uses its own [0.9, 1.15] band for player packages, line 343–344.)
+Packages live in **[80%, 145%]** of the target, and undershoot is penalized **1.6×** per point vs overshoot. (Don't confuse with `suggestFairPackage` in tradeAnalysis.js, whose **assembly** window is `PACKAGE_BAND` = [0.9, 1.15] for player packages. **The 1.6× undershoot penalty is THIS function's, not that one's** — `suggestFairPackage` rejects an undershoot below its floor outright and penalises distance symmetrically at 0.3, and OPEN-10's own write-up got that backwards for two weeks.)
 
 **Why asymmetric — the derivation.** The two miss directions have different loss functions. Undershoot risks *rejection*: the seller declines a light package and the trade never happens (total loss of the move-up opportunity, plus the social cost of a lowball). Overshoot costs a known, bounded *premium* the buyer consciously chooses. When failure-cost > premium-cost per unit of miss, weight undershoot more; 1.6× encodes "a 10% light offer is as bad as a 16% overpay". The asymmetric band edges (−20%/+45%) follow the same logic: the market tolerates far more overpay than lowball before a package stops being worth suggesting.
 
@@ -265,7 +265,9 @@ getTradeVerdict at the band edges (neutral fit/window):
 **Pitfalls:**
 - These constants appear in prose in CLAUDE.md — change code and doc together (`dynastyedge-change-control`).
 - `valuePct` is `Math.round`ed before comparison; a raw 15.4% gap rounds to 15 and is NOT a hard decline. Boundary tests must account for the rounding.
-- Three different band systems coexist (5/15 verdicts, 0.9–1.15 player packages, 0.8–1.45 picks). They serve different failure modes; do not "unify" them without re-deriving each loss function.
+- Three different band systems coexist (5/15 verdicts, 0.9–1.15 player-package **assembly**, 0.8–1.45 picks). They serve different failure modes; do not "unify" them without re-deriving each loss function.
+- **But a band that ASSEMBLES must not let the thing it SUGGESTS leave the band that JUDGES (2026-09-21, OPEN-10).** Those two coexisted without a rule joining them, and the player-package search left the ±5% verdict band on 0-of-20 boards — the app proposing an offer its own Analyzer then called an overpay. The fix was not unification: `PACKAGE_BAND` still bounds the candidate pool, but the returned suggestion is filtered through `buildFairBand` and the wider window feeds `alternative` instead.
+- **Before tuning a bound, check whether an incentive elsewhere is already paying to escape it.** Here `buildSideFit` scores raw value as ±1 and calls it even at ≤5% — `FAIR_BAND_PCT` by construction — so crossing 1.05 bought the partner a whole appeal step, which phase 2 prices at 1.0 keep-pain against a 0.027 distance penalty: **~37× cheaper than what it bought**. That is why sweeping `APPEAL_BONUS` over the shipped band came back flat; the lever moving the board was not the one that had been tuned. Method + the joint sweep: `docs/analysis/trade-fair-band-2026-09.md`, re-runnable via `scripts/dev/trade-fair-band-sweep.mjs`.
 
 ---
 
@@ -313,7 +315,7 @@ spot check, roster 1: playoffPct=0.0491, avgSeed=8.859, projWins=2.752
 
 ## Provenance and maintenance
 
-- **Authored 2026-07-05** against the repo at that date. Every constant cited was read from source that day: `ITERATIONS=10000`, `PRIOR_GAMES=4`, `BASELINE_MEAN=115`, `BASELINE_STD=24`, `STRENGTH_SENSITIVITY=0.40`, seed `0x5eed` (playoffOdds.js); `KERNEL_BW=2.5`, `PRIOR_WEIGHT=4`, clamps `0.55/1.18`, `ROOKIE_ENTRY_AGE=22` (dynastyTrajectory.js); `±5%`/`>15%`, package band `0.9–1.15` (tradeAnalysis.js); `TRADE_EDGE=0.05` (managerAnalysis.js); `0.8/1.45/1.6×` (pickTrades.js); tier weights `0.5/0.3/0.2` (rosterAnalysis.js); peak windows QB 26–33 · RB 23–26 · WR 24–28 · TE 25–29 (peakWindows.js).
+- **Authored 2026-07-05** against the repo at that date. Every constant cited was read from source that day: `ITERATIONS=10000`, `PRIOR_GAMES=4`, `BASELINE_MEAN=115`, `BASELINE_STD=24`, `STRENGTH_SENSITIVITY=0.40`, seed `0x5eed` (playoffOdds.js); `KERNEL_BW=2.5`, `PRIOR_WEIGHT=4`, clamps `0.55/1.18`, `ROOKIE_ENTRY_AGE=22` (dynastyTrajectory.js); `±5%`/`>15%`, package **assembly** band `0.9–1.15` (tradeAnalysis.js; since 2026-09-21 the *suggestion* is additionally held inside `buildFairBand`'s ±5%); `TRADE_EDGE=0.05` (managerAnalysis.js); `0.8/1.45/1.6×` (pickTrades.js); tier weights `0.5/0.3/0.2` (rosterAnalysis.js); peak windows QB 26–33 · RB 23–26 · WR 24–28 · TE 25–29 (peakWindows.js).
 - **Every output block above is a real, pasted run** from 2026-07-05 (Node v22.22.2, offline, synthetic inputs into the repo's actual exported functions). Scripts live in `scripts/` beside this file; re-run them any time — 01, 03, 06, 07 self-verify (drift guard / MATCH / PASS markers).
 - **When source constants change**, this file's quoted lines and numbers go stale: re-read the cited lines, re-run the scripts, update quotes and outputs. Script 01's drift guard will fail loudly if the RNG changes; the others exercise live exports and track code automatically, but their *expected* commentary may need edits.
 - Line numbers cited are as of 2026-07-05 and will drift with edits — the quoted code text is the anchor, not the number.
