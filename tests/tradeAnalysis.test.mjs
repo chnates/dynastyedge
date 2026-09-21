@@ -19,6 +19,7 @@ import assert from 'node:assert/strict'
 import { analyzeTrade, getTradeVerdict, getCounterSuggestion, buildTradePitch, buildPartnerFit, buildSideFit, suggestFairPackage, APPEAL_BONUS } from '../src/utils/tradeAnalysis.js'
 import { computeLeagueAverages, assignWinWindowTiers } from '../src/utils/rosterAnalysis.js'
 import { buildGivabilityContext, assetKeepScore, PROTECT_THRESHOLD } from '../src/utils/recommendations.js'
+import { buildFairBand } from '../src/utils/fairBand.js'
 
 // Minimal 4-team league so analyzeTrade's league-average / tier machinery has
 // real inputs. Values are arbitrary but fixed.
@@ -757,8 +758,8 @@ test('the package still comes from spare parts — phase 2 never unlocks a prote
   const pkg = suggestFairPackage(flowers, me, all, them)
   assert.ok(pkg.assets.every(a => assetKeepScore(a, ctx) < PROTECT_THRESHOLD),
     'appeal may reorder the candidates, never widen the pool')
-  // The fair band is unchanged too.
-  assert.ok(pkg.totalValue >= flowers.value * 0.9 && pkg.totalValue <= flowers.value * 1.15)
+  // …and the suggestion is one the Analyzer will call fair.
+  assert.ok(buildFairBand(pkg.totalValue, flowers.value).inside)
 })
 
 test('without a partner roster the builder degrades to phase 1 and reports no appeal (OPEN-6)', () => {
@@ -1019,8 +1020,7 @@ test('phase 2 declines to buy Strong appeal when it costs more than the bonus', 
 
   // Nothing about the guardrails moved.
   pkg.assets.forEach(a => assert.ok(assetKeepScore(a, ctx) < PROTECT_THRESHOLD))
-  assert.ok(pkg.totalValue >= target.value * 0.9 && pkg.totalValue <= target.value * 1.15,
-    'the fair band still binds')
+  assert.ok(buildFairBand(pkg.totalValue, target.value).inside, 'the fair band still binds')
 })
 
 test('phase 2 maximizes appeal-minus-my-cost, not appeal alone', () => {
@@ -1043,10 +1043,13 @@ test('phase 2 maximizes appeal-minus-my-cost, not appeal alone', () => {
     return (APPEAL_BONUS[fit?.appeal] ?? 0) - pain
   }
   const chosenNet = net(pkg.assets)
-  // Every single-asset package inside the same band is a candidate the search saw.
+  // Every single-asset package the search could have CHOSEN — i.e. one that
+  // lands inside buildFairBand. Out-of-band packages are still enumerated (they
+  // feed `alternative`), but they are no longer eligible to be the suggestion,
+  // so a higher net score out there is expected rather than a failure.
   me.players
     .filter(p => assetKeepScore({ type: 'player', ...p }, ctx) < PROTECT_THRESHOLD)
-    .filter(p => p.value >= target.value * 0.9 && p.value <= target.value * 1.15)
+    .filter(p => buildFairBand(p.value, target.value)?.inside)
     .forEach(p => {
       const rival = [{ type: 'player', name: p.name, value: p.value, sleeperId: p.sleeperId, position: p.position, age: p.age }]
       assert.ok(chosenNet >= net(rival) - 1e-9,
@@ -1178,4 +1181,149 @@ test('the lineup gate never fires on noise, and never upgrades a verdict', () =>
     [{ type: 'pick', name: '2027 4th', value: 500 }], me, opp, all)
   assert.equal(getTradeVerdict(bad).verdict, 'Decline',
     'no lineup number rescues a trade that loses on value')
+})
+
+// ── OPEN-10: the suggestion must be one the Analyzer will call fair ─────────
+// The search assembles inside PACKAGE_BAND ([0.9x, 1.15x]) and `buildFairBand`
+// calls fair +/-5%, so the board could propose an offer its own Analyzer then
+// graded an overpay. It did, systematically: measured live 2026-09-21, 20 of 20
+// suggestions on the owner's board and 145 of 180 across all ten seats landed
+// OUTSIDE the fair band, because phase 2 can buy the partner's value point —
+// worth a full appeal step — for a ~0.03 distance penalty.
+//
+// The fix is a split, not a narrowing: `best` must land inside buildFairBand,
+// `alternative` is drawn from the whole assembly window. Both halves are pinned
+// here, and both fail against the pre-2026-09-21 behaviour.
+
+// A target priced so that two ways to pay both exist — one at parity, one ~10%
+// over — and the overpay is the one that wins the partner's value point. That
+// is the exact shape every row of the live board had: the partner's appeal is
+// bought with the premium, not with the players.
+//
+// The partner is deep enough that neither candidate can crack their lineup, so
+// the ONLY thing separating the two packages is the price. That isolation is
+// deliberate: it is what makes this a test of the band rather than of the fit.
+function overpayScenario() {
+  const P = (id, name, pos, value, age = 26) =>
+    ({ sleeperId: id, name, position: pos, value, age, isIR: false, isTaxi: false })
+  const mk = (rosterId, players) => ({
+    rosterId, owner: { user_id: `u${rosterId}`, display_name: `T${rosterId}` },
+    players, picks: [],
+    totalValue: players.reduce((s, p) => s + p.value, 0),
+    pickCapitalScore: 0, avgStarterAge: 26,
+  })
+  const me = mk(1, [
+    P('a1', 'My QB1', 'QB', 6000), P('a2', 'My QB2', 'QB', 5600),
+    P('a3', 'My RB1', 'RB', 5200), P('a4', 'My RB2', 'RB', 5000),
+    // The two ways to pay for a 4,000 target: parity, and ~10% over.
+    P('a5', 'Parity RB', 'RB', 4010), P('a6', 'Pricier RB', 'RB', 4390),
+    P('a7', 'My WR1', 'WR', 3000), P('a8', 'My TE1', 'TE', 2800),
+  ])
+  const opp = mk(2, [
+    P('b1', 'Their QB1', 'QB', 8000), P('b2', 'Their QB2', 'QB', 7000),
+    P('b3', 'Their RB1', 'RB', 7000), P('b4', 'Their RB2', 'RB', 6800),
+    P('b5', 'Their RB3', 'RB', 6600), P('b6', 'Their RB4', 'RB', 6400),
+    P('b7', 'Their WR1', 'WR', 7000), P('b8', 'Their WR2', 'WR', 6800),
+    P('b9', 'Their WR3', 'WR', 6600), P('b10', 'Their TE1', 'TE', 6000),
+    P('b11', 'TARGET', 'WR', 4000),
+  ])
+  const others = [3, 4].map(i => mk(i, [
+    P(`${i}1`, `QB${i}`, 'QB', 4000), P(`${i}2`, `RB${i}`, 'RB', 4000),
+    P(`${i}3`, `WR${i}`, 'WR', 4000), P(`${i}4`, `TE${i}`, 'TE', 3000),
+  ]))
+  const all = [me, opp, ...others]
+  return { me, all, opp, target: { ...opp.players[10], type: 'player' } }
+}
+
+test('the suggested package lands inside buildFairBand (OPEN-10)', () => {
+  const { me, all, opp, target } = overpayScenario()
+  const pkg = suggestFairPackage(target, me, all, opp)
+  assert.ok(pkg, 'a package is suggested')
+  // Asked of buildFairBand itself, never a literal 0.95/1.05 — §4e-iv's
+  // standing ruling is that there is ONE definition of fair and every surface
+  // predicting the Analyzer's verdict reads it. This card hands its package
+  // straight to the Analyzer.
+  assert.ok(buildFairBand(pkg.totalValue, target.value).inside,
+    `suggested ${pkg.totalValue} against a target of ${target.value} — the Analyzer would call this an overpay`)
+  assert.equal(pkg.inFairBand, true)
+})
+
+test('the pre-2026-09-21 search left the fair band on the same fixture (regression statement)', () => {
+  // Executable statement of the bug, not of the fix: with the gate off, the
+  // search buys the partner's value point and proposes the overpay. If this
+  // ever starts passing the fair band, the fixture has stopped exercising
+  // OPEN-10 and the test above proves less than it claims.
+  const { me, all, opp, target } = overpayScenario()
+  const before = suggestFairPackage(target, me, all, opp, { requireFairBand: false })
+  assert.ok(before)
+  assert.equal(buildFairBand(before.totalValue, target.value).inside, false)
+  assert.ok(before.totalValue > target.value * 1.05)
+})
+
+test('the overpay is not deleted — it becomes the alternative, with its premium (OPEN-10)', () => {
+  // A fairly-priced offer gives the other manager no edge on value, so the
+  // package they would actually say yes to is usually an overpay. Holding the
+  // suggestion inside the band must not throw that read away: it moves to
+  // `alternative`, which is drawn from the whole assembly window.
+  const { me, all, opp, target } = overpayScenario()
+  const pkg = suggestFairPackage(target, me, all, opp)
+  assert.ok(pkg.alternative, 'the pricier package they would prefer is still named')
+  const rank = { Weak: 0, Fair: 1, Strong: 2 }
+  assert.ok(rank[pkg.alternative.appeal] > rank[pkg.appeal],
+    'an alternative at the same or worse appeal is not worth naming')
+  assert.ok(pkg.alternative.totalValue > pkg.totalValue, 'and it genuinely costs more')
+  assert.ok(pkg.alternative.premiumPct > 0,
+    'the premium is the decision — "costs more" alone is a footnote')
+  assert.equal(buildFairBand(pkg.alternative.totalValue, target.value).inside, false,
+    'this fixture\'s alternative is the overpay the suggestion declined to make')
+})
+
+test('a target nothing can price fairly still gets an answer, flagged (OPEN-10)', () => {
+  // Degradation contract: when no combination of movable assets lands inside
+  // the fair band, the board must not go blank — it falls back to the
+  // assembly window and SAYS the suggestion is a near-miss, rather than
+  // implying an agreement the Analyzer will not give.
+  const P = (id, name, pos, value, age = 26) =>
+    ({ sleeperId: id, name, position: pos, value, age, isIR: false, isTaxi: false })
+  const mk = (rosterId, players) => ({
+    rosterId, owner: { user_id: `u${rosterId}`, display_name: `T${rosterId}` },
+    players, picks: [],
+    totalValue: players.reduce((s, p) => s + p.value, 0),
+    pickCapitalScore: 0, avgStarterAge: 26,
+  })
+  // Every movable asset is 3,600 or 4,400 against a 4,000 target: 0.90 and 1.10
+  // are inside the assembly window and outside the fair band, and no pair lands
+  // in it either.
+  const me = mk(1, [
+    P('a1', 'My QB1', 'QB', 9000), P('a2', 'My QB2', 'QB', 8500),
+    P('a3', 'Chunky A', 'RB', 3600), P('a4', 'Chunky B', 'RB', 4400),
+    P('a5', 'My WR1', 'WR', 9000), P('a6', 'My TE1', 'TE', 8000),
+  ])
+  const opp = mk(2, [
+    P('b1', 'Their QB1', 'QB', 9000), P('b2', 'Their WR1', 'WR', 9000),
+    P('b3', 'Their RB1', 'RB', 500), P('b4', 'TARGET', 'WR', 4000),
+  ])
+  const others = [3, 4].map(i => mk(i, [
+    P(`${i}1`, `QB${i}`, 'QB', 6000), P(`${i}2`, `RB${i}`, 'RB', 6000),
+    P(`${i}3`, `WR${i}`, 'WR', 6000), P(`${i}4`, `TE${i}`, 'TE', 4000),
+  ]))
+  const all = [me, opp, ...others]
+  const target = { ...opp.players[3], type: 'player' }
+
+  const pkg = suggestFairPackage(target, me, all, opp)
+  assert.ok(pkg, 'an answer is still given')
+  assert.equal(buildFairBand(pkg.totalValue, target.value).inside, false)
+  assert.equal(pkg.inFairBand, false, 'and the card is told it is a near-miss')
+})
+
+test('holding the suggestion inside the band never unlocks a protected asset (OPEN-10)', () => {
+  const { me, all, opp, target } = overpayScenario()
+  const ctx = buildGivabilityContext(me, all)
+  const pkg = suggestFairPackage(target, me, all, opp)
+  // PROTECT_THRESHOLD binds before the band does, in both directions: the
+  // narrower eligible pool must not tempt the search into a core starter to
+  // hit an exact number.
+  pkg.assets.forEach(a => assert.ok(assetKeepScore(a, ctx) < PROTECT_THRESHOLD, a.name))
+  if (pkg.alternative)
+    pkg.alternative.assets.forEach(a => assert.ok(assetKeepScore(a, ctx) < PROTECT_THRESHOLD, a.name))
 })
