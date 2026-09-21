@@ -340,6 +340,50 @@ visible tip of it.
   A dash must mean "FantasyCalc lists no picks at all", never "this asset's
   season is over".
 
+### 3d. The snapshot PIPELINES kept the bug the app had already fixed — 2026-09-21
+
+The fourth member of this family, and the first outside `src/`. It is the one
+to remember, because it is about **where a fix does and does not travel.**
+
+- **Root cause:** FantasyCalc began stamping its pick entries with synthetic
+  **non-numeric** `sleeperId`s (`FP_2027_1`, `DP_0_8`) in 2026-07 — before
+  that they had no id at all. `useFantasyCalc` and `mcp/snapshot.js` were
+  corrected to classify by id **shape**. The three `scripts/snapshot-*.mjs`,
+  which carry their own copies because Actions cannot resolve `src/utils`'
+  extensionless imports, were **not**. They kept `if (sid)`.
+- **The damage was asymmetric, and only one copy actually hurt.**
+  `snapshot-values.mjs` / `snapshot-values-archive.mjs` merely wasted rows on
+  pick entries no consumer looks up (`getSeries` is called with a real Sleeper
+  id), and the 500-row cap never binds because FantasyCalc lists only ~418.
+  But `snapshot-trade-values.mjs` left `pickEntries` **empty**, so its
+  `pickValue()` returned **0 for every pick, on every run, for two months** —
+  into a **permanent, never-pruned archive**.
+- **Why a 0 was worse here than anywhere else it has appeared.**
+  `useTradeTimeValues` already had the right guard — any missing asset hides
+  the whole "at trade time" line, because a partial total misleads. A `null`
+  triggers it; a **0 sails through it** and renders a confident total short by
+  a first-rounder. Live before the fix: a four-pick trade showed *"got 0 ⇄
+  gave 0"*.
+- **Fix:** `scripts/fantasyCalcValues.mjs` — one pure, tested classifier and
+  pricer, shared by all three scripts, ending the ladder in **null rather than
+  0**. Plus a self-heal: any archived pick value of exactly 0 is rewritten to
+  null on the next run (FantasyCalc never prices a pick at 0, so a stored 0
+  can only be the bug's output), delivered through the normal publish path
+  rather than a hand-edit of the data branch.
+- **Rulings:**
+  1. **A fix to `useFantasyCalc` is not a fix to the pipelines.** They are a
+     third copy of the payload reader, invisible to every app-side test and to
+     every route sweep, and they fail **silently into published data**. When
+     an upstream payload shape changes, grep `scripts/` as well as `src/`.
+  2. **Verify a pipeline against its OUTPUT, not its source.** The bug was
+     found by reading the published `trade-values.json` and noticing every
+     pick was 0 — not by reading the script, which looks perfectly reasonable.
+     The feeds are the only place a pipeline's correctness is observable.
+  3. **In a permanent archive, "unpriced" beats "approximately wrong".** A
+     rolling feed self-heals on the next run; an archive of point-in-time
+     values does not, because the value being recorded no longer exists to be
+     re-measured. Prefer null and a hidden line.
+
 ---
 
 ## 4. Trade preload / state wiring family (SETTLED — owner-flagged)

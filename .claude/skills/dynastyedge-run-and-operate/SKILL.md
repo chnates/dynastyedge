@@ -140,6 +140,20 @@ run force-pushes and clobbers whatever you put there.
 
 GitHub Actions cron is **UTC**.
 
+> **These branches also trigger VERCEL, and the guard is a dashboard setting
+> this repo cannot show you.** The `dynastyedge-mcp` Vercel project is
+> connected to this repo (since 2026-09-20), and the integration builds
+> *every* branch — so `news-data`'s twice-hourly force-push was producing
+> ~48 junk preview deployments a day until 2026-09-21. The fix is the
+> project's **Ignored Build Step**:
+> `case "$VERCEL_GIT_COMMIT_REF" in news-data|values-history|rookie-intel) exit 0 ;; *) exit 1 ;; esac`
+> It is **not** in `vercel.json`, deliberately: Vercel reads that file from
+> the branch being pushed, and these branches carry only their JSON payload,
+> so a `git.deploymentEnabled` block on `main` would be a dead no-op that
+> reads like a fix. **If data-branch builds reappear in the Vercel deployment
+> list, that project setting is what was lost.** Adding a fourth data branch
+> means adding it to that `case` too. See CLAUDE.md's Deployment section.
+
 ### 3a. News pipeline (`.github/workflows/news.yml`)
 
 - **Schedule:** `17,47 * * * *` — twice hourly at :17 and :47 UTC (offsets
