@@ -1,10 +1,14 @@
-// check-feeds.mjs — NETWORK REQUIRED. Freshness check for the four static
-// JSON feeds the app serves from orphan branches via raw.githubusercontent.com:
+// check-feeds.mjs — NETWORK REQUIRED. Freshness check for the static JSON
+// feeds published to orphan branches via raw.githubusercontent.com:
 //
 //   NEWS_FEED_URL       (news-data branch, refreshed twice hourly by Actions)
 //   VALUES_HISTORY_URL  (values-history branch, one column per UTC day)
 //   TRADE_VALUES_URL    (values-history branch, permanent trade-time archive)
 //   ROOKIE_INTEL_URL    (rookie-intel branch, one column per ISO week)
+//   values-consensus    (values-history branch, permanent DAILY three-source
+//                        valuation archive — phase 4a; the APP NEVER FETCHES
+//                        IT, so it has no constant and this is the only place
+//                        a human can see whether it is publishing)
 //
 // Prints per-feed: item counts, newest-item age, values-history date range /
 // column count / player count, and staleness verdicts (news > 2h old? values
@@ -20,6 +24,8 @@ let NEWS_FEED_URL = 'https://raw.githubusercontent.com/chnates/dynastyedge/news-
 let VALUES_HISTORY_URL = 'https://raw.githubusercontent.com/chnates/dynastyedge/values-history/values-history.json'
 let TRADE_VALUES_URL = 'https://raw.githubusercontent.com/chnates/dynastyedge/values-history/trade-values.json'
 let ROOKIE_INTEL_URL = 'https://raw.githubusercontent.com/chnates/dynastyedge/rookie-intel/rookie-intel.json'
+// No constant for this one by design — nothing in src/ reads it.
+const VALUES_CONSENSUS_URL = 'https://raw.githubusercontent.com/chnates/dynastyedge/values-history/values-consensus.json'
 try {
   const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..')
   const c = await import(path.join(repoRoot, 'src/constants.js'))
@@ -94,6 +100,38 @@ try {
   console.log(`updatedAt:    ${t.updatedAt ?? 'n/a'}`)
   console.log('verdict:      no staleness rule — archive only gains entries when trades happen.')
 } catch (err) { failures++; console.log(`FEED UNREACHABLE: ${err.message} — best-effort feed; the app hides its UI line when missing.`) }
+
+// ── Three-source valuation consensus (phase 4a) ──────────────────────────────
+// The per-SOURCE view is the point: a source that could not be read publishes
+// an all-null column, so "the feed updated" does not mean "all three were
+// read". KeepTradeCut is a scraped page and is the one expected to break.
+console.log('\n=== values-consensus.json (values-history branch · not app-read) ===')
+try {
+  const v = await getJSON(VALUES_CONSENSUS_URL)
+  const dates = v.dates ?? []
+  const n = dates.length
+  console.log(`columns:      ${n} daily (permanent — never pruned by time)`)
+  console.log(`date range:   ${n ? `${dates[0]} → ${dates[n - 1]}` : 'n/a'}`)
+  console.log(`updatedAt:    ${v.updatedAt ?? 'n/a'}`)
+  for (const key of ['fantasycalc', 'dynastyprocess', 'keeptradecut']) {
+    const src = v.sources?.[key]
+    if (!src) { console.log(`  ${key.padEnd(15)} MISSING from the feed`); continue }
+    const cov = src.coverage ?? []
+    const latest = cov[cov.length - 1]
+    const blanks = cov.filter(c => c == null).length
+    const asOf = src.asOf?.[src.asOf.length - 1]
+    console.log(
+      `  ${key.padEnd(15)} today ${latest == null ? 'NOT READ (all-null column)' : `${latest} players`}` +
+      `${blanks ? ` · ${blanks}/${n} columns never read` : ''}${asOf ? ` · source asOf ${asOf}` : ''}`
+    )
+  }
+  const age = v.updatedAt ? hoursAgo(v.updatedAt) : Infinity
+  console.log(`verdict:      ${age < 36 ? 'FRESH' : `STALE (${age.toFixed(1)}h) — values-history.yml may have stopped`}`)
+} catch (err) {
+  failures++
+  console.log(`FEED UNREACHABLE: ${err.message}`)
+  console.log('              Expected until phase 4a\'s first scheduled run publishes. No user-facing impact — the app never reads this file.')
+}
 
 // ── Rookie intel ─────────────────────────────────────────────────────────────
 console.log('\n=== rookie-intel.json (rookie-intel branch) ===')

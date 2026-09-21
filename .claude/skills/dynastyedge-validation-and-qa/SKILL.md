@@ -20,12 +20,22 @@ built-in `node:test`, **242 passing**) + `npm run build` — enforced by `ci.yml
 on every branch push/PR and by `deploy.yml` before publishing.
 
 > **Run `npm ci` first.** A fresh clone (what every remote session gets) has
-> no `node_modules`, and `npm test` reports that as `# tests 136 / # pass 129 /
-> # fail 7` rather than a missing-module error — it looks like a regression.
-> **A run that doesn't say 242 is an environment problem, not a code problem**;
-> full mechanism in `dynastyedge-build-and-env` §7. Never report those 7 as
-> failing tests without checking dependencies first. (Counts re-measured
-> 2026-09-06 by moving `node_modules` aside.)
+> no `node_modules`, and `npm test` reports that as a handful of *failing
+> tests* rather than a missing-module error — it looks exactly like a code
+> regression. **A run whose total doesn't match CLAUDE.md's stated count is an
+> environment problem, not a code problem**; full mechanism in
+> `dynastyedge-build-and-env` §7.
+>
+> **Read the two live counts from CLAUDE.md's `npm ci` block, never from
+> here.** They move with every change that adds tests, and a number restated
+> in three skills is a number that will be wrong in two of them — which is the
+> drift CLAUDE.md's own block warns about. As of 2026-09-21 they are
+> **698 / 655**. What is stable, and the better thing to check, is the
+> **gap: 43**, unchanged across every re-measurement — the tests in the five
+> files that cannot load without `node_modules` (`draftLive`, `matchupWeeks`,
+> `sleeperDraft`, `transactions`, and `mcpHttp`, which needs a genuine runtime
+> dependency rather than being React-tainted). An unchanged gap means every
+> test added since loads dependency-free.
 
 But there is
 still **no typecheck**, and the suite pins the pure `src/utils` logic

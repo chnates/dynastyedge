@@ -54,7 +54,7 @@ classes must pass the union of both gate sets.
 |---|---|---|
 | **UI-only** (styling/layout, no logic or data change) | `4457e45` stadium-lights rollout · `0b15ca3` login neon styling · `e98260f` iOS focus-zoom fix | gates green (lint + test + build) · **`design-review` skill on the diff** · 390px mental layout check · CLAUDE.md same-commit *if* the design system or a documented treatment changed (`8b6edb4` bundled CLAUDE.md with the ui/ library) |
 | **Behavior/logic** (any change to what the app computes, fetches, stores, or shows) | `24ed7cf` taxi (developmental-player stash — see dynasty-fantasy-reference) rule fix · `1ef480a` pick pricing fix · `119c164` new Feature 17 · `92657ae` trade preload fix | gates green (lint + test + build) · **real-data verification** against the live league (route: `dynastyedge-validation-and-qa`) · **CLAUDE.md updated in the SAME commit** · design-review if UI moved too |
-| **Data-pipeline/workflow** (`.github/workflows/*.yml`, `scripts/*.mjs`) | `news.yml` (cron `17,47 * * * *`) · `values-history.yml` (cron `41 9 * * *`) — both force-push single-commit data branches | gates green (lint + test + build, if app code touched) · run the script locally where network allows · **never write a publish step that can erase accumulated branch data** (values-history.yml's publish step re-fetches the old trade archive on script failure; news.yml fails *before* publishing if it can't read back the feed it is about to merge into — preserve both patterns) · CLAUDE.md same commit · after merge, verify with a manual `workflow_dispatch` run (workflows can only truly be tested on the default branch) · pipeline ops/schedules canonical: `dynastyedge-run-and-operate` |
+| **Data-pipeline/workflow** (`.github/workflows/*.yml`, `scripts/*.mjs`) | `news.yml` (cron `17,47 * * * *` — **delivered at ~7.4 runs/day, not 48**) · `values-history.yml` (cron `41 9 * * *`, four snapshot steps incl. the phase-4a consensus archive) · `rookie-intel.yml` (cron `23 10 * * *`) — all force-push single-commit data branches | gates green (lint + test + build, if app code touched) · run the script locally where network allows · **never write a publish step that can erase accumulated branch data** (values-history.yml's publish step re-fetches the old trade archive on script failure; news.yml fails *before* publishing if it can't read back the feed it is about to merge into — preserve both patterns) · CLAUDE.md same commit · after merge, verify with a manual `workflow_dispatch` run (workflows can only truly be tested on the default branch) · pipeline ops/schedules canonical: `dynastyedge-run-and-operate` |
 | **Doc-only** (CLAUDE.md / skills, no code) | `700ce00` "docs: reflect UX audit fixes" · `d4f9e75` "docs: add phased Navigation Refactor plan" | prefix subject with `docs:` · verify every claim against the code before writing it (see Divergence protocol) · gates not strictly required but cost seconds — run lint + test + build anyway (CLAUDE.md rule 22 expects lint green before any commit) |
 | **PWA-meta/manifest** (index.html metas, manifest.webmanifest, theme-color logic in `useTheme`) | the `cfd9ad0` → `3083f0c` → `78b6c29` status-bar saga (below) | **highest-risk class.** All behavior-class gates, PLUS: read the saga below and `dynastyedge-failure-archaeology` first · know that meta changes only take effect after the owner **removes and re-adds** the home-screen app (stated in index.html's own comment and CLAUDE.md rule 16) — you cannot verify this class in any sandbox — a headless-browser screenshot shows the page, never iOS chrome, so it needs the physical phone · bump the `?v=N` icon query only for logo changes |
 
@@ -79,19 +79,22 @@ Run top to bottom before any merge to `main`:
 cd /home/user/dynastyedge
 npm ci                 # STEP 0 — see the trap below. Never `npm install`.
 npm run lint           # ESLint 9 flat config over src/ + scripts/, error severity
-npm test               # tests/*.test.mjs on node:test (242 passing as of 2026-09-06)
+npm test               # tests/*.test.mjs on node:test (698 passing as of 2026-09-21)
 npm run build          # must end "✓ built in …"
 ```
 
 > **Trap — a fresh clone has no `node_modules`, and `npm test` lies about it.**
 > Remote sessions start from a fresh clone. Skip `npm ci` and you do *not* get
-> a clean "cannot find module" error — you get **`# tests 136 / # pass 129 /
-> # fail 7`**, which reads exactly like a code regression. The failing
-> files (`tradeAnalysis`, `matchupWeeks`, `transactions`, `sleeperDraft`,
-> `draftLive`) are the ones that transitively import `react` —
-> `tradeAnalysis.js → recommendations.js → useLeague.js`, and the hook loaders
-> directly — so their whole file fails to load and its tests never run,
-> silently dropping the count from 242 to 136.
+> a clean "cannot find module" error — you get a handful of **failing tests**,
+> which reads exactly like a code regression (2026-09-21: `# tests 655` against
+> the real 698). Five files fail to load, so their tests never run: four that
+> reach `react` through a hook (`matchupWeeks`, `transactions`,
+> `sleeperDraft`, `draftLive`) and `mcpHttp`, which imports the MCP SDK — a
+> genuine runtime dependency no refactor will remove.
+> **Check the GAP, not the total**: it is **43** and has not moved across any
+> re-measurement, so an unchanged gap means every test added since loads with
+> no `node_modules`. CLAUDE.md's `npm ci` block is the one place the live
+> totals are maintained — don't restate them here.
 > `npm run build` in the same state fails with `sh: 1: vite: not found`.
 > **If the test count is not 242, install dependencies before debugging
 > anything.** (Observed 2026-08-08.)

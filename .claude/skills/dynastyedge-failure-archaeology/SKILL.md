@@ -384,6 +384,52 @@ to remember, because it is about **where a fix does and does not travel.**
      values does not, because the value being recorded no longer exists to be
      re-measured. Prefer null and a hidden line.
 
+### 3e. The ID-crosswalk traps — two ways to archive the wrong player (2026-09-21)
+
+**Found by probing before writing, which is the transferable half.** Phase 4a
+(the three-source valuation archive) joins DynastyProcess and KeepTradeCut to
+Sleeper ids through dynastyprocess's `files/db_playerids.csv`. Both traps were
+caught in the probe; **neither would have thrown, and both would have written
+permanent wrong data.**
+
+1. **`"NA"` is a null sentinel, not an id.** dynastyprocess writes its CSVs
+   from R, so a missing id is the literal string `"NA"` — on **6,103 of
+   db_playerids' 12,502 rows** in `sleeper_id` alone. Read as a value it is a
+   single valid key onto which every unmapped player collapses; four distinct
+   players landed on it in the first probe. Real mappings: **6,399**. Treat it
+   exactly as rule 8 treats Sleeper's `'0'`: `crosswalkCell()` maps `"NA"` and
+   `""` to null, in one place.
+2. **Join KeepTradeCut on `mfl_id`, NEVER `ktc_id`.** The crosswalk carries
+   **6,399** mfl→sleeper mappings against **434** ktc→sleeper, joining
+   **464 of KTC's 464** players against 433. And where the two keys disagree —
+   exactly once — `ktc_id` is the **wrong** one: **Frank Gore Jr.** resolves to
+   Sleeper `232`, Frank Gore **Sr.** (17 years exp, no team), where `mfl_id`
+   correctly gives `11573` (BUF). This is the two-DJ-Moores collision (§ the
+   news layer's `playerIds` rule) reappearing in a new source, and it is the
+   argument for never adding a name-matching fallback: the *id* path was the
+   one that was wrong, and a name match would have been wrong more often.
+
+**A scraped page changes shape without telling you.** The build plan recorded
+KTC as `var playersArray = [ … ]` on 2026-09-04; by 2026-09-21 that literal was
+gone, replaced by `<script type="application/json" id="ktc-players">`. The plan
+said to re-verify before building, and that instruction is what caught it.
+`extractKtcPlayers` returns **null** on every failure mode — missing tag, bad
+JSON, the old shape — so the source goes absent rather than failing the run,
+and `tests/valuationSources.test.mjs` keeps the old shape as an **executable**
+regression statement.
+
+**The three transferable lessons:**
+
+1. **Probe the source before writing code against a recorded description of
+   it.** Two of the three facts in §10's source table were stale within
+   seventeen days.
+2. **A sentinel is a data contract.** `'0'` (Sleeper), `"NA"` (dynastyprocess)
+   and `null` (this repo's own archives) all mean absence, and every one of
+   them reads as a value if you don't handle it explicitly.
+3. **When two id paths disagree, the one with more coverage is usually also
+   the one that is right** — but check the disagreement itself rather than
+   assuming. One row out of 433 was wrong, and it was a father and son.
+
 ---
 
 ## 4. Trade preload / state wiring family (SETTLED — owner-flagged)
