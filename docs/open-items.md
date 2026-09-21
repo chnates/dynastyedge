@@ -549,6 +549,85 @@ files, **the gap holding at 43**.
    doc-fix commit that carries this paragraph.
 
 
+### NEWS-6 — a dead source was invisible in BOTH pipelines **SHIPPED 2026-09-21**
+
+**Owner question, and the honest first answer was half bad.** Asked whether
+anything warns us if KeepTradeCut (or anyone else) changes how it reports
+values, or whether the process "just switches to silently reporting zeros".
+
+- **Zeros: no, never.** A source that cannot be read writes `null`, and every
+  consumer skips a null. That half was built deliberately in PIPE-2 and driven
+  through each failure in turn.
+- **Warnings: none, and the owner was right.** Three of the four snapshot steps
+  in `values-history.yml` are `continue-on-error`, so the run was **green
+  whatever they did**, and `fetch-news.mjs` catches a failed source, writes a
+  `0` and logs one line into a run log nobody reads.
+
+**Checking it turned up a LIVE instance, which is what makes this a pattern
+rather than a hypothetical.** The published feed's `coverage.sources` read
+**`"ESPN RSS": 0`** — and the endpoint returns **25 perfectly good items** when
+probed by hand (HTTP 200, 15KB, 25 `<item>` blocks, CDATA titles the shipped
+parser handles fine: 25 blocks matched). So the source is alive and the
+pipeline has been getting nothing from it, silently, for an unknown length of
+time. `sourceCounts[name] = 0` is set in the **catch** branch, so the fetch is
+*throwing* in Actions — most likely an IP block or a timeout, not a shape
+change.
+
+**This is the second time.** CLAUDE.md already records FantasyPros — "the most
+player-focused source in the old list" — dead across all three endpoints and
+"had been contributing nothing", found by a hand probe months later. Twice is a
+pattern, so it gets an instrument instead of a third probe.
+
+**Shipped:**
+- **`scripts/sourceHealth.mjs`** — the policy, pure and shared by both
+  pipelines, 16 tests. Same precedent as `newsRetention.mjs`.
+- **`scripts/check-source-health.mjs`** — runs in Actions **after publish** and
+  **fails the workflow**, which is what turns GitHub's own notification into
+  the warning. After publish so the alarm can never cost data.
+- **Alarm on a persistent gap, never a single miss.** A blip is a CDN hiccup,
+  and an alarm that cries at hiccups is one you learn to ignore — which lands
+  you back here. Thresholds sized off **measured** cadence, not the cron line:
+  3 days for the daily archive, 12 runs (~1.5 days) for the news feed.
+- **The archive diagnoses itself** from the `coverage[]` it already carries, so
+  no counter can drift from the data. The feed, having no history of its own,
+  carries `coverage.sourceMisses`.
+- **A missing file is itself an alarm** — a script that dies outright writes
+  nothing and leaves the run green, which is silence that looks like success.
+
+**Verified against the live feed, not a fixture:** the alarm fires on the real
+ESPN RSS gap with the real message. Thresholds driven in both directions —
+3-day gap fires, 1-day blip does not, 2-day gap does not, recovery resets, a
+fresh archive never alarms, a dead script alarms. Tests 698 → **714**; without
+`node_modules` **671**, the gap holding at **43**.
+
+### NEWS-7 — ESPN RSS returns nothing to Actions while working everywhere else
+
+**Found by NEWS-6, deliberately NOT fixed in that change.** `ESPN RSS`
+(`https://www.espn.com/espn/rss/nfl/news`) contributes **0 items** to every
+run, and the count is written from `fetch-news.mjs`'s **catch** branch, so the
+fetch is throwing rather than parsing empty.
+
+**What is ruled out:** the feed is alive (HTTP 200, 15KB, **25 `<item>`
+blocks**), the shipped `parseRss` regex matches all 25 of them, the CDATA
+titles are handled by `decodeEntities`, and `get()` already sends a browser
+User-Agent. So it is neither dead nor a parser bug.
+
+**What is left:** ESPN blocking GitHub Actions' IP range, or a timeout inside
+the 20s budget. **Neither is reproducible from a sandbox**, which is exactly
+why this was not fixed blind — a guessed fix to a failure you cannot observe is
+how you end up with two bugs.
+
+**Cost of leaving it:** one of eleven sources, and a mid-density one (33% of
+items naming a player). The other ten are working, and the general bucket has
+its own cap, so the loss is coverage breadth rather than volume.
+
+**Trigger:** the next time anyone can read a real Actions run log for this
+workflow — the failure message is printed there (`ESPN RSS: FAILED — …`) and
+names the cause outright. **The NEWS-6 alarm will now surface it on every run**
+rather than it sitting silent. If the answer is an IP block, the options are to
+drop the source or move it behind the ESPN news **API**, which already works
+from Actions and is the feed's strongest source.
+
 ### PIPE-2 — Phase 4a: the three-source valuation archive **SHIPPED 2026-09-21**
 
 **Build-plan §10 4a, approved 2026-09-04 and unbuilt for 17 days.** It is the
@@ -1820,6 +1899,7 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 
 | Item | Closed | How |
 |---|---|---|
+| NEWS-6 — a dead source was invisible in both pipelines | 2026-09-21 | Owner asked whether anything warns us when a source changes shape. Zeros were never the risk (nulls, by design) but the silence was real: three snapshot steps are `continue-on-error` and a failed news source is a logged `0`. Checking turned up a LIVE case — **ESPN RSS contributing 0 while returning 25 items to a hand probe** — the second after FantasyPros. Shipped a shared, tested alarm that fails the workflow after a **persistent** gap (never a blip), runs after publish so it cannot cost data, and treats a missing file as an alarm. Detail in §1 |
 | PIPE-2 — Phase 4a: the three-source valuation archive | 2026-09-21 | Build-plan §10 4a, approved 2026-09-04 and unbuilt for 17 days — the one item whose cost was permanent. Daily archive of FantasyCalc + DynastyProcess + KeepTradeCut into `values-consensus.json` on the existing `values-history` branch, joined ID-only through db_playerids. Re-probing found KTC had changed shape (JS literal → JSON island) and two crosswalk traps: `"NA"` as a null sentinel on 6,103 rows, and `ktc_id` mapping Frank Gore Jr. onto Frank Gore Sr. Best-effort per source; a failed source is an all-null column, never a 0. 4b/4c not built. Detail in §1 |
 | PIPE-1 — the trade-value archive priced every pick at 0 | 2026-09-21 | The snapshot scripts kept the `if (sid)` classifier the app fixed in 2026-07, so `pickEntries` was empty and every pick archived as 0 into a **permanent** file. One shared `scripts/fantasyCalcValues.mjs` (pure, 10 tests), a ladder ending in **null not 0**, and a self-heal that rewrites the archived zeros through the normal publish path. Found by reading the published feed, not the code. Detail in §1 |
 | OPS-1 — Vercel built every data-branch push | 2026-09-21 | MCP-2b's integration fix started ~9 junk preview builds a day (first drafted as ~48 from the cron line — corrected by NEWS-5). Fixed with a project-level Ignored Build Step; `git.deploymentEnabled` in `vercel.json` was written and **reverted** as a dead no-op (Vercel reads that file from the pushed branch, and the data branches carry only JSON). Detail in §1 |

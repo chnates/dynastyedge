@@ -64,3 +64,10 @@ jobs:
           git add news.json
           git commit -m "Update news feed"
           git push --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" news-data
+      # AFTER the publish — the feed is already on the branch, so the alarm can
+      # never cost a run's items. A per-source failure is caught inside
+      # fetch-news.mjs and recorded as a 0, which is correct (one dead source
+      # must not cost the other ten) and was also completely invisible: ESPN RSS
+      # sat at 0 items until it was found by hand on 2026-09-21.
+      - name: Alarm if a news source has gone dark
+        run: node scripts/check-source-health.mjs --feed news.json

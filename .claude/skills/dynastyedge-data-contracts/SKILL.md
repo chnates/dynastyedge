@@ -342,7 +342,8 @@ Schema (verified against writer and readers, 2026-09-04):
     "withPlayerIds": 120,
     "withAthleteIds": 62,
     "spanHours": 159,
-    "sources": { "ESPN API": 50, "RotoWire page": 25 }
+    "sources": { "ESPN API": 50, "RotoWire page": 25, "ESPN RSS": 0 },
+    "sourceMisses": { "ESPN RSS": 14 }
   },
   "items": [
     {
@@ -505,6 +506,22 @@ file.
 `/stats/nfl/pre/{year}/{week}` (real box scores, 217 fields), but they predict
 a rookie season at **rho −0.195** — the best rookies sit in August. See
 `docs/analysis/rookie-research-signals-2026-08.md`. Do not add them here.
+
+**`sources` vs `sourceMisses`, and why the second exists.** `sources` is this
+run's per-source item count — a `0` there means the source threw or returned
+nothing. `sourceMisses` counts **consecutive** runs of that, carried forward
+inside the feed because a force-pushed feed has no history of its own to count
+from. `scripts/check-source-health.mjs` reads it after publish and **fails the
+workflow** once a source passes `DARK_AFTER.feed` (12 runs, ~1.5 days at the
+measured ~7.4 runs/day).
+
+It exists because a `0` in `sources` was previously invisible: measured
+2026-09-21, **ESPN RSS had been contributing 0 items** to the live feed while
+returning 25 to anyone who asked from elsewhere, and nothing said so — the
+second time a source died silently here (FantasyPros was the first). A reader
+checking feed health should look at `sourceMisses` before `total`: the item
+count stays healthy while a source is dark, exactly as it stayed pinned at its
+cap during the 2026-09 retention collapse.
 
 ### 3e. values-archive.json (same `values-history` branch) — *not app-read*
 

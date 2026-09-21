@@ -411,9 +411,12 @@ architecture:
   blurb than miss it). The article sheet flags this case explicitly, reading
   whichever of `playerIds` / `athleteIds` is longer.
 - **`coverage` block.** The feed carries `{ total, playerItems, playerCap,
-  distinctPlayers, withPlayerIds, withAthleteIds, spanHours, sources }` next to
-  `updatedAt`, so feed health is
+  distinctPlayers, withPlayerIds, withAthleteIds, spanHours, sources,
+  sourceMisses }` next to `updatedAt`, so feed health is
   inspectable and the next measurement of this pipeline has a baseline.
+  **`sourceMisses` counts CONSECUTIVE runs each source has returned nothing**,
+  carried forward in the feed because a force-pushed feed has no history of its
+  own to count from — see **The source-health alarm** below.
   `node scripts/dev/news-coverage.mjs` reports it against the live feed (or a
   local file) along with how many of the owner's rostered players the app
   actually resolves — that is the pipeline's acceptance metric.
@@ -463,6 +466,61 @@ architecture:
   keepalive step (empty bot commit to `main` when it's 45+ days quiet)
   protects both pipelines, and the side drawer's feed-age line surfaces a
   dead feed.
+
+-----
+
+### The source-health alarm (both multi-source pipelines)
+
+**"Degrades quietly" had become "fails invisibly", and that is a different
+thing.** Every multi-source pipeline here is best-effort per source, which is
+the right contract — one dead source must never cost the other ten. But
+nothing ever *said* a source had stopped: `fetch-news.mjs` catches a failed
+source, records a `0` and logs one line into a run log nobody reads, and the
+three snapshot steps in `values-history.yml` are `continue-on-error`, so the
+run is **green whatever they did**.
+
+**It was not hypothetical. Measured 2026-09-21: ESPN RSS had been contributing
+0 items to the live feed, while returning 25 perfectly good items to anyone who
+asked from elsewhere.** Nothing surfaced it. That is the second instance of
+this exact shape — FantasyPros, "the most player-focused source in the old
+list", was dead across all three endpoints and "had been contributing nothing"
+until a hand probe found it months later. Twice is a pattern, so it gets an
+instrument (see `docs/open-items.md` **NEWS-6**).
+
+- **`scripts/sourceHealth.mjs`** is the policy — pure, shared by both
+  pipelines, pinned by `tests/sourceHealth.test.mjs`. Same precedent as
+  `newsRetention.mjs` and `fantasyCalcValues.mjs`: **do not inline it back into
+  a fetch script.**
+- **`scripts/check-source-health.mjs`** runs in Actions **after the publish
+  step** and **fails the workflow** when a source has gone dark. Failing is the
+  point: it is what turns GitHub's own notification into the warning. Running
+  after publish is also the point — the day's data is already on the branch by
+  the time the alarm decides to shout, so **the alarm can never cost data.**
+- **ALARM ON A PERSISTENT GAP, NEVER ON A SINGLE MISS.** A one-run blip is a
+  CDN hiccup, and an alarm that cries at hiccups is one you learn to ignore —
+  which would leave the pipelines exactly as silent as they were before it
+  existed. Same discipline `spanHours` keeps: measure the **window**, not the
+  instant. Pinned by test from both directions: a 3-day gap fires, a 1-day blip
+  does not.
+- **The thresholds are sized off MEASURED cadence, never off the cron line**
+  (`DARK_AFTER`): the archive alarms after **3** consecutive daily runs, the
+  news feed after **12** — ~1.5 days at the delivered ~7.4 runs/day, not the 48
+  the cron asks for. Both mean "roughly a day or more of total silence".
+- **The archive diagnoses itself.** `values-consensus.json` already carries
+  `coverage[]` per source aligned to `dates[]`, so a null column *is* the
+  record of a source not being read. No extra state file, and no way for a
+  counter to drift from the data it describes. The news feed has no history of
+  its own, so there the counter rides in `coverage.sourceMisses`.
+- **A MISSING FILE IS ITSELF AN ALARM.** Every snapshot step is
+  `continue-on-error`, so a script that died outright leaves the run green and
+  writes nothing — silence that looks exactly like success. Absence is the
+  loudest signal here and is treated as one.
+- **A fresh archive never alarms**, because the check needs a full window of
+  history before it can fire; otherwise every new pipeline would page on day
+  one and be ignored by day two.
+- The message names the source, how long it has been silent, the likeliest
+  cause, and — explicitly — that **a genuinely dead source should be removed**,
+  because an alarm nobody can clear stops meaning what it says.
 
 -----
 
@@ -5354,13 +5412,15 @@ dynastyedge/
 │   └── workflows/
 │       ├── deploy.yml          ← GitHub Actions auto-deploy (lint + test gate before build)
 │       ├── ci.yml              ← lint + test + build on branch pushes / PRs (no deploy)
-│       ├── news.yml            ← twice-hourly news aggregation (accumulates into the feed) → news-data branch
-│       ├── values-history.yml  ← daily value snapshot + trade archive + monthly archive + the three-source consensus archive → values-history branch
+│       ├── news.yml            ← twice-hourly news aggregation (accumulates into the feed) → news-data branch; closes with the source-health alarm, which FAILS the run when a source has gone dark
+│       ├── values-history.yml  ← daily value snapshot + trade archive + monthly archive + the three-source consensus archive → values-history branch; closes with the source-health alarm (its three snapshot steps are continue-on-error, so without it a dead source leaves the run GREEN forever)
 │       └── rookie-intel.yml   ← daily rookie depth-chart + draft-capital feed → rookie-intel branch; `mode` input also runs the two CFBD analyses (probe · college-backtest), which publish nothing
 ├── scripts/
 │   ├── fetch-news.mjs          ← multi-source news fetcher (runs in Actions)
 │   ├── newsRetention.mjs       ← THE feed's retention policy, pure + tested: diversity-aware eviction, so the item cap can never again bind before the 7-day time window (which is what silently collapsed the feed to 30h)
 │   ├── fantasyCalcValues.mjs   ← THE snapshot pipelines' FantasyCalc reader, pure + tested: classify by id SHAPE (picks carry synthetic non-numeric ids since 2026-07) and price a pick down the app's own ladder, ending in NULL rather than 0. Three scripts each carried a copy; two were wrong, and the trade archive wrote every pick as 0 for two months
+│   ├── sourceHealth.mjs        ← THE multi-source alarm policy, pure + tested and shared by BOTH pipelines: when has a source stopped contributing, and when is that a persistent gap rather than a blip. Exists because "degrades quietly" had become "fails invisibly" — ESPN RSS sat at 0 items in the live feed, and FantasyPros before it, both found by hand months late
+│   ├── check-source-health.mjs ← THE alarm itself: runs in Actions AFTER the publish step (so it can never cost data) and FAILS THE WORKFLOW, which is what turns GitHub's own notification into a warning. A missing file is itself an alarm — every snapshot step is continue-on-error, so a script that died outright leaves the run green
 │   ├── valuationSources.mjs    ← THE multi-source valuation readers, pure + tested, BESIDE fantasyCalcValues.mjs (whose reader it imports rather than copies — PIPE-1's lesson): the db_playerids crosswalk with its "NA" null sentinel, DynastyProcess, KeepTradeCut's JSON island (joined on mfl_id, NOT the ktc_id that maps Frank Gore Jr. onto Frank Gore Sr.), and the archive merge policy
 │   ├── snapshot-consensus.mjs  ← phase 4a: the permanent DAILY three-source valuation archive (app never fetches it). Best-effort PER SOURCE — a failed source is an all-null column, never a 0, and never erases the others
 │   ├── snapshot-values.mjs     ← daily FantasyCalc snapshot appender (runs in Actions)
@@ -5605,6 +5665,7 @@ dynastyedge/
 │   ├── rookieResearch.test.mjs      ← opportunity blend, shared points scale (the backup-TE trap), within-position divergence, roster-fit re-ranking (need/window bonuses, score untouched), drawer hand-off fields, best-effort feed degradation, and the measurables NULL (age/combine can never move a score)
 │   ├── recommendations.test.mjs     ← suggestSellMove's two-sided partner pick (a concrete return beats a needier team with nothing, the neediest-team fallback, startsForThem, nav-ready shape); pick keep-scores by round (strict ordering under every tier, nothing auto-excluded, unknown round falls back); the past-peak age tilt (decline-only, per-position, saturating, never positive, cliff protection survives it); and the cash-out board (value-at-risk selection, the reach/premium labels, and the pin that its gap equals buildFairBand's)
 │   ├── fantasyCalcValues.test.mjs   ← the pipelines' FantasyCalc reader: a synthetic non-numeric id is a PICK (the live bug), a pick with no id still is (the pre-2026-07 shape), the season-median → generic-median → NULL ladder, a slot entry never polluting a round median, and the old presence-based classifier kept as an executable regression statement
+│   ├── sourceHealth.test.mjs        ← the alarm, and the RESTRAINT as much as the firing: a 3-day gap fires, a 1-day blip does NOT, recovery resets a consecutive count, a fresh archive never alarms before it has a window of history, a short coverage array reads as unread rather than read, one dark source never implicates the healthy ones, and the feed's threshold is deliberately NOT the archive's
 │   ├── valuationSources.test.mjs    ← the three-source readers: "NA" as a NULL sentinel rather than a key every unmapped player collapses onto, KTC joined on mfl_id with the Frank Gore Jr./Sr. collision pinned from both sides, superflexValues.value never the TE-premium siblings, the old `var playersArray` shape kept as an executable regression statement, and the merge contract — a failed source is all-null with asOf null (never 0), erases nothing, back-fills nothing, and columns are NEVER pruned by time
 │   ├── newsRetention.test.mjs       ← the news window's retention policy: newest-N-per-player, a redundant item losing to an OLDER item about an uncovered player, breadth preserved at every k, roundups charging every player they name, and an id-less item never dropped by quota
 │   ├── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
@@ -5639,9 +5700,9 @@ the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
 honestly:** instead of "cannot find module" it prints `# tests 636 / # pass 631
 / # fail 5`, which reads like a code regression. A file that cannot load never
-runs its tests, so the count silently drops from **698** to 655.
+runs its tests, so the count silently drops from **714** to 671.
 `npm run build` in the same state fails with `sh: 1: vite: not found`.
-**If the test count isn't 698, run `npm ci` before debugging anything.**
+**If the test count isn't 714, run `npm ci` before debugging anything.**
 
 The pair was re-measured 2026-09-19 (MCP phase 1b) by renaming `node_modules`
 aside, and it had drifted seven times before that: 178/130, 177/115, 219/136,
@@ -5663,6 +5724,11 @@ those four raise only the first number. The 2026-09-07 trade-engine work added
 the broken-state count stayed at 152; the 2026-09-12 news-retention work moved
 both, because `newsRetention.test.mjs` imports only a zero-dependency pure
 module. **Re-measure both whenever the suite grows.**
+
+The source-health alarm (2026-09-21) moved both by the same 16
+(698/655 → **714/671**), the gap holding at 43 — `sourceHealth.mjs` imports
+nothing at all, which is what a policy module shared by two pipelines should
+look like.
 
 Phase 4a — the three-source valuation archive (2026-09-21) — moved both by the
 same 19 (679/636 → **698/655**), the gap holding at 43. That equality is the
@@ -5705,7 +5771,8 @@ regression to the next session, which is the exact confusion the block exists
 to prevent, so re-measure rather than incrementing what is written.
 
 The useful invariant survived the drift and is worth preferring to either
-count: **the gap between them is 43 and has not moved.** 698 − 655 = 43,
+count: **the gap between them is 43 and has not moved.** 714 − 671 = 43,
+698 − 655 = 43,
 679 − 636 = 43, 669 − 626 = 43, 639 − 596 = 43,
 630 − 587 = 43, 589 − 546 = 43, and 538 − 495 = 43 before that. That is the number of tests living in the five files
 that cannot load, so an unchanged gap means every test added since loads with

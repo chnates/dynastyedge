@@ -31,6 +31,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 
 import { retainDiverse } from './newsRetention.mjs'
+import { trackSourceMisses } from './sourceHealth.mjs'
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15'
 const MAX_STORY = 600
@@ -313,10 +314,14 @@ function enrich(item) {
 // `isPlayerNews`, but we re-enrich everything so a fix to the index or the
 // matcher applies to the whole retained window, not just today's pull.
 let previous = []
+// The previous run's per-source miss counters, carried forward separately:
+// `previous` is the ITEMS array, so the counter cannot ride on it.
+let previousMisses = {}
 try {
   if (existsSync(PREV_FILE)) {
     const prev = JSON.parse(readFileSync(PREV_FILE, 'utf8'))
     previous = Array.isArray(prev?.items) ? prev.items : []
+    previousMisses = prev?.coverage?.sourceMisses ?? {}
   }
 } catch (err) {
   console.log(`Previous feed: unreadable — ${err.message} (starting fresh)`)
@@ -388,6 +393,12 @@ const coverage = {
   withAthleteIds: items.filter(i => (i.athleteIds ?? []).length > 0).length,
   spanHours: times.length ? Math.round((Math.max(...times) - Math.min(...times)) / 36e5) : 0,
   sources: sourceCounts,
+  // Consecutive runs each source has returned nothing, carried forward in the
+  // feed because a force-pushed feed has no history of its own to count from.
+  // scripts/check-source-health.mjs reads this and fails the run once a source
+  // has been silent long enough to be a real gap rather than a blip — which is
+  // how ESPN RSS sat at 0 unnoticed until 2026-09-21.
+  sourceMisses: trackSourceMisses(previousMisses, sourceCounts),
 }
 
 writeFileSync(OUT_FILE, JSON.stringify({ updatedAt: new Date().toISOString(), coverage, items }))

@@ -252,6 +252,31 @@ GitHub Actions cron is **UTC**.
   and `.../values-history/trade-values.json`. `values-archive.json` and
   `values-consensus.json` live on the same branch but are **read only by
   offline analysis** — no constant, no hook, no phone cost.
+- **Step 5 — the source-health alarm** (`scripts/check-source-health.mjs`,
+  **NOT** continue-on-error, runs **after** publish). **This is the only thing
+  that will tell you a source died.** The three snapshot steps above are all
+  continue-on-error, so without it the run is green whatever they did. It fails
+  the workflow — and therefore sends you GitHub's normal failed-run
+  notification — when a source has been unread for **3 consecutive days**, or
+  when the script produced no file at all.
+  - **A single missed day is silent on purpose.** If you get this alarm it is a
+    persistent gap, not a hiccup, and the message names which source and for
+    how long.
+  - **A red run here does NOT mean data was lost** — publish already ran, so
+    the branch has everything this run could produce. It means something
+    stopped contributing.
+  - To clear it: fix the source, or remove it. An alarm nobody can clear stops
+    meaning what it says.
+
+- **Closing step — the source-health alarm** (`scripts/check-source-health.mjs
+  --feed news.json`, after publish, not continue-on-error): fails the run when
+  a source has returned nothing for **12 consecutive runs** (~1.5 days at the
+  delivered ~7.4 runs/day). A per-source failure is caught inside
+  `fetch-news.mjs` and recorded as a `0`, which is the right contract and was
+  also completely invisible — **ESPN RSS sat at 0 items until it was found by
+  hand on 2026-09-21.** Probe the URL yourself before assuming the source is
+  dead: it returned 25 items fine from outside Actions, so this is more likely
+  an IP block or a timeout than a shape change.
 
 ### 3c. Rookie intel pipeline (`.github/workflows/rookie-intel.yml`)
 

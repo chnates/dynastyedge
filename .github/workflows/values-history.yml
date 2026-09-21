@@ -121,3 +121,11 @@ jobs:
           if [ -f values-consensus.json ]; then git add values-consensus.json; fi
           git commit -m "Update values history"
           git push --force "$REMOTE" values-history
+      # AFTER the publish, never before — the day's data is already on the
+      # branch by the time this decides to shout, so the alarm can never cost
+      # data. NOT continue-on-error: failing the run is the whole point, since
+      # that is what turns GitHub's own notification into the warning. Every
+      # snapshot step above is continue-on-error, so without this a dead source
+      # (or a script that died outright) leaves the run GREEN forever.
+      - name: Alarm if a valuation source has gone dark
+        run: node scripts/check-source-health.mjs --archive values-consensus.json
