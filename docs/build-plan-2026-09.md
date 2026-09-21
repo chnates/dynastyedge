@@ -634,7 +634,7 @@ failure and a single point of view.
 |---|---|---|---|
 | **FantasyCalc** *(in use)* | **Actual completed trades** in real leagues — revealed preference | `api.fantasycalc.com/values/current` | 397 players |
 | **DynastyProcess** | **FantasyPros expert consensus rankings** — stated preference | `raw.githubusercontent.com/dynastyprocess/data/master/files/values-players.csv` (`value_2qb` = Superflex). Also `values-picks.csv`, which carries **high/low ranges** FantasyCalc has no equivalent for. | 631 players |
-| **KeepTradeCut** | **Crowdsourced "would you rather" votes** from its userbase | `keeptradecut.com/dynasty-rankings` embeds `var playersArray = [...]` with `superflexValues`. Server-side only (CORS) — the news-pipeline pattern applies. | 450 players |
+| **KeepTradeCut** | **Crowdsourced "would you rather" votes** from its userbase | `keeptradecut.com/dynasty-rankings` embeds `var playersArray = [...]` with `superflexValues`. Server-side only (CORS) — the news-pipeline pattern applies. **Shape changed by 2026-09-21:** the inline literal is now a typed JSON island, `<script type="application/json" id="ktc-players">`. | 450 players (460 joined, 2026-09-21) |
 
 **The join is ID-based end to end.** DynastyProcess publishes
 `files/db_playerids.csv`, a universal crosswalk carrying `sleeper_id`,
@@ -643,6 +643,19 @@ Verified: 4,850 fantasypros→sleeper and 456 ktc→sleeper mappings; 450 of KTC
 500 players resolve to a Sleeper ID. **No name matching anywhere.** This
 crosswalk is independently valuable and should be documented in
 `dynastyedge-data-contracts` when this lands.
+
+> **CORRECTED 2026-09-21, on building 4a.** Two things this paragraph got
+> wrong, both of which silently corrupt the join:
+> **(1) `sleeper_id` is the literal string `"NA"` on 6,103 of the file's
+> 12,502 rows** — an R null, not an id. Counted as a value it is one key that
+> every unmapped player collapses onto. Real mappings: **6,399**, and the
+> per-key counts above are inflated by it (fantasypros→sleeper is **4,673**,
+> ktc→sleeper **434**).
+> **(2) Join KTC on `mfl_id`, NOT `ktc_id`** — 6,399 mappings against 434,
+> joining **464 of KTC's 464** players against 433; and where the two
+> disagree, exactly once, `ktc_id` is the wrong one (Frank Gore **Jr.**
+> resolves to Frank Gore **Sr.**). KTC ships `mflid` on every entry.
+> The crosswalk is now documented in `dynastyedge-data-contracts` §3g.
 
 ### The finding that shapes the design
 
@@ -672,6 +685,12 @@ pooled across every ranked player, or the effect disappears into the tail.
 ### What to build
 
 **4a. Archive all three, daily — do this first and immediately.**
+**SHIPPED 2026-09-21** (`scripts/snapshot-consensus.mjs` +
+`scripts/valuationSources.mjs` → `values-consensus.json` on the existing
+`values-history` branch). Full record, including the two crosswalk traps this
+section did not know about and KTC's changed page shape, in
+`docs/open-items.md` **PIPE-2**. 4b, 4c and 4d remain unbuilt.
+
 Extend `.github/workflows/values-history.yml`, which already runs daily and
 already publishes to the `values-history` branch. Add DynastyProcess and
 KeepTradeCut columns alongside the existing FantasyCalc snapshot.

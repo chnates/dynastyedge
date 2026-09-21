@@ -11,6 +11,7 @@ news-prev.json
 values-history.json
 values-archive.json
 trade-values.json
+values-consensus.json
 rookie-intel.json
 .cache/
 

@@ -297,7 +297,11 @@ manager scouting ledger.
 
 ## 3. Static feeds (GitHub Actions → orphan branches → raw.githubusercontent.com)
 
-All four URLs live in constants.js. raw.githubusercontent.com sends
+All four **app-read** URLs live in constants.js. The `values-history` branch
+also carries two files the app **never fetches** — `values-archive.json`
+(§3e) and `values-consensus.json` (§3f) — which exist only for offline
+analysis and so have no constant and cost the phone nothing.
+raw.githubusercontent.com sends
 `Access-Control-Allow-Origin: *` and has a **~5-minute CDN cache** — a
 just-pushed feed can serve stale for a few minutes. All four readers are
 **strictly best-effort**: fetch failure / missing branch / bad shape ⇒
@@ -502,6 +506,122 @@ file.
 a rookie season at **rho −0.195** — the best rookies sit in August. See
 `docs/analysis/rookie-research-signals-2026-08.md`. Do not add them here.
 
+### 3e. values-archive.json (same `values-history` branch) — *not app-read*
+
+Writer: `scripts/snapshot-values-archive.mjs` (same workflow,
+`continue-on-error`). Permanent **monthly** FantasyCalc archive — format
+mirrors §3b but keyed by `months: ["YYYY-MM", ...]`, `MAX_PLAYERS = 500`,
+columns never pruned by time (rows age out after `INACTIVE_MONTHS = 24`
+all-null). Exists so the multi-*season* trajectory model can eventually be
+back-tested against realized value, which the 90-day rolling file cannot do.
+**No constant, no reader** — nothing in `src/` fetches it.
+
+### 3f. values-consensus.json (same `values-history` branch) — *not app-read*
+
+Writer: `scripts/snapshot-consensus.mjs` (same workflow,
+`continue-on-error`). **Phase 4a**, added 2026-09-21. Permanent **daily**
+archive of all three valuation sources, so §10 4d — *when they disagree,
+which one moves toward the others?* — becomes answerable. A day not archived
+cannot be recovered, which is why it shipped before any UI.
+
+```json
+{
+  "updatedAt": "ISO-8601",
+  "dates": ["YYYY-MM-DD", "..."],
+  "sources": {
+    "fantasycalc":    { "asOf": [null, "..."],         "coverage": [395, "..."], "players": { "<sleeperId>": [347, null, "..."] } },
+    "dynastyprocess": { "asOf": ["2026-09-18", "..."], "coverage": [485, "..."], "players": { "<sleeperId>": [2, "..."] } },
+    "keeptradecut":   { "asOf": [null, "..."],         "coverage": [460, "..."], "players": { "<sleeperId>": [827, "..."] } }
+  }
+}
+```
+
+- Every array is index-aligned to `dates`. `MAX_PLAYERS = 500` **per source,
+  by that source's own value** — the three scales are not comparable, so a
+  cross-source top-N would be meaningless before 4b exists. Columns are
+  **never pruned by time**; a row ages out only once **every** source has been
+  null for it across `INACTIVE_COLUMNS = 120` days (pruning per-source would
+  leave the three maps holding different id sets, defeating the comparison).
+- Same-day re-run **replaces** that column (idempotent).
+- **A source that could not be read is an all-null column with `asOf: null`
+  and `coverage: null` — never a 0.** *"We did not observe"* and *"the source
+  priced nobody"* are different statements; a 0 reads to 4d as a real collapse
+  in value. Same for an unpriceable asset: absent, never 0.
+- `asOf` carries the source's **own** stated as-of where it has one.
+  DynastyProcess ships `scrape_date` and **repeats** (live 2026-09-21 it read
+  `2026-09-18`, three days stale), so five identical columns are one reading,
+  not five — the stamp is what makes that visible.
+- Size, by **wire** bytes: 6.7KB day one, **43KB at 90 days, 53KB at a year**
+  (2.5MB raw — columnar integers gzip hard). That is what makes daily
+  affordable.
+- **No constant, no reader.** 4b (scale normalization) and 4c (surfacing the
+  spread) are not built; §10 4c forbids replacing FantasyCalc or averaging the
+  sources.
+
+### 3g. The valuation sources and the universal ID crosswalk
+
+The three sources §3f archives, and the crosswalk that joins them. Readers are
+pure and shared in **`scripts/valuationSources.mjs`**, tested by
+`tests/valuationSources.test.mjs`. **The join is ID-based end to end — rule 2
+forbids name-matching, and nothing here does it.**
+
+| Source | URL | Value field | Join key |
+|---|---|---|---|
+| FantasyCalc | `api.fantasycalc.com/values/current` (§2) | `value` | native `player.sleeperId` — no crosswalk |
+| DynastyProcess | `raw.githubusercontent.com/dynastyprocess/data/master/files/values-players.csv` | `value_2qb` (Superflex; `value_1qb` is not this league) | `fp_id` → `fantasypros_id` |
+| KeepTradeCut | `keeptradecut.com/dynasty-rankings` | `superflexValues.value` | `mflid` → `mfl_id` |
+
+**`files/db_playerids.csv` is the universal crosswalk** — DynastyProcess
+publishes it, and it is independently valuable to any future join (it carries
+`mfl_id`, `sportradar_id`, `fantasypros_id`, `gsis_id`, `pff_id`,
+`sleeper_id`, `nfl_id`, `espn_id`, `yahoo_id`, `fleaflicker_id`, `cbs_id`,
+`pfr_id`, `cfbref_id`, `rotowire_id`, `rotoworld_id`, `ktc_id`, `stats_id`,
+`fantasy_data_id`, `swish_id`, plus name/position/team/birthdate/draft).
+Measured live 2026-09-21: **12,502 rows, 6,399 with a real `sleeper_id`**.
+
+**Two traps, both measured, both silently corrupting:**
+
+1. **`"NA"` is the null sentinel, not an id.** dynastyprocess writes from R, so
+   a missing id is the literal string `"NA"` — on **6,103 of 12,502** rows in
+   `sleeper_id`. Read as a value it is one valid key that every unmapped
+   player collapses onto (four distinct players landed on it in the first
+   probe). `crosswalkCell()` maps `"NA"` and `""` to null everywhere. Treat it
+   exactly as rule 8 treats Sleeper's `'0'`.
+2. **Join KTC on `mfl_id`, never `ktc_id`.** The crosswalk carries **6,399**
+   mfl→sleeper mappings against **434** ktc→sleeper, joining **464 of KTC's
+   464** players against 433. And where the two disagree — exactly once —
+   `ktc_id` is **wrong**: **Frank Gore Jr.** resolves to Sleeper `232`, Frank
+   Gore **Sr.** (17 years exp, no team), where `mfl_id` gives `11573` (BUF).
+   `ktc_id` remains only as a fallback for an entry shipping no `mflid`.
+
+**KeepTradeCut is a page, not an API, and has already changed shape once.**
+Probed 2026-09-04 as `var playersArray = [ … ]`; by 2026-09-21 that literal
+was gone, replaced by a typed JSON island the page parses itself:
+
+```html
+<script type="application/json" id="ktc-players">[ … 500 entries … ]</script>
+<script>var playersArray = JSON.parse(document.getElementById('ktc-players').textContent);</script>
+```
+
+More stable than a JS literal, still a page. `extractKtcPlayers()` returns
+**null** on every failure (missing tag, bad JSON, the old shape) so the source
+goes absent rather than throwing the run. Read `superflexValues.value` — the
+sibling `tep` / `tepp` / `teppp` trees are the same board under **TE-premium**
+scoring, which this league does not play. `position: 'RDP'` entries are draft
+picks, not players.
+
+**Live coverage, 2026-09-21** (the numbers to re-measure against):
+
+| source | entries | joined to Sleeper |
+|---|---|---|
+| FantasyCalc | 419 (395 players + 24 picks) | 395 (100%) |
+| DynastyProcess | 494 players | 485 (98.2%) |
+| KeepTradeCut | 500 (464 players + 36 picks) | 460 (99.1%) |
+
+Union **540** against FantasyCalc's 395. The 9 + 4 unjoined are deep rookies
+genuinely absent from the crosswalk — **not** a matching failure to fix with
+names.
+
 -----
 
 ## 4. ESPN unofficial endpoints (best-effort bonus only)
@@ -636,14 +756,24 @@ curl -s 'https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=2&numT
 curl -s https://raw.githubusercontent.com/chnates/dynastyedge/news-data/news.json | head -c 400
 curl -s https://raw.githubusercontent.com/chnates/dynastyedge/values-history/values-history.json | head -c 400
 curl -s https://raw.githubusercontent.com/chnates/dynastyedge/values-history/trade-values.json | head -c 400
+curl -s https://raw.githubusercontent.com/chnates/dynastyedge/values-history/values-consensus.json | head -c 400
+
+# The two extra valuation sources + the universal crosswalk (§3g). These WERE
+# run, 2026-09-21, and the numbers in §3g are what they returned.
+curl -s https://raw.githubusercontent.com/dynastyprocess/data/master/files/values-players.csv | head -2
+curl -s https://raw.githubusercontent.com/dynastyprocess/data/master/files/db_playerids.csv | head -1
+# KTC is a PAGE — confirm the JSON island still exists before trusting a parse
+curl -s https://keeptradecut.com/dynasty-rankings | grep -o 'id="ktc-players"' | head -1
 ```
 
 -----
 
 ## Provenance and maintenance
 
-Everything above was read from repo source on 2026-07-05. Before relying on
-a volatile fact, re-verify in seconds (all local, no network):
+Everything above was read from repo source on 2026-07-05; §3e–3g were added
+2026-09-21 from repo source plus a live probe of all three valuation sources
+and the crosswalk. Before relying on a volatile fact, re-verify in seconds
+(all local, no network):
 
 ```bash
 # Storage-key registry still complete?
@@ -664,6 +794,10 @@ grep -n "PLAYER_MAX\|GENERAL_MAX\|MAX_STORY\|playerIds\|isPlayerNews" /home/user
 grep -n "MAX_DAYS\|MAX_PLAYERS" /home/user/dynastyedge/scripts/snapshot-values.mjs
 grep -n "MIN_SPARKLINE_POINTS" /home/user/dynastyedge/src/hooks/useValueHistory.js
 grep -n "RECENT_DAYS\|picks\[" /home/user/dynastyedge/scripts/snapshot-trade-values.mjs
+grep -n "MAX_PLAYERS\|INACTIVE_COLUMNS\|_URL =" /home/user/dynastyedge/scripts/snapshot-consensus.mjs
+
+# The crosswalk's NA sentinel and KTC's join key — the two §3g traps, in code
+grep -n "NA\|byMfl\|byKtc\|superflexValues" /home/user/dynastyedge/scripts/valuationSources.mjs
 
 # playerDB trim list (fields kept from /players/nfl)
 sed -n '24,40p' /home/user/dynastyedge/src/hooks/usePlayerDB.js
