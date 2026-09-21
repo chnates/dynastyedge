@@ -226,7 +226,11 @@ Full incident narratives: `dynastyedge-failure-archaeology`.
 
 Feeds are static JSON on orphan branches, force-pushed by Actions
 (as of 2026-07-05): `news-data/news.json` (cron `17,47 * * * *`),
-`values-history/{values-history.json,trade-values.json}` (cron `41 9 * * *`).
+`values-history/{values-history.json,trade-values.json,values-archive.json,values-consensus.json}`
+(cron `41 9 * * *`). The last two are **archive-only — the app never fetches
+them**, so they can never cause a user-facing symptom; check them with
+`check-feeds.mjs` (`dynastyedge-diagnostics-and-tooling`) rather than from a
+bug report.
 URLs in `src/constants.js:20,25,30` (raw.githubusercontent.com).
 
 Triage stale feeds — **these need network; posture varies per session

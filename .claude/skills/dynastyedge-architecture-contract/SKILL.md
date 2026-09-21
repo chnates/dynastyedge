@@ -69,12 +69,23 @@ chain; each link **forces** the next:
    Scheduled workflows (`.github/workflows/news.yml` twice-hourly,
    `values-history.yml` daily, `rookie-intel.yml` daily) run Node scripts
    (`scripts/fetch-news.mjs`, `scripts/snapshot-values.mjs`,
-   `scripts/snapshot-trade-values.mjs`, `scripts/snapshot-rookie-intel.mjs`)
+   `scripts/snapshot-trade-values.mjs`, `scripts/snapshot-values-archive.mjs`,
+   `scripts/snapshot-consensus.mjs`, `scripts/snapshot-rookie-intel.mjs`)
    and **force-push single-commit orphan branches** (`news-data`,
    `values-history`, `rookie-intel`) whose files the client fetches from
    `raw.githubusercontent.com` (which sends `Access-Control-Allow-Origin: *`).
    URLs live in `src/constants.js` (`NEWS_FEED_URL`, `VALUES_HISTORY_URL`,
    `TRADE_VALUES_URL`, `ROOKIE_INTEL_URL`).
+
+   **Two files on `values-history` are written but NEVER fetched by the app**,
+   and that is a deliberate shape rather than an oversight:
+   `values-archive.json` (permanent monthly values) and
+   `values-consensus.json` (permanent daily three-source valuations, phase 4a).
+   They exist for offline analysis that needs memory the rolling 90-day file
+   cannot keep, and having no client means they cost the phone nothing — no
+   request, no constant, no bundle weight. **An archive whose only job is to
+   be there later is still architecture**: a day not written cannot be
+   recovered, which is the whole argument for shipping 4a before any UI.
 
    **The pipeline also exists to do work the phone shouldn't.** `rookie-intel`
    is the clearest case: it reads three nflverse CSVs (~39MB, no CORS) and
@@ -405,11 +416,18 @@ task legitimately touches them.
 6. **The data branches are force-pushed single commits.** `news-data`,
    `values-history`, and `rookie-intel` have no git history of their own — the server-side
    "history of the history" is exactly the 90-day rolling window inside
-   `values-history.json` plus the permanent (never-pruned) `trade-values.json`
-   archive. A buggy snapshot run can corrupt the rolling file with no branch
-   history to revert to (the workflow's re-fetch-previous-archive step
-   protects only `trade-values.json`). Be paranoid when touching
-   `scripts/snapshot-*.mjs`. `rookie-intel.json` is regenerated wholesale from
+   `values-history.json` plus the three permanent, never-pruned archives
+   (`trade-values.json`, `values-archive.json`, `values-consensus.json`).
+   A buggy snapshot run can corrupt the rolling file with no branch history to
+   revert to. **The publish step now carries EVERY archive forward from the
+   branch via git** when its script produced nothing, and aborts rather than
+   push without one — so the exposure is the rolling file, not the archives.
+   Be paranoid when touching `scripts/snapshot-*.mjs`: a permanent archive
+   records something that cannot be recomputed in hindsight (a trade-time
+   price, a day's disagreement between valuation sources), so a wrong number
+   written today can only ever be deleted, never corrected. That is why
+   **an unpriceable asset archives as `null`, never 0** — a null is skipped by
+   a consumer, a 0 counts into a total and renders as fact. `rookie-intel.json` is regenerated wholesale from
    upstream each day, so a bad run costs a day rather than an archive — and
    its publish step still carries the previous file forward from the branch.
 7. **localStorage schema has no migration story.** Verified key inventory:

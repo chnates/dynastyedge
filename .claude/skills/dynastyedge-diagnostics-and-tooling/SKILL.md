@@ -206,14 +206,28 @@ Sandboxed sessions typically get proxy 403s — use --fixture offline instead.
 
 ## Tool 2 — `check-feeds.mjs` (feed freshness; network — reachable even in this sandbox)
 
-**What it measures:** the four static JSON feeds served from orphan branches
-(URLs read from `src/constants.js`, falling back to hardcoded copies):
-news item count, newest-item age vs the twice-hourly cron **and the share of
-items resolved to a player** (from the feed's own `coverage` block); values-history
+**What it measures:** the static JSON feeds served from orphan branches (URLs
+read from `src/constants.js`, falling back to hardcoded copies): news item
+count, newest-item age vs the twice-hourly cron **and the share of items
+resolved to a player** (from the feed's own `coverage` block); values-history
 date range / column count / player count vs the daily 09:41 UTC cron;
-trade-values archive entry count; rookie-intel player/column counts and
-snapshot date vs the daily 10:23 UTC cron. Per-feed graceful failure; exits 1
-only if all four are unreachable.
+trade-values archive entry count; **values-consensus columns and a PER-SOURCE
+read** (phase 4a); rookie-intel player/column counts and snapshot date vs the
+daily 10:23 UTC cron. Per-feed graceful failure; exits 1 only if all are
+unreachable.
+
+> **`values-consensus.json` is the one feed the app never fetches**, so it has
+> no constant and no UI — **this tool is the only place a human can see
+> whether it is publishing at all.** Check it per-source rather than by
+> freshness: a failed source writes an **all-null column**, so "the feed
+> updated today" does not mean all three were read. The output names each
+> source's latest coverage and how many of its columns were never read.
+> **KeepTradeCut is a scraped page and is the one expected to break** — a run
+> of null KTC columns means the page changed shape again; the parser is
+> `extractKtcPlayers` in `scripts/valuationSources.mjs`.
+>
+> A **404 there is the expected state until phase 4a's first scheduled run
+> publishes**, and it is never a user-facing incident.
 
 > **rookie-intel first published 2026-08-14**, so a 404 there is no longer the
 > expected state — it now means the pipeline stopped, and the branch should be
@@ -247,6 +261,25 @@ entries:      1 (permanent archive — only ever grows)
 updatedAt:    2026-07-05T11:19:35.507Z
 verdict:      no staleness rule — archive only gains entries when trades happen.
 ```
+
+**The consensus block, once phase 4a has published** (shape, not a real run —
+it had not yet run when this was written):
+
+```
+=== values-consensus.json (values-history branch · not app-read) ===
+columns:      1 daily (permanent — never pruned by time)
+date range:   2026-09-21 → 2026-09-21
+updatedAt:    2026-09-21T…
+  fantasycalc     today 395 players
+  dynastyprocess  today 485 players · source asOf 2026-09-18
+  keeptradecut    today 460 players
+verdict:      FRESH
+```
+
+A source reading **`today NOT READ (all-null column)`** is the degradation
+contract working, not an incident — the other two published normally. Note
+DynastyProcess's `source asOf`: it scrapes roughly weekly, so several
+consecutive columns can legitimately carry the same reading.
 
 **Interpretation:**
 

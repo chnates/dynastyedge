@@ -214,14 +214,69 @@ GitHub Actions cron is **UTC**.
   by sleeperId; picks keyed `season-round-rosterId` at median-of-round).
   **Append-only: existing entries are never overwritten, nothing is ever
   pruned.** Writes `trade-values.json`.
-- **Publish:** force-pushes branch **`values-history`** with
-  `values-history.json`, plus `trade-values.json` — if step 2 produced no
-  file, the workflow **re-fetches the previous `trade-values.json` from the
-  branch** before pushing (`curl ... || true`), so a bad archive run can
-  never erase the archive.
+- **Step 3 — `scripts/snapshot-values-archive.mjs`** (`continue-on-error:
+  true`): the permanent **monthly** FantasyCalc archive, `values-archive.json`
+  — one column per UTC calendar month (same-month re-runs replace it), top 500
+  players, columns never pruned by time. Same 404-starts-fresh / any-other-
+  error-aborts contract as step 2. **The app never fetches it**; it exists so
+  the multi-*season* trajectory model can eventually be back-tested.
+- **Step 4 — `scripts/snapshot-consensus.mjs`** (`continue-on-error: true`,
+  added 2026-09-21, build-plan §10 phase 4a): the permanent **daily**
+  three-source valuation archive, `values-consensus.json` — FantasyCalc +
+  DynastyProcess + KeepTradeCut, joined to Sleeper ids through
+  dynastyprocess's `db_playerids.csv` crosswalk. **The app never fetches it**
+  either; it exists so §10 4d ("when the sources disagree, which one moves?")
+  becomes answerable, which needs history nothing can reconstruct later.
+  - **Best-effort PER SOURCE**, which is the thing to know when reading a run
+    log: a source that fails contributes an **all-null column** with
+    `asOf: null` and the other two publish normally. A log line reading
+    `keeptradecut: FAILED — …` is the contract working, not an incident.
+    **Only all three failing exits 1**, and then nothing is written.
+  - **KeepTradeCut is a scraped PAGE and is the fragile one.** It already
+    changed shape once (a `var playersArray` literal → a
+    `<script type="application/json" id="ktc-players">` island). If its column
+    goes all-null for several days running, the page changed again — check
+    `extractKtcPlayers` in `scripts/valuationSources.mjs`.
+  - Same 404-starts-fresh contract as steps 2–3, plus one addition: a **200
+    carrying the wrong shape also aborts**, because starting fresh on an
+    archive we failed to parse would force-push a one-day file over permanent
+    history.
+- **Publish:** force-pushes branch **`values-history`** carrying all four
+  files. Each of the three archives is recovered **from the branch via git**
+  when its script produced nothing this run (`git checkout "$PREV" -- <file>`,
+  a different failure domain than the raw CDN the scripts read from), and the
+  step aborts rather than push without a file it cannot recover — so a bad run
+  leaves yesterday's data in place and the next run self-heals.
 - **Consumed at:**
   `https://raw.githubusercontent.com/chnates/dynastyedge/values-history/values-history.json`
-  and `.../values-history/trade-values.json`.
+  and `.../values-history/trade-values.json`. `values-archive.json` and
+  `values-consensus.json` live on the same branch but are **read only by
+  offline analysis** — no constant, no hook, no phone cost.
+- **Step 5 — the source-health alarm** (`scripts/check-source-health.mjs`,
+  **NOT** continue-on-error, runs **after** publish). **This is the only thing
+  that will tell you a source died.** The three snapshot steps above are all
+  continue-on-error, so without it the run is green whatever they did. It fails
+  the workflow — and therefore sends you GitHub's normal failed-run
+  notification — when a source has been unread for **3 consecutive days**, or
+  when the script produced no file at all.
+  - **A single missed day is silent on purpose.** If you get this alarm it is a
+    persistent gap, not a hiccup, and the message names which source and for
+    how long.
+  - **A red run here does NOT mean data was lost** — publish already ran, so
+    the branch has everything this run could produce. It means something
+    stopped contributing.
+  - To clear it: fix the source, or remove it. An alarm nobody can clear stops
+    meaning what it says.
+
+- **Closing step — the source-health alarm** (`scripts/check-source-health.mjs
+  --feed news.json`, after publish, not continue-on-error): fails the run when
+  a source has returned nothing for **12 consecutive runs** (~1.5 days at the
+  delivered ~7.4 runs/day). A per-source failure is caught inside
+  `fetch-news.mjs` and recorded as a `0`, which is the right contract and was
+  also completely invisible — **ESPN RSS sat at 0 items until it was found by
+  hand on 2026-09-21.** Probe the URL yourself before assuming the source is
+  dead: it returned 25 items fine from outside Actions, so this is more likely
+  an IP block or a timeout than a shape change.
 
 ### 3c. Rookie intel pipeline (`.github/workflows/rookie-intel.yml`)
 

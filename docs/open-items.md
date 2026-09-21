@@ -94,7 +94,7 @@ which beats any amount of feature value.
 | Day | Work | Why it sits here |
 |---|---|---|
 | **1** | **PIPE-1 + OPS-1 + this catch-up** — **DONE 2026-09-21** | Both were actively bleeding. The archive wrote unrecoverable wrong data on every run; the Vercel builds were pure waste |
-| **2** | **Phase 4a — archive all three valuation sources daily** (`docs/build-plan-2026-09.md` §10) | **The only item on this list where waiting has a permanent cost.** 4a's own instruction is "do this first and immediately", and it has been sitting since 2026-09-04. It starts the clock on 4d ("when sources disagree, which one moves?"), which is unanswerable forever without an archive. Pipeline-only, no UI |
+| **2** | **Phase 4a — archive all three valuation sources daily** — **DONE 2026-09-21** (see PIPE-2) | **The only item on this list where waiting has a permanent cost.** 4a's own instruction is "do this first and immediately", and it had been sitting since 2026-09-04. It starts the clock on 4d ("when sources disagree, which one moves?"), which is unanswerable forever without an archive. Pipeline-only, no UI |
 | **3–4** | **One substantial thing:** either the MCP trade-targets tool (**MCP-CARRY**) or **OPEN-10** | New capability vs. fixing the thing that makes the Targets board read wrong on 17 of 20 cards. Owner's call |
 | **5** | **NEWS-4** (the cap decision) + **NEWS-5** (cron cadence — pick option 1 or 2) + the **MCP connector re-check** on the phone | All small; the last needs the owner's GitHub login and no sandbox can do it |
 
@@ -103,10 +103,13 @@ OPEN-8 (trigger: autumn 2028), OPEN-9 (trigger: ~2027-07, needs 12 monthly
 archive columns and currently holds 3), OPEN-3 (owner ask required), and the
 two device checks in DESIGN-4 (owner-only, uncheckable in any sandbox).
 
-**The single biggest unbuilt approved item is Phase 4**, and it is worth
-naming plainly: FantasyCalc is still the app's only valuation source, so every
-trade verdict, roster total, trajectory curve and pick price traces to one
-provider's opinion.
+**Phase 4's archive (4a) shipped 2026-09-21 — see PIPE-2 — and 4b/4c remain
+the biggest unbuilt approved item.** Worth naming plainly: FantasyCalc is
+still the app's only valuation source *in the product*, so every trade
+verdict, roster total, trajectory curve and pick price traces to one
+provider's opinion. What changed is that a second and third reading are now
+being **recorded** daily, so 4d becomes answerable around **2026-12** and
+4b/4c can be built on evidence rather than on one day's probe.
 
 ---
 
@@ -545,6 +548,209 @@ files, **the gap holding at 43**.
    `Production` deployment environment appearing on GitHub. Verified by the
    doc-fix commit that carries this paragraph.
 
+
+### NEWS-6 — a dead source was invisible in BOTH pipelines **SHIPPED 2026-09-21**
+
+**Owner question, and the honest first answer was half bad.** Asked whether
+anything warns us if KeepTradeCut (or anyone else) changes how it reports
+values, or whether the process "just switches to silently reporting zeros".
+
+- **Zeros: no, never.** A source that cannot be read writes `null`, and every
+  consumer skips a null. That half was built deliberately in PIPE-2 and driven
+  through each failure in turn.
+- **Warnings: none, and the owner was right.** Three of the four snapshot steps
+  in `values-history.yml` are `continue-on-error`, so the run was **green
+  whatever they did**, and `fetch-news.mjs` catches a failed source, writes a
+  `0` and logs one line into a run log nobody reads.
+
+**Checking it turned up a LIVE instance, which is what makes this a pattern
+rather than a hypothetical.** The published feed's `coverage.sources` read
+**`"ESPN RSS": 0`** — and the endpoint returns **25 perfectly good items** when
+probed by hand (HTTP 200, 15KB, 25 `<item>` blocks, CDATA titles the shipped
+parser handles fine: 25 blocks matched). So the source is alive and the
+pipeline has been getting nothing from it, silently, for an unknown length of
+time. `sourceCounts[name] = 0` is set in the **catch** branch, so the fetch is
+*throwing* in Actions — most likely an IP block or a timeout, not a shape
+change.
+
+**This is the second time.** CLAUDE.md already records FantasyPros — "the most
+player-focused source in the old list" — dead across all three endpoints and
+"had been contributing nothing", found by a hand probe months later. Twice is a
+pattern, so it gets an instrument instead of a third probe.
+
+**Shipped:**
+- **`scripts/sourceHealth.mjs`** — the policy, pure and shared by both
+  pipelines, 16 tests. Same precedent as `newsRetention.mjs`.
+- **`scripts/check-source-health.mjs`** — runs in Actions **after publish** and
+  **fails the workflow**, which is what turns GitHub's own notification into
+  the warning. After publish so the alarm can never cost data.
+- **Alarm on a persistent gap, never a single miss.** A blip is a CDN hiccup,
+  and an alarm that cries at hiccups is one you learn to ignore — which lands
+  you back here. Thresholds sized off **measured** cadence, not the cron line:
+  3 days for the daily archive, 12 runs (~1.5 days) for the news feed.
+- **The archive diagnoses itself** from the `coverage[]` it already carries, so
+  no counter can drift from the data. The feed, having no history of its own,
+  carries `coverage.sourceMisses`.
+- **A missing file is itself an alarm** — a script that dies outright writes
+  nothing and leaves the run green, which is silence that looks like success.
+
+**Verified against the live feed, not a fixture:** the alarm fires on the real
+ESPN RSS gap with the real message. Thresholds driven in both directions —
+3-day gap fires, 1-day blip does not, 2-day gap does not, recovery resets, a
+fresh archive never alarms, a dead script alarms. Tests 698 → **714**; without
+`node_modules` **671**, the gap holding at **43**.
+
+### NEWS-7 — ESPN RSS returns nothing to Actions while working everywhere else
+
+**Found by NEWS-6, deliberately NOT fixed in that change.** `ESPN RSS`
+(`https://www.espn.com/espn/rss/nfl/news`) contributes **0 items** to every
+run, and the count is written from `fetch-news.mjs`'s **catch** branch, so the
+fetch is throwing rather than parsing empty.
+
+**What is ruled out:** the feed is alive (HTTP 200, 15KB, **25 `<item>`
+blocks**), the shipped `parseRss` regex matches all 25 of them, the CDATA
+titles are handled by `decodeEntities`, and `get()` already sends a browser
+User-Agent. So it is neither dead nor a parser bug.
+
+**What is left:** ESPN blocking GitHub Actions' IP range, or a timeout inside
+the 20s budget. **Neither is reproducible from a sandbox**, which is exactly
+why this was not fixed blind — a guessed fix to a failure you cannot observe is
+how you end up with two bugs.
+
+**Cost of leaving it:** one of eleven sources, and a mid-density one (33% of
+items naming a player). The other ten are working, and the general bucket has
+its own cap, so the loss is coverage breadth rather than volume.
+
+**Trigger:** the next time anyone can read a real Actions run log for this
+workflow — the failure message is printed there (`ESPN RSS: FAILED — …`) and
+names the cause outright. **The NEWS-6 alarm will now surface it on every run**
+rather than it sitting silent. If the answer is an IP block, the options are to
+drop the source or move it behind the ESPN news **API**, which already works
+from Actions and is the feed's strongest source.
+
+### PIPE-2 — Phase 4a: the three-source valuation archive **SHIPPED 2026-09-21**
+
+**Build-plan §10 4a, approved 2026-09-04 and unbuilt for 17 days.** It is the
+one item on the week's list whose cost is permanent: FantasyCalc is the app's
+only valuation source, and the question worth asking of three — *when they
+disagree, which one moves toward the others?* (4d) — needs history that
+cannot be reconstructed in hindsight. Every day not archived was gone.
+
+**Re-probing first was the right call — one source had changed shape.**
+§10 recorded KTC as `var playersArray = [ … ]`, an inline JS literal. By
+2026-09-21 that was gone, replaced by a typed JSON island the page parses
+itself (`<script type="application/json" id="ktc-players">`). Strictly more
+stable than a literal, and still a page — so every KTC failure mode returns
+null and the source goes absent.
+
+**Two crosswalk traps, both measured, both of which would have silently
+corrupted a permanent file:**
+
+- **`sleeper_id` is the literal string `"NA"` on 6,103 of db_playerids'
+  12,502 rows** — an R-flavoured null. Read as a value it is one valid key
+  that every unmapped player collapses onto; four distinct players landed on
+  it in the first probe. Real `sleeper_id` count is **6,399**. It is this
+  crosswalk's `'0'` sentinel (rule 8), and it is handled in one place.
+- **KTC joins on `mfl_id`, not `ktc_id`** — 6,399 mappings against 434,
+  joining **464 of 464** against 433. And where the two disagree, exactly
+  once, `ktc_id` is the **wrong** one: **Frank Gore Jr.** → Sleeper `232`,
+  Frank Gore **Sr.** (17 years exp, no team), where `mfl_id` gives `11573`
+  (BUF). The two-DJ-Moores collision again, in a new source.
+
+**Shipped:**
+- **`scripts/valuationSources.mjs`** — pure readers for the crosswalk,
+  DynastyProcess and KTC, plus the archive merge policy, **beside**
+  `fantasyCalcValues.mjs` and **importing** its reader rather than copying it.
+  That placement is PIPE-1's lesson applied rather than restated: a payload
+  reader copied per script is one that gets fixed in some copies and not
+  others. 19 tests in `tests/valuationSources.test.mjs`, including the old
+  `var playersArray` shape kept as an **executable** regression statement.
+- **`scripts/snapshot-consensus.mjs`** → `values-consensus.json` on the
+  existing `values-history` branch, one **daily** column, permanent. **No new
+  data branch**, so OPS-1's Vercel Ignored Build Step needed no change —
+  `values-history` is already in its case list.
+- **Best-effort PER SOURCE.** A source that cannot be read is an **all-null
+  column** with `asOf: null` and `coverage: null`, never a 0: *"we did not
+  observe"* and *"the source priced nobody"* are different statements, and a 0
+  reads to 4d as a real collapse in value. Same contract PIPE-1 established
+  for an unpriceable pick.
+
+**Verified against live data, each failure driven in turn rather than
+reasoned about:** KTC unreachable → the other two publish, KTC's column
+all-null; the **crosswalk** unreachable → FantasyCalc alone publishes (it
+needs no crosswalk); **all three** failing → exit 1 with **no file written**,
+so the publish step carries yesterday's forward; a 200 carrying the **wrong
+shape** → abort (only a 404 starts fresh — starting fresh on an archive we
+failed to parse would force-push a one-day file over permanent history); a
+same-day re-run **replaces** its column; a next-day run **appends** with every
+series still aligned. Zero explicit zeros anywhere in the output.
+
+**The numbers (live, 2026-09-21).** FantasyCalc 419 entries → **395** joined
+(native id, 100%); DynastyProcess 494 → **485** (98.2%, via `fp_id`);
+KeepTradeCut 500 (464 players + 36 picks) → **460** (99.1%, all via
+`mfl_id` — `ktc_id` contributed 0). Union **540** against FantasyCalc's 395.
+The 13 unjoined are deep rookies genuinely absent from the crosswalk, **not** a
+matching failure to fix with names.
+
+**§10's structure reproduces**, sorted by FantasyCalc value — and only at the
+top, which is why §10 forbids pooling:
+
+| depth | FC~KTC | FC~DP | DP~KTC |
+|---|---|---|---|
+| top 25 | **0.970** | **0.610** | **0.564** |
+| top 50 | 0.964 | 0.797 | 0.760 |
+| top 100 | 0.961 | 0.874 | 0.866 |
+| all 370 | 0.963 | 0.937 | 0.934 |
+
+Two *market* sources agreeing at 0.97 among elite assets while the lone
+*expert* source sits at 0.56–0.61. Market-vs-expert, not one provider
+misbehaving — and pooled across all 370 the entire effect vanishes.
+
+**Sized by wire bytes** (the news feed's rule), by replaying the live readings
+forward: **6.7KB day one, 43KB at 90 days, 53KB at a year** (2.5MB raw —
+columnar integers gzip hard). That is what makes daily affordable; a weekly
+column would save bytes the budget does not need and cost 4d resolution.
+
+**Not built, deliberately: 4b and 4c.** No normalization, no UI, no constant —
+the app never fetches this file. §10 4c forbids replacing FantasyCalc (every
+model is calibrated on its scale) and forbids averaging (at ~0.96 the average
+*is* FantasyCalc with the disagreement destroyed). The three scales are
+visibly incomparable in the first column — Sleeper player `19` reads FC
+**347** · DP **2** · KTC **827** — which is 4b's problem stated in data.
+
+**4d's clock is now running.** Pre-register the divergence threshold and the
+window **before** looking at the archive, per §10 and the research-methodology
+skill. Earliest useful read: **~2026-12**, at ~3 months.
+
+**Two things noticed and deliberately not acted on.** DynastyProcess's
+`scrape_date` read **2026-09-18**, three days stale, so its columns repeat —
+handled by stamping each column's own `asOf` so a reader can tell a fresh
+reading from a repeat, rather than by changing cadence. And **FantasyCalc's
+top value is now 10758**, above the 0–10000 scale CLAUDE.md documents and
+`Magnitude` pins its reference to; unrelated to this work and worth its own
+look — see VALUE-1.
+
+### VALUE-1 — FantasyCalc's scale now exceeds the documented 0–10000
+
+**Measured live 2026-09-21** while probing for PIPE-2: the top FantasyCalc
+value is **10758**. CLAUDE.md's FantasyCalc contract says "Dynasty trade value
+(0–10000 scale)", and `Magnitude`'s reference is **pinned to 10000** precisely
+so a figure means the same thing on every screen — CLAUDE.md's own words:
+"any asset above it runs off the top of the ramp."
+
+**Impact is small and entirely cosmetic**, which is why this is a note and not
+a fix: `Magnitude` clamps at a 30px ceiling, so the handful of assets over
+10000 render at the same size as one at exactly 10000 rather than breaking.
+Nothing miscounts; no total is wrong.
+
+**The question is which number is the contract.** 10000 was chosen over the
+mock's 9365 because it was documented rather than a snapshot — if FantasyCalc
+has no ceiling at all, that reasoning needs redoing, and the honest answer may
+be a high percentile of the live board rather than a stated maximum. Needs a
+look at FantasyCalc's own docs before changing anything.
+
+**Trigger:** next time anyone touches `Magnitude` or the FantasyCalc contract.
+Do not raise the reference casually — it resizes every figure in the app.
 
 ### PIPE-1 — the trade-value archive priced every pick at 0 **SHIPPED 2026-09-21**
 
@@ -1693,6 +1899,8 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 
 | Item | Closed | How |
 |---|---|---|
+| NEWS-6 — a dead source was invisible in both pipelines | 2026-09-21 | Owner asked whether anything warns us when a source changes shape. Zeros were never the risk (nulls, by design) but the silence was real: three snapshot steps are `continue-on-error` and a failed news source is a logged `0`. Checking turned up a LIVE case — **ESPN RSS contributing 0 while returning 25 items to a hand probe** — the second after FantasyPros. Shipped a shared, tested alarm that fails the workflow after a **persistent** gap (never a blip), runs after publish so it cannot cost data, and treats a missing file as an alarm. Detail in §1 |
+| PIPE-2 — Phase 4a: the three-source valuation archive | 2026-09-21 | Build-plan §10 4a, approved 2026-09-04 and unbuilt for 17 days — the one item whose cost was permanent. Daily archive of FantasyCalc + DynastyProcess + KeepTradeCut into `values-consensus.json` on the existing `values-history` branch, joined ID-only through db_playerids. Re-probing found KTC had changed shape (JS literal → JSON island) and two crosswalk traps: `"NA"` as a null sentinel on 6,103 rows, and `ktc_id` mapping Frank Gore Jr. onto Frank Gore Sr. Best-effort per source; a failed source is an all-null column, never a 0. 4b/4c not built. Detail in §1 |
 | PIPE-1 — the trade-value archive priced every pick at 0 | 2026-09-21 | The snapshot scripts kept the `if (sid)` classifier the app fixed in 2026-07, so `pickEntries` was empty and every pick archived as 0 into a **permanent** file. One shared `scripts/fantasyCalcValues.mjs` (pure, 10 tests), a ladder ending in **null not 0**, and a self-heal that rewrites the archived zeros through the normal publish path. Found by reading the published feed, not the code. Detail in §1 |
 | OPS-1 — Vercel built every data-branch push | 2026-09-21 | MCP-2b's integration fix started ~9 junk preview builds a day (first drafted as ~48 from the cron line — corrected by NEWS-5). Fixed with a project-level Ignored Build Step; `git.deploymentEnabled` in `vercel.json` was written and **reverted** as a dead no-op (Vercel reads that file from the pushed branch, and the data branches carry only JSON). Detail in §1 |
 | NEWS-3 — re-measure coverage at a 7-day window | 2026-09-21 | **PASS, 18 of 31** against a ≥12 target and a 9–11 prediction. Matching still saturated (achieved == ceiling); volume was the lever, as NEWS-1 ruled. Surfaced NEWS-4. Detail in §1 |

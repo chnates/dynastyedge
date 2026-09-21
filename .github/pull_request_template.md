@@ -40,7 +40,7 @@ Highest rung this PR reaches (see `dynastyedge-validation-and-qa` §1):
 Machine gates — all three must pass before merge, and CI enforces them:
 
 - [ ] `npm run lint` exits 0
-- [ ] `npm test` — **679 passing**. A count near 636 means `node_modules` is
+- [ ] `npm test` — **714 passing**. A count near 671 means `node_modules` is
       missing; run `npm ci` before debugging anything. (The gap between the two
       is **43** and has held across every change — an unchanged gap means every
       test you added loads with no `node_modules`, i.e. none reached React or
@@ -54,6 +54,9 @@ Applicable checks:
 - [ ] **Data / computation logic** → real-data spot-check, or marked NETWORK REQUIRED for the owner
 - [ ] **Best-effort feed touched** (news · values-history · trade-values · rookie-intel)
       → degradation verified: on any failure the section **hides**, never errors, never retry-loops
+- [ ] **Permanent archive touched** (trade-values · values-archive · values-consensus)
+      → an unpriceable/unread asset writes **`null`, never 0**; the publish step still
+      carries the previous file forward from the branch and aborts rather than push without it
 - [ ] **No new dependencies** — `git diff package.json` empty, or owner-approved
 - [ ] **No new raw `fetch()`** — every network call goes through `src/utils/fetchJSON.js`
 

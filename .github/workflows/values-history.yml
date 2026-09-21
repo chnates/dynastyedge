@@ -55,6 +55,9 @@ jobs:
       - name: Archive monthly values snapshot
         continue-on-error: true   # best-effort — publish step preserves the old archive
         run: node scripts/snapshot-values-archive.mjs
+      - name: Archive the three-source valuation consensus
+        continue-on-error: true   # best-effort — publish step preserves the old archive
+        run: node scripts/snapshot-consensus.mjs
       - name: Publish snapshots to the values-history branch
         run: |
           mkdir -p /tmp/valuesrepo && cd /tmp/valuesrepo
@@ -100,10 +103,29 @@ jobs:
           elif [ -n "$PREV" ] && git cat-file -e "$PREV:values-archive.json" 2>/dev/null; then
             git checkout "$PREV" -- values-archive.json
           fi
+          # Three-source consensus archive: same permanent-carry-forward
+          # contract. It is the ONLY record of who disagreed with whom on a
+          # given day, and a trade-time price cannot be recomputed in
+          # hindsight — so a run whose sources all failed must leave
+          # yesterday's file exactly where it is.
+          if [ -f "$GITHUB_WORKSPACE/values-consensus.json" ]; then
+            cp "$GITHUB_WORKSPACE/values-consensus.json" .
+          elif [ -n "$PREV" ] && git cat-file -e "$PREV:values-consensus.json" 2>/dev/null; then
+            git checkout "$PREV" -- values-consensus.json
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add values-history.json
           if [ -f trade-values.json ]; then git add trade-values.json; fi
           if [ -f values-archive.json ]; then git add values-archive.json; fi
+          if [ -f values-consensus.json ]; then git add values-consensus.json; fi
           git commit -m "Update values history"
           git push --force "$REMOTE" values-history
+      # AFTER the publish, never before — the day's data is already on the
+      # branch by the time this decides to shout, so the alarm can never cost
+      # data. NOT continue-on-error: failing the run is the whole point, since
+      # that is what turns GitHub's own notification into the warning. Every
+      # snapshot step above is continue-on-error, so without this a dead source
+      # (or a script that died outright) leaves the run GREEN forever.
+      - name: Alarm if a valuation source has gone dark
+        run: node scripts/check-source-health.mjs --archive values-consensus.json
