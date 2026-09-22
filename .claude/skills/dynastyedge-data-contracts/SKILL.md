@@ -342,9 +342,10 @@ Schema (verified against writer and readers, 2026-09-04):
     "playerItems": 127,
     "withPlayerIds": 120,
     "withAthleteIds": 62,
-    "spanHours": 159,
-    "sources": { "ESPN API": 50, "RotoWire page": 25, "ESPN RSS": 0 },
-    "sourceMisses": { "ESPN RSS": 14 }
+    "spanHours": 147,          // max − min over ALL items — stragglers set it
+    "depthHours": 52,          // p90 age of the player window — read THIS (2026-09-22)
+    "sources": { "ESPN API": 50, "RotoWire page": 25, "Yahoo": 50 },
+    "sourceMisses": { "ESPN API": 0, "Yahoo": 0 }
   },
   "items": [
     {

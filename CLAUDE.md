@@ -391,15 +391,16 @@ architecture:
   breadth held (**207 distinct players** against the collapse's 97), so the
   cap was buying breadth and simply running out of room. The 7-day window had
   **never once bound at either cap**. The window retained ~7.1 player items/h
-  after diversity eviction; 168h at that rate is ~1200. **Until the span
-  reaches 168h, "7 days" is the policy's ceiling, not a measured depth** — the
+  after diversity eviction; 168h at that rate is ~1200. **Until `depthHours`
+  reaches ~168h, "7 days" is the policy's ceiling, not a measured depth** — the
   cap fills over several days of accumulation (evicted items do not come
-  back), so re-read `spanHours` about a week after 2026-09-22 before calling
+  back), so re-read `depthHours` about a week after 2026-09-22 before calling
   it met. If the cap pins again below 168h, correct this line to the measured
   depth rather than raising the cap a third time on the same argument.
-  **`spanHours` is the number to watch, never `playerItems`**: a feed pinned
+  **`depthHours` is the number to watch, never `playerItems`**: a feed pinned
   at its cap is exactly what a healthy full feed looks like, which is how the
-  2026-09 collapse ran for days unnoticed.
+  2026-09 collapse ran for days unnoticed. (Nor `spanHours` — see the
+  `coverage` block: the first run at 1200 read span 147h at depth 52h.)
 - **Size the feed by its WIRE bytes, not its raw bytes.**
   `raw.githubusercontent.com` serves the feed gzipped: measured 2026-09-12,
   320 items were 141KB raw but **37KB on the wire** (~114 B/item); 2026-09-22,
@@ -441,8 +442,8 @@ architecture:
   blurb than miss it). The article sheet flags this case explicitly, reading
   whichever of `playerIds` / `athleteIds` is longer.
 - **`coverage` block.** The feed carries `{ total, playerItems, playerCap,
-  distinctPlayers, withPlayerIds, withAthleteIds, spanHours, sources,
-  sourceMisses }` next to `updatedAt`, so feed health is
+  distinctPlayers, withPlayerIds, withAthleteIds, spanHours, depthHours,
+  sources, sourceMisses }` next to `updatedAt`, so feed health is
   inspectable and the next measurement of this pipeline has a baseline.
   **`sourceMisses` counts CONSECUTIVE runs each source has returned nothing**,
   carried forward in the feed because a force-pushed feed has no history of its
@@ -450,16 +451,27 @@ architecture:
   `node scripts/dev/news-coverage.mjs` reports it against the live feed (or a
   local file) along with how many of the owner's rostered players the app
   actually resolves — that is the pipeline's acceptance metric.
-  **`spanHours` and `distinctPlayers` are the two numbers that diagnose a
+  **`depthHours` and `distinctPlayers` are the two numbers that diagnose a
   degraded window, and `playerItems` is the one that hides it.** The 2026-09
   collapse ran for days with `playerItems` sitting at exactly its cap, which
-  reads as a full, healthy feed; span was what told the story, and distinct
-  players was what the cap was failing to buy. `playerCap` ships alongside
+  reads as a full, healthy feed; depth was what told the story, and distinct
+  players was what the cap was failing to buy.
+  **`depthHours`, not `spanHours` (2026-09-22).** `spanHours` is max − min over
+  every item, so a handful of stragglers set it — invisible while the cap
+  evicted the oldest items first, and exposed the moment the cap was raised:
+  one run moved `spanHours` **54h → 147h** on three week-old items from The
+  Athletic's current pull, while the player window's p90 age went **51h →
+  52h**. `depthHours` (`scripts/newsCoverage.mjs`, pinned by
+  `tests/newsCoverage.test.mjs`) is the **p90 age of the player items,
+  measured from the newest one** — under 10% of the window can move it.
+  `spanHours` still ships, unchanged in meaning, for any reader that has it. `playerCap` ships alongside
   `playerItems` so "is the cap binding?" is answerable from the feed alone
   rather than by reading the script.
   **The drawer's News row reads it** (2026-09-12, NEWS-2): one indented line
   under the row — *"5d deep · 119 players"* — amber under
-  `NEWS_SPAN_THIN_HOURS` (48). It shows **depth, deliberately not item count**:
+  `NEWS_SPAN_THIN_HOURS` (48). It reads `depthHours`, falling back to
+  `spanHours` only for a feed that predates the field; on `spanHours` the
+  2026-09-22 feed would have read "6d deep" at two days' real depth. It shows **depth, deliberately not item count**:
   during the collapse the item count sat at exactly its cap, which is what a
   healthy full feed looks like. Versionless and best-effort — a feed carrying
   no `coverage` (or no `distinctPlayers`) renders a shorter line or none at
@@ -5645,6 +5657,7 @@ dynastyedge/
 │       └── rookie-intel.yml   ← daily rookie depth-chart + draft-capital feed → rookie-intel branch; `mode` input also runs the two CFBD analyses (probe · college-backtest), which publish nothing
 ├── scripts/
 │   ├── fetch-news.mjs          ← multi-source news fetcher (runs in Actions)
+│   ├── newsCoverage.mjs        ← THE feed's depth metric (`coverage.depthHours`), pure + tested: p90 age of the player window. Exists because `spanHours` is max − min and three stragglers moved it 54h → 147h the moment the cap stopped evicting them
 │   ├── newsRetention.mjs       ← THE feed's retention policy, pure + tested: diversity-aware eviction, so the item cap can never again bind before the 7-day time window (which is what silently collapsed the feed to 30h)
 │   ├── fantasyCalcValues.mjs   ← THE snapshot pipelines' FantasyCalc reader, pure + tested: classify by id SHAPE (picks carry synthetic non-numeric ids since 2026-07) and price a pick down the app's own ladder, ending in NULL rather than 0. Three scripts each carried a copy; two were wrong, and the trade archive wrote every pick as 0 for two months
 │   ├── sourceHealth.mjs        ← THE multi-source alarm policy, pure + tested and shared by BOTH pipelines: when has a source stopped contributing, and when is that a persistent gap rather than a blip. Exists because "degrades quietly" had become "fails invisibly" — ESPN RSS sat at 0 items in the live feed, and FantasyPros before it, both found by hand months late
@@ -5897,6 +5910,7 @@ dynastyedge/
 │   ├── fantasyCalcValues.test.mjs   ← the pipelines' FantasyCalc reader: a synthetic non-numeric id is a PICK (the live bug), a pick with no id still is (the pre-2026-07 shape), the season-median → generic-median → NULL ladder, a slot entry never polluting a round median, and the old presence-based classifier kept as an executable regression statement
 │   ├── sourceHealth.test.mjs        ← the alarm, and the RESTRAINT as much as the firing: a 3-day gap fires, a 1-day blip does NOT, recovery resets a consecutive count, a fresh archive never alarms before it has a window of history, a short coverage array reads as unread rather than read, one dark source never implicates the healthy ones, and the feed's threshold is deliberately NOT the archive's
 │   ├── valuationSources.test.mjs    ← the three-source readers: "NA" as a NULL sentinel rather than a key every unmapped player collapses onto, KTC joined on mfl_id with the Frank Gore Jr./Sr. collision pinned from both sides, superflexValues.value never the TE-premium siblings, the old `var playersArray` shape kept as an executable regression statement, and the merge contract — a failed source is all-null with asOf null (never 0), erases nothing, back-fills nothing, and columns are NEVER pruned by time
+│   ├── newsCoverage.test.mjs        ← the depth metric: a few stragglers cannot set it (the 54h → 147h case), a genuinely deep window reads deep, general items excluded, measured from the newest player item
 │   ├── newsRetention.test.mjs       ← the news window's retention policy: newest-N-per-player, a redundant item losing to an OLDER item about an uncovered player, breadth preserved at every k, roundups charging every player they name, and an id-less item never dropped by quota
 │   ├── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
 │   ├── leagueState.test.mjs         ← buildLeagueState: string-id normalization across mixed-shape payloads + the '0' sentinel (rule 8), unranked players kept at value 0 and the skip-then-self-heal path (rule 7), a pick at its ORIGINAL owner's slot vs round medians (Feature 1), FAAB read from settings, identity as runtime state, input immutability
@@ -5929,11 +5943,11 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 636 / # pass 631
+honestly:** instead of "cannot find module" it prints `# tests 704 / # pass 699
 / # fail 5`, which reads like a code regression. A file that cannot load never
-runs its tests, so the count silently drops from **742** to 699.
+runs its tests, so the count silently drops from **747** to 704.
 `npm run build` in the same state fails with `sh: 1: vite: not found`.
-**If the test count isn't 742, run `npm ci` before debugging anything.**
+**If the test count isn't 747, run `npm ci` before debugging anything.**
 
 The pair was re-measured 2026-09-19 (MCP phase 1b) by renaming `node_modules`
 aside, and it had drifted seven times before that: 178/130, 177/115, 219/136,
@@ -5955,6 +5969,10 @@ those four raise only the first number. The 2026-09-07 trade-engine work added
 the broken-state count stayed at 152; the 2026-09-12 news-retention work moved
 both, because `newsRetention.test.mjs` imports only a zero-dependency pure
 module. **Re-measure both whenever the suite grows.**
+
+The news depth metric (2026-09-22, NEWS-4) moved both by the same 5
+(742/699 → **747/704**), the gap holding at 43: `newsCoverage.test.mjs`
+imports one zero-dependency script module and nothing else.
 
 `find_trade_targets`, SMALL-1 and the pick-identity fix (2026-09-22) moved
 both by the same 23 (719/676 → **742/699**), the gap holding at 43 — and here
@@ -6015,7 +6033,8 @@ regression to the next session, which is the exact confusion the block exists
 to prevent, so re-measure rather than incrementing what is written.
 
 The useful invariant survived the drift and is worth preferring to either
-count: **the gap between them is 43 and has not moved.** 742 − 699 = 43,
+count: **the gap between them is 43 and has not moved.** 747 − 704 = 43,
+742 − 699 = 43,
 719 − 676 = 43, 714 − 671 = 43, 698 − 655 = 43,
 679 − 636 = 43, 669 − 626 = 43, 639 − 596 = 43,
 630 − 587 = 43, 589 − 546 = 43, and 538 − 495 = 43 before that. That is the number of tests living in the five files

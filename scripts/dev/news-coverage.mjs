@@ -16,6 +16,7 @@
 // Nothing in src/ imports this.
 
 import { readFileSync } from 'node:fs'
+import { windowDepthHours } from '../newsCoverage.mjs'
 
 const LEAGUE_ID = '1313933520715907072'
 const MY_ROSTER_ID = 6
@@ -120,7 +121,8 @@ const name = id => playerDB[id]?.full_name ?? id
 console.log(`\nFeed: ${arg ?? NEWS_URL}`)
 console.log(`updatedAt: ${feed.updatedAt ?? '—'}`)
 console.log(`\nitems:                 ${items.length}`)
-console.log(`span:                  ${spanHrs.toFixed(1)}h`)
+console.log(`depth (p90, player):   ${windowDepthHours(items)}h   ← the number to watch`)
+console.log(`span (max − min):      ${spanHrs.toFixed(1)}h   (a few stragglers set this)`)
 console.log(`carry athleteIds:      ${withAthleteIds} (${((withAthleteIds / (items.length || 1)) * 100).toFixed(0)}%)`)
 console.log(`resolved to playerIds: ${withPlayerIds} (${((withPlayerIds / (items.length || 1)) * 100).toFixed(0)}%)`)
 console.log(`name a skill player:   ${namesSkillHeadline} (${((namesSkillHeadline / (items.length || 1)) * 100).toFixed(0)}%) — headline match, app rules`)

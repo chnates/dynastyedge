@@ -30,6 +30,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 
+import { windowDepthHours } from './newsCoverage.mjs'
 import { retainDiverse } from './newsRetention.mjs'
 import { trackSourceMisses } from './sourceHealth.mjs'
 
@@ -52,7 +53,8 @@ const MAX_STORY = 600
 // rate is ~1200. Projected wire size at 1200+80: ~144KB, against the 5–8MB
 // player DB the phone already pulls once a session.
 //
-// The number to watch is `coverage.spanHours`, NOT `playerItems`: a feed
+// The number to watch is `coverage.depthHours`, NOT `playerItems` (and not
+// `spanHours`, which a few stragglers can set — see newsCoverage.mjs): a feed
 // pinned at its cap is exactly what a healthy full feed looks like, and that
 // is how the last collapse ran for days unnoticed.
 const PLAYER_MAX = 1200
@@ -432,6 +434,9 @@ const coverage = {
   withPlayerIds: items.filter(i => (i.playerIds ?? []).length > 0).length,
   withAthleteIds: items.filter(i => (i.athleteIds ?? []).length > 0).length,
   spanHours: times.length ? Math.round((Math.max(...times) - Math.min(...times)) / 36e5) : 0,
+  // THE depth number: p90 age of the player window. spanHours above is max −
+  // min over every item and a few stragglers set it — see newsCoverage.mjs.
+  depthHours: windowDepthHours(items),
   sources: sourceCounts,
   // Consecutive runs each source has returned nothing, carried forward in the
   // feed because a force-pushed feed has no history of its own to count from.
@@ -445,7 +450,7 @@ writeFileSync(OUT_FILE, JSON.stringify({ updatedAt: new Date().toISOString(), co
 console.log(
   `Wrote ${OUT_FILE}: ${items.length} items ` +
   `(${coverage.playerItems}/${PLAYER_MAX} player, ${coverage.distinctPlayers} distinct players, ` +
-  `${coverage.withPlayerIds} resolved, ${coverage.spanHours}h span)`,
+  `${coverage.withPlayerIds} resolved, ${coverage.depthHours}h deep, ${coverage.spanHours}h span)`,
 )
 console.log(
   players.length > keptPlayers.length

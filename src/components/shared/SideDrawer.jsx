@@ -56,8 +56,13 @@ function formatAgo(ts) {
 // NOT shown: during the 2026-09 collapse it sat at exactly its cap, reading as
 // a healthy full feed while the window shrank to a day. Returns {} when the
 // feed carried no usable coverage block, so the caller renders nothing.
+//
+// Depth is `depthHours` (p90 age of the player window) where the feed carries
+// it. `spanHours` is only the fallback for an older feed: it is max − min over
+// every item, and once the cap stopped evicting stragglers three week-old items
+// moved it 54h → 147h on a window that was still ~2 days deep.
 function newsHealth(coverage) {
-  const hours = Number(coverage?.spanHours)
+  const hours = Number(coverage?.depthHours ?? coverage?.spanHours)
   if (!Number.isFinite(hours) || hours <= 0) return {}
   const players = Number(coverage?.distinctPlayers)
   const depth = hours < 48 ? `${hours}h deep` : `${Math.round(hours / 24)}d deep`
