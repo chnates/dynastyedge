@@ -326,9 +326,10 @@ copies win on content, but the first `published` we recorded stands**, so an
 item cannot float back to the top by being re-listed. Exits 1 (keeping the
 published feed) only when no source returned anything AND nothing was retained.
 
-Eleven sources as of 2026-09-04 — ESPN news API, RotoWire *page*, RotoWire
-RSS, Yardbarker, PFF, The Athletic, ESPN RSS, PFT, CBS, Sporting News, Yahoo.
-FantasyPros was removed (all three endpoints dead). Adoption rationale and the
+Ten sources as of 2026-09-22 — ESPN news API, RotoWire *page*, RotoWire
+RSS, Yardbarker, PFF, The Athletic, PFT, CBS, Sporting News, Yahoo.
+FantasyPros was removed (all three endpoints dead); ESPN RSS was removed
+2026-09-22 (it answers GitHub's runners with an empty HTTP 202). Adoption rationale and the
 ten rejected candidates: `docs/analysis/news-sources-2026-09.md`.
 
 Schema (verified against writer and readers, 2026-09-04):

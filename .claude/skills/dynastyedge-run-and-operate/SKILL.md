@@ -173,10 +173,10 @@ GitHub Actions cron is **UTC**.
   survives and the next run self-heals. Only a never-existing branch (first
   run) proceeds without it.
 - **Step 2 — `node scripts/fetch-news.mjs`** (repo root cwd in Actions). Tries
-  **eleven sources**, each best-effort with a 20s timeout and a browser
+  **ten sources**, each best-effort with a 20s timeout and a browser
   User-Agent: ESPN news API (JSON — the only source shipping `athleteIds`),
   RotoWire's news *page* (scraped `news-update__*` markup — the most
-  player-dense source), RotoWire RSS, Yardbarker, PFF, The Athletic, ESPN RSS,
+  player-dense source), RotoWire RSS, Yardbarker, PFF, The Athletic,
   PFT, CBS, Sporting News, Yahoo. A failing source is logged and skipped. It
   then fetches Sleeper's player DB to resolve items to `playerIds` — also
   best-effort; without it, ranking falls back to recency.
@@ -274,9 +274,11 @@ GitHub Actions cron is **UTC**.
   delivered ~7.4 runs/day). A per-source failure is caught inside
   `fetch-news.mjs` and recorded as a `0`, which is the right contract and was
   also completely invisible — **ESPN RSS sat at 0 items until it was found by
-  hand on 2026-09-21.** Probe the URL yourself before assuming the source is
-  dead: it returned 25 items fine from outside Actions, so this is more likely
-  an IP block or a timeout than a shape change.
+  hand on 2026-09-21.** Probe the URL yourself, then READ THE RUN LOG: it
+  returned 25 items from outside Actions and an **empty HTTP 202** to the
+  runners (a 2xx, so nothing threw), and was removed 2026-09-22. An RSS source
+  that parses to 0 now logs status / final URL / content-type / size / head, so
+  the log names the cause instead of printing a bare "0 items".
 
 ### 3c. Rookie intel pipeline (`.github/workflows/rookie-intel.yml`)
 

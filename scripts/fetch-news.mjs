@@ -240,6 +240,14 @@ const rss = (source, url) => async () => {
 // player — the reason each one is here, and the reason FantasyPros is not:
 // both of its player-news endpoints return 404 and have been contributing
 // nothing.
+//
+// ESPN RSS (espn.com/espn/rss/nfl/news) was REMOVED 2026-09-22 (NEWS-7). It
+// serves 25+ items to a sandbox or a browser, and to GitHub's runners it
+// answers HTTP 202 with an EMPTY text/html body — a bot-manager deferral, not a
+// feed. A 202 is `res.ok`, so it never threw; it parsed an empty string to 0
+// items for every run it was measured on. Unreachable from where this runs is
+// dead for our purposes. The ESPN news API above is unaffected and carries
+// ESPN's stories with athlete ids.
 const SOURCES = [
   ['ESPN API',      espnApi],                                                                  // athlete ids
   ['RotoWire',      rss('RotoWire', 'https://www.rotowire.com/rss/news.php?sport=NFL')],       // 100%, 5/pull, exact times
@@ -247,7 +255,6 @@ const SOURCES = [
   ['Yardbarker',    rss('Yardbarker', 'https://www.yardbarker.com/rss/sport/2')],              // 45%
   ['PFF',           rss('PFF', 'https://www.pff.com/feed')],                                   // 40%
   ['The Athletic',  rss('The Athletic', 'https://www.nytimes.com/athletic/rss/nfl/')],         // 33%, 100/pull
-  ['ESPN RSS',      rss('ESPN', 'https://www.espn.com/espn/rss/nfl/news')],                    // 33%
   ['PFT',           rss('PFT', 'https://www.nbcsports.com/profootballtalk.rss')],              // 30%
   ['CBS',           rss('CBS', 'https://www.cbssports.com/rss/headlines/nfl/')],               // 28%
   ['Sporting News', rss('Sporting News', 'https://www.sportingnews.com/us/rss')],              // 20%

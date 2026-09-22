@@ -646,33 +646,43 @@ ESPN RSS gap with the real message. Thresholds driven in both directions —
 fresh archive never alarms, a dead script alarms. Tests 698 → **714**; without
 `node_modules` **671**, the gap holding at **43**.
 
-### NEWS-7 — ESPN RSS returns nothing to Actions while working everywhere else
+### NEWS-7 — ESPN RSS returns nothing to Actions while working everywhere else **CLOSED 2026-09-22 — source REMOVED**
 
-**Found by NEWS-6, deliberately NOT fixed in that change.** `ESPN RSS`
-(`https://www.espn.com/espn/rss/nfl/news`) contributes **0 items** to every
-run, and the count is written from `fetch-news.mjs`'s **catch** branch, so the
-fetch is throwing rather than parsing empty.
+**The recorded diagnosis was wrong, and reading the log is what showed it.**
+This entry said the 0 was "written from `fetch-news.mjs`'s **catch** branch, so
+the fetch is throwing", and left two causes open: an IP block (403) or a
+timeout. The scheduled run's log (run 1230) read **`ESPN RSS: 0 items`** — not
+`FAILED — …` — in **~95ms**. So it never threw and never came near the 20s
+budget; both candidate causes were ruled out by the first line of evidence.
 
-**What is ruled out:** the feed is alive (HTTP 200, 15KB, **25 `<item>`
-blocks**), the shipped `parseRss` regex matches all 25 of them, the CDATA
-titles are handled by `decodeEntities`, and `get()` already sends a browser
-User-Agent. So it is neither dead nor a parser bug.
+**What it actually was.** The log could not name a cause, because the script
+printed nothing about a 2xx that parsed empty. So the first change added that
+line (status, final URL, content-type, size, first bytes of the body) and ran
+the workflow from this branch (run 1231). It read:
 
-**What is left:** ESPN blocking GitHub Actions' IP range, or a timeout inside
-the 20s budget. **Neither is reproducible from a sandbox**, which is exactly
-why this was not fixed blind — a guessed fix to a failure you cannot observe is
-how you end up with two bugs.
+> `ESPN: HTTP 202 but 0 <item> blocks — url https://www.espn.com/espn/rss/nfl/news · text/html; charset=UTF-8 · 0 bytes`
 
-**Cost of leaving it:** one of eleven sources, and a mid-density one (33% of
-items naming a player). The other ten are working, and the general bucket has
-its own cap, so the loss is coverage breadth rather than volume.
+**An empty 202 is a bot-manager deferral, not a feed.** `res.ok` is true for any
+2xx, so `get()` returned `''` and `parseRss` found nothing. From this sandbox,
+the same request with the same User-Agent got **HTTP 200, `text/xml`, 17,306
+bytes, 29 items**. So the source is alive and ESPN's edge will not serve it to
+GitHub's runners — the IP-block case in substance, arrived by a status code no
+one had guessed.
 
-**Trigger:** the next time anyone can read a real Actions run log for this
-workflow — the failure message is printed there (`ESPN RSS: FAILED — …`) and
-names the cause outright. **The NEWS-6 alarm will now surface it on every run**
-rather than it sitting silent. If the answer is an IP block, the options are to
-drop the source or move it behind the ESPN news **API**, which already works
-from Actions and is the feed's strongest source.
+**Removed**, per the alarm's own rule (a source that is genuinely gone from
+where this runs must leave the list, or the alarm stops meaning anything). It
+was at **8 consecutive misses against `DARK_AFTER.feed` 12** — about a day and a
+half from failing the workflow on every run. `trackSourceMisses` iterates only
+the current run's sources, so removing the source drops its counter rather than
+carrying a stale one forward.
+
+**Cost:** breadth, not volume. ESPN's stories still arrive through the ESPN news
+API (the first source, and the only one shipping athlete ids).
+
+**Kept:** the zero-item diagnostic, so the next source to die this way names
+itself in the run log. **The transferable lesson:** a best-effort source has
+*three* ways to fail, not two — throw, parse-empty on a real feed, and a 2xx
+that is not a feed at all — and only the first one was ever logged.
 
 ### PIPE-2 — Phase 4a: the three-source valuation archive **SHIPPED 2026-09-21**
 

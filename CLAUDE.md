@@ -292,7 +292,7 @@ architecture:
 
 - `.github/workflows/news.yml` **asks** to run twice an hour (cron
   `17,47 * * * *`, plus manual `workflow_dispatch`). It runs `scripts/fetch-news.mjs`, which
-  pulls **eleven** sources, merges them into the **previously published
+  pulls **ten** sources, merges them into the **previously published
   feed**, resolves each item to the players it names, ranks player news above
   general news, and **force-pushes a single-commit `news-data` branch**
   containing `news.json`. Each item carries `headline`, `story` (≤600 chars),
@@ -315,7 +315,7 @@ architecture:
   adoption — see `docs/analysis/news-sources-2026-09.md` for the full probe,
   including the ten rejected candidates): ESPN news API (the only source that
   ships `athleteIds`), **RotoWire's news page**, RotoWire RSS, Yardbarker,
-  PFF, The Athletic, ESPN RSS, PFT, CBS, Sporting News, Yahoo. The percentage
+  PFF, The Athletic, PFT, CBS, Sporting News, Yahoo. The percentage
   of a source's items naming a real player is the reason each is on the list;
   Yahoo (8%) still ships because the News tab wants general items too, it just
   loses every tiebreak.
@@ -326,6 +326,19 @@ architecture:
     literally `Player: Note`, the shape the app matches on. It is the single
     most player-dense source in the pipeline. Markup is more fragile than an
     RSS contract, so it sits in the same best-effort `try` as everything else.
+  - **ESPN RSS is gone (2026-09-22, NEWS-7) — alive everywhere except where
+    this runs.** `espn.com/espn/rss/nfl/news` serves 25+ items to a browser
+    or a sandbox, and to GitHub's runners it answers **HTTP 202 with an EMPTY
+    `text/html` body** — a bot-manager deferral, not a feed. A 202 is
+    `res.ok`, so the fetch never threw: it parsed an empty string to 0 items,
+    on every run measured (8 consecutive by the time the log was read). The
+    earlier diagnosis — "written from the catch branch, so it is throwing" —
+    was wrong, and both candidate causes it named (403, timeout) were wrong
+    with it; the empty 202 was only visible once the script was made to print
+    what it received. **An RSS source that 2xx-parses to nothing now logs its
+    status, final URL, content-type, size and first bytes**, so the next one
+    names itself in the run log. The ESPN news API is unaffected and remains
+    the first source.
   - **FantasyPros is gone.** All three of its endpoints are dead
     (`/nfl/rss/player-news.php` 404, `/nfl/rss/news.php` 404,
     `/rss/player-news.xml` 200-with-empty-body). It was the most
@@ -446,8 +459,8 @@ architecture:
   `site.web.api.espn.com/apis/common/v3/...`) — these are CORS-blocked in
   practice (and 403 server-side) but cost nothing and degrade silently.
 - **News must never block a panel, show an error, or retry-loop.** On any
-  failure the news section simply hides. Verified end to end: with all eleven
-  sources AND the player DB unreachable the script republishes the retained
+  failure the news section simply hides. Verified end to end: with every
+  source AND the player DB unreachable the script republishes the retained
   window intact; with no previous feed either, it exits 1 without writing, so
   the branch keeps the feed it has.
 - **Coverage, measured (2026-09-04).** Before: 100 items, 25.7h deep, 25%
@@ -481,7 +494,9 @@ run is **green whatever they did**.
 
 **It was not hypothetical. Measured 2026-09-21: ESPN RSS had been contributing
 0 items to the live feed, while returning 25 perfectly good items to anyone who
-asked from elsewhere.** Nothing surfaced it. That is the second instance of
+asked from elsewhere.** Nothing surfaced it. (The cause, read from the Actions
+log on 2026-09-22: ESPN answers the runners with an **empty HTTP 202** — a 2xx,
+so nothing threw. The source was removed; see the news pipeline section.) That is the second instance of
 this exact shape — FantasyPros, "the most player-focused source in the old
 list", was dead across all three endpoints and "had been contributing nothing"
 until a hand probe found it months later. Twice is a pattern, so it gets an
