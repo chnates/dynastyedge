@@ -27,6 +27,7 @@ import { buildTradeAnswer, renderTradeText, isPickId } from './tools/analyzeTrad
 import { buildLineupAnswer, renderLineupText } from './tools/lineupAdvice.js'
 import { buildOddsAnswer, renderOddsText } from './tools/playoffOdds.js'
 import { buildNewsAnswer, renderNewsText, MAX_NEWS_LIMIT } from './tools/playerNews.js'
+import { buildTradeTargetsAnswer, renderTradeTargetsText, DEFAULT_LIMIT as TARGETS_DEFAULT_LIMIT, MAX_LIMIT as MAX_TARGETS } from './tools/findTradeTargets.js'
 import { getLiveScores } from './liveScores.js'
 import { getNews } from './news.js'
 
@@ -211,6 +212,33 @@ const sideFitSchema = z.object({
   benchNote: z.string().nullable().optional(),
   starterLossNote: z.string().nullable().optional(),
   landingSpots: z.array(z.any()).optional(),
+})
+
+// One asset inside a suggested package, carrying the id analyze_trade accepts
+// so the handoff is a second call rather than a re-resolution. `id` is NULLABLE
+// on a pick for a reason: two picks on one roster can share a label
+// ("2027 1st"), and this server refuses to guess between them — the same rule
+// resolve_assets keeps about two players sharing a surname.
+const packageAssetSchema = z.object({
+  id: z.string().nullable(),
+  type: z.enum(['player', 'pick']),
+  name: z.string(),
+  position: z.string().optional(),
+  age: z.number().nullable().optional(),
+  value: z.number().nullable(),
+  round: z.number().optional(),
+  ambiguous: z.boolean().optional(),
+})
+
+// One seat's read of a suggested package — the compact form of sideFitSchema,
+// because a board of eight targets showing both seats' full reason arrays is
+// exactly the unbounded output non-negotiable 2 forbids. `concern` is the one
+// line worth the bytes: it is what you would counter with.
+const seatAppealSchema = z.object({
+  appeal: z.string().nullable(),
+  summary: z.string().nullable(),
+  concern: z.string().nullable(),
+  startersDelta: z.number().nullable(),
 })
 
 // `store` and `fetcher` are injectable so the HTTP transport can share ONE of
@@ -1155,6 +1183,103 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
       }
       return {
         content: [{ type: 'text', text: renderNewsText(answer) }],
+        structuredContent: answer,
+        isError: !answer.ok,
+      }
+    }
+  )
+
+  // ── Tool 9 — find_trade_targets ─────────────────────────────────────────
+  //
+  // The question that comes BEFORE analyze_trade. It reads the snapshot and
+  // nothing else — no new source, so `asOf.sources` is the base three and the
+  // closed object it is declared in stays satisfied by construction.
+
+  server.registerTool(
+    'find_trade_targets',
+    {
+      title: 'Find trade targets and what they would cost',
+      description:
+        'Answers "who should I call about, and what would it cost me?" — the question that comes ' +
+        'BEFORE grading a trade. Ranks opponents\' players by your positional need x their value x how ' +
+        'movable they are (three roster facts about the team that holds them), then prices each one with ' +
+        'a concrete package from your own roster, held inside the Analyzer\'s fair band. Every row carries ' +
+        'BOTH seats\' appeal and, where one exists, the pricier package the search declined to pay for ' +
+        'with the premium it would cost — on a fairly-priced offer that premium is usually the thing that ' +
+        'buys a yes. Pass `team` to scout one opponent instead of the league. Works in season and ' +
+        'offseason alike. It does NOT grade: hand the ids to analyze_trade for a verdict.',
+      inputSchema: {
+        position: z.enum(['QB', 'RB', 'WR', 'TE']).optional()
+          .describe('Only target this position. Applied inside the ranking, not to the returned rows, ' +
+                    'so an empty answer means the league has nobody rather than your top few being someone else.'),
+        team: z.string().optional()
+          .describe('Scout ONE opponent: team name, manager handle, or roster id. Scoped mode also keeps ' +
+                    'their best movable pieces at positions you are not short of, flagged fillsNeed: false. ' +
+                    'Omit for the league-wide board. An ambiguous name returns candidates and refuses.'),
+        limit: z.number().int().min(1).max(MAX_TARGETS).optional()
+          .describe(`How many targets to price (default ${TARGETS_DEFAULT_LIMIT}, max ${MAX_TARGETS}). ` +
+                    'The board is always ranked 20 deep, so counts.board is the true total either way.'),
+        leagueId: z.string().optional()
+          .describe('Sleeper league id. Omit for the configured league.'),
+        refresh: z.boolean().optional()
+          .describe('Bypass the ~15 minute snapshot cache and refetch.'),
+      },
+      outputSchema: {
+        ok: z.boolean(),
+        error: z.string().optional(),
+        candidates: z.array(teamCandidate).optional(),
+        asOf: asOfSchema.optional(),
+        league: z.object({
+          leagueId: z.string().nullable(), name: z.string().nullable(),
+          season: z.string().nullable(), isOffseason: z.boolean(), teams: z.number(),
+        }).optional(),
+        team: z.object({
+          rosterId: z.number(), teamName: z.string(), winWindow: z.string().nullable(),
+        }).optional(),
+        positions: z.object({ deficits: z.array(z.string()) }).optional(),
+        mode: z.enum(['league-wide', 'scoped']).optional(),
+        scopedTo: z.object({ rosterId: z.number(), teamName: z.string() }).nullable().optional(),
+        filter: z.object({ position: z.string().nullable() }).optional(),
+        counts: z.object({
+          board: z.number(), returned: z.number(), truncated: z.boolean(),
+          fillsNeed: z.number(), priced: z.number(), inFairBand: z.number(),
+        }).optional(),
+        targets: z.array(z.object({
+          player: playerRowSchema,
+          owner: z.object({
+            rosterId: z.number(), teamName: z.string(), winWindow: z.string().nullable(),
+          }),
+          fillsNeed: z.boolean(),
+          movability: z.number(),
+          package: z.object({
+            assets: z.array(packageAssetSchema),
+            totalValue: z.number(),
+            gapPct: z.number(),
+            over: z.boolean(),
+            inFairBand: z.boolean(),
+            short: z.boolean(),
+            rationale: z.string(),
+            you: seatAppealSchema,
+            them: seatAppealSchema,
+            alternative: z.object({
+              assets: z.array(packageAssetSchema),
+              totalValue: z.number(),
+              appeal: z.string().nullable(),
+              premiumPct: z.number(),
+            }).nullable(),
+          }).nullable(),
+          packageNote: z.string().nullable(),
+        })).optional(),
+        notes: z.array(z.string()).optional(),
+      },
+    },
+    async ({ position, team, limit, leagueId, refresh }) => {
+      const snapshot = await snapshotFor(leagueId, refresh)
+      const answer = buildTradeTargetsAnswer(snapshot, {
+        team, position, limit, myRosterId: config.defaultRosterId,
+      })
+      return {
+        content: [{ type: 'text', text: renderTradeTargetsText(answer) }],
         structuredContent: answer,
         isError: !answer.ok,
       }

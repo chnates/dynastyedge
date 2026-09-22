@@ -7,9 +7,13 @@ knowledge.
 Design spec: [`../MCP_DISCOVERY.md`](../MCP_DISCOVERY.md). Read it first — this
 file covers only what is built.
 
-**Phase 2c (this): eight tools, over stdio AND streamable HTTP — game locks in
-`lineup_advice`, and the first tools to read one of the Actions-published
-static feeds.** Phase 1
+**Nine tools, over stdio AND streamable HTTP.** The ninth,
+`find_trade_targets` (2026-09-22), is the first of `MCP_DISCOVERY.md` §5's
+three deferred phase-two tools and the question that comes *before*
+`analyze_trade` — the server could grade a trade you had already thought of and
+could not answer "who do I call about?". Phase 2c before it added game locks in
+`lineup_advice` and the first tools to read one of the Actions-published static
+feeds. Phase 1
 shipped three prerequisite refactors plus `get_roster`; 1b added the other four
 of `MCP_DISCOVERY.md` §5's set and the weekly data layer; phase 2 added the
 HTTP transport, stateless OAuth and the Vercel packaging, and is **live at
@@ -73,9 +77,23 @@ Every tool also takes `leagueId` per call; these are only the fallbacks.
 | `lineup_advice` | "What do I start, and what's it costing me?" | **In-season only** — the offseason says so, never zeros |
 | `get_playoff_odds` | "Am I making the playoffs — buying or selling?" | The preseason returns a **null** percentage and a labelled preview, never a made-up one |
 | `get_player_news` | "What's the latest on Bowers?" / "Who on my team is hurt?" | Injury body part + notes + the feed; an ambiguous name is **refused**, and silence is a gap in coverage, never good health |
+| `find_trade_targets` | "Who should I call about, and what would it cost?" | Both seats' appeal per row, the package held inside the Analyzer's **fair band**, and the premium that would buy a yes. It does **not** grade — hand the ids to `analyze_trade` |
 
-All eight are documented with their contracts and traps in CLAUDE.md's
+All nine are documented with their contracts and traps in CLAUDE.md's
 **The MCP Server** section. Read that before changing one.
+
+### The one layer with NO TTL, and that is the argument
+
+`find_trade_targets` is the only layer here that does not name a cache
+interval, because it owns **no fetch**: `getTopTradeTargets` and
+`suggestFairPackage` are pure functions of the snapshot the server has already
+fetched, cached and stamped. Its freshness domain IS the snapshot's, and a
+number of its own could only be a second clock disagreeing with the first. A
+derived cache was considered and rejected on a measurement — `getSnapshot`
+builds a fresh object every call, so a cache keyed on snapshot identity would
+never hit. What the ~730ms costs is CPU, and CPU is bounded by how many
+**targets** are priced (`limit`, ~32ms each), never by truncating the candidate
+search inside one.
 
 ### A LOCKED slot is not a decision
 
@@ -133,14 +151,14 @@ mcp/
   tools/
     getRoster.js  findSellHigh.js  recommendFreeAgents.js
     resolveAssets.js  analyzeTrade.js  lineupAdvice.js
-    playoffOdds.js    playerNews.js
+    playoffOdds.js    playerNews.js  findTradeTargets.js
 ```
 
 Tests live with the rest of the suite: `mcpLimit`, `mcpSnapshot`, `mcpWeekly`,
 `mcpSeason`, `mcpStore`, `mcpHttp`, `mcpOauth`, and one file per tool
 (`mcpGetRoster`, `mcpFindSellHigh`, `mcpRecommendFreeAgents`,
 `mcpResolveAssets`, `mcpAnalyzeTrade`, `mcpLineupAdvice`, `mcpPlayoffOdds`,
-`mcpNews`),
+`mcpNews`, `mcpFindTradeTargets`),
 plus `tests/leagueState.test.mjs` and `tests/playoffOdds.test.mjs` for the join
 and the model this all rests on. The tool suites share
 `tests/helpers/mcpFixtures.mjs` — one synthetic league, because several tools

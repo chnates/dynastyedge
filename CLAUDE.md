@@ -831,14 +831,17 @@ app's own analysis code** — not general knowledge. Design spec and the
 owner-confirmed decisions: `MCP_DISCOVERY.md`.
 
 **Status: phase 2c — LIVE and CONNECTED at `https://dynastyedge-mcp.vercel.app/mcp`.**
-**Eight** tools answer over **both** transports: stdio for local runs,
+**Nine** tools answer over **both** transports: stdio for local runs,
 streamable HTTP for the Claude apps, authenticated by GitHub against a
 single-account allowlist. Six are `MCP_DISCOVERY.md` §5's set; the seventh,
 `get_playoff_odds`, came with phase 2a (2026-09-20) alongside the wiring that
 put `analyze_trade`'s Layer 3 on live odds. The eighth,
 **`get_player_news`**, came with phase 2c (2026-09-20) alongside game locks in
 `lineup_advice` — the first tools to read one of the Actions-published static
-feeds.
+feeds. The ninth, **`find_trade_targets`** (2026-09-22), is the first of §5's
+three deferred phase-two tools and the question that comes *before*
+`analyze_trade`: the server could grade a trade you had already thought of and
+could not answer *"who do I call about?"*.
 
 Phase 1 shipped the three prerequisite refactors plus `get_roster`; phase 1b
 added `find_sell_high`, `recommend_free_agents`, `resolve_assets`,
@@ -848,8 +851,9 @@ transport (`http.js`), stateless OAuth 2.1 (`oauth.js` / `oauthRoutes.js` /
 `app.js`) and the Vercel packaging (`api/mcp.js`, `vercel.json`).
 
 **All SEVEN tools confirmed in the connector's own tool list, 2026-09-20** —
-the owner's phone, after phase 2b deployed (phase 2c's `get_player_news` makes
-eight, and the same re-check is owed after it deploys): Grade a trade · Find a sell-high
+the owner's phone, after phase 2b deployed (phase 2c's `get_player_news` and
+2026-09-22's `find_trade_targets` make nine, and the same re-check is owed
+after each deploys): Grade a trade · Find a sell-high
 candidate · Rest-of-season playoff odds · Get a team roster · Weekly start/sit
 advice · Recommend free agents · Resolve player and pick names to ids. That is
 the end of the chain no probe can reach — what the client actually enumerates
@@ -1568,6 +1572,87 @@ bounded-output rule to say nothing), and `get_roster` carries the detail plus a
 single headline on any player Sleeper has a status for. The reader never has to
 know to ask — which was the complaint that produced the tool.
 
+### Tool 9 — `find_trade_targets`
+
+"Who should I call about, and what would it cost?" Optional `position`,
+`limit`, `team`, `leagueId`, `refresh`. `rosterAnalysis.getTopTradeTargets` +
+`tradeAnalysis.suggestFairPackage` — the same two functions Trade › Targets
+runs, so the board on the phone and the answer in the chat cannot disagree.
+
+**It exists because the server could grade a trade and not find one.**
+`analyze_trade` answers a question you have already had; this answers the one
+before it. `MCP_DISCOVERY.md` §5 deferred it to phase two noting the ~730ms
+in-app path, and OPEN-10 then rebuilt exactly the fields that make it worth
+returning — `inFairBand`, both seats' appeal, and `alternative` with its
+`premiumPct`.
+
+- **Every row carries BOTH seats and whether the offer is one the Analyzer
+  will call fair.** A package that reaches the band is the *default*, not a
+  hope: `suggestFairPackage` is held inside `buildFairBand` since OPEN-10, and
+  `inFairBand: false` means nothing you can spare reaches it — an honest
+  near-miss rather than a silent overpay.
+- **`alternative`'s premium is the most actionable field on most rows, and
+  that is a property of fair pricing, not a defect.** A fairly-priced offer
+  gives the other manager no edge on value, so a `Weak for them` is common and
+  the premium that would change it is the negotiating information. Measured
+  live on the owner's board: **6 of 8** read Weak to the partner, and the
+  notes say why rather than leaving a reader to infer a search failure.
+- **The position filter pushes INTO the ranking, never onto the returned
+  rows.** `getTopTradeTargets` slices to a limit before anything downstream
+  sees it, so filtering the slice answers *"which of your top few are RBs?"*
+  and reads as *"who do I call about at RB?"* — and can come back empty when
+  the real answer is a full board. This is the team filter's own ruling
+  (Feature 3) applied to the other argument; `position` is a new **additive**
+  option on `getTopTradeTargets`, and nothing in `src/` passes it — the app's
+  chips still filter the visible 20, which is right for a board you can see
+  all of.
+- **It never guesses which team you meant** (`team`), and scouting your own
+  roster is refused rather than answered with an empty board.
+- **A pick id is emitted only when it is UNAMBIGUOUS.** `suggestFairPackage`
+  labels its pick assets `"2027 1st"` and drops the season/round/originalOwner
+  triple that forms the id, so recovering it means matching on that label —
+  which the app does with a `.find` that silently takes the first of two picks
+  sharing one. A display bug on a screen is a *wrong asset in a graded trade*
+  through an LLM, so two twins resolve to `id: null` with `ambiguous: true` and
+  a note pointing at `resolve_assets`. Same rule as the two DJ Moores.
+- **Bounded output, and the cap can never out-run the app.** Default **8**,
+  max **20** — the app board's own depth — with `counts.board` reporting the
+  full ranked total beside the returned slice and the truncation disclosed in
+  `notes`. Only the returned rows are priced, which is also what bounds the
+  cost.
+- **It does NOT grade**, and says so: hand `package.assets[].id` plus the
+  target's `sleeperId` to `analyze_trade` for a verdict. Running
+  `analyzeTrade` per row is the 1.5s path the extraction of `buildPartnerFit`
+  exists to avoid.
+
+Measured live over the real transport (2026 Week 3): **927ms cold / 268ms
+cached at the default 8 (17,240B)**, 722ms / 36,297B at `limit: 20`, 132ms for
+a scoped scout, 18ms for a refused team name. Top of the owner's board: Malik
+Nabers for Gunnar Helm + Rachaad White + Jordan Love (6,260, inside the band),
+with *"to get a yes: 2029 2nd + Jonathan Taylor (+7% over fair)"*.
+
+### The board's freshness — the one layer here with NO TTL of its own
+
+`weekly.js`, `season.js`, `transactions.js` and `liveScores.js` each argue a
+number, and `find_trade_targets` argues that a number is the **wrong
+instrument**. The four above each own a FETCH. This one owns none:
+`getTopTradeTargets` and `suggestFairPackage` are pure functions of the
+snapshot the server has already fetched, already cached for ~15 minutes and
+already stamped. Its freshness domain is therefore the snapshot's, exactly —
+and a TTL of its own could only ever be a second clock disagreeing with the
+first, which is `store.js`'s trap read from the other direction.
+
+**A derived cache was considered and rejected on a measurement:**
+`getSnapshot` assembles a **fresh object every call** (`generatedAt` is `now`,
+`ageSeconds` recomputed), so a cache keyed on snapshot identity would never
+hit, and one keyed on time would be that second clock.
+
+What the ~730ms buys is **CPU, not requests**, and CPU is bounded the way
+§4e-v says to bound it — by how many **targets** are priced (~32ms each,
+measured on the live league), never by truncating the candidate search inside
+a target. Truncation is what the untruncated search replaced, and the cost of
+a `limit: 20` answer is 722ms of arithmetic over data already in hand.
+
 ### Caching the news feed — and WHY A TOOL beats "let the model search"
 
 `mcp/news.js`, **10 minutes** (`NEWS_STALE_MINUTES` governs the warning, not
@@ -1788,7 +1873,11 @@ driving the real transport found it, which is exactly why "verify live" is a
 gate and not a formality. A new source must be added to that schema. Phase 2c
 added two more — `liveScores` and `news` — and declared both; the trap is
 recorded twice now because it is the single easiest way to ship a response no
-client will accept.
+client will accept. **`find_trade_targets` adds none, deliberately** — it reads
+the snapshot and nothing else, so its `asOf.sources` is the base three and the
+closed object stays satisfied by construction. That was still verified by
+driving a real client over the transport rather than assumed, because "it adds
+no source" is exactly the reasoning that would skip the check.
 
 ### Prerequisite refactors this shipped with
 
@@ -5549,14 +5638,15 @@ dynastyedge/
 │   ├── config.js               ← league / identity / TTLs, env-first: leagueId and rosterId are parameters, not constants
 │   ├── register.mjs            ← registers loader.mjs (deliberate copy of the test suite's — a runnable server must not depend on .claude/skills/)
 │   ├── loader.mjs              ← the extensionless-import resolver hook
-│   └── tools/                  ← all EIGHT are orchestration only, in the shape of TradeAnalyzer.jsx
+│   └── tools/                  ← all NINE are orchestration only, in the shape of TradeAnalyzer.jsx
 │       ├── getRoster.js            ← #1 "what's on my team?"
 │       ├── findSellHigh.js         ← #2 "who's my best sell-high?" — names a CONCRETE partner and return
 │       ├── recommendFreeAgents.js  ← #3 "who should I pick up?" — dynasty value AND this week's projection; a defense is never a general pickup
 │       ├── resolveAssets.js        ← #4 (support) "which Bijan?" — an ambiguous name resolves to NOTHING
 │       ├── analyzeTrade.js         ← #5 "grade this trade" — IDS ONLY; a free-text name is rejected, never guessed
 │       ├── lineupAdvice.js         ← #6 "what do I start?" — IN-SEASON ONLY; a must-fix carries no confidence; a LOCKED slot is never a move
-│       └── playerNews.js           ← #8 "what's the latest on him?" — injury body part + notes + the feed; an ambiguous name is refused, and silence is a gap in coverage, never good health
+│       ├── playerNews.js           ← #8 "what's the latest on him?" — injury body part + notes + the feed; an ambiguous name is refused, and silence is a gap in coverage, never good health
+│       └── findTradeTargets.js     ← #9 "who do I call about, and what would it cost?" — the question BEFORE analyze_trade. The one layer here with NO TTL: it owns no fetch, so its freshness IS the snapshot's and a number of its own would be a second clock. A pick sharing its label with another resolves to NOTHING, never to the first match
 ├── public/
 │   └── favicon.ico
 ├── src/
@@ -5737,7 +5827,7 @@ dynastyedge/
 │   ├── pickTrades.test.mjs          ← slot tiers (as coded), slot pricing fallback, package constraints
 │   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
 │   ├── appVersion.test.mjs          ← reload URL: ?v= before the hash (HashRouter), encoding, null build id
-│   ├── tradeTargets.test.mjs        ← Targets ranking: deficit gate + value floor league-wide, team-scoped mode keeps depth (never empty), fillsNeed flag, and the movability TILT (band under 2×, spare depth outranks an equal-value untouchable, nothing ever hidden)
+│   ├── tradeTargets.test.mjs        ← Targets ranking: deficit gate + value floor league-wide, team-scoped mode keeps depth (never empty), fillsNeed flag, the movability TILT (band under 2×, spare depth outranks an equal-value untouchable, nothing ever hidden), and the POSITION filter applied inside the ranking rather than to the slice — pinned by the case where filtering the sliced top-1 returns nothing
 │   ├── tradeAnalysis.test.mjs       ← OPEN-10 (the suggestion lands inside buildFairBand — asked of that function, never a 0.95/1.05 literal; the pre-2026-09-21 search kept as an EXECUTABLE statement of the bug, so the fixture cannot silently stop exercising it; the overpay demoted to `alternative` with its premium; a target nothing can price fairly still answered and flagged; PROTECT_THRESHOLD unmoved), Layer 3's basis swap (odds score the window in season, tier is the offseason fallback byte-for-byte, a bubble team gets a real read, the printed stance is the one that scored it), the `alternative` (now always HIGHER-appeal — the pricier road the cost-aware search passed over), the phase-2 trade-off (a Strong package costing more than APPEAL_BONUS loses to a Fair one; the fair band and protect threshold still bind), Layer 4's fills/lineup-gain scored ONCE, the my-lineup verdict gate (downgrades an Accept, never upgrades, never fires on noise), verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge, Layer 4 (a benched acquisition reads Weak however valued; the gate downgrades an Accept but never lifts a Decline; landing spots both directions; the pitch speaks from their side), buildPartnerFit's extraction contract (standalone == via analyzeTrade) and its wrapper contract (== buildSideFit from the `them` seat), the my-side read (myFit's facts equal Layer 2's own, it speaks in the second person, and it can NEVER move a verdict — swapped for its opposite or removed, the whole ladder is deepEqual), the two depth charts (marker in/out, getContext read off the POST-trade roster so a WR-for-WR chart stays true), the package's my-side read (present without a partner roster, null without a league, computed after the choice so it never reorders), and the two-phase package builder (phase 2 rejects the piece they have no use for, never unlocks a protected asset, reports no appeal without a partner)
 │   ├── tradeContext.test.mjs        ← the five negotiating signals (fair band, scarcity, roster space, weekly impact, partner activity) — and the contract that NONE of them may move the verdict
 │   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
@@ -5771,7 +5861,8 @@ dynastyedge/
 │   ├── mcpPlayoffOdds.test.mjs      ← get_playoff_odds: the preseason returning a NULL percentage and a labelled PREVIEW (never 0, which reads as eliminated), a POSTED-but-unplayed schedule being ACTIVE rather than preseason, unavailable ≠ preseason, Σ odds === the field size, seedDist computed but not returned, and the stance being getDeadlineVerdict's so a trade grade cannot disagree
 │   ├── mcpNews.test.mjs             ← the news layer + tool 8: `playerIds` as THE join with NO headline-name fallback (the two-DJ-Moores collision, pinned from both sides), athleteIds as the second hop, a roundup FLAGGED as one, Class B degradation stated as a missing source rather than as "no news", and the stale-feed warning near kickoff
 │   ├── mcpLineupAdvice.test.mjs     ← lineup_advice: the offseason returning no summary and no zeros, per-move gains summing EXACTLY to the headline, a must-fix carrying NO confidence, confidencePct being a percentage not a fraction (the ×100 bug that printed "6530%"), and a blocked starter contributing 0
-│   └── helpers/mcpFixtures.mjs      ← ONE synthetic league shared by the six MCP tool suites — four tools read the same object, and four divergent copies is the drift prerequisite C removed from src/
+│   ├── mcpFindTradeTargets.test.mjs ← find_trade_targets: the position filter applied INSIDE the ranking (a filter over the sliced top-1 returns nothing where the real answer is a row), the cap disclosed with the true board beside it, scoped mode keeping their depth pieces, a near-miss stated rather than implying the Analyzer will agree, and two picks sharing a label resolving to NOTHING (the app's own `.find` takes the first silently)
+│   └── helpers/mcpFixtures.mjs      ← ONE synthetic league shared by the seven MCP tool suites — four tools read the same object, and four divergent copies is the drift prerequisite C removed from src/
 ├── index.html
 ├── eslint.config.js             ← ESLint 9 flat config (recommended + react-hooks, src/ + scripts/)
 ├── vite.config.js
@@ -5784,9 +5875,9 @@ the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
 honestly:** instead of "cannot find module" it prints `# tests 636 / # pass 631
 / # fail 5`, which reads like a code regression. A file that cannot load never
-runs its tests, so the count silently drops from **719** to 676.
+runs its tests, so the count silently drops from **740** to 697.
 `npm run build` in the same state fails with `sh: 1: vite: not found`.
-**If the test count isn't 719, run `npm ci` before debugging anything.**
+**If the test count isn't 740, run `npm ci` before debugging anything.**
 
 The pair was re-measured 2026-09-19 (MCP phase 1b) by renaming `node_modules`
 aside, and it had drifted seven times before that: 178/130, 177/115, 219/136,
@@ -5808,6 +5899,13 @@ those four raise only the first number. The 2026-09-07 trade-engine work added
 the broken-state count stayed at 152; the 2026-09-12 news-retention work moved
 both, because `newsRetention.test.mjs` imports only a zero-dependency pure
 module. **Re-measure both whenever the suite grows.**
+
+`find_trade_targets` plus SMALL-1 (2026-09-22) moved both by the same 21
+(719/676 → **740/697**), the gap holding at 43 — and here that equality is the
+check that matters: `mcpFindTradeTargets.test.mjs` drives a tool, so it would
+have shown up as a gap had the tool reached `zod` out of `mcp/server.js` or
+pulled React in through a util. It imports `mcp/tools/findTradeTargets.js` and
+the shared fixture, and nothing else.
 
 OPEN-10 — holding the suggested package inside `buildFairBand` (2026-09-21) —
 moved both by the same 5 (714/671 → **719/676**), the gap holding at 43:
@@ -5860,8 +5958,8 @@ regression to the next session, which is the exact confusion the block exists
 to prevent, so re-measure rather than incrementing what is written.
 
 The useful invariant survived the drift and is worth preferring to either
-count: **the gap between them is 43 and has not moved.** 719 − 676 = 43,
-714 − 671 = 43, 698 − 655 = 43,
+count: **the gap between them is 43 and has not moved.** 740 − 697 = 43,
+719 − 676 = 43, 714 − 671 = 43, 698 − 655 = 43,
 679 − 636 = 43, 669 − 626 = 43, 639 − 596 = 43,
 630 − 587 = 43, 589 − 546 = 43, and 538 − 495 = 43 before that. That is the number of tests living in the five files
 that cannot load, so an unchanged gap means every test added since loads with
