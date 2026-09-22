@@ -39,11 +39,23 @@ const MAX_STORY = 600
 // Retention. Player items are the product, so they get a long window and the
 // lion's share of the cap; general items are context and age out in two days.
 //
-// SIZE: 480 items lands ~55KB ON THE WIRE. raw.githubusercontent serves the
+// SIZE: price it by WIRE bytes, never raw. raw.githubusercontent serves the
 // feed gzipped and gzip is what the phone pays — measured 2026-09-12, 320
-// items were 141KB raw but 37KB gzipped (~114 B/item). Earlier notes sized
-// this feed by its raw bytes and so over-priced the cap by ~4x.
-const PLAYER_MAX = 400
+// items were 141KB raw but 37KB gzipped (~114 B/item); measured 2026-09-22,
+// 480 items were 211KB raw and 53,957 B on the wire (~112 B/item).
+//
+// 1200, raised from 400 on 2026-09-22 (NEWS-4). At 400 the cap bound first,
+// at 54–78h, and the 7-day window had NEVER bound at either cap setting
+// (240, then 400) — the same signature as the 2026-09 collapse, one level up,
+// though breadth held (207 distinct players against the collapse's 97). The
+// window retained ~7.1 player items/h after diversity eviction; 168h at that
+// rate is ~1200. Projected wire size at 1200+80: ~144KB, against the 5–8MB
+// player DB the phone already pulls once a session.
+//
+// The number to watch is `coverage.spanHours`, NOT `playerItems`: a feed
+// pinned at its cap is exactly what a healthy full feed looks like, and that
+// is how the last collapse ran for days unnoticed.
+const PLAYER_MAX = 1200
 const PLAYER_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 const GENERAL_MAX = 80
 const GENERAL_MAX_AGE_MS = 48 * 60 * 60 * 1000

@@ -350,7 +350,7 @@ architecture:
 - **The feed ACCUMULATES.** It used to be a snapshot of one fetch capped at
   100 items, which spanned ~20 hours because 100 general-interest items
   flushed the player news out. Each run now merges into the last run's output,
-  retaining **player items 7 days (400 max, ~3 per player)** and
+  retaining **player items 7 days (1200 max, ~3 per player)** and
   **general items 48 hours (80 max)**. This is what makes a
   source like RotoWire (25 player items per pull) compound across 48 runs a
   day. The workflow therefore reads the previous `news.json` off the
@@ -385,10 +385,27 @@ architecture:
   player holds the same 97 in 152 items and frees 37% of the cap for depth.
   One run of the fix moved span **27.5h → 76h** and unpinned the cap
   (165/400). See `docs/analysis/news-retention-2026-09.md`.
+  **The cap bound again at 400, and was raised to 1200 (2026-09-22, NEWS-4).**
+  Within ten days `playerItems` was pinned at 400/400 with the span at 78h,
+  then 56h — the collapse's signature one level up, with the difference that
+  breadth held (**207 distinct players** against the collapse's 97), so the
+  cap was buying breadth and simply running out of room. The 7-day window had
+  **never once bound at either cap**. The window retained ~7.1 player items/h
+  after diversity eviction; 168h at that rate is ~1200. **Until the span
+  reaches 168h, "7 days" is the policy's ceiling, not a measured depth** — the
+  cap fills over several days of accumulation (evicted items do not come
+  back), so re-read `spanHours` about a week after 2026-09-22 before calling
+  it met. If the cap pins again below 168h, correct this line to the measured
+  depth rather than raising the cap a third time on the same argument.
+  **`spanHours` is the number to watch, never `playerItems`**: a feed pinned
+  at its cap is exactly what a healthy full feed looks like, which is how the
+  2026-09 collapse ran for days unnoticed.
 - **Size the feed by its WIRE bytes, not its raw bytes.**
   `raw.githubusercontent.com` serves the feed gzipped: measured 2026-09-12,
-  320 items were 141KB raw but **37KB on the wire** (~114 B/item). The 400+80
-  cap is ~55KB gzipped. Earlier notes priced this feed at "~100KB, pulled once
+  320 items were 141KB raw but **37KB on the wire** (~114 B/item); 2026-09-22,
+  480 items were 211KB raw and **53,957 B on the wire** (~112 B/item). The
+  1200+80 cap projects to **~144KB gzipped** against ~54KB at 400+80 — still a
+  fraction of the 5–8MB player DB the phone already pulls once a session. Earlier notes priced this feed at "~100KB, pulled once
   per session" from its raw size and so over-priced the cap by ~4×.
 - **Two per-source density traps.** The percentages in
   `docs/analysis/news-sources-2026-09.md` were measured in the **preseason on
@@ -1696,8 +1713,9 @@ search** — which is why the answer is a handoff rather than a choice:
    tools print an explicit instruction to confirm against a live source.** A
    tool that knows its own blind spot is more useful than one silently behind.
 
-Context economy is the quiet fourth reason: the raw feed is 480 items / 141KB,
-and filtered to a roster it is ~2KB.
+Context economy is the quiet fourth reason: the raw feed is up to ~1,280 items
+(~560KB raw, ~144KB gzipped — and gzipped into KV too), and filtered to a
+roster it is ~2KB.
 
 ### Caching the live box score — a FIFTH TTL, and the only SHORT one
 
@@ -3838,8 +3856,11 @@ top-level drawer section (`/news`, violet identity), single view (no
 sub-tabs).
 
 **Zero new data sources.** It reads the same once-per-session aggregated feed
-(`loadNewsFeed` → the `news-data` branch's `news.json`, ≤100 items) used
-everywhere else — see the Player news pipeline.
+(`loadNewsFeed` → the `news-data` branch's `news.json`, up to ~1,280 items
+since the player cap went to 1200) used everywhere else — see the Player news
+pipeline. **The page renders 50 rows at a time with a "Show more"**, the same
+pattern as League › Activity; each date band's count is the full bucket, not
+the rendered slice, so paging never understates how much news there is.
 
 **`useNewsFeed` hook:** returns `{ items, loading }` — the *full* feed
 (newest-first), each item enriched with the best-matched FantasyCalc-ranked

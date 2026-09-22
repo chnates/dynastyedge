@@ -3,7 +3,7 @@ import { useNewsFeed } from '../../hooks/useNewsFeed'
 import { useWatchlist } from '../../hooks/useWatchlist'
 import { relativeTime } from '../../hooks/usePlayerIntel'
 import { POS_TEXT } from '../../utils/positionColors'
-import { Badge, Chip, PositionBand, Row, RuledList, SearchInput, Loading } from '../ui'
+import { Badge, Button, Chip, PositionBand, Row, RuledList, SearchInput, Loading } from '../ui'
 import SectionHeader from '../shared/SectionHeader'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import NewsArticleSheet from '../shared/NewsArticleSheet'
@@ -20,6 +20,11 @@ const FILTERS = [
 ]
 
 const BUCKET_ORDER = ['Today', 'Yesterday', 'Earlier']
+
+// The feed holds up to ~1,280 items since the player cap went to 1200
+// (NEWS-4), and this is the one surface that renders all of it. Page it, the
+// same way League › Activity does, rather than mount every row at once.
+const PAGE_SIZE = 50
 
 function bucketOf(iso) {
   if (!iso) return 'Earlier'
@@ -79,8 +84,11 @@ function NewsRow({ item, onOpen }) {
 export default function NewsView() {
   const { items, loading } = useNewsFeed()
   const { watchlist } = useWatchlist()
-  const [filter, setFilter] = useState('all')
-  const [query, setQuery] = useState('')
+  const [filter, setFilterState] = useState('all')
+  const [query, setQueryState] = useState('')
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const setFilter = id => { setFilterState(id); setVisibleCount(PAGE_SIZE) }
+  const setQuery = q => { setQueryState(q); setVisibleCount(PAGE_SIZE) }
   const [selectedPlayer, setSelectedPlayer] = useState(null)
   const [openArticle, setOpenArticle] = useState(null)
 
@@ -100,12 +108,22 @@ export default function NewsView() {
     })
   }, [items, filter, query, watchSet])
 
-  // Light date grouping; sorted order is preserved within each bucket.
+  // Light date grouping; sorted order is preserved within each bucket. Each
+  // band's `total` counts the whole bucket, so paging never understates how
+  // much news there is; `items` is only what is currently shown.
   const groups = useMemo(() => {
     const map = { Today: [], Yesterday: [], Earlier: [] }
     filtered.forEach(n => { map[bucketOf(n.published)].push(n) })
-    return BUCKET_ORDER.map(label => ({ label, items: map[label] })).filter(g => g.items.length)
-  }, [filtered])
+    let budget = visibleCount
+    return BUCKET_ORDER
+      .map(label => {
+        const all = map[label]
+        const items = all.slice(0, Math.max(0, budget))
+        budget -= items.length
+        return { label, total: all.length, items }
+      })
+      .filter(g => g.items.length)
+  }, [filtered, visibleCount])
 
   if (loading) return <Loading message="Loading news…" />
 
@@ -152,7 +170,7 @@ export default function NewsView() {
       ) : (
         groups.map(group => (
           <section key={group.label}>
-            <PositionBand label={group.label} count={group.items.length} className="mt-5" />
+            <PositionBand label={group.label} count={group.total} className="mt-5" />
             <RuledList>
               {group.items.map((n, i) => (
                 <NewsRow
@@ -164,6 +182,18 @@ export default function NewsView() {
             </RuledList>
           </section>
         ))
+      )}
+
+      {visibleCount < filtered.length && (
+        <Button
+          variant="tinted"
+          size="lg"
+          fullWidth
+          onClick={() => setVisibleCount(c => c + PAGE_SIZE)}
+          className="mt-3"
+        >
+          Show more
+        </Button>
       )}
 
       {selectedPlayer && (
