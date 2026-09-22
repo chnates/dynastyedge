@@ -106,6 +106,13 @@ which beats any amount of feature value.
 | **3–4** | **OPEN-10 — DONE 2026-09-21.** (**MCP-CARRY**, the alternative, is untouched) | The owner picked the fix over the new capability. The board read wrong on 17 of 20 cards; it now reads 18 Fair / 2 Weak from my seat and every suggestion agrees with the Analyzer |
 | **5** | **NEWS-4** (the cap decision) + **NEWS-5** (cron cadence — pick option 1 or 2) + the **MCP connector re-check** on the phone | All small; the last needs the owner's GitHub login and no sandbox can do it |
 
+**Week plan complete 2026-09-22 with OPEN-10 (PR #64).** The owner's call for
+what follows it: **MCP-CARRY's trade-targets tool, with SMALL-1 as its
+prerequisite** — see both items. Day 5's three remain open and small; NEWS-5 is
+effectively settled (the docs are corrected and its option 2 is cosmetic), and
+**NEWS-7's trigger has now fired** — a session with GitHub Actions log access
+can read the failure message this item was waiting for.
+
 **What is deliberately NOT in the week**, so nobody picks it up by accident:
 OPEN-8 (trigger: autumn 2028), OPEN-9 (trigger: ~2027-07, needs 12 monthly
 archive columns and currently holds 3), OPEN-3 (owner ask required), and the
@@ -945,6 +952,14 @@ that is the mistake this item exists to prevent.
 **Status:** open, consolidated 2026-09-21 from the tails of MCP-2a/2b/2c,
 which had scattered it across three items. Nothing here is a correctness bug;
 it is the honest remainder.
+
+**NEXT BUILD (owner call, 2026-09-22): the trade-targets tool, with SMALL-1
+first.** Chosen over the news batch and phase 4b/4c because it is the largest
+capability gap — the server can *grade* a trade you already thought of but
+cannot answer "who do I call about, and what would it cost?", which is the
+question the Targets board exists for. OPEN-10 also just rebuilt that engine,
+so `inFairBand`, `premiumPct` and both seats' appeal are newly available and
+are exactly what the tool would surface.
 
 **Capability not built:**
 - **Three of `MCP_DISCOVERY.md` §5's phase-two tools** — trade targets / fair
@@ -1883,10 +1898,23 @@ actually means is "touched nothing scoring ≥ 0.9" — which is not what it say
 and `PROTECT_THRESHOLD` protects less than its name suggests anyway (core
 starters land on exactly 0.85; only a deficit or a cliff crosses 0.9).
 
+**MEASURED 2026-09-22 on the live board: 9 of 20 rows** say "protects your
+starters" while sending a player who starts — Jonathan Taylor (5,767) on three
+of them, Bo Nix (4,177) on two, TreVeyon Henderson on three, Chase Brown on
+one. It is not an edge case; it is nearly half the board, and it sits one line
+above the appeal reads OPEN-10 just corrected.
+
 **The honest fix:** check the package against
 `buildValueLineup(myRoster).starterIds` and name the starter when one is in
 it. It is a copy fix over a fact the engine already has — no model change, no
 recalibration.
+
+**It is now the PREREQUISITE for MCP-CARRY's trade-targets tool** (owner call,
+2026-09-22), not an independent item. `packageRationale` is the explanation
+string such a tool would return, so shipping the tool first propagates the
+false claim to a second surface — and through an LLM, where
+`MCP_DISCOVERY.md` §7's whole argument is that a wrong fact stops being a
+visibly broken screen and becomes a confident, fluent, wrong answer.
 
 Recorded in §1's 2026-09-06 entry as "found but not acted on"; promoted here
 so it stops living inside another item's write-up.
