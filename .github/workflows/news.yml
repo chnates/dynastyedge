@@ -54,7 +54,13 @@ jobs:
         # retained. The job then fails before the publish step, so the branch
         # keeps the feed it already has.
         run: node scripts/fetch-news.mjs
+      # Only the default branch publishes (same guard as rookie-intel.yml). A
+      # workflow_dispatch aimed at a feature branch is a DRY RUN: the scripts
+      # run and their log is readable, but unreviewed code must never
+      # force-push the production data branch. Added 2026-09-22 after a
+      # branch dispatch did exactly that during NEWS-4/NEWS-7 verification.
       - name: Publish news.json to the news-data branch
+        if: github.ref_name == github.event.repository.default_branch
         run: |
           mkdir -p /tmp/newsrepo && cd /tmp/newsrepo
           git init -b news-data .

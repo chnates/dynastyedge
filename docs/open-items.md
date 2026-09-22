@@ -962,6 +962,18 @@ from the newest one (`scripts/newsCoverage.mjs`, 5 tests). The drawer and
 | sources | 11 (ESPN RSS 0) | 10, all non-zero |
 | sourceMisses | ESPN RSS 7, rest 0 | all 0 |
 
+**How those runs were made, and why it can't happen again.** Runs 1231–1235
+were `workflow_dispatch`es on the feature branch, and because `news.yml`'s
+publish step had no default-branch guard, **each one force-pushed that
+branch's unreviewed code to the live `news-data` feed.** That was the second
+time (the 2026-09-12 retention fix did the same). Both `news.yml` and
+`values-history.yml` now carry `rookie-intel.yml`'s guard, so a branch dispatch
+is a dry run. **Post-merge check (owed):** dispatch `news.yml` on `main` and
+read the published file; expect `playerCap 1200`, a `depthHours` field, ten
+sources, and no `ESPN RSS` key. Until the PR merges, scheduled runs on `main`
+publish the old code (cap 400, ESPN RSS back in), which is correct: the feed
+is `main`'s.
+
 **What is NOT verified, stated plainly:** that the 7-day window binds. The cap
 fills by accumulation and evicted items don't come back, so depth can only grow
 at the arrival rate: ~7 retained items/h, several days to reach 1200. **Trigger
@@ -2155,6 +2167,7 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 | Item | Closed | How |
 |---|---|---|
 | NEWS-7 — ESPN RSS gave Actions nothing | 2026-09-22 | The recorded diagnosis ("catch branch, so it throws — 403 or timeout") was wrong on every count: the log read `0 items` in ~95ms, not `FAILED`. The script was made to print what a zero-item 2xx returned, and the next run read **HTTP 202 · text/html · 0 bytes** — a bot-manager deferral, which `res.ok` accepts. Same URL + UA from outside Actions: 200, 29 items. **Removed** at 8 of 12 consecutive misses; the zero-item diagnostic stays. Detail in §1 |
+| OPS-2 — a branch dispatch could publish production data | 2026-09-22 | Found by the owner's review question. `news.yml` and `values-history.yml` had no default-branch guard on their publish steps (`rookie-intel.yml` did), so NEWS-4/NEWS-7's verification runs, and the 2026-09-12 retention verification before them, force-pushed feature-branch code to the live `news-data` feed. Both now carry `if: github.ref_name == github.event.repository.default_branch`; a branch dispatch is a dry run. |
 | NEWS-4 — the news cap was binding at 400 | 2026-09-22 | Cap-bound at 56h with breadth healthy (207 players), so raised to **1200** (~7.1 retained/h × 168h; ~144KB wire projected vs 54KB). News page now paged at 50. The raise exposed that **`spanHours` is set by stragglers** (54 → 147h on three items while p90 depth went 51 → 52h), so `coverage.depthHours` was added and the drawer reads it. The 7-day claim is **pending**: re-read `depthHours` 2026-09-29. Detail in §1 |
 | SMALL-1 — the package rationale claimed what it hadn't checked | 2026-09-22 | *"Protects your starters"* printed on **180 of 180** suggestions and was false on **11 of the owner's 20** and **77 of 180** league-wide — it meant "touched nothing ≥ `PROTECT_THRESHOLD`", and a core starter sits at 0.85. `packageRationale` now takes `buildValueLineup(...).starterIds` and names the starter instead; 0 and 0 after, with the claim surviving on 103 of 180 where it is true. Every one of the 180 selected packages is byte-identical, which was the acceptance test — a changed package would mean the search moved, not the copy. Shipped as the prerequisite to MCP-CARRY's trade-targets tool. Detail in §2 |
 | OPEN-10 — the two "fair" windows disagreed | 2026-09-21 | The board proposed an offer and the Analyzer, one tap later, called it an overpay: **0 of 20** suggestions on the owner's board and **35 of 180** across all ten seats landed inside `buildFairBand`, at a mean of 1.0965× the target. The mechanism was not the window but the price of an appeal step — crossing 1.05 hands the partner a whole appeal point (worth 1.0 keep-pain) against a ~0.027 distance penalty. Fixed by a **split**, not a narrowing: the suggestion must land inside `buildFairBand` (asked of that function, never a literal), the assembly window feeds `alternative`, which now carries its premium. Owner's board: keep-pain 17.24 → 15.19, value sent −7.3%, in band 0/20 → 20/20, my-side 3 Fair/17 Weak → 18 Fair/2 Weak, verdicts 3A/16C/1D → 8A/12C/0D. All ten seats: value −4.6%, in band 35 → 161 of 180, Weak-for-me 74 → 9. The price: Weak-for-them 31 → 106, stated rather than buried. `APPEAL_BONUS` re-swept and unmoved. Detail in §2 |

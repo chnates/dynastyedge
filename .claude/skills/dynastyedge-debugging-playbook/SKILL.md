@@ -251,7 +251,8 @@ Likely causes, in order:
 
 1. **GitHub disables cron workflows after ~60 days without repo activity.**
    Any push to the repo re-enables them; or trigger manually
-   (`workflow_dispatch` on both workflows).
+   (`workflow_dispatch` on both workflows — **on `main`**; a dispatch on any
+   other branch is a dry run and publishes nothing).
 2. Workflow failing: check Actions runs. News only hard-fails when **all
    ten sources return nothing AND nothing was retained** from the previous
    feed (which keeps the published feed). It also fails deliberately if the

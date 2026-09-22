@@ -298,6 +298,19 @@ architecture:
   containing `news.json`. Each item carries `headline`, `story` (≤600 chars),
   `published`, `source`, `link` (validated http(s) article URL or null),
   `athleteIds`, `playerIds`, and `isPlayerNews`.
+- **ONLY `main` PUBLISHES — a dispatch from any other branch is a DRY RUN.**
+  All three pipelines' publish steps carry
+  `if: github.ref_name == github.event.repository.default_branch`. The script
+  still runs and its log still prints the coverage line (items, cap, depth,
+  distinct players, per-source counts), so a branch run is inspectable; it
+  just cannot force-push the production data branch. `rookie-intel.yml` always
+  had this guard; **`news.yml` and `values-history.yml` did not until
+  2026-09-22**, and a branch dispatch had published unreviewed code to the live
+  `news-data` feed **twice** — both times as "verification" (the 2026-09-12
+  retention fix and the 2026-09-22 NEWS-4/NEWS-7 work). **To verify a
+  pipeline change:** dry-run it from the branch and read the log; after merge,
+  dispatch it on `main` and read the *published* file. The published feed is
+  only ever `main`'s code.
 - **THE CRON IS A REQUEST, NOT A SCHEDULE — measured 2026-09-21, GitHub
   delivers ~7.4 runs/day at a 3.26h mean gap, not 48 at 0.5h.** Over runs
   1205–1220 (consecutive run numbers, so nothing is missing from the list)
@@ -581,7 +594,9 @@ architecture as the news pipeline:
   `values-history.json`. The script starts a fresh history **only** when the
   existing file 404s (first run / missing branch); any other load failure
   aborts the run non-zero so a transient error can't force-push a one-day
-  file over the rolling window. The publish step recovers any missing output
+  file over the rolling window. **Only `main` publishes** — a branch dispatch
+  runs every snapshot script and the alarm, then skips the force-push (the
+  guard was added 2026-09-22; see the news pipeline). The publish step recovers any missing output
   **via git from the existing `values-history` branch** (not the raw CDN —
   a different failure domain than the one the snapshot scripts read from),
   and hard-fails rather than push without a file it can't recover, so a
@@ -732,7 +747,8 @@ CSVs, which are CORS-blocked *and* ~39MB — so they are aggregated server-side
 in Actions and served as a static file, same architecture as news and values:
 
 - `.github/workflows/rookie-intel.yml` runs daily (cron `23 10 * * *`, plus
-  `workflow_dispatch`). It runs `scripts/snapshot-rookie-intel.mjs`, which
+  `workflow_dispatch`; only `main` publishes — this workflow had that guard
+  first). It runs `scripts/snapshot-rookie-intel.mjs`, which
   reads three nflverse release files — `draft_picks.csv` (NFL draft capital),
   `roster_{season}.csv` (the **`sleeper_id` crosswalk**), and
   `depth_charts_{season}.csv` (daily depth-chart snapshots) — plus Sleeper's
@@ -5652,8 +5668,8 @@ dynastyedge/
 │   └── workflows/
 │       ├── deploy.yml          ← GitHub Actions auto-deploy (lint + test gate before build)
 │       ├── ci.yml              ← lint + test + build on branch pushes / PRs (no deploy)
-│       ├── news.yml            ← twice-hourly news aggregation (accumulates into the feed) → news-data branch; closes with the source-health alarm, which FAILS the run when a source has gone dark
-│       ├── values-history.yml  ← daily value snapshot + trade archive + monthly archive + the three-source consensus archive → values-history branch; closes with the source-health alarm (its three snapshot steps are continue-on-error, so without it a dead source leaves the run GREEN forever)
+│       ├── news.yml            ← (only main publishes; a branch dispatch is a dry run) twice-hourly news aggregation (accumulates into the feed) → news-data branch; closes with the source-health alarm, which FAILS the run when a source has gone dark
+│       ├── values-history.yml  ← (only main publishes) daily value snapshot + trade archive + monthly archive + the three-source consensus archive → values-history branch; closes with the source-health alarm (its three snapshot steps are continue-on-error, so without it a dead source leaves the run GREEN forever)
 │       └── rookie-intel.yml   ← daily rookie depth-chart + draft-capital feed → rookie-intel branch; `mode` input also runs the two CFBD analyses (probe · college-backtest), which publish nothing
 ├── scripts/
 │   ├── fetch-news.mjs          ← multi-source news fetcher (runs in Actions)

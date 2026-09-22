@@ -324,6 +324,17 @@ GitHub Actions cron is **UTC**.
   `gh workflow run rookie-intel.yml --repo chnates/dynastyedge`
 - **MCP:** `actions_run_trigger` (github MCP server).
 
+**Only `main` publishes.** Every pipeline's publish step is guarded with
+`if: github.ref_name == github.event.repository.default_branch`, so dispatching
+on a feature branch (e.g. `actions_run_trigger` with `ref:
+claude/…`) is a **dry run**: the scripts, the zero-item diagnostics and the
+source-health alarm all run and log, and the force-push is skipped. That is the
+way to test a pipeline change before merge — read the run log. After the PR
+merges, dispatch on `main` and read the **published** file (via git from the
+data branch, not the ~5-min raw CDN) to verify for real. `news.yml` and
+`values-history.yml` lacked this guard until 2026-09-22, and a branch dispatch
+had published unreviewed code to `news-data` twice.
+
 Safe to re-run anytime: news merges into the published feed (it no longer
 regenerates from scratch, so a re-run can only add); values replaces today's
 column; trade archive never overwrites existing entries; rookie intel is

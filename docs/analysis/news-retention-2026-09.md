@@ -163,6 +163,11 @@ So the honest verification splits in two:
 Workflow dispatched on the branch; the feed was really re-published and
 re-measured from the CDN.
 
+> **Note (2026-09-22):** that dispatch published *unreviewed branch code* to the
+> live feed, because `news.yml`'s publish step had no default-branch guard. It
+> now has one (OPS-2 in `docs/open-items.md`): a branch dispatch is a dry run,
+> and a published measurement like this one is taken after merge, on `main`.
+
 | | before | after 1 run | target |
 |---|---|---|---|
 | `spanHours` | **27.5** | **112** | 168 (7d) |
