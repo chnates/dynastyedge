@@ -28,7 +28,9 @@ import { buildLineupAnswer, renderLineupText } from './tools/lineupAdvice.js'
 import { buildOddsAnswer, renderOddsText } from './tools/playoffOdds.js'
 import { buildNewsAnswer, renderNewsText, MAX_NEWS_LIMIT } from './tools/playerNews.js'
 import { buildTradeTargetsAnswer, renderTradeTargetsText, DEFAULT_LIMIT as TARGETS_DEFAULT_LIMIT, MAX_LIMIT as MAX_TARGETS } from './tools/findTradeTargets.js'
+import { buildRookieResearchAnswer, renderRookieResearchText, DEFAULT_LIMIT as ROOKIES_DEFAULT_LIMIT, MAX_LIMIT as MAX_ROOKIES } from './tools/researchRookies.js'
 import { getLiveScores } from './liveScores.js'
+import { getRookieIntel } from './feeds.js'
 import { getNews } from './news.js'
 
 export const SERVER_NAME = 'dynastyedge'
@@ -87,6 +89,10 @@ const asOfSchema = z.object({
     // everything else, because an answer quoting a beat report has to be
     // datable.
     news: sourceStamp.optional(),
+    // The Actions-published rookie depth-chart + draft-capital feed, behind
+    // research_rookies. Class B like news: absent when the feed could not be
+    // read, stamped when it was used.
+    rookieIntel: sourceStamp.optional(),
   }),
 })
 
@@ -1282,6 +1288,136 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
       })
       return {
         content: [{ type: 'text', text: renderTradeTargetsText(answer) }],
+        structuredContent: answer,
+        isError: !answer.ok,
+      }
+    }
+  )
+
+  // ── Tool 10 — research_rookies ──────────────────────────────────────────
+  //
+  // The second static feed the server reads. It adds ONE source to asOf —
+  // `rookieIntel`, declared in the closed object above — and only when the
+  // feed was actually used.
+
+  const rookieRowSchema = z.object({
+    sleeperId: z.string(),
+    name: z.string(),
+    position: z.string().nullable(),
+    nflTeam: z.string().nullable(),
+    value: z.number().nullable(),
+    unranked: z.boolean(),
+    positionRank: z.number().nullable(),
+    rookieAdp: z.number().nullable(),
+    score: z.number().nullable(),
+    scoreTier: z.string().nullable(),
+    ageTilted: z.boolean(),
+    reasons: z.array(z.string()),
+    depth: z.object({
+      rank: z.number().nullable(),
+      read: z.string().nullable(),
+      campMove: z.object({
+        from: z.number(), to: z.number(), delta: z.number(), direction: z.string(),
+      }).nullable(),
+    }),
+    nflDraft: z.object({ round: z.number().nullable(), pick: z.number() }).nullable(),
+    undrafted: z.boolean(),
+    noFeedEntry: z.boolean(),
+    marketRank: z.number().nullable(),
+    modelRank: z.number().nullable(),
+    divergence: z.number().nullable(),
+    fit: z.number().nullable(),
+    fitReasons: z.array(z.string()),
+    fitsNeed: z.boolean(),
+    ownerRosterId: z.number().nullable(),
+    ownerTeam: z.string().nullable(),
+    isYours: z.boolean(),
+    isFreeAgent: z.boolean(),
+    context: z.object({
+      ageAtDraft: z.number().nullable(),
+      heightIn: z.number().nullable(),
+      weightLb: z.number().nullable(),
+      forty: z.number().nullable(),
+      vertical: z.number().nullable(),
+      broadJump: z.number().nullable(),
+    }),
+  })
+
+  server.registerTool(
+    'research_rookies',
+    {
+      title: 'Research the rookie class',
+      description:
+        'Answers "which rookies become something, and which should I take?" — the question a dynasty ' +
+        'value cannot, because value prices consensus rather than opportunity. Returns the ONE opportunity ' +
+        'score the app ships (0-100: NFL depth-chart standing x NFL draft capital, back-tested, with a small ' +
+        'youth tilt), the within-position disagreement between that model and the market, and a roster-fit ' +
+        'ranking for one team. Age and combine numbers are returned as context only and never score. Pass ' +
+        '`player` for one rookie. A rookie the feed has no entry for is unscored (null), never zero.',
+      inputSchema: {
+        player: z.string().optional()
+          .describe('One rookie by name or Sleeper id. An ambiguous name returns candidates and refuses.'),
+        position: z.enum(['QB', 'RB', 'WR', 'TE']).optional()
+          .describe('Only this position (applies to the board, the shortlist and the divergence lists).'),
+        sort: z.enum(['fit', 'score', 'value']).optional()
+          .describe('fit (default, for the team) · score (opportunity alone) · value (dynasty market).'),
+        team: z.string().optional()
+          .describe('Whose roster fit to read: team name, manager handle or roster id. Omit for your own.'),
+        limit: z.number().int().min(1).max(MAX_ROOKIES).optional()
+          .describe(`Board rows to return (default ${ROOKIES_DEFAULT_LIMIT}, max ${MAX_ROOKIES}). counts carries the true size.`),
+        leagueId: z.string().optional()
+          .describe('Sleeper league id. Omit for the configured league.'),
+        refresh: z.boolean().optional()
+          .describe('Bypass the caches (~15 min snapshot, ~60 min feed) and refetch.'),
+      },
+      outputSchema: {
+        ok: z.boolean(),
+        error: z.string().optional(),
+        candidates: z.array(teamCandidate).optional(),
+        rookieCandidates: z.array(z.object({
+          sleeperId: z.string(), name: z.string(), position: z.string().nullable(), nflTeam: z.string().nullable(),
+        })).optional(),
+        asOf: asOfSchema.optional(),
+        // False means the rookie intel feed could not be read — every score
+        // is then null and the board is in dynasty-value order. Never "no
+        // rookies": the class comes from the player DB, not the feed.
+        available: z.boolean().optional(),
+        feed: z.object({
+          updatedAt: z.string().nullable(), ageHours: z.number().nullable(), season: z.string().nullable(),
+        }).nullable().optional(),
+        team: z.object({
+          rosterId: z.number(), teamName: z.string(), isYou: z.boolean(),
+          deficits: z.array(z.string()), winWindow: z.string().nullable(),
+        }).optional(),
+        scope: z.enum(['board', 'player']).optional(),
+        filter: z.object({ position: z.string().nullable(), sort: z.string() }).optional(),
+        counts: z.object({
+          rookieClass: z.number(), scored: z.number(), noFeedEntry: z.number(),
+          matchingFilter: z.number().optional(), returned: z.number().optional(), truncated: z.boolean().optional(),
+        }).optional(),
+        rookie: rookieRowSchema.optional(),
+        targets: z.array(rookieRowSchema).optional(),
+        undervalued: z.array(rookieRowSchema).optional(),
+        overvalued: z.array(rookieRowSchema).optional(),
+        board: z.array(rookieRowSchema).optional(),
+        notes: z.array(z.string()).optional(),
+      },
+    },
+    async ({ player, position, sort, team, limit, leagueId, refresh }) => {
+      const snapshot = await snapshotFor(leagueId, refresh)
+      const intel = await getRookieIntel({
+        force: !!refresh, fetcher: get, ttlMs: config.feedTtlMs, ...(store ? { store } : {}),
+      })
+      const answer = buildRookieResearchAnswer(snapshot, intel, {
+        player, position, sort, team, limit,
+        defaultRosterId: config.defaultRosterId,
+        myRosterId: config.defaultRosterId,
+      })
+      if (answer.asOf && intel.available) {
+        answer.asOf = mergeAsOf(answer.asOf, { rookieIntel: intel.source })
+      }
+      return {
+        content: [{ type: 'text', text: renderRookieResearchText(answer) }],
         structuredContent: answer,
         isError: !answer.ok,
       }

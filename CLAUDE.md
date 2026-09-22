@@ -891,7 +891,7 @@ app's own analysis code** — not general knowledge. Design spec and the
 owner-confirmed decisions: `MCP_DISCOVERY.md`.
 
 **Status: phase 2c — LIVE and CONNECTED at `https://dynastyedge-mcp.vercel.app/mcp`.**
-**Nine** tools answer over **both** transports: stdio for local runs,
+**Ten** tools answer over **both** transports: stdio for local runs,
 streamable HTTP for the Claude apps, authenticated by GitHub against a
 single-account allowlist. Six are `MCP_DISCOVERY.md` §5's set; the seventh,
 `get_playoff_odds`, came with phase 2a (2026-09-20) alongside the wiring that
@@ -901,7 +901,10 @@ put `analyze_trade`'s Layer 3 on live odds. The eighth,
 feeds. The ninth, **`find_trade_targets`** (2026-09-22), is the first of §5's
 three deferred phase-two tools and the question that comes *before*
 `analyze_trade`: the server could grade a trade you had already thought of and
-could not answer *"who do I call about?"*.
+could not answer *"who do I call about?"*. The tenth, **`research_rookies`**
+(2026-09-22), is the second of the three and the second static feed the server
+reads (`rookie-intel.json`): it answers the question a dynasty value cannot —
+*"which rookies become something, and which should I take?"*.
 
 Phase 1 shipped the three prerequisite refactors plus `get_roster`; phase 1b
 added `find_sell_high`, `recommend_free_agents`, `resolve_assets`,
@@ -912,8 +915,8 @@ transport (`http.js`), stateless OAuth 2.1 (`oauth.js` / `oauthRoutes.js` /
 
 **All SEVEN tools confirmed in the connector's own tool list, 2026-09-20** —
 the owner's phone, after phase 2b deployed (phase 2c's `get_player_news` and
-2026-09-22's `find_trade_targets` make nine, and the same re-check is owed
-after each deploys): Grade a trade · Find a sell-high
+2026-09-22's `find_trade_targets` and `research_rookies` make ten, and the same
+re-check is owed after each deploys): Grade a trade · Find a sell-high
 candidate · Rest-of-season playoff odds · Get a team roster · Weekly start/sit
 advice · Recommend free agents · Resolve player and pick names to ids. That is
 the end of the chain no probe can reach — what the client actually enumerates
@@ -970,6 +973,7 @@ mcp/
   season.js     every regular-season week's matchups, on a THIRD TTL
   liveScores.js this week's box score, on a FIFTH and DELIBERATELY SHORT TTL
   news.js       the aggregated player-news feed + the id-only matcher
+  feeds.js      rookie-intel.json + trade-values.json — the other static feeds, Class B
   teams.js      resolveTeam — shared by get_roster, analyze_trade, lineup_advice
   limit.js      concurrency gate + retry/backoff
   config.js     league / identity / TTLs, env-first
@@ -977,7 +981,8 @@ mcp/
   tools/
     getRoster.js  findSellHigh.js  recommendFreeAgents.js
     resolveAssets.js  analyzeTrade.js  lineupAdvice.js
-    playoffOdds.js    playerNews.js
+    playoffOdds.js    playerNews.js  findTradeTargets.js
+    researchRookies.js
 ```
 
 ### The HTTP transport (phase 2) — stateless, by necessity
@@ -1692,6 +1697,72 @@ a scoped scout, 18ms for a refused team name. Top of the owner's board: Malik
 Nabers for Gunnar Helm + Rachaad White + Jordan Love (6,260, inside the band),
 with *"to get a yes: 2029 2nd + Jonathan Taylor (+7% over fair)"*.
 
+### Tool 10 — `research_rookies`
+
+"Which rookies become something, and which should I take?" / "Is Jeremiyah
+Love going to play?" Optional `player`, `position`, `sort`
+(`fit` | `score` | `value`), `team`, `limit`, `leagueId`, `refresh`.
+`rookieResearch.buildRookieBoard` — the SAME composition Draft › Research and
+the profile drawer read, so the board on the phone and the answer in the chat
+rank the class identically.
+
+**Prerequisite E, in the shape of A–D.** The composition lived as `buildBoard`
+inside `useRookieResearch`, and the rookie-class rule as `buildRookieMap`
+inside `useSleeperRookies` — both hooks, so no server could reach them. They
+moved to `utils/rookieResearch.js` (`buildRookieBoard`) and `utils/rookieAdp.js`
+(`buildRookieMap`); **the hooks keep the memo and nothing else**. Equivalence
+**proved, not inspected**: both pre-extraction bodies lifted verbatim from git
+and run beside the new functions on the live league (444-rookie class, the
+published feed) at all ten identities plus no identity, no feed and no
+FantasyCalc — `deepStrictEqual` on all **14**.
+
+- **ONE score, no second axis.** `score` is `dynastyOpportunityScore` (0–100
+  as the app shows it) — the back-tested year-1 core with its measured youth
+  tilt. Age at the draft and the combine drills ride along under `context` and
+  never move it (Feature 19's measured nulls); a test changes the 40, vertical
+  and broad and asserts the score and fit do not move.
+- **Rule 7 applied to a model.** A rookie with no feed entry is `score: null`
+  and `fit: null`, never 0 — absence may be a feed gap. Live: **236 of 444**
+  are scored and **208** carry no entry (almost all undrafted). An unpriced
+  rookie is `value: null` + `unranked`.
+- **Class B, and never "no rookies".** The class comes from the player DB, not
+  the feed, so an unreadable `rookie-intel.json` answers `ok: true`,
+  `available: false`, every score null and the board in dynasty-value order —
+  exactly Draft › Research's degraded state. Only a missing **player DB**
+  refuses, because then there is genuinely no class to rank.
+- **Roster fit is read for the requested team.** `team` defaults to you;
+  naming an opponent reads the class from their seat (their deficits, their
+  window), which is the scouting question before a rookie trade.
+- **The name search refuses rather than guesses**, over the rookie class
+  itself (the league-wide resolver's universe excludes unpriced free-agent
+  rookies): "Smith" returns four candidates live.
+- **It adds ONE source to `asOf`** — `rookieIntel`, declared in the closed
+  object, stamped only when the feed was actually used.
+
+**A latent identity bug found on the way, and NOT fixed here** — see
+`docs/open-items.md` **ROOKIE-1**: `buildRookieProspects`' name fallback is
+**position-unguarded**, so a rookie who shares a name with a priced player
+takes that player's FantasyCalc entry. Measured live it fires on **0 of 444**
+(69 join by id, 375 are unpriced, 0 by name), which is why it is recorded
+rather than fixed inside a tool commit.
+
+Measured live over the real transport (2026 Week 3): **943ms cold / 40ms
+cached, 25,888B** at the default 12 rows (9 upstream requests cold, 0 cached);
+30ms / 50,029B at `limit: 40`; a single rookie 3,701B. Top of the owner's
+board by fit: Carnell Tate (WR, 78/100, fills the WR need), Jeremiyah Love
+(RB, 77), Fernando Mendoza (QB, 80).
+
+### Caching the other static feeds — `mcp/feeds.js`
+
+`rookie-intel.json` and `trade-values.json` share one small loader rather than
+each growing a copy of the Class B contract: never throws, a miss is
+`available: false` with the reason, and **a 200 with the wrong shape is a
+miss** (checked inside the load, so it is never cached) — the same checks the
+app's loaders throw `bad shape` on. **60 minutes** (`DYNASTYEDGE_FEED_TTL_MS`),
+argued per feed: rookie intel publishes once a day and its depth signal is
+weekly-granular; the trade archive is append-only and grows at most daily.
+Anything shorter buys nothing either feed can deliver.
+
 ### The board's freshness — the one layer here with NO TTL of its own
 
 `weekly.js`, `season.js`, `transactions.js` and `liveScores.js` each argue a
@@ -1998,10 +2069,12 @@ contract `LineupOptimizer` honours.
 `values-history.json`, `trade-values.json` and `rookie-intel.json` are
 published from *this* repo's branches. A second league gets working rosters,
 values, trades, lineups and odds — but no news, sparklines or rookie research.
-**`news.json` is now read** (by `get_player_news`, `lineup_advice` and
-`get_roster` — see `mcp/news.js`), and it degrades exactly as the contract
-demands: `available: false` with a note, never an error and never an empty
-result dressed up as "there is no news". The other three are still unread.
+**`news.json` is read** (by `get_player_news`, `lineup_advice` and
+`get_roster` — see `mcp/news.js`) and so is **`rookie-intel.json`** (by
+`research_rookies`, through `mcp/feeds.js`); both degrade exactly as the
+contract demands: `available: false` with a note, never an error and never an
+empty result dressed up as "there is no news" or "there are no rookies".
+`trade-values.json` and `values-history.json` are still unread.
 
 **"Who won our league in 2023?" is still unanswerable.** It needs
 `/league/{id}/winners_bracket`, an endpoint this app has never called
@@ -4262,7 +4335,10 @@ Roster, Movers, News, the Draft Board or global search showed nothing but
 dynasty framing ("D — Deep Stash" on a rookie with a starting job). The
 composition now lives in **`useRookieResearch`** (`hooks/`), which both this
 page and `PlayerProfileDrawer` read, so the class is built once per data load
-and there is no second copy to drift. The drawer resolves its own row via
+and there is no second copy to drift. Since 2026-09-22 the hook holds only the
+**memo**: the composition is `buildRookieBoard` in `utils/rookieResearch.js`
+(and the class rule `buildRookieMap` in `utils/rookieAdp.js`), which the MCP
+server's `research_rookies` calls too — so there is no second copy there either. The drawer resolves its own row via
 `useRookieResearchFor(sleeperId)`; an explicit `research` prop still wins, so
 this page keeps handing over the exact row you tapped.
 - **The intel fetch stays lazy at a second level.** `useRookieIntel(enabled)`
@@ -5715,6 +5791,7 @@ dynastyedge/
 │   ├── transactions.js         ← the season-wide transaction feed behind analyze_trade's partner-activity read. A FOURTH TTL and the only SPLIT one: a settled bucket is frozen, the live week rides the SNAPSHOT's 15 minutes because its events are the ones that make a roster wrong. Reads weeks 1..current only — a later bucket is empty by construction (measured: 71/6/0/0/0), so 2 requests where the phone spends 18
 │   ├── history.js              ← the league-history walk, DELIBERATELY narrow: leagues + rosters + drafts + picks, no transactions and no users, so 14 requests against useLeagueHistory's ~169. Feeds ONLY buildDraftGrades — pairing it with buildManagerProfiles would report an empty ledger as "never traded" when the truth is "we did not ask"
 │   ├── liveScores.js           ← this week's box score. A FIFTH TTL and the only SHORT one (5 min): every other layer here caches LONGER than instinct, because their inputs change on an event, a drip, or once a week — a live score changes every few plays. NOT season.js's cache, whose long TTL exists BECAUSE the odds model discards a partially-played week
+│   ├── feeds.js                ← rookie-intel.json + trade-values.json: ONE Class B loader for the other two static feeds the server reads. Never throws; a 200 with the wrong shape is a miss and is never cached; 60-minute TTL because both publish at most daily
 │   ├── news.js                 ← the player-news feed + the matcher. `playerIds` only, NO headline-name fallback: the pipeline already name-matched server-side, and the live player DB holds TWO "DJ Moore"s. Carries its own age so a tool can say when to confirm against a live source instead of being silently 30 minutes behind
 │   ├── season.js               ← every regular-season week's matchups, on a THIRD TTL with its own argument (a completed week is frozen forever; the model discards a partially-played one, so the odds move once a WEEK). Owns the state that must never happen: 14 empty weeks and a season that hasn't started are identical, so a total outage is never reported as a preseason
 │   ├── weekly.js               ← projections + the schedule, on their OWN ~60-min TTL (league data changes on an EVENT, projections on a 0.06%/10h DRIP). Owns the two silent traps: the schedule is off /v1 (SLEEPER_ROOT) and its fields are home/away
@@ -5731,6 +5808,7 @@ dynastyedge/
 │       ├── analyzeTrade.js         ← #5 "grade this trade" — IDS ONLY; a free-text name is rejected, never guessed
 │       ├── lineupAdvice.js         ← #6 "what do I start?" — IN-SEASON ONLY; a must-fix carries no confidence; a LOCKED slot is never a move
 │       ├── playerNews.js           ← #8 "what's the latest on him?" — injury body part + notes + the feed; an ambiguous name is refused, and silence is a gap in coverage, never good health
+│       ├── researchRookies.js      ← #10 "which rookies become something, and which should I take?" — buildRookieBoard, the SAME board Draft › Research reads; ONE score (the age tilt included), combine numbers as context only; no feed entry is score NULL, never 0; an unreadable feed is available:false with the board in value order, never "no rookies"
 │       └── findTradeTargets.js     ← #9 "who do I call about, and what would it cost?" — the question BEFORE analyze_trade. The one layer here with NO TTL: it owns no fetch, so its freshness IS the snapshot's and a number of its own would be a second clock. A pick's id is READ OFF the asset (season/round/originalOwner), never recovered from a label several picks can share
 ├── public/
 │   └── favicon.ico
@@ -5842,7 +5920,7 @@ dynastyedge/
 │   │   ├── useNewsFeed.js       ← full aggregated feed for the News section
 │   │   ├── useValueHistory.js   ← daily value snapshots for sparklines (best-effort)
 │   │   ├── useRookieIntel.js    ← rookie depth-chart + draft-capital feed (best-effort; `enabled` keeps it unfetched for a consumer with no rookie to show)
-│   │   ├── useRookieResearch.js ← THE rookie board, composed once: Draft › Research AND the profile drawer's per-player row
+│   │   ├── useRookieResearch.js ← THE rookie board's memo for Draft › Research AND the profile drawer's per-player row — the composition itself is utils/rookieResearch.js's buildRookieBoard (so the MCP server builds the same board)
 │   │   ├── usePlayerIntel.js    ← production stats + depth chart + ESPN news
 │   │   ├── useScrollLock.js     ← freezes <main> while a bottom sheet is open
 │   │   ├── useSheetDrag.js      ← swipe-down-to-dismiss gesture for bottom sheets
@@ -5871,8 +5949,8 @@ dynastyedge/
 │   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation
 │   │   ├── seasonWindow.js      ← THE "has the rookie draft happened yet?" resolver — the live pick window + which draft the Tracker shows (replaced the hand-rolled PICK_YEARS)
 │   │   ├── pickCapital.js       ← pick ownership resolution logic (year weights are relative to the window, never literal years); also THE spent-pick answer shared by League › Activity and the manager ledger — buildDraftPickIndex (what it became) + buildGenericRoundValues ("a 2nd is a 2nd")
-│   │   ├── rookieAdp.js         ← derived rookie-class ADP for the Draft section
-│   │   ├── rookieResearch.js    ← rookie opportunity model: depth × capital, market-vs-model divergence
+│   │   ├── rookieAdp.js         ← derived rookie-class ADP for the Draft section + buildRookieMap, THE rookie-class rule (moved out of useSleeperRookies)
+│   │   ├── rookieResearch.js    ← rookie opportunity model: depth × capital, market-vs-model divergence; buildRookieBoard is THE whole-board composition (extracted from useRookieResearch; equivalence proved on live data)
 │   │   ├── positionalValue.js   ← scarcity / value over replacement — replacement levels LEARNED from the live league, DISPLAY ONLY
 │   │   ├── rosterSpace.js       ← active-slot headroom for a trade; reports owed drops, NEVER calls a trade illegal
 │   │   ├── partnerActivity.js   ← a partner's recent adds from the cached transaction feed (descriptive only)
@@ -5947,8 +6025,9 @@ dynastyedge/
 │   ├── mcpPlayoffOdds.test.mjs      ← get_playoff_odds: the preseason returning a NULL percentage and a labelled PREVIEW (never 0, which reads as eliminated), a POSTED-but-unplayed schedule being ACTIVE rather than preseason, unavailable ≠ preseason, Σ odds === the field size, seedDist computed but not returned, and the stance being getDeadlineVerdict's so a trade grade cannot disagree
 │   ├── mcpNews.test.mjs             ← the news layer + tool 8: `playerIds` as THE join with NO headline-name fallback (the two-DJ-Moores collision, pinned from both sides), athleteIds as the second hop, a roundup FLAGGED as one, Class B degradation stated as a missing source rather than as "no news", and the stale-feed warning near kickoff
 │   ├── mcpLineupAdvice.test.mjs     ← lineup_advice: the offseason returning no summary and no zeros, per-move gains summing EXACTLY to the headline, a must-fix carrying NO confidence, confidencePct being a percentage not a fraction (the ×100 bug that printed "6530%"), and a blocked starter contributing 0
+│   ├── mcpResearchRookies.test.mjs ← research_rookies + mcp/feeds.js: the tool's score IS the util's, a faster 40 moves neither score nor fit, no feed entry is null never 0, an unreadable feed returns the whole class in value order rather than an empty board, an ambiguous name refuses, bounded output with the true count; and the loader never throws, never caches a wrong-shape 200
 │   ├── mcpFindTradeTargets.test.mjs ← find_trade_targets: the position filter applied INSIDE the ranking (a filter over the sliced top-1 returns nothing where the real answer is a row), the cap disclosed with the true board beside it, scoped mode keeping their depth pieces, a near-miss stated rather than implying the Analyzer will agree, and twin picks resolving to the RIGHT one rather than the first match (one label, two distinguishable assets)
-│   └── helpers/mcpFixtures.mjs      ← ONE synthetic league shared by the seven MCP tool suites — four tools read the same object, and four divergent copies is the drift prerequisite C removed from src/
+│   └── helpers/mcpFixtures.mjs      ← ONE synthetic league shared by the MCP tool suites — four tools read the same object, and four divergent copies is the drift prerequisite C removed from src/
 ├── index.html
 ├── eslint.config.js             ← ESLint 9 flat config (recommended + react-hooks, src/ + scripts/)
 ├── vite.config.js
@@ -5959,11 +6038,11 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 704 / # pass 699
+honestly:** instead of "cannot find module" it prints `# tests 718 / # pass 713
 / # fail 5`, which reads like a code regression. A file that cannot load never
-runs its tests, so the count silently drops from **747** to 704.
+runs its tests, so the count silently drops from **761** to 718.
 `npm run build` in the same state fails with `sh: 1: vite: not found`.
-**If the test count isn't 747, run `npm ci` before debugging anything.**
+**If the test count isn't 761, run `npm ci` before debugging anything.**
 
 The pair was re-measured 2026-09-19 (MCP phase 1b) by renaming `node_modules`
 aside, and it had drifted seven times before that: 178/130, 177/115, 219/136,
@@ -5985,6 +6064,11 @@ those four raise only the first number. The 2026-09-07 trade-engine work added
 the broken-state count stayed at 152; the 2026-09-12 news-retention work moved
 both, because `newsRetention.test.mjs` imports only a zero-dependency pure
 module. **Re-measure both whenever the suite grows.**
+
+`research_rookies` and prerequisite E (2026-09-22) moved both by the same
+14 (747/704 → **761/718**), the gap holding at 43: the new suite imports the
+tool, `mcp/feeds.js`, `mcp/store.js` and `src/utils`, and none of them reaches
+React or pulls `zod` down out of `mcp/server.js`.
 
 The news depth metric (2026-09-22, NEWS-4) moved both by the same 5
 (742/699 → **747/704**), the gap holding at 43: `newsCoverage.test.mjs`
@@ -6049,7 +6133,8 @@ regression to the next session, which is the exact confusion the block exists
 to prevent, so re-measure rather than incrementing what is written.
 
 The useful invariant survived the drift and is worth preferring to either
-count: **the gap between them is 43 and has not moved.** 747 − 704 = 43,
+count: **the gap between them is 43 and has not moved.** 761 − 718 = 43,
+747 − 704 = 43,
 742 − 699 = 43,
 719 − 676 = 43, 714 − 671 = 43, 698 − 655 = 43,
 679 − 636 = 43, 669 − 626 = 43, 639 − 596 = 43,

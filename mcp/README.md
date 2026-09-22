@@ -7,7 +7,9 @@ knowledge.
 Design spec: [`../MCP_DISCOVERY.md`](../MCP_DISCOVERY.md). Read it first — this
 file covers only what is built.
 
-**Nine tools, over stdio AND streamable HTTP.** The ninth,
+**Ten tools, over stdio AND streamable HTTP.** The tenth, `research_rookies`
+(2026-09-22), is the second of §5's deferred phase-two tools and the second
+static feed the server reads (`rookie-intel.json`). The ninth,
 `find_trade_targets` (2026-09-22), is the first of `MCP_DISCOVERY.md` §5's
 three deferred phase-two tools and the question that comes *before*
 `analyze_trade` — the server could grade a trade you had already thought of and
@@ -77,9 +79,10 @@ Every tool also takes `leagueId` per call; these are only the fallbacks.
 | `lineup_advice` | "What do I start, and what's it costing me?" | **In-season only** — the offseason says so, never zeros |
 | `get_playoff_odds` | "Am I making the playoffs — buying or selling?" | The preseason returns a **null** percentage and a labelled preview, never a made-up one |
 | `get_player_news` | "What's the latest on Bowers?" / "Who on my team is hurt?" | Injury body part + notes + the feed; an ambiguous name is **refused**, and silence is a gap in coverage, never good health |
+| `research_rookies` | "Which rookies become something, and which should I take?" | The ONE opportunity score the app ships, within-position market-vs-model divergence, and roster fit for any team. No feed entry is **null**, never 0; an unreadable feed returns the class in value order, never "no rookies" |
 | `find_trade_targets` | "Who should I call about, and what would it cost?" | Both seats' appeal per row, the package held inside the Analyzer's **fair band**, and the premium that would buy a yes. It does **not** grade — hand the ids to `analyze_trade` |
 
-All nine are documented with their contracts and traps in CLAUDE.md's
+All ten are documented with their contracts and traps in CLAUDE.md's
 **The MCP Server** section. Read that before changing one.
 
 ### The one layer with NO TTL, and that is the argument
@@ -155,6 +158,7 @@ mcp/
   transactions.js the season transaction feed, on a FOURTH and SPLIT TTL
   liveScores.js   this week's box score, on a FIFTH and deliberately SHORT TTL
   news.js         the player-news feed + the id-only matcher (Class B)
+  feeds.js        rookie-intel + trade-values: one Class B loader, 60-min TTL
   history.js      the deliberately narrow league-history walk
   teams.js        resolveTeam — one definition, three tools
   limit.js        concurrency gate + retry/backoff
@@ -165,13 +169,14 @@ mcp/
     getRoster.js  findSellHigh.js  recommendFreeAgents.js
     resolveAssets.js  analyzeTrade.js  lineupAdvice.js
     playoffOdds.js    playerNews.js  findTradeTargets.js
+    researchRookies.js
 ```
 
 Tests live with the rest of the suite: `mcpLimit`, `mcpSnapshot`, `mcpWeekly`,
 `mcpSeason`, `mcpStore`, `mcpHttp`, `mcpOauth`, and one file per tool
 (`mcpGetRoster`, `mcpFindSellHigh`, `mcpRecommendFreeAgents`,
 `mcpResolveAssets`, `mcpAnalyzeTrade`, `mcpLineupAdvice`, `mcpPlayoffOdds`,
-`mcpNews`, `mcpFindTradeTargets`),
+`mcpNews`, `mcpFindTradeTargets`, `mcpResearchRookies`),
 plus `tests/leagueState.test.mjs` and `tests/playoffOdds.test.mjs` for the join
 and the model this all rests on. The tool suites share
 `tests/helpers/mcpFixtures.mjs` — one synthetic league, because several tools
@@ -299,7 +304,9 @@ first live call, before either reached a reader — which is the concrete payoff
   `values-history.json`, `trade-values.json` and `rookie-intel.json` are
   published from this repo's own branches. A second league gets working
   rosters, values and trades — but no news, sparklines or rookie research.
-  No tool reads them yet; the ones that will must degrade cleanly and say so.
+  `news.json` (via `news.js`) and `rookie-intel.json` (via `feeds.js`) are
+  read, and both degrade to `available: false` with a note — never an error,
+  never an empty answer that reads as a fact about the world.
 
 ## Auth (phase 2)
 

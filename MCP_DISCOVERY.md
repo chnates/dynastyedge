@@ -224,11 +224,11 @@ Build in this order. Each row names what it reuses and what must exist first.
 | 5 | `analyze_trade` | "Grade this trade." | `give[]`, `get[]` (resolved IDs only), `partner` | Verdict, reasoning, value split, both-seat appeal, landing spots, fair band, counter suggestion, pitch text | `tradeAnalysis.analyzeTrade` → `getTradeVerdict` → `adjustVerdictForInjuries` → `getCounterSuggestion` → `buildTradePitch`. Mirror `TradeAnalyzer.jsx:141-256`. |
 | 6 | `lineup_advice` | "What do I start, and what's it costing me?" | optional `week` | Moves with per-move gain, confidence %, must-fix flags, total points left on bench | `lineupMoves.buildLineupMoves` — pure, heavily tested. Needs projections (already committed), player DB, and the schedule for byes **and locks**. |
 
-> **This table is the original plan, kept as the record. Three tools shipped
+> **This table is the original plan, kept as the record. Four tools shipped
 > beyond it** — `get_playoff_odds` (phase 2a, the first "deferred" item below),
-> `get_player_news` (phase 2c) and `find_trade_targets` (2026-09-22, the first
-> of the three deferred below). CLAUDE.md's **The MCP Server** section is
-> the live truth for all nine; this section is what was specified on
+> `get_player_news` (phase 2c), `find_trade_targets` and `research_rookies`
+> (2026-09-22, two of the three deferred below). CLAUDE.md's **The MCP Server**
+> section is the live truth for all ten; this section is what was specified on
 > 2026-09-19.
 >
 > **Row 6 gained a requirement that was not foreseen here, and it cost a wrong
@@ -246,7 +246,10 @@ cheap once `processWeeks` was lifted, which became
 `suggestFairPackage`; the ~730ms noted here is real and turned out to be **CPU
 over a snapshot already in hand**, so it is bounded by how many targets are
 priced rather than by a cache, and the tool is the only layer in `mcp/` with no
-TTL of its own), manager scouting (biggest fetch burst), rookie research.
+TTL of its own), manager scouting (biggest fetch burst), rookie research
+(**shipped 2026-09-22 as `research_rookies`** — prerequisite E lifted
+`buildRookieBoard` out of `useRookieResearch`, equivalence proved on live data;
+the second static feed the server reads).
 
 > **A note this table could not have foreseen.** The tool's most useful field
 > is one that did not exist when §5 was written: OPEN-10 (2026-09-21) made

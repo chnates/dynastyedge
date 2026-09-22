@@ -1082,12 +1082,25 @@ Two things worth carrying forward from building it:
   is the one place the bug cannot appear. Measure the blast radius on every
   seat, not the one you are looking at.
 
+**SHIPPED 2026-09-22: the rookie research tool.** `research_rookies` is the
+tenth tool and the second of §5's deferred three. Prerequisite E lifted the
+board composition out of `useRookieResearch` (→ `buildRookieBoard`) and the
+class rule out of `useSleeperRookies` (→ `buildRookieMap`); the hooks keep the
+memo. Equivalence **proved on live data**, not inspected: both pre-extraction
+bodies lifted verbatim from git, `deepStrictEqual` on all 14 cases (444-rookie
+class, all ten identities, no identity, no feed, no FantasyCalc). Measured over
+the real transport: **943ms cold / 40ms cached, 25,888B**, 9 upstream requests
+cold and 0 cached; 236 of 444 rookies scored, 208 with no feed entry and
+therefore null. It turned up **ROOKIE-1** (§2) — found, measured at 0 live
+occurrences, not fixed in a tool commit.
+
 **Capability not built:**
-- **Two of `MCP_DISCOVERY.md` §5's phase-two tools** remain — manager scouting
+- **One of `MCP_DISCOVERY.md` §5's phase-two tools** remains — manager scouting
   (the biggest fetch burst; note `mcp/history.js`'s walk is deliberately narrow
-  and must NOT be quietly widened) and rookie research.
-- **Three of the four static feeds are still unread** — `values-history`,
-  `trade-values`, `rookie-intel`. `get_player_news` was the first to read one.
+  and must NOT be quietly widened).
+- **Two of the four static feeds are still unread** — `values-history`,
+  `trade-values`. `get_player_news` read the first; `research_rookies` reads
+  `rookie-intel`.
   So a second league gets no sparklines, no at-trade-time values and no rookie
   research, and the tools say so.
 - **`/league/{id}/winners_bracket` has still never been called**, so *"who won
@@ -1629,6 +1642,27 @@ curl -s 'https://api.sleeper.app/v1/league/1313933520715907072/drafts' | grep -c
 ---
 
 ## 2. Deferred — waiting on a trigger
+
+### ROOKIE-1 — `buildRookieProspects`' name fallback is position-unguarded
+
+**Status:** open, found 2026-09-22 while building `research_rookies`.
+**Trigger:** ready work, small; deliberately not folded into the tool commit.
+
+`utils/rookieAdp.js`'s `buildRookieProspects` enriches each rookie with his
+FantasyCalc entry by `sleeperId`, and **falls back to a lower-cased full-name
+match** when the id misses. That fallback checks no position, so a rookie who
+shares a name with a priced player — the two-DJ-Moores shape — takes the
+*other* player's value, rank and position. The tool test's fixture hit it on
+its first run: an unpriced RB "Jaylen Smith" came back as the priced WR.
+
+**Measured live, it fires on 0 of 444 rookies** (69 join by id, 375 are
+unpriced, 0 by name) — which is why it is recorded rather than fixed inside a
+tool commit that owed only orchestration. The fix is the one the rookie-intel
+pipeline already carries (*"every name-based match is position-guarded"*):
+require the positions to agree, and prefer dropping the fallback entirely if a
+re-measure still shows 0 hits across a full offseason. Either change moves app
+behaviour (Draft Board, Tracker, Research, Pick Trades all read it), so it gets
+its own commit and its own before/after count.
 
 ### OPEN-1 — ~~Normalize FAAB stats to percent-of-budget~~ **CLOSED 2026-09-20**
 

@@ -20,6 +20,10 @@
 //      August, so preseason usage measures job insecurity. Nothing here is
 //      derived from preseason stats, deliberately.
 
+import { buildRookieProspects } from './rookieAdp'
+import { getDeficitPositions } from './recommendations'
+import { getWinWindowTier } from './rosterAnalysis'
+
 // Median rookie-season half-PPR points by position x week-1 depth rank,
 // measured over 2021-2025. Rank 4 is the "4+ or off the chart" bucket. These
 // are observed medians, not hand-tuned weights — re-derive them from the
@@ -531,4 +535,38 @@ export function splitDivergence(rows, { minGap = 5, limit = 6 } = {}) {
     .sort((a, b) => a.divergence - b.divergence)
     .slice(0, limit)
   return { undervalued, overvalued }
+}
+
+// ── The whole board, composed ────────────────────────────────────────────────
+// THE composition Draft › Research and the profile drawer read (through
+// useRookieResearch) and the MCP server's rookie research tool reads directly.
+// It lived as `buildBoard` inside the hook, where no server could reach it; it
+// moved here in the shape of the other prerequisite extractions
+// (buildLeagueState, buildPlayoffOutlook), and the hook keeps only the memo.
+// Equivalence to the pre-extraction body was proved on live data, not
+// inspected — see docs/open-items.md MCP-CARRY.
+//
+// `rookieMap` is utils/rookieAdp.js's `buildRookieMap(playerDB)`. `league` is
+// buildLeagueState's object; without a `myRoster` there is no fit to read, so
+// deficits are empty and the tier null — the board itself still builds.
+export const EMPTY_ROOKIE_BOARD = Object.freeze({ rows: [], byId: new Map(), deficits: new Set(), tier: null })
+
+export function buildRookieBoard({ rookieMap, playerMap, intel, league } = {}) {
+  if (!rookieMap) return EMPTY_ROOKIE_BOARD
+  const myRoster = league?.myRoster
+  const allRosters = league?.allRosters
+  // The same helpers every other recommendation surface uses, so "you need a
+  // TE" means here what it means in Free Agents and the Trade Analyzer.
+  const deficits = myRoster && allRosters?.length
+    ? getDeficitPositions(myRoster, allRosters)
+    : new Set()
+  const tier = myRoster && allRosters?.length
+    ? getWinWindowTier(myRoster.rosterId, allRosters)
+    : null
+
+  const prospects = buildRookieProspects(rookieMap, playerMap)
+  const rows = buildTeamFit(buildRookieResearch(prospects, intel), { deficits, tier })
+  // deficits/tier ride along: Draft › Research states them in plain English
+  // above its shortlist, and they are already computed here.
+  return { rows, byId: new Map(rows.map(r => [r.sleeperId, r])), deficits, tier }
 }

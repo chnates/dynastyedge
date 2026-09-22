@@ -32,7 +32,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 
 // src/constants.js
-var LEAGUE_ID, MY_ROSTER_ID, SLEEPER_BASE, SLEEPER_ROOT, FANTASYCALC_BASE, NEWS_FEED_URL, FANTASYCALC_PARAMS, PICK_YEARS, POSITIONS, ROSTER_SLOTS;
+var LEAGUE_ID, MY_ROSTER_ID, SLEEPER_BASE, SLEEPER_ROOT, FANTASYCALC_BASE, NEWS_FEED_URL, ROOKIE_INTEL_URL, FANTASYCALC_PARAMS, PICK_YEARS, POSITIONS, ROSTER_SLOTS;
 var init_constants = __esm({
   "src/constants.js"() {
     LEAGUE_ID = "1313933520715907072";
@@ -41,6 +41,7 @@ var init_constants = __esm({
     SLEEPER_ROOT = "https://api.sleeper.app";
     FANTASYCALC_BASE = "https://api.fantasycalc.com";
     NEWS_FEED_URL = "https://raw.githubusercontent.com/chnates/dynastyedge/news-data/news.json";
+    ROOKIE_INTEL_URL = "https://raw.githubusercontent.com/chnates/dynastyedge/rookie-intel/rookie-intel.json";
     FANTASYCALC_PARAMS = {
       isDynasty: true,
       numQbs: 2,
@@ -1140,6 +1141,56 @@ var init_history = __esm({
   }
 });
 
+// mcp/feeds.js
+async function loadFeed({ key, url: url2, label, valid, ttlMs, force, fetcher, concurrency, store }) {
+  const get = fetcher ?? createFetcher({ concurrency });
+  const loaded = await loadSource(store, key, force ? -1 : ttlMs, async () => {
+    const data2 = await get(url2, { label });
+    if (!valid(data2)) throw new Error(`${label} returned an unexpected shape`);
+    return data2;
+  }).catch((err) => ({ data: null, fetchedAt: null, stale: false, error: err.message }));
+  const data = loaded.data ?? null;
+  const updatedAt = data?.updatedAt ?? null;
+  return {
+    available: !!data,
+    data,
+    updatedAt,
+    ageHours: updatedAt ? Math.max(0, Math.round((Date.now() - new Date(updatedAt).getTime()) / 36e5 * 10) / 10) : null,
+    error: data ? null : loaded.error ?? "unknown error",
+    source: stampSource(loaded)
+  };
+}
+function getRookieIntel({
+  ttlMs = DEFAULT_FEED_TTL_MS,
+  force = false,
+  fetcher,
+  concurrency = 6,
+  store = defaultStore6
+} = {}) {
+  return loadFeed({
+    key: "feed:rookie-intel",
+    url: ROOKIE_INTEL_URL,
+    label: "DynastyEdge rookie intel",
+    valid: (d) => !!d?.players && typeof d.players === "object",
+    ttlMs,
+    force,
+    fetcher,
+    concurrency,
+    store
+  });
+}
+var DEFAULT_FEED_TTL_MS, defaultStore6;
+var init_feeds = __esm({
+  "mcp/feeds.js"() {
+    init_constants();
+    init_limit();
+    init_snapshot();
+    init_store();
+    DEFAULT_FEED_TTL_MS = 60 * 60 * 1e3;
+    defaultStore6 = memoryStore();
+  }
+});
+
 // mcp/config.js
 function loadConfig(env = process.env) {
   const rosterEnv = env.DYNASTYEDGE_ROSTER_ID;
@@ -1164,6 +1215,8 @@ function loadConfig(env = process.env) {
     frozenTtlMs: Number(env.DYNASTYEDGE_FROZEN_TTL_MS) || DEFAULT_FROZEN_TTL_MS,
     // Past seasons never change. The longest TTL here, and for that reason.
     historyTtlMs: Number(env.DYNASTYEDGE_HISTORY_TTL_MS) || DEFAULT_HISTORY_TTL_MS,
+    // rookie-intel and trade-values publish at most daily (mcp/feeds.js).
+    feedTtlMs: Number(env.DYNASTYEDGE_FEED_TTL_MS) || DEFAULT_FEED_TTL_MS,
     concurrency: Number(env.DYNASTYEDGE_CONCURRENCY) || 6,
     githubClientId: env.GITHUB_CLIENT_ID || DEFAULT_GITHUB_CLIENT_ID,
     // No default, deliberately. A server that starts without this would
@@ -1182,6 +1235,7 @@ var init_config = __esm({
     init_season();
     init_transactions();
     init_history();
+    init_feeds();
     DEFAULT_GITHUB_CLIENT_ID = "Ov23lipGgde1WRtguwMc";
     DEFAULT_ALLOWED_GITHUB_LOGIN = "chnates";
     DEFAULT_ORIGIN = "https://dynastyedge-mcp.vercel.app";
@@ -3110,8 +3164,8 @@ var init_doc = __esm({
         const lines = content.split("\n").filter((x) => x);
         const minIndent = Math.min(...lines.map((x) => x.length - x.trimStart().length));
         const dedented = lines.map((x) => x.slice(minIndent)).map((x) => " ".repeat(this.indent * 2) + x);
-        for (const line of dedented) {
-          this.content.push(line);
+        for (const line2 of dedented) {
+          this.content.push(line2);
         }
       }
       compile() {
@@ -25719,13 +25773,13 @@ var require_scope = __commonJS({
       }
     };
     exports.ValueScopeName = ValueScopeName;
-    var line = (0, code_1._)`\n`;
+    var line2 = (0, code_1._)`\n`;
     var ValueScope = class extends Scope {
       constructor(opts) {
         super(opts);
         this._values = {};
         this._scope = opts.scope;
-        this.opts = { ...opts, _n: opts.lines ? line : code_1.nil };
+        this.opts = { ...opts, _n: opts.lines ? line2 : code_1.nil };
       }
       get() {
         return this._scope;
@@ -32771,13 +32825,13 @@ var require_scope2 = __commonJS({
       }
     };
     exports.ValueScopeName = ValueScopeName;
-    var line = (0, code_1._)`\n`;
+    var line2 = (0, code_1._)`\n`;
     var ValueScope = class extends Scope {
       constructor(opts) {
         super(opts);
         this._values = {};
         this._scope = opts.scope;
-        this.opts = { ...opts, _n: opts.lines ? line : code_1.nil };
+        this.opts = { ...opts, _n: opts.lines ? line2 : code_1.nil };
       }
       get() {
         return this._scope;
@@ -40693,7 +40747,7 @@ async function getNews({
   force = false,
   fetcher,
   concurrency = 6,
-  store = defaultStore6
+  store = defaultStore7
 } = {}) {
   const get = fetcher ?? createFetcher({ concurrency });
   const loaded = await loadSource(
@@ -40784,7 +40838,7 @@ function newsNotes(feed, { nearKickoff = false } = {}) {
   }
   return notes;
 }
-var DEFAULT_NEWS_TTL_MS, NEWS_STALE_MINUTES, NEWS_KEY, defaultStore6;
+var DEFAULT_NEWS_TTL_MS, NEWS_STALE_MINUTES, NEWS_KEY, defaultStore7;
 var init_news = __esm({
   "mcp/news.js"() {
     init_constants();
@@ -40794,7 +40848,7 @@ var init_news = __esm({
     DEFAULT_NEWS_TTL_MS = 10 * 60 * 1e3;
     NEWS_STALE_MINUTES = 35;
     NEWS_KEY = "news:feed";
-    defaultStore6 = memoryStore();
+    defaultStore7 = memoryStore();
   }
 });
 
@@ -41149,9 +41203,9 @@ function buildRosterTrajectory(roster, currentSeasonYear, curves, genericCurve) 
 }
 function seriesDirection(series) {
   if (!series?.length || !series[0]) return "stable";
-  const pct2 = (series[series.length - 1] - series[0]) / series[0];
-  if (pct2 > 0.05) return "ascending";
-  if (pct2 < -0.05) return "declining";
+  const pct3 = (series[series.length - 1] - series[0]) / series[0];
+  if (pct3 > 0.05) return "ascending";
+  if (pct3 < -0.05) return "declining";
   return "stable";
 }
 function getTrajectoryRead(trajectory) {
@@ -43118,8 +43172,8 @@ var init_tradeAnalysis = __esm({
     });
     SEAT_VOICE = {
       them: {
-        valueAhead: (pct2) => `They come out ${pct2}% ahead on raw dynasty value.`,
-        valueBehind: (pct2) => `They'd be giving up ${pct2}% more value than they get back.`,
+        valueAhead: (pct3) => `They come out ${pct3}% ahead on raw dynasty value.`,
+        valueBehind: (pct3) => `They'd be giving up ${pct3}% more value than they get back.`,
         benchedStack: (names, positions) => `${names} wouldn't crack their lineup \u2014 they're already above league average at ${positions}.`,
         marginalStack: (positions) => `They're already above league average at ${positions} \u2014 this is a marginal upgrade for them, not a hole filled.`,
         lineupGain: (n) => `Their best starting lineup gains ${n} in value.`,
@@ -43136,8 +43190,8 @@ var init_tradeAnalysis = __esm({
         }
       },
       you: {
-        valueAhead: (pct2) => `You come out ${pct2}% ahead on raw dynasty value.`,
-        valueBehind: (pct2) => `You'd be giving up ${pct2}% more value than you get back.`,
+        valueAhead: (pct3) => `You come out ${pct3}% ahead on raw dynasty value.`,
+        valueBehind: (pct3) => `You'd be giving up ${pct3}% more value than you get back.`,
         benchedStack: (names, positions) => `${names} wouldn't crack your lineup \u2014 you're already above league average at ${positions}.`,
         marginalStack: (positions) => `You're already above league average at ${positions} \u2014 this is a marginal upgrade, not a hole filled.`,
         lineupGain: (n) => `Your best starting lineup gains ${n} in value.`,
@@ -43555,7 +43609,7 @@ function renderTradeText(a) {
   }
   if (a.pitch) {
     L.push("PITCH IT");
-    String(a.pitch.text).split("\n").forEach((line) => L.push(`  ${line}`));
+    String(a.pitch.text).split("\n").forEach((line2) => L.push(`  ${line2}`));
     L.push("");
   }
   a.notes.forEach((n) => L.push(`Note: ${n}`));
@@ -44689,6 +44743,568 @@ var init_findTradeTargets = __esm({
   }
 });
 
+// src/utils/rookieAdp.js
+function buildRookieMap(playerDB) {
+  const map2 = {};
+  Object.entries(playerDB ?? {}).forEach(([player_id, p]) => {
+    const isRookie = p.years_exp === 0 || p.years_exp == null && p.age != null && p.age <= 25;
+    if (!isRookie) return;
+    if (!ROOKIE_POSITIONS.has(p.position)) return;
+    if (!p.name) return;
+    map2[player_id] = {
+      sleeperId: player_id,
+      name: p.name,
+      position: p.position,
+      team: p.team,
+      age: p.age,
+      value: 0
+    };
+  });
+  return map2;
+}
+function assignRookieAdp(prospects) {
+  const adpById = new Map(
+    prospects.filter((p) => p.overallRank != null).sort((a, b) => a.overallRank - b.overallRank).map((p, i) => [p.sleeperId, i + 1])
+  );
+  return prospects.map((p) => ({ ...p, adp: adpById.get(p.sleeperId) ?? null }));
+}
+function buildRookieProspects(rookieMap, playerMap) {
+  if (!rookieMap) return [];
+  const nameToFC = {};
+  if (playerMap) {
+    Object.values(playerMap).forEach((e) => {
+      if (e.name) nameToFC[e.name.toLowerCase()] = e;
+    });
+  }
+  return assignRookieAdp(Object.values(rookieMap).map((rookieEntry) => {
+    const mainEntry = playerMap?.[rookieEntry.sleeperId];
+    if (mainEntry) return { ...mainEntry };
+    const nameMatch = nameToFC[rookieEntry.name?.toLowerCase()];
+    if (nameMatch) return { ...nameMatch, sleeperId: rookieEntry.sleeperId };
+    return { ...rookieEntry, adpOnly: true };
+  }));
+}
+var ROOKIE_POSITIONS;
+var init_rookieAdp = __esm({
+  "src/utils/rookieAdp.js"() {
+    ROOKIE_POSITIONS = /* @__PURE__ */ new Set(["QB", "RB", "WR", "TE"]);
+  }
+});
+
+// src/utils/rookieResearch.js
+function depthBucket(rank) {
+  if (rank == null || rank >= 4) return 4;
+  return rank < 1 ? 1 : rank;
+}
+function depthScore(position, rank) {
+  const row = DEPTH_VALUE[position];
+  if (!row) return 0;
+  return row[depthBucket(rank)] / DEPTH_MAX;
+}
+function capitalScore(pick2) {
+  if (pick2 == null) return UDFA_SCORE;
+  if (pick2 <= 1) return 1;
+  return Math.max(0, 1 - Math.log(pick2) / Math.log(LAST_PICK));
+}
+function opportunityScore({ position, rank, pick: pick2 }) {
+  return DEPTH_WEIGHT * depthScore(position, rank) + (1 - DEPTH_WEIGHT) * capitalScore(pick2);
+}
+function dynastyOpportunityScore({ position, rank, pick: pick2, age }) {
+  const base = opportunityScore({ position, rank, pick: pick2 });
+  const z2 = ageAtDraftZ(position, age);
+  if (z2 == null) return base;
+  return Math.max(0, Math.min(1, base + AGE_Z_COEFF * z2));
+}
+function ageAtDraftZ(position, age) {
+  const b = AGE_BASELINE[position];
+  if (!b?.sd || age == null || !Number.isFinite(age)) return null;
+  return (b.mean - age) / b.sd;
+}
+function positionArticle(position) {
+  return position === "RB" ? "an" : "a";
+}
+function campMove(ranks) {
+  if (!Array.isArray(ranks)) return null;
+  const points = ranks.filter((r) => r != null);
+  if (points.length < 2) return null;
+  const from = points[0];
+  const to = points[points.length - 1];
+  if (from === to) return null;
+  return { from, to, delta: from - to, direction: to < from ? "up" : "down" };
+}
+function depthLabel(position, rank, ahead = []) {
+  if (rank == null) return "Not on the depth chart";
+  const blocker = ahead.length ? ahead[ahead.length - 1] : null;
+  if (rank === 1) return "Listed first at his spot";
+  if (rank === 2) {
+    if (position === "QB") return blocker ? `Backup behind ${blocker}` : "Listed second";
+    if (position === "RB") return blocker ? `Splitting behind ${blocker}` : "Listed second";
+    return blocker ? `One spot behind ${blocker}` : "Listed second";
+  }
+  if (rank === 3) return "Third at his spot";
+  return "Buried on the depth chart";
+}
+function scoreReasons({ position, rank, pick: pick2, round, age }) {
+  const out = [];
+  if (pick2 != null) {
+    if (pick2 <= 32) out.push({ tone: "good", text: `First-round capital (pick ${pick2})` });
+    else if (pick2 <= 100) out.push({ tone: "good", text: `Day-two capital (round ${round ?? "2-3"}, pick ${pick2})` });
+    else out.push({ tone: "flat", text: `Day-three capital (pick ${pick2})` });
+  } else {
+    out.push({ tone: "bad", text: "Undrafted \u2014 no capital invested" });
+  }
+  const bucket = depthBucket(rank);
+  if (bucket === 1) out.push({ tone: "good", text: `Starting-caliber ${position} snaps in reach` });
+  else if (bucket === 2) out.push({ tone: "flat", text: "One move from a starting role" });
+  else if (bucket === 3) out.push({ tone: position === "RB" ? "flat" : "bad", text: "Third on the depth chart" });
+  else out.push({ tone: "bad", text: "No clear path to snaps yet" });
+  const ageZ = ageAtDraftZ(position, age);
+  const art = positionArticle(position);
+  if (ageZ != null && ageZ >= 0.75) {
+    out.push({ tone: "good", text: `Young for ${art} ${position} at ${age.toFixed(1)} \u2014 more upside years` });
+  } else if (ageZ != null && ageZ <= -0.75) {
+    out.push({ tone: "bad", text: `Old for ${art} ${position} at ${age.toFixed(1)} \u2014 fewer upside years` });
+  }
+  return out;
+}
+function buildRookieResearch(prospects, intel) {
+  if (!Array.isArray(prospects) || !prospects.length) return [];
+  const feed = intel?.players ?? null;
+  const rows = prospects.map((p) => {
+    const entry = feed?.[String(p.sleeperId)] ?? null;
+    const position = p.position ?? entry?.pos ?? null;
+    const rank = entry?.rank ?? null;
+    const pick2 = entry?.pick ?? null;
+    const base = {
+      sleeperId: String(p.sleeperId),
+      name: p.name ?? entry?.name ?? "Unknown",
+      position,
+      team: p.maybeTeam ?? p.team ?? entry?.team ?? null,
+      value: p.value ?? null,
+      overallRank: p.overallRank ?? null,
+      // positionRank and age are not used by the model — they are carried so a
+      // row can be handed straight to PlayerProfileDrawer, which grades and
+      // labels a player from them. Dropping them (the shape shipped first) made
+      // the drawer read `positionRank ?? 99` and stamp every rookie opened from
+      // this page "D — Deep Stash", with no age in the header.
+      positionRank: p.positionRank ?? null,
+      age: p.age ?? null,
+      trend30Day: p.trend30Day ?? null,
+      adp: p.adp ?? null,
+      rank,
+      slot: entry?.slot ?? null,
+      pick: pick2,
+      round: entry?.round ?? null,
+      ahead: entry?.ahead ?? [],
+      move: campMove(entry?.ranks),
+      // Measurables ride along untouched from the feed. They are DISPLAY ONLY
+      // (see the null above) — nothing below reads them, and `opportunityScore`
+      // is not passed them, so a feed that starts or stops carrying them can
+      // never move a single score.
+      ageAtDraft: entry?.age ?? null,
+      height: entry?.ht ?? null,
+      weight: entry?.wt ?? null,
+      forty: entry?.forty ?? null,
+      vert: entry?.vert ?? null,
+      broad: entry?.broad ?? null,
+      noData: !entry
+    };
+    if (!entry || !position) {
+      return { ...base, score: null, reasons: [], tier: null, depthText: null, ageTilted: false };
+    }
+    const score = dynastyOpportunityScore({ position, rank, pick: pick2, age: base.ageAtDraft });
+    return {
+      ...base,
+      score,
+      // Whether the age tilt actually applied. The UI says so rather than
+      // implying every score is on the same basis — an untilted rookie is
+      // scored on year-1 opportunity alone.
+      ageTilted: ageAtDraftZ(position, base.ageAtDraft) != null,
+      tier: tierOf(score),
+      reasons: scoreReasons({ position, rank, pick: pick2, round: base.round, age: base.ageAtDraft }),
+      depthText: depthLabel(position, rank, base.ahead)
+    };
+  });
+  const eligible = rows.filter((r) => r.score != null && r.value != null && r.value > 0 && r.position);
+  const marketRank = /* @__PURE__ */ new Map();
+  const modelRank = /* @__PURE__ */ new Map();
+  const byPosition = /* @__PURE__ */ new Map();
+  for (const r of eligible) {
+    if (!byPosition.has(r.position)) byPosition.set(r.position, []);
+    byPosition.get(r.position).push(r);
+  }
+  for (const group of byPosition.values()) {
+    [...group].sort((a, b) => b.value - a.value).forEach((r, i) => marketRank.set(r.sleeperId, i + 1));
+    [...group].sort((a, b) => b.score - a.score).forEach((r, i) => modelRank.set(r.sleeperId, i + 1));
+  }
+  return rows.map((r) => {
+    const mkt = marketRank.get(r.sleeperId) ?? null;
+    const mod = modelRank.get(r.sleeperId) ?? null;
+    return {
+      ...r,
+      marketRank: mkt,
+      modelRank: mod,
+      // Positive = the model likes him more than the market does, among the
+      // other rookies at his position.
+      divergence: mkt != null && mod != null ? mkt - mod : null
+    };
+  });
+}
+function buildTeamFit(rows, { deficits, tier } = {}) {
+  if (!Array.isArray(rows)) return [];
+  const needs = deficits instanceof Set ? deficits : new Set(deficits ?? []);
+  const maxValue = rows.reduce((m, r) => Math.max(m, r.value ?? 0), 0);
+  return rows.map((row) => {
+    const fitsNeed = row.position != null && needs.has(row.position);
+    if (row.score == null) return { ...row, fit: null, fitReasons: [], fitsNeed };
+    const market = maxValue > 0 ? (row.value ?? 0) / maxValue : 0;
+    let fit = (1 - FIT_MARKET_WEIGHT) * row.score + FIT_MARKET_WEIGHT * market;
+    const fitReasons = [];
+    if (fitsNeed) {
+      fit += FIT_NEED_BONUS;
+      fitReasons.push(`Fills your ${row.position} need`);
+    }
+    if (row.divergence != null && row.divergence >= 5) {
+      fit += FIT_DIVERGENCE_BONUS;
+      fitReasons.push(`Model rates him ${row.divergence} spots above the market`);
+    }
+    if (tier === "Contending" && depthBucket(row.rank) === 1) {
+      fit += FIT_WINDOW_BONUS;
+      fitReasons.push("In line to play right away \u2014 you're contending");
+    } else if (tier === "Rebuilding" && row.pick != null && row.pick <= EARLY_CAPITAL) {
+      fit += FIT_WINDOW_BONUS;
+      fitReasons.push("Early NFL capital worth developing \u2014 you're rebuilding");
+    }
+    return { ...row, fit, fitReasons, fitsNeed };
+  });
+}
+function topTargets(rows, { limit = 4 } = {}) {
+  return rows.filter((r) => r.fit != null).sort((a, b) => b.fit - a.fit || (b.value ?? 0) - (a.value ?? 0)).slice(0, limit);
+}
+function splitDivergence(rows, { minGap = 5, limit = 6 } = {}) {
+  const scored = rows.filter((r) => r.divergence != null);
+  const undervalued = scored.filter((r) => r.divergence >= minGap).sort((a, b) => b.divergence - a.divergence).slice(0, limit);
+  const overvalued = scored.filter((r) => r.divergence <= -minGap).sort((a, b) => a.divergence - b.divergence).slice(0, limit);
+  return { undervalued, overvalued };
+}
+function buildRookieBoard({ rookieMap, playerMap, intel, league } = {}) {
+  if (!rookieMap) return EMPTY_ROOKIE_BOARD;
+  const myRoster = league?.myRoster;
+  const allRosters = league?.allRosters;
+  const deficits = myRoster && allRosters?.length ? getDeficitPositions(myRoster, allRosters) : /* @__PURE__ */ new Set();
+  const tier = myRoster && allRosters?.length ? getWinWindowTier(myRoster.rosterId, allRosters) : null;
+  const prospects = buildRookieProspects(rookieMap, playerMap);
+  const rows = buildTeamFit(buildRookieResearch(prospects, intel), { deficits, tier });
+  return { rows, byId: new Map(rows.map((r) => [r.sleeperId, r])), deficits, tier };
+}
+var DEPTH_VALUE, DEPTH_WEIGHT, UDFA_SCORE, LAST_PICK, DEPTH_MAX, AGE_TILT_WEIGHT, AGE_Z_COEFF, AGE_BASELINE, tierOf, FIT_MARKET_WEIGHT, FIT_NEED_BONUS, FIT_DIVERGENCE_BONUS, FIT_WINDOW_BONUS, EARLY_CAPITAL, EMPTY_ROOKIE_BOARD;
+var init_rookieResearch = __esm({
+  "src/utils/rookieResearch.js"() {
+    init_rookieAdp();
+    init_recommendations();
+    init_rosterAnalysis();
+    DEPTH_VALUE = {
+      QB: { 1: 212, 2: 55, 3: 19, 4: 0 },
+      RB: { 1: 120, 2: 76, 3: 38, 4: 3 },
+      WR: { 1: 154, 2: 43, 3: 17, 4: 4 },
+      TE: { 1: 102, 2: 41, 3: 23, 4: 0 }
+    };
+    DEPTH_WEIGHT = 0.3;
+    UDFA_SCORE = 0.05;
+    LAST_PICK = 260;
+    DEPTH_MAX = Math.max(...Object.values(DEPTH_VALUE).flatMap((row) => Object.values(row)));
+    AGE_TILT_WEIGHT = 0.1;
+    AGE_Z_COEFF = 0.25 * AGE_TILT_WEIGHT / (1 - AGE_TILT_WEIGHT);
+    AGE_BASELINE = {
+      QB: { mean: 22.75, sd: 1.06 },
+      RB: { mean: 22.09, sd: 0.88 },
+      WR: { mean: 22.15, sd: 0.89 },
+      TE: { mean: 22.45, sd: 0.88 }
+    };
+    tierOf = (score) => score >= 0.62 ? "strong" : score >= 0.38 ? "fair" : "weak";
+    FIT_MARKET_WEIGHT = 0.45;
+    FIT_NEED_BONUS = 0.22;
+    FIT_DIVERGENCE_BONUS = 0.1;
+    FIT_WINDOW_BONUS = 0.08;
+    EARLY_CAPITAL = 64;
+    EMPTY_ROOKIE_BOARD = Object.freeze({ rows: [], byId: /* @__PURE__ */ new Map(), deficits: /* @__PURE__ */ new Set(), tier: null });
+  }
+});
+
+// mcp/tools/researchRookies.js
+function ownerIndex(league) {
+  const byPlayer = /* @__PURE__ */ new Map();
+  league.allRosters.forEach((r) => r.players.forEach((p) => byPlayer.set(String(p.sleeperId), r)));
+  return byPlayer;
+}
+function rookieRow(r, owners, myRosterId) {
+  const owner = owners.get(r.sleeperId) ?? null;
+  const priced = r.value != null && r.value > 0;
+  return {
+    sleeperId: r.sleeperId,
+    name: r.name,
+    position: r.position ?? null,
+    nflTeam: r.team || null,
+    // Rule 7: an unpriced rookie is null + unranked, never 0.
+    value: priced ? r.value : null,
+    unranked: !priced,
+    positionRank: priced ? r.positionRank ?? null : null,
+    rookieAdp: r.adp ?? null,
+    // THE score, 0-100 as the app shows it. Null without a feed entry.
+    score: pct2(r.score),
+    scoreTier: r.tier ?? null,
+    ageTilted: !!r.ageTilted,
+    reasons: (r.reasons ?? []).map((x) => x.text),
+    depth: {
+      rank: r.rank ?? null,
+      read: r.depthText ?? null,
+      campMove: r.move ?? null
+    },
+    nflDraft: r.pick != null ? { round: r.round ?? null, pick: r.pick } : null,
+    undrafted: !r.noData && r.pick == null,
+    noFeedEntry: !!r.noData,
+    // Within-position ranks; divergence > 0 = the model likes him more than
+    // the market among rookies at his position.
+    marketRank: r.marketRank ?? null,
+    modelRank: r.modelRank ?? null,
+    divergence: r.divergence ?? null,
+    fit: round3(r.fit),
+    fitReasons: r.fitReasons ?? [],
+    fitsNeed: !!r.fitsNeed,
+    ownerRosterId: owner?.rosterId ?? null,
+    ownerTeam: owner ? getTeamName(owner.owner) : null,
+    isYours: owner != null && owner.rosterId === myRosterId,
+    isFreeAgent: owner == null,
+    // DISPLAY ONLY. None of these reaches `score` or `fit` — CLAUDE.md
+    // Feature 19 records the measured nulls. Age is the one exception, and it
+    // is already inside `score` via the tilt; it is repeated here as a fact.
+    context: {
+      ageAtDraft: r.ageAtDraft ?? null,
+      heightIn: r.height ?? null,
+      weightLb: r.weight ?? null,
+      forty: r.forty ?? null,
+      vertical: r.vert ?? null,
+      broadJump: r.broad ?? null
+    }
+  };
+}
+function sortRows(rows, sort) {
+  const byValue = (a, b) => (b.value ?? 0) - (a.value ?? 0);
+  if (sort === "value") return [...rows].sort(byValue);
+  const key = sort === "score" ? "score" : "fit";
+  return [...rows].sort((a, b) => {
+    const av = a[key];
+    const bv = b[key];
+    if (av == null && bv == null) return byValue(a, b);
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    return bv - av || byValue(a, b);
+  });
+}
+function findRookie(rows, query) {
+  const raw = String(query).trim();
+  if (/^\d+$/.test(raw)) {
+    const hit = rows.find((r) => r.sleeperId === raw);
+    return hit ? { match: hit } : { match: null, candidates: [] };
+  }
+  const q = normalize(raw);
+  if (q.length < 2) return { match: null, candidates: [] };
+  const keyed = rows.map((r) => ({ r, key: normalize(r.name) }));
+  const exact = keyed.filter((x) => x.key === q);
+  if (exact.length === 1) return { match: exact[0].r };
+  const pool = exact.length > 1 ? exact : keyed.filter((x) => x.key.split(" ").some((w) => w === q) || x.key.includes(q));
+  if (pool.length === 1) return { match: pool[0].r };
+  return { match: null, candidates: pool.map((x) => x.r) };
+}
+function buildRookieResearchAnswer(snapshot, intelFeed, {
+  team,
+  position,
+  player,
+  sort = "fit",
+  limit = DEFAULT_LIMIT4,
+  defaultRosterId,
+  myRosterId
+} = {}) {
+  const { league } = snapshot;
+  if (!league) throw new Error("League state unavailable");
+  if (position != null && !POSITIONS4.includes(String(position).toUpperCase())) {
+    return {
+      ok: false,
+      error: `Rookie research covers ${POSITIONS4.join(" / ")}. A defense is never a rookie and this league rosters no kicker.`
+    };
+  }
+  const pos = position ? String(position).toUpperCase() : null;
+  const order = SORTS.includes(sort) ? sort : "fit";
+  const resolved = resolveTeam(league, team, defaultRosterId);
+  if (!resolved.roster) {
+    return { ok: false, error: resolved.error, candidates: resolved.candidates ?? [] };
+  }
+  const fitRoster = resolved.roster;
+  if (!snapshot.playerDB) {
+    return {
+      ok: false,
+      error: "The Sleeper player DB did not load, and the rookie class is read from it \u2014 so there is no rookie list to rank. Retry with refresh: true.",
+      asOf: snapshot.asOf
+    };
+  }
+  const available = !!intelFeed?.available;
+  const board = buildRookieBoard({
+    rookieMap: buildRookieMap(snapshot.playerDB),
+    playerMap: snapshot.values?.playerMap,
+    intel: available ? intelFeed.data : null,
+    // Roster fit is read for the requested team — the same fit the app reads
+    // for "me", computed from that team's seat.
+    league: { ...league, myRoster: fitRoster }
+  });
+  const owners = ownerIndex(league);
+  const rows = board.rows.map((r) => rookieRow(r, owners, myRosterId));
+  const rowById = new Map(rows.map((r) => [r.sleeperId, r]));
+  const cap = Math.min(Math.max(1, Number(limit) || DEFAULT_LIMIT4), MAX_LIMIT3);
+  const base = {
+    ok: true,
+    asOf: snapshot.asOf,
+    available,
+    feed: available ? { updatedAt: intelFeed.updatedAt, ageHours: intelFeed.ageHours, season: intelFeed.data?.season ?? null } : null,
+    team: {
+      rosterId: fitRoster.rosterId,
+      teamName: getTeamName(fitRoster.owner),
+      isYou: fitRoster.rosterId === myRosterId,
+      deficits: [...board.deficits].sort(),
+      winWindow: board.tier
+    }
+  };
+  const scored = rows.filter((r) => r.score != null).length;
+  const counts = {
+    rookieClass: rows.length,
+    scored,
+    noFeedEntry: rows.filter((r) => r.noFeedEntry).length
+  };
+  if (player) {
+    const found = findRookie(board.rows, player);
+    if (!found.match) {
+      return {
+        ...base,
+        ok: false,
+        error: found.candidates?.length ? `"${player}" matches ${found.candidates.length} rookies. Name which one \u2014 this tool will not guess between two players.` : `No rookie matching "${player}" in this year's class. Veterans are not on the rookie board.`,
+        rookieCandidates: (found.candidates ?? []).slice(0, 12).map((r) => ({
+          sleeperId: r.sleeperId,
+          name: r.name,
+          position: r.position ?? null,
+          nflTeam: r.team || null
+        }))
+      };
+    }
+    return {
+      ...base,
+      scope: "player",
+      rookie: rowById.get(found.match.sleeperId),
+      counts,
+      notes: buildNotes10({ available, intelFeed, scoped: "player", row: rowById.get(found.match.sleeperId), base })
+    };
+  }
+  const inPos = pos ? rows.filter((r) => r.position === pos) : rows;
+  const sorted = sortRows(inPos, order);
+  const returned = sorted.slice(0, cap);
+  const inPosIds = new Set(inPos.map((r) => r.sleeperId));
+  const boardInPos = board.rows.filter((r) => inPosIds.has(r.sleeperId));
+  const targets = topTargets(boardInPos, { limit: TARGETS }).map((r) => rowById.get(r.sleeperId));
+  const div = splitDivergence(boardInPos, { minGap: DIVERGENCE_MIN_GAP, limit: DIVERGENCE_LIMIT });
+  return {
+    ...base,
+    scope: "board",
+    filter: { position: pos, sort: order },
+    counts: { ...counts, matchingFilter: inPos.length, returned: returned.length, truncated: inPos.length > returned.length },
+    targets,
+    undervalued: div.undervalued.map((r) => rowById.get(r.sleeperId)),
+    overvalued: div.overvalued.map((r) => rowById.get(r.sleeperId)),
+    board: returned,
+    notes: buildNotes10({ available, intelFeed, scoped: "board", inPos, returned, order, base })
+  };
+}
+function buildNotes10({ available, intelFeed, scoped, row, inPos, returned, order, base }) {
+  const notes = [];
+  if (!available) {
+    notes.push(
+      `The rookie intel feed could not be read (${intelFeed?.error ?? "not loaded"}), so every opportunity score and fit is null \u2014 NOT zero \u2014 and the board is in dynasty-value order, the same state Draft \u203A Research shows. This is a gap in our data, not a verdict on any rookie.`
+    );
+  } else if (intelFeed.ageHours != null && intelFeed.ageHours > 36) {
+    notes.push(`The rookie intel feed was last published ${intelFeed.ageHours}h ago; it normally publishes daily.`);
+  }
+  notes.push(
+    "score is the ONE opportunity score the app ships: 30% NFL depth-chart standing / 70% NFL draft capital (back-tested at Spearman +0.664 vs rookie-season points), tilted 10% toward youth within position. Everything under `context` (age at the draft, height, weight, combine drills) is display only and never moves a score \u2014 athleticism was tested and is a measured null."
+  );
+  notes.push(
+    "marketRank / modelRank / divergence are computed WITHIN POSITION: FantasyCalc already prices Superflex QB scarcity and the shallow TE pool, so a cross-position comparison would measure the two yardsticks rather than disagree about a player."
+  );
+  notes.push(
+    `fit ranks the class for ${base.team.teamName}: the score blended 55/45 with market price, plus bonuses for a position below league average, a 5+ spot model-over-market gap, and the win window. It is a judgement call layered on the back-tested score, never a change to it.`
+  );
+  if (scoped === "board") {
+    if (inPos.length > returned.length) {
+      notes.push(`Showing the top ${returned.length} of ${inPos.length} by ${order}; raise limit (max ${MAX_LIMIT3}) for more.`);
+    }
+  } else if (row?.noFeedEntry && available) {
+    notes.push(`${row.name} has no entry in the rookie intel feed, so he is unscored \u2014 absence of feed data is not evidence of no opportunity.`);
+  }
+  return notes;
+}
+function line(r) {
+  const val = r.value == null ? "\u2014" : r.value.toLocaleString();
+  const score = r.score == null ? "unscored" : `${r.score}/100 ${r.scoreTier}`;
+  const cap = r.nflDraft ? `pick ${r.nflDraft.pick}` : r.noFeedEntry ? "no feed entry" : "undrafted";
+  const own = r.isYours ? " \xB7 yours" : r.ownerTeam ? ` \xB7 ${r.ownerTeam}` : " \xB7 free agent";
+  return `${r.name} (${r.position}, ${r.nflTeam ?? "FA"}) \u2014 ${score} \xB7 value ${val} \xB7 ${cap}${r.depth.read ? ` \xB7 ${r.depth.read}` : ""}${own}`;
+}
+function renderRookieResearchText(a) {
+  if (!a.ok) {
+    const c = a.rookieCandidates?.length ? `
+Candidates: ${a.rookieCandidates.map((r) => `${r.name} (${r.position}, ${r.sleeperId})`).join("; ")}` : "";
+    const t = a.candidates?.length ? `
+Teams: ${a.candidates.map((x) => x.teamName).join("; ")}` : "";
+    return `${a.error}${c}${t}`;
+  }
+  const out = [];
+  out.push(`Rookie research for ${a.team.teamName} \u2014 needs: ${a.team.deficits.join(", ") || "none"}; window: ${a.team.winWindow ?? "\u2014"}.`);
+  if (!a.available) out.push("Rookie intel feed unavailable: scores are null, board in dynasty-value order.");
+  if (a.scope === "player") {
+    const r = a.rookie;
+    out.push(line(r));
+    if (r.reasons.length) out.push(`Why: ${r.reasons.join("; ")}.`);
+    if (r.divergence != null) out.push(`Within ${r.position}s: market #${r.marketRank}, model #${r.modelRank} (${r.divergence >= 0 ? "+" : ""}${r.divergence}).`);
+    if (r.fitReasons.length) out.push(`Fit: ${r.fitReasons.join("; ")}.`);
+  } else {
+    if (a.targets.length) {
+      out.push("Targets:");
+      a.targets.forEach((r) => out.push(`  ${line(r)}${r.fitReasons.length ? ` \u2014 ${r.fitReasons.join("; ")}` : ""}`));
+    }
+    if (a.undervalued.length) out.push(`Model over market: ${a.undervalued.map((r) => `${r.name} (+${r.divergence})`).join(", ")}.`);
+    if (a.overvalued.length) out.push(`Market over model: ${a.overvalued.map((r) => `${r.name} (${r.divergence})`).join(", ")}.`);
+    out.push(`Board by ${a.filter.sort}${a.filter.position ? ` (${a.filter.position})` : ""}:`);
+    a.board.forEach((r, i) => out.push(`  ${i + 1}. ${line(r)}`));
+  }
+  a.notes.forEach((n) => out.push(`Note: ${n}`));
+  return out.join("\n");
+}
+var DEFAULT_LIMIT4, MAX_LIMIT3, TARGETS, DIVERGENCE_LIMIT, DIVERGENCE_MIN_GAP, POSITIONS4, SORTS, pct2, round3;
+var init_researchRookies = __esm({
+  "mcp/tools/researchRookies.js"() {
+    init_rookieResearch();
+    init_rookieAdp();
+    init_teamName();
+    init_teams();
+    init_resolveAssets();
+    DEFAULT_LIMIT4 = 12;
+    MAX_LIMIT3 = 40;
+    TARGETS = 4;
+    DIVERGENCE_LIMIT = 6;
+    DIVERGENCE_MIN_GAP = 5;
+    POSITIONS4 = ["QB", "RB", "WR", "TE"];
+    SORTS = ["fit", "score", "value"];
+    pct2 = (x) => x == null ? null : Math.round(x * 100);
+    round3 = (x) => x == null ? null : Math.round(x * 1e3) / 1e3;
+  }
+});
+
 // mcp/liveScores.js
 async function getLiveScores({
   leagueId,
@@ -44697,7 +45313,7 @@ async function getLiveScores({
   force = false,
   fetcher,
   concurrency = 6,
-  store = defaultStore7
+  store = defaultStore8
 } = {}) {
   const notes = [];
   if (!leagueId || !Number.isFinite(Number(week)) || Number(week) < 1) {
@@ -44723,7 +45339,7 @@ async function getLiveScores({
   });
   return { available: true, week: Number(week), pointsByRoster, source: stampSource(loaded), notes };
 }
-var DEFAULT_LIVE_TTL_MS, keyFor, defaultStore7;
+var DEFAULT_LIVE_TTL_MS, keyFor, defaultStore8;
 var init_liveScores = __esm({
   "mcp/liveScores.js"() {
     init_constants();
@@ -44732,7 +45348,7 @@ var init_liveScores = __esm({
     init_store();
     DEFAULT_LIVE_TTL_MS = 5 * 60 * 1e3;
     keyFor = (leagueId, week) => `live:${leagueId}_${week}`;
-    defaultStore7 = memoryStore();
+    defaultStore8 = memoryStore();
   }
 });
 
@@ -45649,6 +46265,137 @@ function createServer({ env = process.env, fetcher, store } = {}) {
       };
     }
   );
+  const rookieRowSchema = external_exports.object({
+    sleeperId: external_exports.string(),
+    name: external_exports.string(),
+    position: external_exports.string().nullable(),
+    nflTeam: external_exports.string().nullable(),
+    value: external_exports.number().nullable(),
+    unranked: external_exports.boolean(),
+    positionRank: external_exports.number().nullable(),
+    rookieAdp: external_exports.number().nullable(),
+    score: external_exports.number().nullable(),
+    scoreTier: external_exports.string().nullable(),
+    ageTilted: external_exports.boolean(),
+    reasons: external_exports.array(external_exports.string()),
+    depth: external_exports.object({
+      rank: external_exports.number().nullable(),
+      read: external_exports.string().nullable(),
+      campMove: external_exports.object({
+        from: external_exports.number(),
+        to: external_exports.number(),
+        delta: external_exports.number(),
+        direction: external_exports.string()
+      }).nullable()
+    }),
+    nflDraft: external_exports.object({ round: external_exports.number().nullable(), pick: external_exports.number() }).nullable(),
+    undrafted: external_exports.boolean(),
+    noFeedEntry: external_exports.boolean(),
+    marketRank: external_exports.number().nullable(),
+    modelRank: external_exports.number().nullable(),
+    divergence: external_exports.number().nullable(),
+    fit: external_exports.number().nullable(),
+    fitReasons: external_exports.array(external_exports.string()),
+    fitsNeed: external_exports.boolean(),
+    ownerRosterId: external_exports.number().nullable(),
+    ownerTeam: external_exports.string().nullable(),
+    isYours: external_exports.boolean(),
+    isFreeAgent: external_exports.boolean(),
+    context: external_exports.object({
+      ageAtDraft: external_exports.number().nullable(),
+      heightIn: external_exports.number().nullable(),
+      weightLb: external_exports.number().nullable(),
+      forty: external_exports.number().nullable(),
+      vertical: external_exports.number().nullable(),
+      broadJump: external_exports.number().nullable()
+    })
+  });
+  server.registerTool(
+    "research_rookies",
+    {
+      title: "Research the rookie class",
+      description: 'Answers "which rookies become something, and which should I take?" \u2014 the question a dynasty value cannot, because value prices consensus rather than opportunity. Returns the ONE opportunity score the app ships (0-100: NFL depth-chart standing x NFL draft capital, back-tested, with a small youth tilt), the within-position disagreement between that model and the market, and a roster-fit ranking for one team. Age and combine numbers are returned as context only and never score. Pass `player` for one rookie. A rookie the feed has no entry for is unscored (null), never zero.',
+      inputSchema: {
+        player: external_exports.string().optional().describe("One rookie by name or Sleeper id. An ambiguous name returns candidates and refuses."),
+        position: external_exports.enum(["QB", "RB", "WR", "TE"]).optional().describe("Only this position (applies to the board, the shortlist and the divergence lists)."),
+        sort: external_exports.enum(["fit", "score", "value"]).optional().describe("fit (default, for the team) \xB7 score (opportunity alone) \xB7 value (dynasty market)."),
+        team: external_exports.string().optional().describe("Whose roster fit to read: team name, manager handle or roster id. Omit for your own."),
+        limit: external_exports.number().int().min(1).max(MAX_LIMIT3).optional().describe(`Board rows to return (default ${DEFAULT_LIMIT4}, max ${MAX_LIMIT3}). counts carries the true size.`),
+        leagueId: external_exports.string().optional().describe("Sleeper league id. Omit for the configured league."),
+        refresh: external_exports.boolean().optional().describe("Bypass the caches (~15 min snapshot, ~60 min feed) and refetch.")
+      },
+      outputSchema: {
+        ok: external_exports.boolean(),
+        error: external_exports.string().optional(),
+        candidates: external_exports.array(teamCandidate).optional(),
+        rookieCandidates: external_exports.array(external_exports.object({
+          sleeperId: external_exports.string(),
+          name: external_exports.string(),
+          position: external_exports.string().nullable(),
+          nflTeam: external_exports.string().nullable()
+        })).optional(),
+        asOf: asOfSchema.optional(),
+        // False means the rookie intel feed could not be read — every score
+        // is then null and the board is in dynasty-value order. Never "no
+        // rookies": the class comes from the player DB, not the feed.
+        available: external_exports.boolean().optional(),
+        feed: external_exports.object({
+          updatedAt: external_exports.string().nullable(),
+          ageHours: external_exports.number().nullable(),
+          season: external_exports.string().nullable()
+        }).nullable().optional(),
+        team: external_exports.object({
+          rosterId: external_exports.number(),
+          teamName: external_exports.string(),
+          isYou: external_exports.boolean(),
+          deficits: external_exports.array(external_exports.string()),
+          winWindow: external_exports.string().nullable()
+        }).optional(),
+        scope: external_exports.enum(["board", "player"]).optional(),
+        filter: external_exports.object({ position: external_exports.string().nullable(), sort: external_exports.string() }).optional(),
+        counts: external_exports.object({
+          rookieClass: external_exports.number(),
+          scored: external_exports.number(),
+          noFeedEntry: external_exports.number(),
+          matchingFilter: external_exports.number().optional(),
+          returned: external_exports.number().optional(),
+          truncated: external_exports.boolean().optional()
+        }).optional(),
+        rookie: rookieRowSchema.optional(),
+        targets: external_exports.array(rookieRowSchema).optional(),
+        undervalued: external_exports.array(rookieRowSchema).optional(),
+        overvalued: external_exports.array(rookieRowSchema).optional(),
+        board: external_exports.array(rookieRowSchema).optional(),
+        notes: external_exports.array(external_exports.string()).optional()
+      }
+    },
+    async ({ player, position, sort, team, limit, leagueId, refresh }) => {
+      const snapshot = await snapshotFor(leagueId, refresh);
+      const intel = await getRookieIntel({
+        force: !!refresh,
+        fetcher: get,
+        ttlMs: config2.feedTtlMs,
+        ...store ? { store } : {}
+      });
+      const answer = buildRookieResearchAnswer(snapshot, intel, {
+        player,
+        position,
+        sort,
+        team,
+        limit,
+        defaultRosterId: config2.defaultRosterId,
+        myRosterId: config2.defaultRosterId
+      });
+      if (answer.asOf && intel.available) {
+        answer.asOf = mergeAsOf(answer.asOf, { rookieIntel: intel.source });
+      }
+      return {
+        content: [{ type: "text", text: renderRookieResearchText(answer) }],
+        structuredContent: answer,
+        isError: !answer.ok
+      };
+    }
+  );
   return { server, config: config2 };
 }
 var SERVER_NAME, SERVER_VERSION, sourceStamp, asOfSchema, teamCandidate, playerRowSchema, playerCandidateSchema, pickCandidateSchema, lineupPlayerSchema, newsItemSchema, tradeAssetSchema, sideFitSchema, packageAssetSchema, seatAppealSchema;
@@ -45675,7 +46422,9 @@ var init_server3 = __esm({
     init_playoffOdds2();
     init_playerNews();
     init_findTradeTargets();
+    init_researchRookies();
     init_liveScores();
+    init_feeds();
     init_news();
     SERVER_NAME = "dynastyedge";
     SERVER_VERSION = "0.1.0";
@@ -45724,7 +46473,11 @@ var init_server3 = __esm({
         // absent rather than erroring — but when it IS used it is stamped like
         // everything else, because an answer quoting a beat report has to be
         // datable.
-        news: sourceStamp.optional()
+        news: sourceStamp.optional(),
+        // The Actions-published rookie depth-chart + draft-capital feed, behind
+        // research_rookies. Class B like news: absent when the feed could not be
+        // read, stamped when it was used.
+        rookieIntel: sourceStamp.optional()
       })
     });
     teamCandidate = external_exports.object({

@@ -13,6 +13,7 @@ import { DEFAULT_WEEKLY_TTL_MS } from './weekly.js'
 import { DEFAULT_SEASON_TTL_MS } from './season.js'
 import { DEFAULT_TRANSACTIONS_TTL_MS, DEFAULT_FROZEN_TTL_MS } from './transactions.js'
 import { DEFAULT_HISTORY_TTL_MS } from './history.js'
+import { DEFAULT_FEED_TTL_MS } from './feeds.js'
 
 // The GitHub OAuth App this server authenticates against. A client ID is
 // PUBLIC by design — it travels in the browser's address bar on every
@@ -60,6 +61,8 @@ export function loadConfig(env = process.env) {
     frozenTtlMs: Number(env.DYNASTYEDGE_FROZEN_TTL_MS) || DEFAULT_FROZEN_TTL_MS,
     // Past seasons never change. The longest TTL here, and for that reason.
     historyTtlMs: Number(env.DYNASTYEDGE_HISTORY_TTL_MS) || DEFAULT_HISTORY_TTL_MS,
+    // rookie-intel and trade-values publish at most daily (mcp/feeds.js).
+    feedTtlMs: Number(env.DYNASTYEDGE_FEED_TTL_MS) || DEFAULT_FEED_TTL_MS,
     concurrency: Number(env.DYNASTYEDGE_CONCURRENCY) || 6,
     githubClientId: env.GITHUB_CLIENT_ID || DEFAULT_GITHUB_CLIENT_ID,
     // No default, deliberately. A server that starts without this would

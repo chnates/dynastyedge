@@ -26,8 +26,9 @@ const MIN_QUERY_LENGTH = 2
 
 // Same normalization the app's global search uses: fold case, strip
 // punctuation and suffixes so "A.J. Brown", "AJ Brown" and "aj brown" are one
-// key. Never used to AUTO-PICK a match — only to find candidates.
-function normalize(s) {
+// key. Never used to AUTO-PICK a match — only to find candidates. Exported so
+// research_rookies searches the rookie class on exactly the same key.
+export function normalize(s) {
   return String(s ?? '')
     .toLowerCase()
     .replace(/[.'’-]/g, '')
