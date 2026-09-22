@@ -74,7 +74,7 @@ const OUT_FILE = 'news.json'
 const SLEEPER_PLAYERS = 'https://api.sleeper.app/v1/players/nfl'
 const SKILL_POSITIONS = new Set(['QB', 'RB', 'WR', 'TE'])
 
-async function get(url, type = 'text') {
+async function fetchOk(url, type) {
   const res = await fetch(url, {
     headers: {
       'User-Agent': UA,
@@ -83,6 +83,11 @@ async function get(url, type = 'text') {
     signal: AbortSignal.timeout(20000),
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res
+}
+
+async function get(url, type = 'text') {
+  const res = await fetchOk(url, type)
   return type === 'json' ? res.json() : res.text()
 }
 
@@ -212,7 +217,23 @@ async function rotowirePage() {
     .filter(i => i.headline)
 }
 
-const rss = (source, url) => async () => parseRss(await get(url), source)
+// A 2xx that parses to nothing is a DIFFERENT failure from a throw, and it is
+// the one that hid ESPN RSS for weeks (NEWS-7): the old log printed "0 items"
+// and nothing else, so the run log could not name the cause. Say what we were
+// actually handed — status, final URL (redirects), type, size, first bytes.
+const rss = (source, url) => async () => {
+  const res = await fetchOk(url, 'text')
+  const body = await res.text()
+  const items = parseRss(body, source)
+  if (!items.length) {
+    const head = body.slice(0, 200).replace(/\s+/g, ' ')
+    console.log(
+      `${source}: HTTP ${res.status} but 0 <item> blocks — ` +
+      `url ${res.url} · ${res.headers.get('content-type')} · ${body.length} bytes · head: ${head}`,
+    )
+  }
+  return items
+}
 
 // Probed live 2026-09-04 (see docs/analysis/news-sources-2026-09.md). The
 // percentage is the share of that source's items naming an active skill
