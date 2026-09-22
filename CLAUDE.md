@@ -6222,6 +6222,14 @@ Two things the roll must not break, both pinned by tests:
 ## Rules Claude Code Must Always Follow
 
 1. **Read this entire file before writing any code in a new session.**
+   Then, if the task is "what should I build next?" rather than a named change,
+   read **`docs/open-items.md` §0** — the plan, in priority order, with the
+   trigger that makes each item ready. An item there carrying a
+   **`Kickoff prompt`** block is ready-to-run work the owner has already signed
+   off; paste it into a fresh session. **Never start an item whose trigger has
+   not fired** — doing it early is a bug, and OPEN-2 is the worked example
+   (rolling the pick window before the draft ran broke the Draft Tracker during
+   the one event it exists for).
 1. **Player resolution:** Sleeper returns IDs. FantasyCalc returns names + sleeperId.
    Always join on `sleeperId`. Never guess player names from IDs.
 1. **Pick ownership:** Derive from traded_picks endpoint only.
@@ -6392,10 +6400,15 @@ Two things the roll must not break, both pinned by tests:
 
 ## Future Features (Do Not Build Yet)
 
-> **"What's next?" is answered by `docs/open-items.md`** — which currently points
-> at `docs/build-plan-2026-09.md`, the owner-approved active work queue. It is
-> the living backlog
-> of deferred work, each item with the trigger condition that makes it ready.
+> **"What's next?" is answered by `docs/open-items.md` §0**, which is titled
+> "read this first" and carries the current plan in priority order. It is the
+> living backlog of deferred work, each item with the trigger condition that
+> makes it ready, and **an item carrying a `Kickoff prompt` block is
+> ready-to-run work with the owner's sign-off already on it.**
+> `docs/build-plan-2026-09.md` was the active queue through 2026-09; **all four
+> of its phases are now resolved** (1 shipped · 2 shipped-with-a-recorded-miss ·
+> 3 partial, 3b/3c null · 4 cut), so it is history plus the standing rules in
+> its §0 and §8 — not the queue.
 > Read it before proposing next steps. Some items are **not** ready work and
 > say so explicitly (rolling `PICK_YEARS` before the rookie draft runs actively
 > breaks the Draft Tracker). The list below is the longer-horizon feature
