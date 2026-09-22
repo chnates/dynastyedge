@@ -2673,6 +2673,28 @@ Counter or Decline.** The app proposed and then argued with itself.
     hiding the row.
   - Without a partner roster it degrades to phase 1 and reports `appeal: null`;
     no read is invented.
+  - **The `rationale` is CHECKED against the lineup, not asserted (2026-09-22,
+    SMALL-1).** It said *"protects your starters"* unconditionally whenever a
+    package drew from a surplus. What it meant was "touched nothing scoring ≥
+    `PROTECT_THRESHOLD`", which is a weaker and different claim — a core
+    starter lands on exactly **0.85**, and only a deficit or a cliff crosses
+    0.9. Measured on the live board it said so on **11 of the owner's 20**
+    suggestions and **77 of 180** across all ten seats *while sending a player
+    who actually starts* (Jonathan Taylor, Bo Nix, Chase Brown, TreVeyon
+    Henderson). `packageRationale` now takes
+    `buildValueLineup(myRoster.players).starterIds` and **names the starter**
+    instead — *"Drawn from your RB surplus — but Jonathan Taylor starts in your
+    best lineup."* Both counts are **0** after; the claim still prints where it
+    is true (103 of 180), so this is a check rather than a blanket suppression.
+    The `bestUnder` copy lost *"without dealing a core starter"* for the same
+    reason — it was the identical unchecked claim, and it would have
+    contradicted the corrected sentence on the same line.
+    **It is a copy fix over a fact the engine already had**: no keep-score, no
+    `PROTECT_THRESHOLD`, no search behaviour moved, and **all 180 selected
+    packages across all ten seats are byte-identical** on assets, totals,
+    keep-pain, both appeals, `inFairBand` and `alternative`. That equality is
+    the acceptance test — a package that changed would mean the search moved,
+    and the screen looks plausible either way.
   - **`alternative` — the road not taken, and it now points the OTHER way
     (2026-09-07, widened 2026-09-21).** While appeal won outright the suggestion
     was always the most agreeable package, so the useful footnote was the

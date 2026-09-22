@@ -1083,7 +1083,23 @@ export function adjustVerdictForInjuries(baseVerdict, liveIntelligence, giveAsse
 
 // Build a one-line, plain-English read of where a package's pieces come from —
 // so the UI can explain why these assets (and not your studs) were chosen.
-function packageRationale(assets, ctx) {
+//
+// `starterIds` is the Set from `buildValueLineup(myRoster.players)` — who
+// actually starts. It is REQUIRED for the second sentence, and that is the
+// whole point of this signature: until 2026-09-22 the sentence read
+// "protects your starters" unconditionally whenever a package drew from a
+// surplus. Measured live, it said so on 11 of the owner's 20 suggestions and
+// 77 of 180 across all ten seats WHILE SENDING A LINEUP REGULAR — Jonathan
+// Taylor, Bo Nix, Chase Brown, TreVeyon Henderson. What it actually meant was
+// "touched nothing scoring >= PROTECT_THRESHOLD", which is a weaker and
+// different claim: a core starter lands on exactly 0.85, and only a deficit
+// or a cliff crosses 0.9. The fact needed to say something true was already
+// in the engine, one call away.
+//
+// When the set is missing the claim is DROPPED rather than asserted. The
+// failure being fixed here is a sentence stating something nobody checked, so
+// the unchecked branch must not restate it.
+function packageRationale(assets, ctx, starterIds) {
   const playerPositions = [...new Set(
     assets.filter(a => a.type === 'player').map(a => a.position).filter(Boolean)
   )]
@@ -1094,9 +1110,23 @@ function packageRationale(assets, ctx) {
   if (surplusPos.length) parts.push(`your ${surplusPos.join('/')} surplus`)
   if (hasPicks) parts.push(ctx.myTier === 'Contending' ? 'spare draft capital' : 'draft capital')
   if (!parts.length && playerPositions.length) parts.push('your roster depth')
+  const source = parts.length ? `Drawn from ${joinAnd(parts)}` : null
 
-  return parts.length
-    ? `Drawn from ${joinAnd(parts)} — protects your starters.`
+  const canCheck = starterIds instanceof Set
+  const leaving = canCheck
+    ? assets.filter(a => a.type === 'player' && starterIds.has(String(a.sleeperId)))
+    : []
+
+  if (leaving.length) {
+    const names = joinAnd(leaving.map(a => a.name))
+    const verb = leaving.length > 1 ? 'start' : 'starts'
+    return source
+      ? `${source} — but ${names} ${verb} in your best lineup.`
+      : `${names} ${verb} in your best lineup.`
+  }
+  if (!canCheck) return source ? `${source}.` : 'Drawn from your roster depth.'
+  return source
+    ? `${source} — protects your starters.`
     : 'Protects your core starters.'
 }
 
@@ -1233,6 +1263,11 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
 
   const ctx = buildGivabilityContext(myRoster, allRosters)
   const opponentDeficits = getDeficitPositions(opponentRoster, allRosters)
+  // Who actually starts for me, by dynasty value — the fact `packageRationale`
+  // needs to stop overclaiming. Computed once per target, not per candidate,
+  // and it reaches nothing that scores or orders a package: the search is
+  // untouched by this call.
+  const myStarterIds = buildValueLineup(myRoster.players).starterIds
 
   // Build the candidate pool, then drop anything core/irreplaceable (an elite
   // backup-less starter like a top-1 TE) — the package builder never reaches for
@@ -1423,7 +1458,7 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
       // so the sweep reports the number the search actually minimised rather
       // than a re-derivation of the formula that could drift from it.
       keepPain: best.pain,
-      rationale: packageRationale(assets, ctx),
+      rationale: packageRationale(assets, ctx, myStarterIds),
       // What this package is worth to MY roster — the counterpart to `appeal`.
       myAppeal: mine?.appeal ?? null,
       mySummary: mine?.summary ?? null,
@@ -1463,7 +1498,11 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
     const gapPct = Math.round((targetValue - bestUnder.total) / targetValue * 100)
     return {
       assets, totalValue: bestUnder.total, gapPct, over: false, short: true,
-      rationale: `${packageRationale(assets, ctx)} Covers ~${100 - gapPct}% — add a piece to reach fair value without dealing a core starter.`,
+      // "without dealing a core starter" was the same unchecked claim in
+      // different words, and leaving it would now contradict the sentence
+      // above it on the very same line. The instruction survives; the
+      // assertion doesn't.
+      rationale: `${packageRationale(assets, ctx, myStarterIds)} Covers ~${100 - gapPct}% — add a piece to reach fair value.`,
     }
   }
 

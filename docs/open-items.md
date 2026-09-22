@@ -1936,6 +1936,8 @@ verified against the live league.
    "touched nothing scoring ≥ 0.9", which is not what it says. The honest fix
    is to check the package against `buildValueLineup(myRoster).starterIds` and
    name the starter when one is in it. Small, and not blocked on anything.
+   *Became **SMALL-1**; **fixed 2026-09-22**, exactly as described here, after
+   sitting open for sixteen days.*
 2. **`PROTECT_THRESHOLD` (0.9) protects almost nothing on a healthy roster.**
    Core starters land on exactly 0.85; only a position in deficit (+0.22, which
    clamps to 1.0) or a cliff (0.95) ever crosses it. That is *by design* —
@@ -1988,39 +1990,54 @@ so the two carrying a layout decision stay reviewable.
 `main`, plus a seventh truncation of a load-bearing value that the crash had
 been hiding.
 
-### SMALL-1 — `packageRationale` claims it protected your starters when it didn't
+### SMALL-1 — `packageRationale` claimed it protected your starters when it didn't — **CLOSED 2026-09-22**
 
-**Status:** open, small, and **blocked on nothing.** **Trigger: fired** — it
-has been ready since it was recorded on 2026-09-06 and was simply never
-picked up.
+**Status:** closed. Shipped as the prerequisite commit to MCP-CARRY's
+trade-targets tool (owner call, 2026-09-22), because `packageRationale` is the
+explanation string that tool returns and `MCP_DISCOVERY.md` §7's whole argument
+is that a wrong fact stops being a visibly broken screen and becomes a
+confident, fluent, wrong answer.
 
-`packageRationale` says *"protects your starters"* unconditionally whenever a
-suggested package draws from a surplus. On the live board it said that while
-spending the owner's **RB2, who starts** in `buildValueLineup`. What it
-actually means is "touched nothing scoring ≥ 0.9" — which is not what it says,
-and `PROTECT_THRESHOLD` protects less than its name suggests anyway (core
-starters land on exactly 0.85; only a deficit or a cliff crosses 0.9).
+`packageRationale` said *"protects your starters"* unconditionally whenever a
+suggested package drew from a surplus. What it actually meant was "touched
+nothing scoring ≥ `PROTECT_THRESHOLD`" — a weaker and different claim, since
+core starters land on exactly **0.85** and only a deficit or a cliff crosses
+0.9.
 
-**MEASURED 2026-09-22 on the live board: 9 of 20 rows** say "protects your
-starters" while sending a player who starts — Jonathan Taylor (5,767) on three
-of them, Bo Nix (4,177) on two, TreVeyon Henderson on three, Chase Brown on
-one. It is not an edge case; it is nearly half the board, and it sits one line
-above the appeal reads OPEN-10 just corrected.
+**Re-measured on the live board 2026-09-22 before touching anything, and the
+number had moved: 11 of 20, not the 9 recorded when the item was written** —
+Jonathan Taylor (5,786) on three rows, Chase Brown on three, TreVeyon Henderson
+on three, Bo Nix and Jaxson Dart on one each. Across all ten seats: **77 of
+180**, with the claim printed on **180 of 180**. That is the shape of the bug —
+a sentence that is not a finding because it is always said.
 
-**The honest fix:** check the package against
-`buildValueLineup(myRoster).starterIds` and name the starter when one is in
-it. It is a copy fix over a fact the engine already has — no model change, no
-recalibration.
+**The fix is a copy fix over a fact the engine already had.**
+`suggestFairPackage` computes `buildValueLineup(myRoster.players).starterIds`
+once per target and hands it to `packageRationale`, which names the starter
+instead of claiming to have protected him: *"Drawn from your RB surplus — but
+Jonathan Taylor starts in your best lineup."* A missing set drops the claim
+rather than asserting it — the failure being fixed is a sentence stating
+something nobody checked, so the unchecked branch must not restate it. The
+`bestUnder` copy lost *"without dealing a core starter"* for the same reason;
+it was the identical unchecked claim and would have contradicted the corrected
+sentence on the same line.
 
-**It is now the PREREQUISITE for MCP-CARRY's trade-targets tool** (owner call,
-2026-09-22), not an independent item. `packageRationale` is the explanation
-string such a tool would return, so shipping the tool first propagates the
-false claim to a second surface — and through an LLM, where
-`MCP_DISCOVERY.md` §7's whole argument is that a wrong fact stops being a
-visibly broken screen and becomes a confident, fluent, wrong answer.
+**After: 0 of 20 and 0 of 180.** The claim still prints on **103 of 180**, so
+this is a check rather than a blanket suppression — one of its two halves would
+be useless without the other, and both are pinned by test.
 
-Recorded in §1's 2026-09-06 entry as "found but not acted on"; promoted here
-so it stops living inside another item's write-up.
+**The acceptance test was the equality, not the count.** All **180** selected
+packages across all ten seats are byte-identical on assets, totals, keep-pain,
+both appeals, `inFairBand` and `alternative`. A package that changed would mean
+the search had moved rather than the copy — and the screen looks plausible
+either way, which is why the check exists. `PROTECT_THRESHOLD` and every
+keep-score are untouched (§4e's three prohibitions).
+
+**Left standing, and still true:** `PROTECT_THRESHOLD` (0.9) protects almost
+nothing on a healthy roster — that is by design (ff116ba's ruling is about the
+*irreplaceable* starter), but anyone reading "protected" should know it means
+"deficit or cliff", not "starter". The fix above is precisely what stops the UI
+from conflating the two.
 
 ### OPEN-5 — Model calibration (open research)
 
@@ -2041,6 +2058,7 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 
 | Item | Closed | How |
 |---|---|---|
+| SMALL-1 — the package rationale claimed what it hadn't checked | 2026-09-22 | *"Protects your starters"* printed on **180 of 180** suggestions and was false on **11 of the owner's 20** and **77 of 180** league-wide — it meant "touched nothing ≥ `PROTECT_THRESHOLD`", and a core starter sits at 0.85. `packageRationale` now takes `buildValueLineup(...).starterIds` and names the starter instead; 0 and 0 after, with the claim surviving on 103 of 180 where it is true. Every one of the 180 selected packages is byte-identical, which was the acceptance test — a changed package would mean the search moved, not the copy. Shipped as the prerequisite to MCP-CARRY's trade-targets tool. Detail in §2 |
 | OPEN-10 — the two "fair" windows disagreed | 2026-09-21 | The board proposed an offer and the Analyzer, one tap later, called it an overpay: **0 of 20** suggestions on the owner's board and **35 of 180** across all ten seats landed inside `buildFairBand`, at a mean of 1.0965× the target. The mechanism was not the window but the price of an appeal step — crossing 1.05 hands the partner a whole appeal point (worth 1.0 keep-pain) against a ~0.027 distance penalty. Fixed by a **split**, not a narrowing: the suggestion must land inside `buildFairBand` (asked of that function, never a literal), the assembly window feeds `alternative`, which now carries its premium. Owner's board: keep-pain 17.24 → 15.19, value sent −7.3%, in band 0/20 → 20/20, my-side 3 Fair/17 Weak → 18 Fair/2 Weak, verdicts 3A/16C/1D → 8A/12C/0D. All ten seats: value −4.6%, in band 35 → 161 of 180, Weak-for-me 74 → 9. The price: Weak-for-them 31 → 106, stated rather than buried. `APPEAL_BONUS` re-swept and unmoved. Detail in §2 |
 | NEWS-6 — a dead source was invisible in both pipelines | 2026-09-21 | Owner asked whether anything warns us when a source changes shape. Zeros were never the risk (nulls, by design) but the silence was real: three snapshot steps are `continue-on-error` and a failed news source is a logged `0`. Checking turned up a LIVE case — **ESPN RSS contributing 0 while returning 25 items to a hand probe** — the second after FantasyPros. Shipped a shared, tested alarm that fails the workflow after a **persistent** gap (never a blip), runs after publish so it cannot cost data, and treats a missing file as an alarm. Detail in §1 |
 | PIPE-2 — Phase 4a: the three-source valuation archive | 2026-09-21 | Build-plan §10 4a, approved 2026-09-04 and unbuilt for 17 days — the one item whose cost was permanent. Daily archive of FantasyCalc + DynastyProcess + KeepTradeCut into `values-consensus.json` on the existing `values-history` branch, joined ID-only through db_playerids. Re-probing found KTC had changed shape (JS literal → JSON island) and two crosswalk traps: `"NA"` as a null sentinel on 6,103 rows, and `ktc_id` mapping Frank Gore Jr. onto Frank Gore Sr. Best-effort per source; a failed source is an all-null column, never a 0. 4b/4c not built. Detail in §1 |
