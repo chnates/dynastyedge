@@ -79,8 +79,9 @@ if (mode === '--archive') {
     findings, unit: 'run',
     fixHint:
       `Threshold is ${DARK_AFTER.feed} runs (~1.5 days at the measured ~7.4 runs/day). ` +
-      'Probe the URL by hand first: a source can be alive everywhere and blocked from ' +
-      "Actions' IP range, which is exactly what ESPN RSS turned out to be.",
+      'Probe the URL by hand first, then read the run log: a source can be alive ' +
+      'everywhere and still hand Actions nothing — ESPN RSS answered the runners with ' +
+      'an empty HTTP 202 and was removed. A source unreachable from Actions should go.',
   })
 }
 

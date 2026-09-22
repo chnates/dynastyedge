@@ -30,6 +30,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 
+import { windowDepthHours } from './newsCoverage.mjs'
 import { retainDiverse } from './newsRetention.mjs'
 import { trackSourceMisses } from './sourceHealth.mjs'
 
@@ -39,11 +40,24 @@ const MAX_STORY = 600
 // Retention. Player items are the product, so they get a long window and the
 // lion's share of the cap; general items are context and age out in two days.
 //
-// SIZE: 480 items lands ~55KB ON THE WIRE. raw.githubusercontent serves the
+// SIZE: price it by WIRE bytes, never raw. raw.githubusercontent serves the
 // feed gzipped and gzip is what the phone pays — measured 2026-09-12, 320
-// items were 141KB raw but 37KB gzipped (~114 B/item). Earlier notes sized
-// this feed by its raw bytes and so over-priced the cap by ~4x.
-const PLAYER_MAX = 400
+// items were 141KB raw but 37KB gzipped (~114 B/item); measured 2026-09-22,
+// 480 items were 211KB raw and 53,957 B on the wire (~112 B/item).
+//
+// 1200, raised from 400 on 2026-09-22 (NEWS-4). At 400 the cap bound first,
+// at 54–78h, and the 7-day window had NEVER bound at either cap setting
+// (240, then 400) — the same signature as the 2026-09 collapse, one level up,
+// though breadth held (207 distinct players against the collapse's 97). The
+// window retained ~7.1 player items/h after diversity eviction; 168h at that
+// rate is ~1200. Projected wire size at 1200+80: ~144KB, against the 5–8MB
+// player DB the phone already pulls once a session.
+//
+// The number to watch is `coverage.depthHours`, NOT `playerItems` (and not
+// `spanHours`, which a few stragglers can set — see newsCoverage.mjs): a feed
+// pinned at its cap is exactly what a healthy full feed looks like, and that
+// is how the last collapse ran for days unnoticed.
+const PLAYER_MAX = 1200
 const PLAYER_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 const GENERAL_MAX = 80
 const GENERAL_MAX_AGE_MS = 48 * 60 * 60 * 1000
@@ -74,7 +88,7 @@ const OUT_FILE = 'news.json'
 const SLEEPER_PLAYERS = 'https://api.sleeper.app/v1/players/nfl'
 const SKILL_POSITIONS = new Set(['QB', 'RB', 'WR', 'TE'])
 
-async function get(url, type = 'text') {
+async function fetchOk(url, type) {
   const res = await fetch(url, {
     headers: {
       'User-Agent': UA,
@@ -83,6 +97,11 @@ async function get(url, type = 'text') {
     signal: AbortSignal.timeout(20000),
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res
+}
+
+async function get(url, type = 'text') {
+  const res = await fetchOk(url, type)
   return type === 'json' ? res.json() : res.text()
 }
 
@@ -212,13 +231,37 @@ async function rotowirePage() {
     .filter(i => i.headline)
 }
 
-const rss = (source, url) => async () => parseRss(await get(url), source)
+// A 2xx that parses to nothing is a DIFFERENT failure from a throw, and it is
+// the one that hid ESPN RSS for weeks (NEWS-7): the old log printed "0 items"
+// and nothing else, so the run log could not name the cause. Say what we were
+// actually handed — status, final URL (redirects), type, size, first bytes.
+const rss = (source, url) => async () => {
+  const res = await fetchOk(url, 'text')
+  const body = await res.text()
+  const items = parseRss(body, source)
+  if (!items.length) {
+    const head = body.slice(0, 200).replace(/\s+/g, ' ')
+    console.log(
+      `${source}: HTTP ${res.status} but 0 <item> blocks — ` +
+      `url ${res.url} · ${res.headers.get('content-type')} · ${body.length} bytes · head: ${head}`,
+    )
+  }
+  return items
+}
 
 // Probed live 2026-09-04 (see docs/analysis/news-sources-2026-09.md). The
 // percentage is the share of that source's items naming an active skill
 // player — the reason each one is here, and the reason FantasyPros is not:
 // both of its player-news endpoints return 404 and have been contributing
 // nothing.
+//
+// ESPN RSS (espn.com/espn/rss/nfl/news) was REMOVED 2026-09-22 (NEWS-7). It
+// serves 25+ items to a sandbox or a browser, and to GitHub's runners it
+// answers HTTP 202 with an EMPTY text/html body — a bot-manager deferral, not a
+// feed. A 202 is `res.ok`, so it never threw; it parsed an empty string to 0
+// items for every run it was measured on. Unreachable from where this runs is
+// dead for our purposes. The ESPN news API above is unaffected and carries
+// ESPN's stories with athlete ids.
 const SOURCES = [
   ['ESPN API',      espnApi],                                                                  // athlete ids
   ['RotoWire',      rss('RotoWire', 'https://www.rotowire.com/rss/news.php?sport=NFL')],       // 100%, 5/pull, exact times
@@ -226,7 +269,6 @@ const SOURCES = [
   ['Yardbarker',    rss('Yardbarker', 'https://www.yardbarker.com/rss/sport/2')],              // 45%
   ['PFF',           rss('PFF', 'https://www.pff.com/feed')],                                   // 40%
   ['The Athletic',  rss('The Athletic', 'https://www.nytimes.com/athletic/rss/nfl/')],         // 33%, 100/pull
-  ['ESPN RSS',      rss('ESPN', 'https://www.espn.com/espn/rss/nfl/news')],                    // 33%
   ['PFT',           rss('PFT', 'https://www.nbcsports.com/profootballtalk.rss')],              // 30%
   ['CBS',           rss('CBS', 'https://www.cbssports.com/rss/headlines/nfl/')],               // 28%
   ['Sporting News', rss('Sporting News', 'https://www.sportingnews.com/us/rss')],              // 20%
@@ -392,6 +434,9 @@ const coverage = {
   withPlayerIds: items.filter(i => (i.playerIds ?? []).length > 0).length,
   withAthleteIds: items.filter(i => (i.athleteIds ?? []).length > 0).length,
   spanHours: times.length ? Math.round((Math.max(...times) - Math.min(...times)) / 36e5) : 0,
+  // THE depth number: p90 age of the player window. spanHours above is max −
+  // min over every item and a few stragglers set it — see newsCoverage.mjs.
+  depthHours: windowDepthHours(items),
   sources: sourceCounts,
   // Consecutive runs each source has returned nothing, carried forward in the
   // feed because a force-pushed feed has no history of its own to count from.
@@ -405,7 +450,7 @@ writeFileSync(OUT_FILE, JSON.stringify({ updatedAt: new Date().toISOString(), co
 console.log(
   `Wrote ${OUT_FILE}: ${items.length} items ` +
   `(${coverage.playerItems}/${PLAYER_MAX} player, ${coverage.distinctPlayers} distinct players, ` +
-  `${coverage.withPlayerIds} resolved, ${coverage.spanHours}h span)`,
+  `${coverage.withPlayerIds} resolved, ${coverage.depthHours}h deep, ${coverage.spanHours}h span)`,
 )
 console.log(
   players.length > keptPlayers.length

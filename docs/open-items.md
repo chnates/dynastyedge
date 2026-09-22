@@ -135,7 +135,7 @@ which beats any amount of feature value.
 | Next | Work | Why here |
 |---|---|---|
 | **1** | ~~SMALL-1 → then MCP-CARRY's trade-targets tool~~ — **DONE 2026-09-22.** Both shipped: the rationale now checks the lineup before claiming to have protected it, and `find_trade_targets` is the ninth tool. Two of §5's phase-two tools remain (manager scouting, rookie research) — neither is scheduled | The largest capability gap the server had: it could *grade* a trade you already thought of but not answer "who do I call about, and what would it cost?". SMALL-1 went first because `packageRationale` is the string that tool returns, and a false claim through an LLM is worse than one on a screen |
-| **2** | **NEWS-4** (raise the cap — the evidence favours it) + **NEWS-7** (whose trigger has now FIRED: a session with Actions log access can read the failure message it was waiting for) | Both small. NEWS-5 is effectively settled — the docs are corrected and its option 2 is cosmetic |
+| **2** | ~~NEWS-4 + NEWS-7~~ — **DONE 2026-09-22.** ESPN RSS removed (it answers Actions with an empty HTTP 202, not a throw); player cap 400 → 1200; `coverage.depthHours` added because `spanHours` turned out to be set by stragglers. **One follow-up: re-read `depthHours` on 2026-09-29** to learn whether the 7-day window binds | Both small. NEWS-5 is effectively settled — the docs are corrected and its option 2 is cosmetic |
 | **3** | **Phase 4b/4c** — normalize the three valuation sources and surface the disagreement | The biggest unbuilt owner-approved item, but 4d wants archive history and `values-consensus.json` holds one day as of 2026-09-21. It gets better by waiting, which nothing else on this list does |
 
 **Deliberately NOT next**, so nobody picks one up by accident: OPEN-8 (trigger
@@ -646,33 +646,43 @@ ESPN RSS gap with the real message. Thresholds driven in both directions —
 fresh archive never alarms, a dead script alarms. Tests 698 → **714**; without
 `node_modules` **671**, the gap holding at **43**.
 
-### NEWS-7 — ESPN RSS returns nothing to Actions while working everywhere else
+### NEWS-7 — ESPN RSS returns nothing to Actions while working everywhere else **CLOSED 2026-09-22 — source REMOVED**
 
-**Found by NEWS-6, deliberately NOT fixed in that change.** `ESPN RSS`
-(`https://www.espn.com/espn/rss/nfl/news`) contributes **0 items** to every
-run, and the count is written from `fetch-news.mjs`'s **catch** branch, so the
-fetch is throwing rather than parsing empty.
+**The recorded diagnosis was wrong, and reading the log is what showed it.**
+This entry said the 0 was "written from `fetch-news.mjs`'s **catch** branch, so
+the fetch is throwing", and left two causes open: an IP block (403) or a
+timeout. The scheduled run's log (run 1230) read **`ESPN RSS: 0 items`** — not
+`FAILED — …` — in **~95ms**. So it never threw and never came near the 20s
+budget; both candidate causes were ruled out by the first line of evidence.
 
-**What is ruled out:** the feed is alive (HTTP 200, 15KB, **25 `<item>`
-blocks**), the shipped `parseRss` regex matches all 25 of them, the CDATA
-titles are handled by `decodeEntities`, and `get()` already sends a browser
-User-Agent. So it is neither dead nor a parser bug.
+**What it actually was.** The log could not name a cause, because the script
+printed nothing about a 2xx that parsed empty. So the first change added that
+line (status, final URL, content-type, size, first bytes of the body) and ran
+the workflow from this branch (run 1231). It read:
 
-**What is left:** ESPN blocking GitHub Actions' IP range, or a timeout inside
-the 20s budget. **Neither is reproducible from a sandbox**, which is exactly
-why this was not fixed blind — a guessed fix to a failure you cannot observe is
-how you end up with two bugs.
+> `ESPN: HTTP 202 but 0 <item> blocks — url https://www.espn.com/espn/rss/nfl/news · text/html; charset=UTF-8 · 0 bytes`
 
-**Cost of leaving it:** one of eleven sources, and a mid-density one (33% of
-items naming a player). The other ten are working, and the general bucket has
-its own cap, so the loss is coverage breadth rather than volume.
+**An empty 202 is a bot-manager deferral, not a feed.** `res.ok` is true for any
+2xx, so `get()` returned `''` and `parseRss` found nothing. From this sandbox,
+the same request with the same User-Agent got **HTTP 200, `text/xml`, 17,306
+bytes, 29 items**. So the source is alive and ESPN's edge will not serve it to
+GitHub's runners — the IP-block case in substance, arrived by a status code no
+one had guessed.
 
-**Trigger:** the next time anyone can read a real Actions run log for this
-workflow — the failure message is printed there (`ESPN RSS: FAILED — …`) and
-names the cause outright. **The NEWS-6 alarm will now surface it on every run**
-rather than it sitting silent. If the answer is an IP block, the options are to
-drop the source or move it behind the ESPN news **API**, which already works
-from Actions and is the feed's strongest source.
+**Removed**, per the alarm's own rule (a source that is genuinely gone from
+where this runs must leave the list, or the alarm stops meaning anything). It
+was at **8 consecutive misses against `DARK_AFTER.feed` 12** — about a day and a
+half from failing the workflow on every run. `trackSourceMisses` iterates only
+the current run's sources, so removing the source drops its counter rather than
+carrying a stale one forward.
+
+**Cost:** breadth, not volume. ESPN's stories still arrive through the ESPN news
+API (the first source, and the only one shipping athlete ids).
+
+**Kept:** the zero-item diagnostic, so the next source to die this way names
+itself in the run log. **The transferable lesson:** a best-effort source has
+*three* ways to fail, not two — throw, parse-empty on a real feed, and a 2xx
+that is not a feed at all — and only the first one was ever logged.
 
 ### PIPE-2 — Phase 4a: the three-source valuation archive **SHIPPED 2026-09-21**
 
@@ -897,35 +907,80 @@ setting is what was lost.
 deployment (or a skipped one). The setting was applied 2026-09-21 and the
 cron fires at :17 and :47 UTC.
 
-### NEWS-4 — the news item cap is binding again, at 78h
+### NEWS-4 — the news item cap is binding again, at 78h **CLOSED 2026-09-22 — cap raised 400 → 1200; the 7-day claim is PENDING, not met**
 
-**Status:** open, and it is a **decision, not a bug**. **Trigger: fired** —
-measured 2026-09-21 while closing NEWS-3.
+**Re-measured first, as the entry asked.** Live 2026-09-22 22:14Z (run 1230):
+`playerItems 400 / playerCap 400`, `spanHours 56` (was 78 the day before),
+`distinctPlayers 207`, 480 items, **53,957 B on the wire** (211,241 raw —
+~112 B/item gzipped, matching the ~114 recorded 2026-09-12). The log read
+*"dropped 106 redundant player items (over 3/player); 0 cap slots spare"*.
+Still cap-bound, still shrinking, breadth still healthy — so the decision was
+the one the evidence favoured.
 
-Live `coverage`: `playerItems 400 / playerCap 400`, `spanHours 78`,
-`distinctPlayers 198`, 480 items total. **The cap is binding before the time
-window does** — the same signature as the 2026-09 collapse, one level up (400
-instead of 240) — against a documented 7-day/168h window that has now never
-bound at either cap.
+**Raised to 1200.** The window held ~7.1 player items/h after diversity
+eviction (400 over 56h); 168h at that rate is ~1200 (the 2026-09-12 memo's
+pre-diversity figure was ~1357). Projected wire size at 1200+80: **~144KB**,
+against ~54KB at 400+80 — a fraction of the 5–8MB player DB the phone
+already pulls once a session. KV entries on the MCP side are gzipped, so it
+costs the same there; tool output is filtered per player, so bounded output
+is unaffected. `newsRetention.mjs` and `PER_PLAYER_MAX` are untouched.
 
-**What is different this time, and why it is not the same failure.** The 2026-09
-collapse was a *breadth* failure: 240 items resolving to 97 distinct players,
-3.14 each, one carrying 23. Diversity-aware eviction fixed that and it has
-held — **198 distinct players** now, double the collapse figure. So the cap is
-buying breadth as intended; there is simply more qualifying news than 400
-slots at the current arrival rate.
+**One consequence the entry did not anticipate, and it is fixed:** Feature
+15's News page rendered *every* item — 480 rows, going to ~1,280. It now pages
+50 at a time with "Show more" (League › Activity's pattern), and each date
+band's count stays the full bucket. Verified at 390px against the live feed:
+50 rows → 150 after two taps, TODAY reading the true 195 throughout, 0 clipped
+elements.
 
-**The decision:**
-- **Raise the cap.** The feed is 210KB raw, and CLAUDE.md's own rule is to
-  size it by **wire** bytes (~114 B/item gzipped), which puts 400 items around
-  55KB and leaves real headroom. This is the option the evidence favours.
-- **Or accept 78h as the honest operating depth** and correct the 7-day claim
-  in CLAUDE.md, which has now been aspirational for two cap settings running.
+**A second consequence, and it is the finding worth keeping: `spanHours` was
+the wrong number to watch.** The first run at 1200 (run 1234) published
+`spanHours 147` — 54 → 147 in one run with **three** more items. Evicted items
+do not come back, so that is not depth. It was **three week-old The Athletic
+items** from the current pull (it returns 100 per pull, reaching back days),
+which newest-first eviction used to throw away first and could now keep. The
+player window's p90 age went **51h → 52h**. `spanHours` is max − min over every
+item, so a handful of stragglers set it; the pinned cap had been hiding that
+by evicting them. The drawer renders it as "Nd deep", so it would have read
+**"6d deep" on a two-day window** — the 2026-09 collapse's shape (a health
+number reading fine while depth is wrong) from the other direction.
 
-**Do not "fix" it by adding sources** — NEWS-1's standing ruling, unchanged.
-Whichever way it goes, `spanHours` stays the number to watch: `playerItems`
-sitting at its cap is exactly what a healthy full feed looks like, which is
-how the last collapse ran for days unnoticed.
+**Fixed with `coverage.depthHours`** — p90 age of the player items, measured
+from the newest one (`scripts/newsCoverage.mjs`, 5 tests). The drawer and
+`news-coverage.mjs` read it; `spanHours` still ships unchanged.
+
+**Before → after on the PUBLISHED feed** (runs 1230 → 1235, read from the
+`news-data` branch):
+
+| | 1230 (before) | 1235 (after) |
+|---|---|---|
+| total | 480 | 484 |
+| playerItems / playerCap | 400 / **400** | 404 / **1200** |
+| spanHours | 56 | 147 (three stragglers) |
+| depthHours | — (p90 51h, computed) | **52** |
+| distinctPlayers | 207 | 216 |
+| wire bytes | 53,957 | ~54,100 |
+| sources | 11 (ESPN RSS 0) | 10, all non-zero |
+| sourceMisses | ESPN RSS 7, rest 0 | all 0 |
+
+**How those runs were made, and why it can't happen again.** Runs 1231–1235
+were `workflow_dispatch`es on the feature branch, and because `news.yml`'s
+publish step had no default-branch guard, **each one force-pushed that
+branch's unreviewed code to the live `news-data` feed.** That was the second
+time (the 2026-09-12 retention fix did the same). Both `news.yml` and
+`values-history.yml` now carry `rookie-intel.yml`'s guard, so a branch dispatch
+is a dry run. **Post-merge check (owed):** dispatch `news.yml` on `main` and
+read the published file; expect `playerCap 1200`, a `depthHours` field, ten
+sources, and no `ESPN RSS` key. Until the PR merges, scheduled runs on `main`
+publish the old code (cap 400, ESPN RSS back in), which is correct: the feed
+is `main`'s.
+
+**What is NOT verified, stated plainly:** that the 7-day window binds. The cap
+fills by accumulation and evicted items don't come back, so depth can only grow
+at the arrival rate: ~7 retained items/h, several days to reach 1200. **Trigger
+to re-measure: 2026-09-29.** Read `depthHours` (not `spanHours`, not
+`playerItems`). If it is near 168h, the claim is met. If the cap has pinned
+again below 168h, correct CLAUDE.md's 7-day line to the measured depth rather
+than raising the cap a third time on the same argument.
 
 ### NEWS-5 — the news cron is delivered at ~7.4 runs/day, not 48
 
@@ -2111,6 +2166,9 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 
 | Item | Closed | How |
 |---|---|---|
+| NEWS-7 — ESPN RSS gave Actions nothing | 2026-09-22 | The recorded diagnosis ("catch branch, so it throws — 403 or timeout") was wrong on every count: the log read `0 items` in ~95ms, not `FAILED`. The script was made to print what a zero-item 2xx returned, and the next run read **HTTP 202 · text/html · 0 bytes** — a bot-manager deferral, which `res.ok` accepts. Same URL + UA from outside Actions: 200, 29 items. **Removed** at 8 of 12 consecutive misses; the zero-item diagnostic stays. Detail in §1 |
+| OPS-2 — a branch dispatch could publish production data | 2026-09-22 | Found by the owner's review question. `news.yml` and `values-history.yml` had no default-branch guard on their publish steps (`rookie-intel.yml` did), so NEWS-4/NEWS-7's verification runs, and the 2026-09-12 retention verification before them, force-pushed feature-branch code to the live `news-data` feed. Both now carry `if: github.ref_name == github.event.repository.default_branch`; a branch dispatch is a dry run. |
+| NEWS-4 — the news cap was binding at 400 | 2026-09-22 | Cap-bound at 56h with breadth healthy (207 players), so raised to **1200** (~7.1 retained/h × 168h; ~144KB wire projected vs 54KB). News page now paged at 50. The raise exposed that **`spanHours` is set by stragglers** (54 → 147h on three items while p90 depth went 51 → 52h), so `coverage.depthHours` was added and the drawer reads it. The 7-day claim is **pending**: re-read `depthHours` 2026-09-29. Detail in §1 |
 | SMALL-1 — the package rationale claimed what it hadn't checked | 2026-09-22 | *"Protects your starters"* printed on **180 of 180** suggestions and was false on **11 of the owner's 20** and **77 of 180** league-wide — it meant "touched nothing ≥ `PROTECT_THRESHOLD`", and a core starter sits at 0.85. `packageRationale` now takes `buildValueLineup(...).starterIds` and names the starter instead; 0 and 0 after, with the claim surviving on 103 of 180 where it is true. Every one of the 180 selected packages is byte-identical, which was the acceptance test — a changed package would mean the search moved, not the copy. Shipped as the prerequisite to MCP-CARRY's trade-targets tool. Detail in §2 |
 | OPEN-10 — the two "fair" windows disagreed | 2026-09-21 | The board proposed an offer and the Analyzer, one tap later, called it an overpay: **0 of 20** suggestions on the owner's board and **35 of 180** across all ten seats landed inside `buildFairBand`, at a mean of 1.0965× the target. The mechanism was not the window but the price of an appeal step — crossing 1.05 hands the partner a whole appeal point (worth 1.0 keep-pain) against a ~0.027 distance penalty. Fixed by a **split**, not a narrowing: the suggestion must land inside `buildFairBand` (asked of that function, never a literal), the assembly window feeds `alternative`, which now carries its premium. Owner's board: keep-pain 17.24 → 15.19, value sent −7.3%, in band 0/20 → 20/20, my-side 3 Fair/17 Weak → 18 Fair/2 Weak, verdicts 3A/16C/1D → 8A/12C/0D. All ten seats: value −4.6%, in band 35 → 161 of 180, Weak-for-me 74 → 9. The price: Weak-for-them 31 → 106, stated rather than buried. `APPEAL_BONUS` re-swept and unmoved. Detail in §2 |
 | NEWS-6 — a dead source was invisible in both pipelines | 2026-09-21 | Owner asked whether anything warns us when a source changes shape. Zeros were never the risk (nulls, by design) but the silence was real: three snapshot steps are `continue-on-error` and a failed news source is a logged `0`. Checking turned up a LIVE case — **ESPN RSS contributing 0 while returning 25 items to a hand probe** — the second after FantasyPros. Shipped a shared, tested alarm that fails the workflow after a **persistent** gap (never a blip), runs after publish so it cannot cost data, and treats a missing file as an alarm. Detail in §1 |

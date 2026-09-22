@@ -114,7 +114,8 @@ export function getNewsFeedFetchedAt() {
 }
 
 // The feed's own health block — `{ total, playerItems, playerCap,
-// distinctPlayers, withPlayerIds, withAthleteIds, spanHours, sources }` — as
+// distinctPlayers, withPlayerIds, withAthleteIds, spanHours, depthHours,
+// sources, sourceMisses }` — as
 // published by scripts/fetch-news.mjs. Powers the drawer's feed-health line.
 //
 // This exists because publish age surfaces a DEAD pipeline but not a DEGRADED

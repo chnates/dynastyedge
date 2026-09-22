@@ -173,10 +173,10 @@ GitHub Actions cron is **UTC**.
   survives and the next run self-heals. Only a never-existing branch (first
   run) proceeds without it.
 - **Step 2 — `node scripts/fetch-news.mjs`** (repo root cwd in Actions). Tries
-  **eleven sources**, each best-effort with a 20s timeout and a browser
+  **ten sources**, each best-effort with a 20s timeout and a browser
   User-Agent: ESPN news API (JSON — the only source shipping `athleteIds`),
   RotoWire's news *page* (scraped `news-update__*` markup — the most
-  player-dense source), RotoWire RSS, Yardbarker, PFF, The Athletic, ESPN RSS,
+  player-dense source), RotoWire RSS, Yardbarker, PFF, The Athletic,
   PFT, CBS, Sporting News, Yahoo. A failing source is logged and skipped. It
   then fetches Sleeper's player DB to resolve items to `playerIds` — also
   best-effort; without it, ranking falls back to recency.
@@ -274,9 +274,11 @@ GitHub Actions cron is **UTC**.
   delivered ~7.4 runs/day). A per-source failure is caught inside
   `fetch-news.mjs` and recorded as a `0`, which is the right contract and was
   also completely invisible — **ESPN RSS sat at 0 items until it was found by
-  hand on 2026-09-21.** Probe the URL yourself before assuming the source is
-  dead: it returned 25 items fine from outside Actions, so this is more likely
-  an IP block or a timeout than a shape change.
+  hand on 2026-09-21.** Probe the URL yourself, then READ THE RUN LOG: it
+  returned 25 items from outside Actions and an **empty HTTP 202** to the
+  runners (a 2xx, so nothing threw), and was removed 2026-09-22. An RSS source
+  that parses to 0 now logs status / final URL / content-type / size / head, so
+  the log names the cause instead of printing a bare "0 items".
 
 ### 3c. Rookie intel pipeline (`.github/workflows/rookie-intel.yml`)
 
@@ -321,6 +323,17 @@ GitHub Actions cron is **UTC**.
   `gh workflow run values-history.yml --repo chnates/dynastyedge` /
   `gh workflow run rookie-intel.yml --repo chnates/dynastyedge`
 - **MCP:** `actions_run_trigger` (github MCP server).
+
+**Only `main` publishes.** Every pipeline's publish step is guarded with
+`if: github.ref_name == github.event.repository.default_branch`, so dispatching
+on a feature branch (e.g. `actions_run_trigger` with `ref:
+claude/…`) is a **dry run**: the scripts, the zero-item diagnostics and the
+source-health alarm all run and log, and the force-push is skipped. That is the
+way to test a pipeline change before merge — read the run log. After the PR
+merges, dispatch on `main` and read the **published** file (via git from the
+data branch, not the ~5-min raw CDN) to verify for real. `news.yml` and
+`values-history.yml` lacked this guard until 2026-09-22, and a branch dispatch
+had published unreviewed code to `news-data` twice.
 
 Safe to re-run anytime: news merges into the published feed (it no longer
 regenerates from scratch, so a re-run can only add); values replaces today's
