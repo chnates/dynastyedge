@@ -5,7 +5,15 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-09-21 (**the backlog audit + day 1 of the week plan** —
+**Last reviewed:** 2026-09-21 (**OPEN-10 closed** — the Targets board stopped
+arguing with the Analyzer. The suggestion is now held inside `buildFairBand`
+and the wider assembly window feeds `alternative` instead, which names the
+premium that would buy a yes. Measured on the live board from all ten seats,
+before and after, on all four axes together: value sent −4.6%, keep-pain −6.5,
+agreement with the Analyzer 35 → 161 of 180, `Weak for me` 74 → 9 — and, stated
+rather than buried, `Weak for them` 31 → 106, which is a real property of fair
+trades rather than a search failure. `APPEAL_BONUS` was re-swept jointly and
+left alone. Previously **the backlog audit + day 1 of the week plan** —
 this file had drifted two weeks behind the code, and the audit that caught up
 with it also turned up three things no doc knew about. Two were bugs and are
 fixed here: **PIPE-1**, the trade-value archive writing every pick as 0 into a
@@ -81,6 +89,13 @@ deleted. The active work queue remains `docs/build-plan-2026-09.md`).
   request, per CLAUDE.md's Future Features gate.
 - When you close an item, move it to §3 with the date and commit. Don't delete
   it — the record is why nobody re-litigates it.
+- **An item carrying a `Kickoff prompt` block is ready-to-run work with the
+  owner's sign-off already on it** — paste it into a fresh session. Same
+  convention `docs/build-plan-2026-09.md` uses per phase; it lives here now
+  because that file's four phases are all resolved and this is the living
+  queue. A prompt is **dated and quotes measurements**, so treat its numbers
+  as a starting point to re-measure, not as facts to trust: the whole point of
+  the item it sits in is that the board moved.
 
 ---
 
@@ -95,8 +110,22 @@ which beats any amount of feature value.
 |---|---|---|
 | **1** | **PIPE-1 + OPS-1 + this catch-up** — **DONE 2026-09-21** | Both were actively bleeding. The archive wrote unrecoverable wrong data on every run; the Vercel builds were pure waste |
 | **2** | **Phase 4a — archive all three valuation sources daily** — **DONE 2026-09-21** (see PIPE-2) | **The only item on this list where waiting has a permanent cost.** 4a's own instruction is "do this first and immediately", and it had been sitting since 2026-09-04. It starts the clock on 4d ("when sources disagree, which one moves?"), which is unanswerable forever without an archive. Pipeline-only, no UI |
-| **3–4** | **One substantial thing:** either the MCP trade-targets tool (**MCP-CARRY**) or **OPEN-10** | New capability vs. fixing the thing that makes the Targets board read wrong on 17 of 20 cards. Owner's call |
+| **3–4** | **OPEN-10 — DONE 2026-09-21.** (**MCP-CARRY**, the alternative, is untouched) | The owner picked the fix over the new capability. The board read wrong on 17 of 20 cards; it now reads 18 Fair / 2 Weak from my seat and every suggestion agrees with the Analyzer |
 | **5** | **NEWS-4** (the cap decision) + **NEWS-5** (cron cadence — pick option 1 or 2) + the **MCP connector re-check** on the phone | All small; the last needs the owner's GitHub login and no sandbox can do it |
+
+### The week plan is complete (2026-09-22). What follows it:
+
+| Next | Work | Why here |
+|---|---|---|
+| **1** | **SMALL-1 → then MCP-CARRY's trade-targets tool.** Owner call 2026-09-22. **The kickoff prompt is in the MCP-CARRY entry in §2 — paste it into a fresh session.** | The largest capability gap the server has: it can *grade* a trade you already thought of but cannot answer "who do I call about, and what would it cost?". SMALL-1 goes first because `packageRationale` is the string that tool returns, and a false claim through an LLM is worse than one on a screen |
+| **2** | **NEWS-4** (raise the cap — the evidence favours it) + **NEWS-7** (whose trigger has now FIRED: a session with Actions log access can read the failure message it was waiting for) | Both small. NEWS-5 is effectively settled — the docs are corrected and its option 2 is cosmetic |
+| **3** | **Phase 4b/4c** — normalize the three valuation sources and surface the disagreement | The biggest unbuilt owner-approved item, but 4d wants archive history and `values-consensus.json` holds one day as of 2026-09-21. It gets better by waiting, which nothing else on this list does |
+
+**Deliberately NOT next**, so nobody picks one up by accident: OPEN-8 (trigger
+autumn 2028), OPEN-9 (~2027-07, needs 12 monthly archive columns), OPEN-3
+(owner ask required), VALUE-1 (a note, triggered only by touching
+`Magnitude`), and the two device checks in DESIGN-4 plus the MCP connector
+re-check — all three owner-only, uncheckable in any sandbox.
 
 **What is deliberately NOT in the week**, so nobody picks it up by accident:
 OPEN-8 (trigger: autumn 2028), OPEN-9 (trigger: ~2027-07, needs 12 monthly
@@ -938,6 +967,14 @@ that is the mistake this item exists to prevent.
 which had scattered it across three items. Nothing here is a correctness bug;
 it is the honest remainder.
 
+**NEXT BUILD (owner call, 2026-09-22): the trade-targets tool, with SMALL-1
+first.** Chosen over the news batch and phase 4b/4c because it is the largest
+capability gap — the server can *grade* a trade you already thought of but
+cannot answer "who do I call about, and what would it cost?", which is the
+question the Targets board exists for. OPEN-10 also just rebuilt that engine,
+so `inFairBand`, `premiumPct` and both seats' appeal are newly available and
+are exactly what the tool would surface.
+
 **Capability not built:**
 - **Three of `MCP_DISCOVERY.md` §5's phase-two tools** — trade targets / fair
   packages (note: the ~730ms path in-app), manager scouting (the biggest fetch
@@ -966,6 +1003,95 @@ it is the honest remainder.
   which matters a great deal more at this cadence than at the one the docs
   assumed. **Tightening `news.yml`'s cron is NOT the fix** — the requested
   cadence is already 6× what is delivered.
+
+### Kickoff prompt — SMALL-1, then the trade-targets tool
+
+*Set 2026-09-22 after OPEN-10 shipped. The measurements it quotes were taken
+that day against the live board; **re-measure rather than trusting them** —
+OPEN-10 moved the board and SMALL-1's count is a live figure, not a constant.*
+
+```
+Read CLAUDE.md in full, then docs/open-items.md §0, the SMALL-1 entry and this
+MCP-CARRY entry, then MCP_DISCOVERY.md §5 and §7, and
+docs/analysis/trade-fair-band-2026-09.md §4 — the fields this tool surfaces
+did not exist before 2026-09-21.
+
+Load dynastyedge-failure-archaeology before touching anything: §4e-iv through
+§4e-vii ALL live in the code you are about to read, and §4e-iv gained a new
+standing ruling with OPEN-10. Also load dynastyedge-architecture-contract for
+the mcp/ boundary.
+
+Build MCP-CARRY's trade-targets tool. SMALL-1 FIRST, as its own commit.
+
+Branch: claude/mcp-trade-targets
+
+-- Part 1: SMALL-1, a prerequisite and not a warm-up --
+
+`packageRationale` (src/utils/tradeAnalysis.js) says "protects your starters"
+unconditionally whenever a package draws from a surplus. Measured on the live
+board 2026-09-22: 9 of 20 rows said it while sending a player who actually
+starts. Re-measure first; the number will have moved.
+
+Fix it against the fact the engine already has --
+`buildValueLineup(myRoster).starterIds` -- and name the starter when one is in
+the package. Do NOT touch PROTECT_THRESHOLD or any keep-score: §4e's three
+prohibitions are settled, and the item's own note is that the threshold
+protects less than its name suggests (core starters land on exactly 0.85).
+
+ACCEPTANCE: the count reaches 0 AND every selected package is byte-identical.
+If a package changes you have altered the search, not the copy -- and the
+screen looks right either way, which is why this check exists.
+
+-- Part 2: the tool --
+
+`find_trade_targets` (confirm the name; MCP_DISCOVERY.md §5 never fixed one).
+"Who should I call about, and what would it cost?" Optional `position`,
+`limit`, `team` (the scoped mode), `leagueId`, `refresh`.
+
+`rosterAnalysis.getTopTradeTargets` + `tradeAnalysis.suggestFairPackage`. A
+tool is ORCHESTRATION ONLY -- any math goes in src/utils so the app gets it
+too. Per target return the player and owner, the package, whether it lands
+`inFairBand`, BOTH seats' appeal, and `alternative` with its `premiumPct`: a
+fairly-priced offer gives the partner no edge on value, so the premium that
+buys a yes is the most actionable field on most rows.
+
+Traps, in the order they will bite:
+
+1. THE ZOD OUTPUT SCHEMA'S `asOf.sources` IS A CLOSED OBJECT, and it has
+   caught three shipped changes. Lint, the full suite and a clean build all
+   pass a response a real client rejects, because the tests call the builder
+   directly and never cross the wire. Declare every source.
+2. BOUNDED OUTPUT. Twenty targets each carrying two fit reads, a package and
+   an alternative is a lot of tokens. Cap it, report the true count beside
+   the capped one, disclose the truncation in `notes`. `get_roster` answers
+   in ~9KB.
+3. THE ~730ms COST IS REAL -- it is why the app moved this off the render
+   path. On a server it is one call, but DECIDE AND DOCUMENT the TTL with its
+   own argument, the way season.js / weekly.js / liveScores.js each do. Do
+   not inherit a number.
+4. §4e-v: the search stays UNTRUNCATED. If cost bites, chunk within a target.
+5. The three non-negotiables: an as-of stamp, bounded output, leagueId and
+   rosterId as parameters.
+6. Add the tool to `createServer` AND assert it BY NAME in the transport
+   test -- that assertion is what stops stdio and HTTP forking.
+
+MEASUREMENT BAR: run it live over the real transport. Report cold ms, cached
+ms, response bytes, and the actual answer for the owner's roster. Then
+`npm run build:mcp` and commit api/mcp.js. Unlike OPEN-10 this WILL move the
+bundle -- OPEN-10's was byte-identical only because nothing imported
+`suggestFairPackage`, and this tool ends that.
+
+Update CLAUDE.md (The MCP Server: the tool list, the tool's own section, its
+TTL argument, and the "three of §5's phase-two tools" line), MCP_DISCOVERY.md,
+mcp/README.md; close or re-scope SMALL-1 and re-scope MCP-CARRY in
+docs/open-items.md; add a dated analysis memo only if you measure something
+new. Same commit as the behaviour.
+
+Not this session: NEWS-4, NEWS-5, NEWS-7, phase 4b/4c, and the connector
+re-check, which needs my phone.
+
+Do not open a PR until I ask.
+```
 
 **Owed, and owner-only:** re-confirm the connector lists all **eight** tools
 on the phone. Phase 2c's deploy *did* land (`bcf5c6a` is `target: production`,
@@ -1684,33 +1810,36 @@ so it fails loudly if the measured ordering stops matching them. **If round 1
 ever stops beating its price in a resolved class, re-derive rather than nudge.**
 Full method: `docs/analysis/asset-aging-and-pick-value-2026-09.md` §3.
 
-### OPEN-10 — The two "fair" windows disagree
+### OPEN-10 — The two "fair" windows disagree — **CLOSED 2026-09-21**
 
-**Status:** deferred, and it is the reason 17 of 20 suggested packages read
-`Weak for you`. **Trigger:** an owner ask, or the next deliberate pass over
-`suggestFairPackage`'s tuning — it is not a bug to fix in passing.
+Closed by the split recorded in §3 and in
+`docs/analysis/trade-fair-band-2026-09.md`: the **assembly window did not
+move**; what moved is which window may pick the **suggestion**. It must now
+land inside `buildFairBand`, and `[0.9×, 1.15×]` is demoted to feeding
+`alternative` — the pricier package the partner would actually prefer, now
+labelled with its premium.
 
-`suggestFairPackage` builds inside **`[0.9×, 1.15×]`** of the target, with
-undershoot penalised 1.6× (sellers don't take light offers). `buildFairBand` —
-THE definition of fair, shared with the Analyzer's verdict and every surface
-that predicts it — is **±5%**. So the search routinely proposes packages the
-Analyzer then scores as an overpay. Measured live 2026-09-07 on the 20-target
-board: every suggestion landed **6–11% in the partner's favour**, which is why
-16 of 20 come back `Counter` and why the new my-side read grades 17 of 20
-`Weak` (my seat takes −1 on value; theirs takes +1).
+Two corrections to this item's own text, for anyone reading it as history: the
+"undershoot penalised 1.6×" belongs to `pickTrades.js`, not to
+`suggestFairPackage` (which penalises distance symmetrically at 0.3), and the
+**floor never bound at all** — `[0.90, 1.15]` and `[0.95, 1.15]` produce
+byte-identical boards. Only the cap was ever doing anything, and even it was
+not the mechanism: the overpay was ~37× cheaper than the appeal point it
+bought.
 
-**The grader is not the problem.** Swept across price, 8 of the first 8 targets
-reach `Strong for you` at 58–94% of the target's value, and a user-built trade
-winning 8% on value renders `Fair for you`. The board's *offers* are what sit
-outside the band.
+**`APPEAL_BONUS` was re-swept jointly, as this item demanded, and NOT moved** —
+its 0.40 mid-plateau setting still holds on the assembly window, which is where
+`alternative` is chosen. If the assembly window is ever changed, sweep them
+together again.
 
-**Why it wasn't touched:** narrowing the search band moves package selection on
-every surface that consumes it, and `APPEAL_BONUS` (Weak −1 · Fair 0 · Strong
-+0.4) was swept and set at the current band — changing one without re-measuring
-the other invalidates the sweep. Whoever picks this up should re-run the
-20-target board before and after and report the keep-pain / appeal / verdict
-deltas together, exactly as `docs/analysis/trade-engine-my-side-2026-09.md` §1
-did. Full context: `docs/analysis/trade-my-side-read-2026-09.md` §3–4.
+**What this did NOT settle, and is the honest successor question:** `Weak for
+them` rises from 31 to 106 of 180 league-wide, because a fairly-priced offer
+gives the other manager no edge on value. It is not a search failure — across
+all 176–597 in-band candidates per target, phase 2 chose the best achievable
+appeal on 20 of 20 — and 75 of the 106 carry an `alternative` naming the
+premium that would change it. But it is a lot of amber on one board. If that
+reads wrong on the phone, the question to re-open is **how the board renders an
+honest Weak**, not whether it should price fairly.
 
 ### OPEN-9 — Rebuild the trajectory age curves longitudinally
 
@@ -1872,10 +2001,23 @@ actually means is "touched nothing scoring ≥ 0.9" — which is not what it say
 and `PROTECT_THRESHOLD` protects less than its name suggests anyway (core
 starters land on exactly 0.85; only a deficit or a cliff crosses 0.9).
 
+**MEASURED 2026-09-22 on the live board: 9 of 20 rows** say "protects your
+starters" while sending a player who starts — Jonathan Taylor (5,767) on three
+of them, Bo Nix (4,177) on two, TreVeyon Henderson on three, Chase Brown on
+one. It is not an edge case; it is nearly half the board, and it sits one line
+above the appeal reads OPEN-10 just corrected.
+
 **The honest fix:** check the package against
 `buildValueLineup(myRoster).starterIds` and name the starter when one is in
 it. It is a copy fix over a fact the engine already has — no model change, no
 recalibration.
+
+**It is now the PREREQUISITE for MCP-CARRY's trade-targets tool** (owner call,
+2026-09-22), not an independent item. `packageRationale` is the explanation
+string such a tool would return, so shipping the tool first propagates the
+false claim to a second surface — and through an LLM, where
+`MCP_DISCOVERY.md` §7's whole argument is that a wrong fact stops being a
+visibly broken screen and becomes a confident, fluent, wrong answer.
 
 Recorded in §1's 2026-09-06 entry as "found but not acted on"; promoted here
 so it stops living inside another item's write-up.
@@ -1899,6 +2041,7 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 
 | Item | Closed | How |
 |---|---|---|
+| OPEN-10 — the two "fair" windows disagreed | 2026-09-21 | The board proposed an offer and the Analyzer, one tap later, called it an overpay: **0 of 20** suggestions on the owner's board and **35 of 180** across all ten seats landed inside `buildFairBand`, at a mean of 1.0965× the target. The mechanism was not the window but the price of an appeal step — crossing 1.05 hands the partner a whole appeal point (worth 1.0 keep-pain) against a ~0.027 distance penalty. Fixed by a **split**, not a narrowing: the suggestion must land inside `buildFairBand` (asked of that function, never a literal), the assembly window feeds `alternative`, which now carries its premium. Owner's board: keep-pain 17.24 → 15.19, value sent −7.3%, in band 0/20 → 20/20, my-side 3 Fair/17 Weak → 18 Fair/2 Weak, verdicts 3A/16C/1D → 8A/12C/0D. All ten seats: value −4.6%, in band 35 → 161 of 180, Weak-for-me 74 → 9. The price: Weak-for-them 31 → 106, stated rather than buried. `APPEAL_BONUS` re-swept and unmoved. Detail in §2 |
 | NEWS-6 — a dead source was invisible in both pipelines | 2026-09-21 | Owner asked whether anything warns us when a source changes shape. Zeros were never the risk (nulls, by design) but the silence was real: three snapshot steps are `continue-on-error` and a failed news source is a logged `0`. Checking turned up a LIVE case — **ESPN RSS contributing 0 while returning 25 items to a hand probe** — the second after FantasyPros. Shipped a shared, tested alarm that fails the workflow after a **persistent** gap (never a blip), runs after publish so it cannot cost data, and treats a missing file as an alarm. Detail in §1 |
 | PIPE-2 — Phase 4a: the three-source valuation archive | 2026-09-21 | Build-plan §10 4a, approved 2026-09-04 and unbuilt for 17 days — the one item whose cost was permanent. Daily archive of FantasyCalc + DynastyProcess + KeepTradeCut into `values-consensus.json` on the existing `values-history` branch, joined ID-only through db_playerids. Re-probing found KTC had changed shape (JS literal → JSON island) and two crosswalk traps: `"NA"` as a null sentinel on 6,103 rows, and `ktc_id` mapping Frank Gore Jr. onto Frank Gore Sr. Best-effort per source; a failed source is an all-null column, never a 0. 4b/4c not built. Detail in §1 |
 | PIPE-1 — the trade-value archive priced every pick at 0 | 2026-09-21 | The snapshot scripts kept the `if (sid)` classifier the app fixed in 2026-07, so `pickEntries` was empty and every pick archived as 0 into a **permanent** file. One shared `scripts/fantasyCalcValues.mjs` (pure, 10 tests), a ladder ending in **null not 0**, and a self-heal that rewrites the archived zeros through the normal publish path. Found by reading the published feed, not the code. Detail in §1 |

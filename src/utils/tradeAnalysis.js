@@ -1172,6 +1172,21 @@ const ALTERNATIVE_MIN_SAVING = 0.25
 // suggestion is a real failure rather than a cheap win.
 export const APPEAL_BONUS = { Weak: -1, Fair: 0, Strong: 0.4 }
 
+// The ASSEMBLY window: how far from the target's value a candidate package may
+// sit before it stops being worth considering at all. Deliberately wider than
+// `buildFairBand` — §4e-iv is right that they answer different questions, and
+// this one still answers "what could I put together?".
+//
+// What changed in 2026-09-21 is which question each one is allowed to ANSWER.
+// The suggestion itself now has to land inside `buildFairBand`; this window
+// only bounds the pool that `alternative` is drawn from. Measured before that
+// split, the search left the fair band on 20 of 20 targets on the owner's
+// board and 145 of 180 league-wide, because phase 2 can buy the partner's
+// value point (worth a full appeal step, and the step from Weak to Fair is
+// worth 1.0 keep-pain) for a ~0.03 distance penalty. The window permitted it;
+// the appeal weight paid for it. See docs/analysis/trade-fair-band-2026-09.md.
+export const PACKAGE_BAND = { floor: 0.90, cap: 1.15 }
+
 // Suggest a fair package from MY roster to acquire targetPlayer.
 //
 // TWO-PHASE, and the second phase is the point. Phase 1 enumerates every
@@ -1196,10 +1211,25 @@ export const APPEAL_BONUS = { Weak: -1, Fair: 0, Strong: 0.4 }
 // allRosters + opponentRoster are optional; without them it degrades to a
 // depth-aware package (no surplus/window/partner lean) and skips phase 2 —
 // there is no partner to score against.
-export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, opponentRoster = null) {
+export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, opponentRoster = null, opts = {}) {
   if (!targetPlayer || !myRoster) return null
   const targetValue = targetPlayer.value || 0
   if (targetValue === 0) return null
+
+  // Sweep hooks. Both default to the shipped constants, so no caller in the app
+  // passes them and behaviour is unchanged — they exist so
+  // `scripts/dev/trade-fair-band-sweep.mjs` drives THIS function rather than a
+  // copy of it. The band and the appeal weight were tuned together once
+  // (failure-archaeology §4e-vi) and must be re-measured together, which is not
+  // possible against a reimplementation.
+  const {
+    band = PACKAGE_BAND,
+    appealBonus = APPEAL_BONUS,
+    // Sweep hook only: false reproduces the pre-2026-09-21 behaviour, where the
+    // suggestion could be any package in the assembly window. The before/after
+    // in the memo is one command because of it.
+    requireFairBand = true,
+  } = opts
 
   const ctx = buildGivabilityContext(myRoster, allRosters)
   const opponentDeficits = getDeficitPositions(opponentRoster, allRosters)
@@ -1227,8 +1257,8 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
 
   if (!available.length) return null
 
-  const FLOOR = targetValue * 0.9   // a lowball gets rejected
-  const CAP   = targetValue * 1.15  // a big overpay is its own way of gutting the roster
+  const FLOOR = targetValue * band.floor
+  const CAP   = targetValue * band.cap
 
   const keepCache = available.map(a => assetKeepScore(a, ctx))
 
@@ -1253,7 +1283,12 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
     }
     pain += 0.2 * (idxs.length - 1)
     pain += Math.abs(total - targetValue) / targetValue * 0.3
-    candidates.push({ idxs, total, pain })
+    // Asked of `buildFairBand`, never re-derived here — §4e-iv's standing
+    // ruling is that every surface predicting what the Analyzer will say uses
+    // THE one definition. This card hands its package straight to the
+    // Analyzer, so it is exactly such a surface.
+    const inFair = buildFairBand(total, targetValue)?.inside ?? false
+    candidates.push({ idxs, total, pain, inFair })
   }
 
   const n = available.length
@@ -1280,12 +1315,20 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
   // moves) stay out of it, exactly as they stay out of the verdict.
   let best = null
   let alternative = null
+  // The suggestion has to be one the Analyzer will call fair. Everything else
+  // the search assembled stays in play as `alternative` — see the note on
+  // PACKAGE_BAND. Only when NOTHING lands inside the band does the wider pool
+  // supply the suggestion itself, because an honest near-miss beats no answer.
+  const inFair = requireFairBand ? candidates.filter(c => c.inFair) : candidates
+  const eligible = inFair.length ? inFair : candidates
+  const fairReachable = inFair.length > 0
   if (candidates.length) {
     candidates.sort((a, b) => a.pain - b.pain)
+    eligible.sort((a, b) => a.pain - b.pain)
 
     const canScorePartner = !!opponentRoster && !!allRosters?.length
     if (!canScorePartner) {
-      best = candidates[0]
+      best = eligible[0]
     } else {
       // Computed once and injected — phase 2 runs buildPartnerFit up to
       // once per candidate per target, and these are the same for all of them.
@@ -1294,6 +1337,7 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
       const getAssets = [{ ...targetPlayer, type: 'player' }]
 
       const scored = []
+      const eligibleSet = new Set(eligible)
       candidates.forEach(c => {
         const assets = c.idxs.map(i => available[i])
         const fit = buildPartnerFit(assets, getAssets, opponentRoster, allRosters, {
@@ -1308,11 +1352,13 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
         // other than the cheapest fair one on 18 of 20 targets, sending 11,293
         // more dynasty value in total (median 654, max 1,403 per trade) and
         // reaching for an asset just under the protect line on 10 of them.
-        const netScore = (APPEAL_BONUS[fit.appeal] ?? 0) - c.pain
+        const netScore = (appealBonus[fit.appeal] ?? 0) - c.pain
         scored.push({ ...c, appealRank: rank, netScore, partnerFit: fit })
         // The shortlist is already sorted by pain ascending, so a strict >
         // keeps the cheaper package when two score identically.
-        if (!best || netScore > best.netScore) best = { ...c, appealRank: rank, netScore, partnerFit: fit }
+        if (eligibleSet.has(c) && (!best || netScore > best.netScore)) {
+          best = { ...c, appealRank: rank, netScore, partnerFit: fit }
+        }
       })
       // The road not taken — and it now points the OTHER way. When appeal was
       // lexicographically first, the suggestion was always the most agreeable
@@ -1326,14 +1372,30 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
       // Only surfaced when the extra cost is real (ALTERNATIVE_MIN_SAVING) —
       // below that the two packages cost the same and one merely reads better,
       // which is not a decision.
+      //
+      // It is drawn from the WHOLE assembly window, not just the fair band, and
+      // that is now this field's main job: a fairly-priced offer gives the
+      // other manager no edge on value, so the thing they'd actually say yes to
+      // is usually an overpay. Measured on the live board, the premium that
+      // buys an appeal step runs to about 10% of the target. Naming it keeps
+      // the information the two-phase search exists to produce, without letting
+      // it silently pick an offer the Analyzer would then call an overpay.
       if (best) {
+        // "Costs more" is the whole point, so the candidate must actually cost
+        // more — in EITHER currency. The keep-pain test alone was written when
+        // both packages were selectable, and it now hides the most useful row
+        // on the card: an upgrade that leaves the fair band for a couple of
+        // hundred points of value but barely touches my keep-pain. Verified
+        // live across all ten seats: not one alternative sends LESS value than
+        // the suggestion, so the copy can say "costs more" unconditionally.
         alternative = scored
-          .filter(c => c.appealRank > best.appealRank && c.pain - best.pain >= ALTERNATIVE_MIN_SAVING)
+          .filter(c => c.appealRank > best.appealRank
+            && (c.pain - best.pain >= ALTERNATIVE_MIN_SAVING || c.total > best.total))
           .sort((a, b) => b.appealRank - a.appealRank || a.pain - b.pain)[0] ?? null
       }
       // Every scored candidate returned null (no partner roster shape to read) —
       // fall back to the cheapest rather than suggesting nothing.
-      if (!best) best = candidates[0]
+      if (!best) best = eligible[0]
     }
   }
 
@@ -1356,6 +1418,11 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
     return {
       assets, totalValue: best.total, gapPct,
       over: best.total >= targetValue,
+      // The search's own objective value for the winning package — what this
+      // suggestion cost me, on assetKeepScore's 0..1-per-asset scale. Exposed
+      // so the sweep reports the number the search actually minimised rather
+      // than a re-derivation of the formula that could drift from it.
+      keepPain: best.pain,
       rationale: packageRationale(assets, ctx),
       // What this package is worth to MY roster — the counterpart to `appeal`.
       myAppeal: mine?.appeal ?? null,
@@ -1369,13 +1436,20 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
       partnerSummary: fit?.summary ?? null,
       partnerStartersDelta: fit?.startersDelta ?? null,
       partnerConcern: fit?.concerns?.[0] ?? null,
-      // The cheaper option, when giving less would genuinely cost less and the
-      // only price is how it reads to them. Null when no such package exists.
+      // Whether the suggestion itself lands inside buildFairBand. False only
+      // when no combination of my movable assets could — an honest near-miss
+      // rather than no answer at all — so a surface can say which it is looking
+      // at instead of implying the Analyzer will agree.
+      inFairBand: fairReachable,
+      // The package they'd want MORE that this declined to pay for, drawn from
+      // the whole assembly window. `premiumPct` is what it costs over the
+      // target — the number that makes it a decision rather than a footnote.
       alternative: alternative
         ? {
           assets: alternative.idxs.map(i => available[i]),
           totalValue: alternative.total,
           appeal: alternative.partnerFit?.appeal ?? null,
+          premiumPct: Math.round((alternative.total - targetValue) / targetValue * 100),
         }
         : null,
     }

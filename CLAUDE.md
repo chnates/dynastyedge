@@ -2314,20 +2314,26 @@ the one measure the verdict gate quotes).
   live playoff odds; the fit engine's pick lean reads a tier. My seat is passed
   the `buying`/`selling` Layer 3 actually scored on, so two adjacent blocks
   can't print different answers to one question.
-- **"Strong for me" is real but unreachable on the Targets board, and that is a
-  finding, not a bug.** Live: my-side appeal came back **17 Weak · 3 Fair · 0
-  Strong** on the 20 suggested packages — because `suggestFairPackage` searches
-  `[0.9×, 1.15×]` while `buildFairBand` calls fair **±5%**, so every suggestion
-  is priced 6–11% in the partner's favour and my seat takes a −1 on value that
-  their seat takes as +1. Swept across price, **8 of the first 8 targets reach
-  `Strong for you` at 58–94% of the target's value**, and a user-built trade
-  winning 8% on value renders `Fair for you`. The scale discriminates; the board
-  overpays. So the Targets card prints the sharpest my-side concern — *"Weak for
-  you · you'd be giving up 7% more value than you get back"* — because that is a
-  counter you can make. The band mismatch is filed as the next question for this
-  engine, **not** fixed in passing (narrowing it moves package selection
-  everywhere and `APPEAL_BONUS` was tuned at the current band). See
-  `docs/analysis/trade-my-side-read-2026-09.md`.
+- **"Weak for me" on 17 of 20 was the BOARD OVERPAYING, and it is fixed
+  (2026-09-21, OPEN-10).** The finding recorded here on 2026-09-07 was that the
+  grader discriminates and the board's offers sat outside the band:
+  `suggestFairPackage` assembled inside `[0.9×, 1.15×]` while `buildFairBand`
+  calls fair **±5%**, so my seat took a −1 on value that their seat took as +1.
+  That diagnosis was right and reproduced exactly two weeks later — with one
+  number it had not measured: **0 of 20 suggestions landed inside the fair
+  band**, 35 of 180 across all ten seats.
+  **The mechanism was never the window — it was the price of an appeal step.**
+  Crossing 1.05 hands the partner a whole appeal point, phase 2 prices a
+  Weak→Fair step at 1.0 keep-pain, and the distance penalty resisting it is
+  `0.3 × 0.09 ≈ 0.027`. The overpay was ~37× cheaper than what it bought, which
+  is why the `APPEAL_BONUS` sweep is flat over the shipped band: the lever
+  moving the board was not the one that had been tuned.
+  **The fix is a split, not a narrowing** — see the two-phase section below. The
+  board now reads **18 Fair · 2 Weak** from my seat and every suggestion lands
+  in the band. The my-side concern line still prints when a `Weak` survives, but
+  it now names a roster objection rather than a price the app chose to pay. See
+  `docs/analysis/trade-fair-band-2026-09.md` (supersedes §4 of
+  `trade-my-side-read-2026-09.md`).
 
 **Layer 4 is exported as `buildPartnerFit` and shared with the recommenders.**
 `suggestFairPackage` scores its candidate packages with this exact function, so
@@ -2568,8 +2574,9 @@ Counter or Decline.** The app proposed and then argued with itself.
     stays on the board, ranked below the ones they can spare. Nothing is hidden
     by it, and the team-scoped contract above is untouched.
 - **`suggestFairPackage` is two-phase.** Phase 1 enumerates every package in the
-  fair band and ranks them by what they cost **me** — surplus and depth first,
-  core starters never auto-included (`PROTECT_THRESHOLD`), win-window lean.
+  **assembly window** (`PACKAGE_BAND`, `[0.9×, 1.15×]` of the target) and ranks
+  them by what they cost **me** — surplus and depth first, core starters never
+  auto-included (`PROTECT_THRESHOLD`), win-window lean.
   Phase 2 scores **every** one of those with **`buildPartnerFit`** — the same
   Layer 4 the Analyzer will grade the suggestion with — then takes the best
   appeal, breaking ties by my own cost. It is deliberately **not** truncated:
@@ -2585,9 +2592,54 @@ Counter or Decline.** The app proposed and then argued with itself.
     package for **all 20** targets (8 Strong, 12 Fair) without touching a
     protected asset. Phase 1 simply never looked at their side. After the fix
     the live board reads **Strong 4 · Fair 13 · Weak 3**, with 5 Accepts.
-  - **Phase 2 reorders candidates; it never widens the pool.** The fair band and
-    the protected-asset rule are unchanged, so the builder still never reaches
-    for a core starter to make a deal palatable.
+  - **Phase 2 reorders candidates; it never widens the pool.** The assembly
+    window and the protected-asset rule are unchanged, so the builder still
+    never reaches for a core starter to make a deal palatable.
+  - **THE SUGGESTION MUST LAND INSIDE `buildFairBand` — the assembly window only
+    feeds `alternative` (2026-09-21, OPEN-10).** The two windows answer
+    different questions and §4e-iv is right that they may differ; what they may
+    not do is let the *suggestion* leave the band the Analyzer grades in.
+    Measured live, it always did: **0 of 20** on the owner's board and **35 of
+    180** across all ten seats landed inside ±5%, at a mean of **1.0965× the
+    target**. So the card proposed an offer and THE CALL, one tap later, called
+    it an overpay — the "app argues with itself" loop that phase 2 exists to
+    close, returning in a new place.
+    - **Asked of `buildFairBand`, never re-derived** from a 0.95/1.05 literal —
+      the Targets card hands its package straight to the Analyzer, so it is
+      precisely the surface §4e-iv's standing ruling names.
+    - **The overpay is not deleted; it becomes the `alternative`**, now carrying
+      `premiumPct`. A fairly-priced offer gives the other manager no edge on
+      value, so the package they would say yes to is usually an overpay —
+      *"To get a yes: 2027 2nd + Jonathan Taylor (+7% over fair) — fair for
+      them"*. That keeps the read the two-phase search exists to produce without
+      letting it silently pick the offer. Shown on **88 of 180** rows, against 8
+      before; **75 of the 106 `Weak for them`** carry one.
+    - **Measured, all four axes together** (the only honest way to report it —
+      they trade against each other). Owner's board: keep-pain **17.24 → 15.19**,
+      value sent **106,195 → 98,444 (−7.3%)**, inside the band **0/20 → 20/20**,
+      my-side appeal **3 Fair/17 Weak → 18 Fair/2 Weak**, verdicts
+      **3A/16C/1D → 8A/12C/0D**. All ten seats: keep **198.0 → 191.5**, value
+      **979,546 → 934,876 (−4.6%)**, in band **35/180 → 161/180**, Weak-for-me
+      **74 → 9**.
+    - **The price, stated rather than buried: `Weak for them` rises 31 → 106 of
+      180.** It is a *different* Weak from §4e-v's — that one was about
+      composition (a third quarterback nobody needs), this one is about price —
+      and it is **not a search failure**: across all 176–597 in-band candidates
+      per target, the best achievable partner appeal is exactly what phase 2
+      chose on **20 of 20**. At fair value those partners cannot be interested by
+      anything the owner can spare, which is the literal thing a surviving
+      `Weak` has always been documented to mean.
+    - **`APPEAL_BONUS` was re-swept jointly and NOT moved.** Its 0.40
+      mid-plateau setting is unchanged; the sweep is the evidence for leaving it
+      alone rather than an assumption. If the assembly window is ever changed,
+      sweep them together again — they are one measurement.
+    - **A near-miss still gets an answer.** When nothing reaches the band the
+      search falls back to the assembly window and returns `inFairBand: false`,
+      and the card says so rather than implying an agreement the Analyzer will
+      not give.
+    - `PACKAGE_BAND` and `requireFairBand` are exported **sweep hooks**; nothing
+      in `src/` passes them. Full method:
+      `docs/analysis/trade-fair-band-2026-09.md`.
   - **Phase 2 is a TRADE-OFF, not an override (2026-09-07 — supersedes the
     2026-09-06 owner call recorded below, on the owner's explicit later ask).**
     It used to be lexicographic: best appeal won outright and my own cost only
@@ -2622,14 +2674,23 @@ Counter or Decline.** The app proposed and then argued with itself.
   - Without a partner roster it degrades to phase 1 and reports `appeal: null`;
     no read is invented.
   - **`alternative` — the road not taken, and it now points the OTHER way
-    (2026-09-07).** While appeal won outright the suggestion was always the most
-    agreeable package, so the useful footnote was the *cheaper* one. Now that
-    the winner already weighs my cost, the card names the package they'd like
-    **more** that it declined to pay for: *"Est. cost: Rachaad White · Fair for
-    them / Costs more: Chase Brown — strong for them."* Shown only when the
-    extra cost is real (`ALTERNATIVE_MIN_SAVING` of keep-pain); below that the
-    two cost the same and one merely reads better, which is not a decision.
+    (2026-09-07, widened 2026-09-21).** While appeal won outright the suggestion
+    was always the most agreeable package, so the useful footnote was the
+    *cheaper* one. Now that the winner already weighs my cost — and, since
+    OPEN-10, is held inside the fair band — the card names the package they'd
+    like **more** that it declined to pay for, and that is this field's main
+    job: *"To get a yes: 2027 2nd + Jonathan Taylor (+7% over fair) — fair for
+    them."* It is drawn from the **whole assembly window**, so it is usually the
+    overpay the suggestion no longer makes.
     **It still never reorders anything** — it is information beside the pick.
+    - **`ALTERNATIVE_MIN_SAVING` (0.25) keeps its value but gained an OR: the
+      alternative must cost more in EITHER currency** (keep-pain or value sent).
+      The keep-pain test alone was written when both packages were selectable,
+      and it hid the most useful row on the card — an upgrade that leaves the
+      band for a few hundred points of value while barely touching keep-pain.
+      Verified across all ten seats: **not one alternative sends less value than
+      the suggestion**, so "costs more" is unconditionally true. Effect: 85 → 88
+      of 180.
     - **Historical note.** Making appeal trade off against my own cost was
       proposed and **declined by the owner on 2026-09-06** (reasoning: knowing
       whether they would accept is the information the search exists to
@@ -5438,6 +5499,7 @@ dynastyedge/
 │       ├── trade-structure-backtest.mjs ← analysis-only: the DISCONFIRMED trade-structure profiling test (frontier Item 3); drives the shipped buildManagerProfiles so it cannot drift
 │       ├── optimizer-signal-backtest.mjs ← analysis-only: measures whether a better weekly PROJECTION is obtainable (it is not) and what DEF streaming is worth; see docs/analysis/optimizer-data-sources-2026-09.md
 │       ├── asset-aging-backtest.mjs ← analysis-only: THE keep-score calibration — longitudinal player aging (the survivorship trap the trajectory curves fall into) + whether rookie picks deliver their market price; see docs/analysis/asset-aging-and-pick-value-2026-09.md
+│       ├── trade-fair-band-sweep.mjs ← analysis-only: THE OPEN-10 measurement — sweeps the package ASSEMBLY window against APPEAL_BONUS jointly (they were tuned together, so they must be re-measured together) over the live board from all ten seats, and prints keep-pain / appeal / verdict / value sent in ONE table because they trade against each other. Drives the shipped suggestFairPackage through its `band` / `appealBonus` / `requireFairBand` hooks, so the analysis and the product cannot drift
 │       ├── contrast-audit.mjs ← THE accessibility-floor instrument: reads the tokens out of src/index.css and measures each against its theme's WORST-CASE ground, plus the two reversal cases a text-on-ground audit misses (paper type on a position band, type on an ink field). Exits non-zero on any failure — re-run after ANY ground-colour change.
 │       └── news-coverage.mjs ← analysis-only: THE news-pipeline acceptance metric — how many of my rostered players the app can actually resolve in the feed (no arg = live feed); see docs/analysis/news-sources-2026-09.md
 ├── api/
@@ -5638,7 +5700,7 @@ dynastyedge/
 │   ├── build-plan-2026-09.md        ← owner-approved four-phase build plan (Sept 2026) — per-phase kickoff prompts, gates, and the four measured NOT-to-build decisions
 │   ├── project-status-2026-08.md    ← dated status snapshot (superseded by newer dated files)
 │   ├── repo-review-2026-07.md       ← full read-only audit + ranked backlog (all items landed)
-│   ├── analysis/                    ← model calibration + research notes (incl. optimizer-data-sources-2026-09.md: the Optimizer data-source feasibility study; asset-aging-and-pick-value-2026-09.md: THE keep-score calibration — player aging + pick realization; trade-my-side-read-2026-09.md: the one-engine-both-seats change + why "Strong for me" cannot appear on the Targets board)
+│   ├── analysis/                    ← model calibration + research notes (incl. optimizer-data-sources-2026-09.md: the Optimizer data-source feasibility study; asset-aging-and-pick-value-2026-09.md: THE keep-score calibration — player aging + pick realization; trade-my-side-read-2026-09.md: the one-engine-both-seats change, whose §4 is SUPERSEDED by trade-fair-band-2026-09.md: which of the two "fair" windows is allowed to answer which question — the suggestion is held inside buildFairBand and the wider assembly window is demoted to feeding `alternative`)
 │   ├── design/                      ← Phase 3 "Primetime Blackout" brief + reference render (SUPERSEDED — see below)
 │   └── design/review-2026-09/       ← THE UX/IA + visual review that superseded Phase 3: findings.md (audit) · inventory.md (all 21 destinations) · slop-checklist.md (researched AI-slop markers + how the shipped app scores) · directions.md (six mocked directions + the Matchday decision) · unasked.md · mocks/ (standalone, never imported by the app)
 ├── tests/                       ← plain-Node test suite (node:test + node:assert/strict, zero deps)
@@ -5654,7 +5716,7 @@ dynastyedge/
 │   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
 │   ├── appVersion.test.mjs          ← reload URL: ?v= before the hash (HashRouter), encoding, null build id
 │   ├── tradeTargets.test.mjs        ← Targets ranking: deficit gate + value floor league-wide, team-scoped mode keeps depth (never empty), fillsNeed flag, and the movability TILT (band under 2×, spare depth outranks an equal-value untouchable, nothing ever hidden)
-│   ├── tradeAnalysis.test.mjs       ← Layer 3's basis swap (odds score the window in season, tier is the offseason fallback byte-for-byte, a bubble team gets a real read, the printed stance is the one that scored it), the `alternative` (now always HIGHER-appeal — the pricier road the cost-aware search passed over), the phase-2 trade-off (a Strong package costing more than APPEAL_BONUS loses to a Fair one; the fair band and protect threshold still bind), Layer 4's fills/lineup-gain scored ONCE, the my-lineup verdict gate (downgrades an Accept, never upgrades, never fires on noise), verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge, Layer 4 (a benched acquisition reads Weak however valued; the gate downgrades an Accept but never lifts a Decline; landing spots both directions; the pitch speaks from their side), buildPartnerFit's extraction contract (standalone == via analyzeTrade) and its wrapper contract (== buildSideFit from the `them` seat), the my-side read (myFit's facts equal Layer 2's own, it speaks in the second person, and it can NEVER move a verdict — swapped for its opposite or removed, the whole ladder is deepEqual), the two depth charts (marker in/out, getContext read off the POST-trade roster so a WR-for-WR chart stays true), the package's my-side read (present without a partner roster, null without a league, computed after the choice so it never reorders), and the two-phase package builder (phase 2 rejects the piece they have no use for, never unlocks a protected asset, reports no appeal without a partner)
+│   ├── tradeAnalysis.test.mjs       ← OPEN-10 (the suggestion lands inside buildFairBand — asked of that function, never a 0.95/1.05 literal; the pre-2026-09-21 search kept as an EXECUTABLE statement of the bug, so the fixture cannot silently stop exercising it; the overpay demoted to `alternative` with its premium; a target nothing can price fairly still answered and flagged; PROTECT_THRESHOLD unmoved), Layer 3's basis swap (odds score the window in season, tier is the offseason fallback byte-for-byte, a bubble team gets a real read, the printed stance is the one that scored it), the `alternative` (now always HIGHER-appeal — the pricier road the cost-aware search passed over), the phase-2 trade-off (a Strong package costing more than APPEAL_BONUS loses to a Fair one; the fair band and protect threshold still bind), Layer 4's fills/lineup-gain scored ONCE, the my-lineup verdict gate (downgrades an Accept, never upgrades, never fires on noise), verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge, Layer 4 (a benched acquisition reads Weak however valued; the gate downgrades an Accept but never lifts a Decline; landing spots both directions; the pitch speaks from their side), buildPartnerFit's extraction contract (standalone == via analyzeTrade) and its wrapper contract (== buildSideFit from the `them` seat), the my-side read (myFit's facts equal Layer 2's own, it speaks in the second person, and it can NEVER move a verdict — swapped for its opposite or removed, the whole ladder is deepEqual), the two depth charts (marker in/out, getContext read off the POST-trade roster so a WR-for-WR chart stays true), the package's my-side read (present without a partner roster, null without a league, computed after the choice so it never reorders), and the two-phase package builder (phase 2 rejects the piece they have no use for, never unlocks a protected asset, reports no appeal without a partner)
 │   ├── tradeContext.test.mjs        ← the five negotiating signals (fair band, scarcity, roster space, weekly impact, partner activity) — and the contract that NONE of them may move the verdict
 │   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
 │   ├── lineupBuild.test.mjs         ← slot-fill order (singles → FLEX → SFLX), IR/taxi excluded, who-starts identity
@@ -5700,9 +5762,9 @@ the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
 honestly:** instead of "cannot find module" it prints `# tests 636 / # pass 631
 / # fail 5`, which reads like a code regression. A file that cannot load never
-runs its tests, so the count silently drops from **714** to 671.
+runs its tests, so the count silently drops from **719** to 676.
 `npm run build` in the same state fails with `sh: 1: vite: not found`.
-**If the test count isn't 714, run `npm ci` before debugging anything.**
+**If the test count isn't 719, run `npm ci` before debugging anything.**
 
 The pair was re-measured 2026-09-19 (MCP phase 1b) by renaming `node_modules`
 aside, and it had drifted seven times before that: 178/130, 177/115, 219/136,
@@ -5724,6 +5786,11 @@ those four raise only the first number. The 2026-09-07 trade-engine work added
 the broken-state count stayed at 152; the 2026-09-12 news-retention work moved
 both, because `newsRetention.test.mjs` imports only a zero-dependency pure
 module. **Re-measure both whenever the suite grows.**
+
+OPEN-10 — holding the suggested package inside `buildFairBand` (2026-09-21) —
+moved both by the same 5 (714/671 → **719/676**), the gap holding at 43:
+`tradeAnalysis.test.mjs` has been loadable without `node_modules` since the MCP
+prerequisite work un-tainted it, and the five new tests import only `src/utils`.
 
 The source-health alarm (2026-09-21) moved both by the same 16
 (698/655 → **714/671**), the gap holding at 43 — `sourceHealth.mjs` imports
@@ -5771,8 +5838,8 @@ regression to the next session, which is the exact confusion the block exists
 to prevent, so re-measure rather than incrementing what is written.
 
 The useful invariant survived the drift and is worth preferring to either
-count: **the gap between them is 43 and has not moved.** 714 − 671 = 43,
-698 − 655 = 43,
+count: **the gap between them is 43 and has not moved.** 719 − 676 = 43,
+714 − 671 = 43, 698 − 655 = 43,
 679 − 636 = 43, 669 − 626 = 43, 639 − 596 = 43,
 630 − 587 = 43, 589 − 546 = 43, and 538 − 495 = 43 before that. That is the number of tests living in the five files
 that cannot load, so an unchanged gap means every test added since loads with
@@ -6155,6 +6222,14 @@ Two things the roll must not break, both pinned by tests:
 ## Rules Claude Code Must Always Follow
 
 1. **Read this entire file before writing any code in a new session.**
+   Then, if the task is "what should I build next?" rather than a named change,
+   read **`docs/open-items.md` §0** — the plan, in priority order, with the
+   trigger that makes each item ready. An item there carrying a
+   **`Kickoff prompt`** block is ready-to-run work the owner has already signed
+   off; paste it into a fresh session. **Never start an item whose trigger has
+   not fired** — doing it early is a bug, and OPEN-2 is the worked example
+   (rolling the pick window before the draft ran broke the Draft Tracker during
+   the one event it exists for).
 1. **Player resolution:** Sleeper returns IDs. FantasyCalc returns names + sleeperId.
    Always join on `sleeperId`. Never guess player names from IDs.
 1. **Pick ownership:** Derive from traded_picks endpoint only.
@@ -6325,10 +6400,15 @@ Two things the roll must not break, both pinned by tests:
 
 ## Future Features (Do Not Build Yet)
 
-> **"What's next?" is answered by `docs/open-items.md`** — which currently points
-> at `docs/build-plan-2026-09.md`, the owner-approved active work queue. It is
-> the living backlog
-> of deferred work, each item with the trigger condition that makes it ready.
+> **"What's next?" is answered by `docs/open-items.md` §0**, which is titled
+> "read this first" and carries the current plan in priority order. It is the
+> living backlog of deferred work, each item with the trigger condition that
+> makes it ready, and **an item carrying a `Kickoff prompt` block is
+> ready-to-run work with the owner's sign-off already on it.**
+> `docs/build-plan-2026-09.md` was the active queue through 2026-09; **all four
+> of its phases are now resolved** (1 shipped · 2 shipped-with-a-recorded-miss ·
+> 3 partial, 3b/3c null · 4 cut), so it is history plus the standing rules in
+> its §0 and §8 — not the queue.
 > Read it before proposing next steps. Some items are **not** ready work and
 > say so explicitly (rolling `PICK_YEARS` before the rookie draft runs actively
 > breaks the Draft Tracker). The list below is the longer-horizon feature

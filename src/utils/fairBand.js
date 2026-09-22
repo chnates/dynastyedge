@@ -13,6 +13,16 @@
 // window is about what to ASSEMBLE (undershooting gets rejected, overshooting
 // guts the roster), while this band is the VERDICT's tolerance around the value
 // being received. Do not conflate them again.
+//
+// They are still different questions, and since 2026-09-21 the builder asks
+// this one before it answers its own: a SUGGESTION has to land inside this
+// band, because the Targets card hands its package straight to the Analyzer
+// and so is a surface that predicts the verdict. The wider assembly window now
+// only feeds `alternative` — the pricier package the partner would prefer.
+// Before that split, 20 of 20 suggestions on the owner's live board and 145 of
+// 180 across all ten seats landed outside this band, so the app proposed an
+// offer and then graded its own proposal an overpay.
+// See docs/analysis/trade-fair-band-2026-09.md.
 
 // A trade is fair when the give total lands within this fraction of the get.
 export const FAIR_BAND_PCT = 0.05

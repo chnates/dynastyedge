@@ -137,9 +137,17 @@ decimals. Unranked players show `—` and contribute 0.
   valuePct > 15`).
 - **5–15% overpay can still be Accept** if it fills a deficit position
   (`fitScore > 0`) — raw value is layer 1 of 3, not the whole verdict.
-- `suggestFairPackage` targets **90%–115%** of the target's value
-  (`FLOOR = 0.9×`, `CAP = 1.15×`) — a lowball gets rejected, a big overpay
-  guts the roster.
+- `suggestFairPackage` **ASSEMBLES** inside 90%–115% of the target's value
+  (`PACKAGE_BAND`) — a lowball gets rejected, a big overpay guts the roster —
+  but since 2026-09-21 (OPEN-10) the **suggestion it returns must land inside
+  `buildFairBand` (±5%)**, and the wider window only feeds `alternative`, the
+  pricier package the partner would prefer (carrying its `premiumPct`).
+  **Assembling and suggesting are different questions and only one of them may
+  leave the verdict's band.** Before the split, 0 of 20 suggestions on the
+  owner's board and 35 of 180 league-wide landed inside ±5%, so the Targets
+  card handed the Analyzer a package it then graded an overpay. When nothing
+  can reach the band the search falls back to the assembly window and reports
+  `inFairBand: false`. See `docs/analysis/trade-fair-band-2026-09.md`.
 - % diff convention: `valuePct = |get − give| / max(give, get) × 100`,
   rounded — the denominator is the **larger** side.
 
@@ -342,8 +350,9 @@ grep -n "QB:\|RB:\|WR:\|TE:" src/utils/peakWindows.js
 # Tier formula weights and 3/4/3 split
 grep -n "0.5\|0.3\|0.2\|rank < 3\|length - 3" src/utils/rosterAnalysis.js
 
-# Fair-trade thresholds (±5%, 15% hard decline, 0.9/1.15 package band)
-grep -n "valuePct <= 5\|valuePct > 15\|targetValue \* 0.9\|targetValue \* 1.15" src/utils/tradeAnalysis.js
+# Fair-trade thresholds (±5% verdict band, 15% hard decline, the ASSEMBLY window)
+grep -n "valuePct <= 5\|valuePct > 15\|PACKAGE_BAND\|band.floor\|band.cap" src/utils/tradeAnalysis.js
+grep -n "FAIR_BAND_PCT\|inside" src/utils/fairBand.js   # THE definition of fair
 
 # Pick tiers, package band, undershoot penalty
 grep -n "slotTier\|0.8\|1.45\|1.6" src/utils/pickTrades.js

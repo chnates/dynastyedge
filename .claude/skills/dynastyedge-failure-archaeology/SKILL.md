@@ -575,6 +575,41 @@ killed. Full method + numbers:
 - **Method note worth keeping:** this was caught by screenshotting the
   *handoff* (`--click` through to the Analyzer), not the component. A component
   screenshot would have shown a perfectly good card.
+- **EXTENDED 2026-09-21 (OPEN-10) — different questions, but the SUGGESTION may
+  only answer one of them.** The ruling above kept the two windows separate and
+  was right to; what it did not say is which one is allowed to pick the offer.
+  `suggestFairPackage` picked from the assembly window, so the Targets card —
+  which hands its package straight to the Analyzer, i.e. the exact kind of
+  surface this ruling names — proposed offers THE CALL then graded an overpay
+  on **0 of 20** rows on the owner's board and **35 of 180** across all ten
+  seats (mean 1.0965× the target).
+  - **The mechanism was NOT the window, and that is the transferable part.**
+    `buildSideFit` scores raw value as ±1 and calls it even at ≤5%, which is
+    `FAIR_BAND_PCT` by construction — so crossing 1.05 hands the partner a whole
+    appeal point, which phase 2 prices at 1.0 keep-pain, against a distance
+    penalty of `0.3 × 0.09 ≈ 0.027`. **The overpay was ~37× cheaper than what it
+    bought.** Before tuning a bound, check whether an incentive elsewhere is
+    already paying to escape it.
+  - **Fix: a split, not a narrowing.** `PACKAGE_BAND` is unchanged and still
+    bounds the candidate pool (so §4e-v's untruncated search is untouched); the
+    *suggestion* must land inside `buildFairBand`, asked of that function and
+    never re-derived from a literal; the wider window feeds `alternative`, which
+    now carries its `premiumPct`.
+  - **Standing ruling:** a surface that hands a trade to the Analyzer must
+    propose something the Analyzer will call fair. Keep the assembly window
+    wide — it is what makes the negotiating read possible — but never let it
+    choose the offer.
+  - **The price is recorded, not hidden:** `Weak for them` rises 31 → 106 of 180,
+    because a fairly-priced offer gives the other manager no edge on value. It
+    is a *different* Weak from §4e-v's (price, not composition) and it is not a
+    search failure — across all 176–597 in-band candidates per target, phase 2
+    chose the best achievable appeal on 20 of 20. **Do not "fix" it by widening
+    the band again**; the open question is how the board renders an honest Weak.
+  - `APPEAL_BONUS` was re-swept jointly (§4e-vi demands it) and **not moved**.
+  - Evidence: `docs/analysis/trade-fair-band-2026-09.md`,
+    `scripts/dev/trade-fair-band-sweep.mjs`, `tests/tradeAnalysis.test.mjs`
+    (five tests, three of which fail against the pre-change behaviour, one of
+    which is an executable statement of the bug).
 
 ### 4e-v. `PACKAGE_SHORTLIST` truncation cost real appeal — do not reintroduce it
 

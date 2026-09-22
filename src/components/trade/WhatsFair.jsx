@@ -251,11 +251,13 @@ function TargetRow({ target, fairPackage, packagePending, showNeedTag, onTap }) 
               worth to the team being asked to accept it — or to mine. */}
           {fairPackage.myAppeal && (
             <AppealLine label="You" tier={fairPackage.myAppeal}>
-              {/* A Weak here is almost always the price, not the player: the
-                  search's band is [0.9x, 1.15x] while `fairBand` calls fair
-                  ±5%, so a suggestion routinely lands a few points over. Say
-                  which, because "you'd pay 7% over fair" is a counter you can
-                  make and "little here for your roster" is not. */}
+              {/* A Weak here used to be the price rather than the player — the
+                  search assembled inside [0.9x, 1.15x] while `fairBand` calls
+                  fair ±5%, so every suggestion landed a few points over and 17
+                  of 20 read Weak. The suggestion is now held inside the fair
+                  band, so a Weak that survives is about the ROSTER. The
+                  concern still leads when there is one: it names the specific
+                  objection, which is a counter you can make. */}
               {fairPackage.myAppeal === 'Weak' && fairPackage.myConcern
                 ? fairPackage.myConcern.replace(/\.$/, '').replace(/^You'd be /, "you'd be ")
                 : fairPackage.myStartersDelta > 0
@@ -269,18 +271,34 @@ function TargetRow({ target, fairPackage, packagePending, showNeedTag, onTap }) 
             </AppealLine>
           )}
 
-          {/* The road not taken. The suggestion now weighs their appeal against
-              what the package costs ME, so the option worth naming is the one
-              they'd like MORE that it declined to pay for — the reverse of when
-              appeal won outright. The read the search exists to produce is
-              still on the row; it just no longer picks the offer by itself. */}
+          {/* What it would take to make them want it. A fairly-priced offer
+              gives the other manager no edge on value, so on most rows the
+              package they'd say yes to is an overpay — and since the
+              suggestion is now held inside the fair band, this line is where
+              that read lives. The premium is the point: "+10% and he's a
+              strong yes" is a decision; "costs more" alone is a footnote. */}
           {fairPackage.alternative && (
             <p className="mt-1 font-body text-[10px] text-text-tertiary leading-snug">
-              <span className="font-mono text-[9px] uppercase tracking-[0.16em]">Costs more</span>{' '}
+              <span className="font-mono text-[9px] uppercase tracking-[0.16em]">To get a yes</span>{' '}
               <span className="text-text-secondary">
                 {fairPackage.alternative.assets.map(a => a.name).join(' + ')}
               </span>{' '}
+              {fairPackage.alternative.premiumPct > 0 && (
+                <span className="font-mono text-[10px] tabular-nums whitespace-nowrap">
+                  (+{fairPackage.alternative.premiumPct}% over fair)
+                </span>
+              )}{' '}
               — {fairPackage.alternative.appeal?.toLowerCase()} for them
+            </p>
+          )}
+
+          {/* The honest near-miss: no combination of movable assets prices this
+              target inside the fair band, so the Analyzer will not call the
+              suggestion fair either. Say so rather than letting the card imply
+              agreement it will not get on the next screen. */}
+          {fairPackage.inFairBand === false && (
+            <p className="mt-1 font-body text-[10px] text-text-tertiary leading-snug aside">
+              Nothing you can spare prices him inside fair value — this is the closest.
             </p>
           )}
         </div>

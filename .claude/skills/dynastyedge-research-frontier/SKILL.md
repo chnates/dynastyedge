@@ -286,6 +286,20 @@ the user, not applied to shape the Analyzer's suggestions
 (`getCounterSuggestion` and `suggestFairPackage` in `tradeAnalysis.js`
 optimize value fit only; verified).
 
+**One measured fact the revival now inherits (2026-09-21, OPEN-10).** The
+roster model's own answer to "would they want this?" was, until that date,
+being bought with an overpay: `suggestFairPackage` left the ±5% verdict band on
+every suggestion, and crossing it handed the partner a value point worth a full
+appeal step. Held to fair prices, **`Weak for them` is 106 of 180** across all
+ten seats — and it is not a search failure (phase 2 chose the best achievable
+appeal on 20 of 20 in-band candidate sets). So the honest baseline for any
+acceptance work is that **a fairly-priced offer usually gives the other manager
+no reason to say yes**, and the premium that changes it is now measured per
+target (`alternative.premiumPct`). That is a far better-posed question than the
+disconfirmed one — "how much over fair does this shape cost?" is answerable
+from the ledger, where "which shape do they prefer?" was not.
+See `docs/analysis/trade-fair-band-2026-09.md`.
+
 **Hard limit, stated up front.** Sleeper never shows rejected or pending
 offers (CLAUDE.md Future Features note; the API is read-only). We observe
 **accepted trades only** — a one-class problem. Honest framing: this is
