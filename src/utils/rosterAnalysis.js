@@ -219,12 +219,22 @@ export function buildMovabilityIndex(roster, leagueAverages) {
 export function getTopTradeTargets(myRoster, allRosters, limit = 20, opts = {}) {
   if (!myRoster || !allRosters?.length) return []
 
-  const { ownerRosterId = null } = opts
+  const { ownerRosterId = null, position = null } = opts
   // Single-team mode ("scout this team"): the ranking is scoped to one
   // opponent AND keeps their non-deficit pieces, ranked below the ones that
   // fill a need. An explicitly chosen team must never render an empty board
   // just because they hold nobody at a position you're thin at.
   const scoped = ownerRosterId != null
+  // A position filter, applied INSIDE the ranking for the same reason the team
+  // filter is: this function slices to `limit` before anything downstream sees
+  // it, so filtering the slice answers "which of my top 20 are RBs?" while
+  // reading as "who should I call about at RB?". Those differ, and the second
+  // one can come back empty when the real answer is a full board.
+  // Additive: the app's chips still filter the visible 20 (WhatsFair), which is
+  // the right behaviour for a board you can see all of; nothing in `src/`
+  // passes this. It exists so a caller that returns only the top N — the MCP
+  // tool — can take a position argument that means what it says.
+  const wantPos = position ? String(position).toUpperCase() : null
 
   const leagueAverages = computeLeagueAverages(allRosters)
   const myDeltas = getPositionalDeltas(myRoster, leagueAverages)
@@ -239,6 +249,7 @@ export function getTopTradeTargets(myRoster, allRosters, limit = 20, opts = {}) 
 
       r.players
         .filter(p => !p.isIR && (p.value ?? 0) >= 1000)
+        .filter(p => !wantPos || p.position === wantPos)
         .forEach(p => {
           const need = Math.max(0, -(myDeltas[p.position] ?? 0))
           // League-wide: skip positions where I'm not below average.

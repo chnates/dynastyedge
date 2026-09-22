@@ -181,13 +181,20 @@ dependency and its justification (verified against `package.json` 2026-07-05):
 | Package | Type | Why it exists |
 |---|---|---|
 | `react`, `react-dom` (^19) | dep | the framework |
-| `react-router-dom` (^7) | dep | side-drawer navigation, route map + redirects |
+| `react-router-dom` (^7) | dep | the route map + redirects (HashRouter) |
 | `@dnd-kit/core` / `sortable` / `utilities` | dep | Draft Board "My Board" drag-to-reorder (Feature 10) |
-| `lucide-react` (1.17.0) | dep | the app's entire icon set |
+| `@modelcontextprotocol/sdk` (^1.30) | dep | the MCP server in `mcp/` — **owner-approved 2026-09-19 (PR #56)**, and it never reaches the web bundle (nothing in `src/` imports `mcp/`). Brings `zod`, which is the first schema validation anywhere in this repo |
 | `vite`, `@vitejs/plugin-react` | devDep | build tool |
+| `eslint`, `eslint-plugin-react-hooks` | devDep | the lint gate (`npm run lint` over `src/`, `scripts/`, `mcp/`) |
 | `tailwindcss` (3.4.x), `postcss`, `autoprefixer` | devDep | styling pipeline |
 | `sharp` (0.34.x) | devDep | icon rasterization in `scripts/generate-icons.mjs` (never bundled) |
 | `png-to-ico` | devDep | `favicon.ico` packaging in the same script |
+
+**`lucide-react` was REMOVED, not overlooked.** It was "the app's entire icon
+set" until the Matchday design work deleted all 51 icons across 32 files and
+uninstalled it — a thin-line icon set is a named AI-slop marker and navigation
+here is typographic. Don't reintroduce it, and don't treat a missing icon as a
+missing dependency.
 
 That is the complete list. **What to do instead of adding a dep:** write the
 small utility yourself. The canonical precedent is `src/components/ui/cn.js` —

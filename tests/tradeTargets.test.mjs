@@ -131,3 +131,39 @@ test('movability reorders a real board: spare depth outranks an equal-value unto
   assert.ok(deepRow.needScore > tightRow.needScore,
     'at equal value, the team that can spare him ranks first')
 })
+
+// ── The position filter (2026-09-22, for find_trade_targets) ───────────────
+// Additive: nothing in `src/` passes it — WhatsFair's chips still filter the
+// visible 20, which is right for a board you can see all of. It exists for a
+// caller that returns only the top few, where a filter applied to the slice
+// answers "which of your top N are RBs?" and reads as "who should I call about
+// at RB?". The team filter carries the same ruling (CLAUDE.md Feature 3).
+
+test('the position filter is applied INSIDE the ranking, not to the sliced result', () => {
+  // Scoped to opponent 2, the top target is their RB (my only deficit); their
+  // 9,000 WR is a depth piece ranked below it. A filter over an already-sliced
+  // top-1 would therefore return NOTHING for WR.
+  const top = getTopTradeTargets(me, league, 1, { ownerRosterId: 2 })
+  assert.equal(top[0].position, 'RB', 'fixture precondition: the RB outranks the WR here')
+
+  const wr = getTopTradeTargets(me, league, 1, { ownerRosterId: 2, position: 'WR' })
+  assert.equal(wr.length, 1, 'an empty answer here would mean "not in your top 1", not "nobody"')
+  assert.equal(wr[0].sleeperId, 'w4')
+})
+
+test('the position filter is case-insensitive and never reaches past the other rules', () => {
+  const lower = getTopTradeTargets(me, league, 20, { position: 'rb' })
+  const upper = getTopTradeTargets(me, league, 20, { position: 'RB' })
+  assert.deepEqual(lower.map(t => t.sleeperId), upper.map(t => t.sleeperId))
+  assert.ok(lower.length > 0)
+  // League-wide it still skips positions I am not below average at, so asking
+  // for WR — where I am rich — is empty BY THE RULE, not by the filter.
+  assert.equal(getTopTradeTargets(me, league, 20, { position: 'WR' }).length, 0)
+})
+
+test('omitting the position filter changes nothing (the app passes none)', () => {
+  assert.deepEqual(
+    getTopTradeTargets(me, league, 20).map(t => t.sleeperId),
+    getTopTradeTargets(me, league, 20, { position: null }).map(t => t.sleeperId),
+  )
+})

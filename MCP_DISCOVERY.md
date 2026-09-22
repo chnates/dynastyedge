@@ -224,10 +224,11 @@ Build in this order. Each row names what it reuses and what must exist first.
 | 5 | `analyze_trade` | "Grade this trade." | `give[]`, `get[]` (resolved IDs only), `partner` | Verdict, reasoning, value split, both-seat appeal, landing spots, fair band, counter suggestion, pitch text | `tradeAnalysis.analyzeTrade` → `getTradeVerdict` → `adjustVerdictForInjuries` → `getCounterSuggestion` → `buildTradePitch`. Mirror `TradeAnalyzer.jsx:141-256`. |
 | 6 | `lineup_advice` | "What do I start, and what's it costing me?" | optional `week` | Moves with per-move gain, confidence %, must-fix flags, total points left on bench | `lineupMoves.buildLineupMoves` — pure, heavily tested. Needs projections (already committed), player DB, and the schedule for byes **and locks**. |
 
-> **This table is the original plan, kept as the record. Two tools shipped
-> beyond it** — `get_playoff_odds` (phase 2a, the first "deferred" item below)
-> and `get_player_news` (phase 2c). CLAUDE.md's **The MCP Server** section is
-> the live truth for all eight; this section is what was specified on
+> **This table is the original plan, kept as the record. Three tools shipped
+> beyond it** — `get_playoff_odds` (phase 2a, the first "deferred" item below),
+> `get_player_news` (phase 2c) and `find_trade_targets` (2026-09-22, the first
+> of the three deferred below). CLAUDE.md's **The MCP Server** section is
+> the live truth for all nine; this section is what was specified on
 > 2026-09-19.
 >
 > **Row 6 gained a requirement that was not foreseen here, and it cost a wrong
@@ -241,8 +242,20 @@ Build in this order. Each row names what it reuses and what must exist first.
 **Phase two, deliberately deferred:** playoff odds (**shipped, phase 2a** —
 cheap once `processWeeks` was lifted, which became
 `playoffOdds.buildPlayoffOutlook`), trade targets / fair packages
-(`getTopTradeTargets` + `suggestFairPackage` — note this is the ~730ms path
-in-app), manager scouting (biggest fetch burst), rookie research.
+(**shipped 2026-09-22 as `find_trade_targets`** — `getTopTradeTargets` +
+`suggestFairPackage`; the ~730ms noted here is real and turned out to be **CPU
+over a snapshot already in hand**, so it is bounded by how many targets are
+priced rather than by a cache, and the tool is the only layer in `mcp/` with no
+TTL of its own), manager scouting (biggest fetch burst), rookie research.
+
+> **A note this table could not have foreseen.** The tool's most useful field
+> is one that did not exist when §5 was written: OPEN-10 (2026-09-21) made
+> `suggestFairPackage` hold its suggestion inside the Analyzer's fair band and
+> demoted the wider assembly window to an `alternative` carrying its
+> `premiumPct`. A fairly-priced offer gives the other manager no edge on value,
+> so the premium that would buy a yes is the negotiating information — and
+> without that split the tool would have returned offers `analyze_trade` then
+> called an overpay, i.e. the app arguing with itself over MCP.
 
 **Not foreseen here and shipped anyway: reading the static feeds.** §6 treats
 the Actions-published branches as app-only. `get_player_news` reads

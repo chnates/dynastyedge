@@ -20,6 +20,7 @@ import { analyzeTrade, getTradeVerdict, getCounterSuggestion, buildTradePitch, b
 import { computeLeagueAverages, assignWinWindowTiers } from '../src/utils/rosterAnalysis.js'
 import { buildGivabilityContext, assetKeepScore, PROTECT_THRESHOLD } from '../src/utils/recommendations.js'
 import { buildFairBand } from '../src/utils/fairBand.js'
+import { buildValueLineup } from '../src/utils/lineupBuild.js'
 
 // Minimal 4-team league so analyzeTrade's league-average / tier machinery has
 // real inputs. Values are arbitrary but fixed.
@@ -762,6 +763,78 @@ test('the package still comes from spare parts — phase 2 never unlocks a prote
   assert.ok(buildFairBand(pkg.totalValue, flowers.value).inside)
 })
 
+// ── The rationale must not claim what it has not checked (SMALL-1) ──────────
+// `packageRationale` said "protects your starters" unconditionally whenever a
+// package drew from a surplus. What it meant was "touched nothing scoring >=
+// PROTECT_THRESHOLD", which is weaker: a core starter lands on exactly 0.85.
+// Measured on the live board 2026-09-22 it said so on 11 of the owner's 20
+// suggestions and 77 of 180 across all ten seats while sending a player who
+// actually starts. Both directions are pinned, because a rule that only ever
+// suppresses the claim would be as useless as one that always makes it.
+
+test('a package that sends a lineup regular names him instead of claiming to protect starters (SMALL-1)', () => {
+  const { me, them, all } = makeSpareDepthLeague()
+  const flowers = them.players.find(p => p.name === 'Flowers')
+  const pkg = suggestFairPackage(flowers, me, all, them)
+
+  const starterIds = buildValueLineup(me.players).starterIds
+  const leaving = pkg.assets.filter(a => a.type === 'player' && starterIds.has(String(a.sleeperId)))
+  assert.ok(leaving.length > 0, 'fixture precondition: this package does send a starter')
+
+  assert.doesNotMatch(pkg.rationale, /protects your/i,
+    'the false claim — this is the bug, stated executably')
+  leaving.forEach(a => assert.ok(pkg.rationale.includes(a.name),
+    `the rationale names ${a.name}, the starter actually leaving`))
+  assert.match(pkg.rationale, /start in your best lineup/,
+    'two starters leave here, so the verb agrees')
+})
+
+// A roster with genuine bench depth — 15 players against 10 fillable slots, so
+// a package can be assembled entirely from players who do not start.
+function makeDeepBenchLeague() {
+  const P = (id, name, pos, value, age = 26) =>
+    ({ sleeperId: id, name, position: pos, value, age, isIR: false, isTaxi: false })
+  const mk = (rosterId, players) => ({
+    rosterId, players, picks: [],
+    totalValue: players.reduce((s, p) => s + p.value, 0),
+    pickCapitalScore: 0, avgStarterAge: 26,
+  })
+  const me = mk(1, [
+    P('101', 'My QB1', 'QB', 5200), P('102', 'My QB2', 'QB', 5000),
+    P('103', 'My RB1', 'RB', 4000), P('104', 'My RB2', 'RB', 3800),
+    P('105', 'My RB3', 'RB', 3600), P('106', 'My RB4', 'RB', 3400),
+    P('107', 'My WR1', 'WR', 4200), P('108', 'My WR2', 'WR', 4000),
+    P('109', 'My WR3', 'WR', 3800), P('110', 'My WR4', 'WR', 3600),
+    P('111', 'My TE1', 'TE', 3000),
+    P('112', 'Bench RB', 'RB', 1100), P('113', 'Bench WR', 'WR', 1000),
+    P('114', 'Bench TE', 'TE', 900), P('115', 'Bench QB', 'QB', 800),
+  ])
+  const them = mk(2, [
+    P('201', 'Their QB1', 'QB', 6000), P('202', 'Their QB2', 'QB', 5500),
+    P('203', 'Their WR1', 'WR', 5000), P('204', 'Target WR', 'WR', 2000),
+    P('205', 'Their WR2', 'WR', 4500),
+    P('206', 'Their RB1', 'RB', 600), P('207', 'Their TE1', 'TE', 500),
+    P('208', 'Their RB2', 'RB', 400),
+  ])
+  const t3 = mk(3, [P('301', 'a', 'QB', 3000), P('302', 'b', 'RB', 3000), P('303', 'c', 'WR', 3000), P('304', 'd', 'TE', 1500)])
+  const t4 = mk(4, [P('401', 'a', 'QB', 2000), P('402', 'b', 'RB', 2000), P('403', 'c', 'WR', 2000), P('404', 'd', 'TE', 1000)])
+  return { me, them, all: [me, them, t3, t4] }
+}
+
+test('a package drawn entirely from the bench still says it protects your starters (SMALL-1)', () => {
+  const { me, them, all } = makeDeepBenchLeague()
+  const target = them.players.find(p => p.name === 'Target WR')
+  const pkg = suggestFairPackage(target, me, all, them)
+
+  const starterIds = buildValueLineup(me.players).starterIds
+  assert.equal(
+    pkg.assets.filter(a => a.type === 'player' && starterIds.has(String(a.sleeperId))).length, 0,
+    'fixture precondition: nothing in this package starts',
+  )
+  assert.match(pkg.rationale, /protects your starters/,
+    'the claim survives where it is true — this is not a blanket suppression')
+})
+
 test('without a partner roster the builder degrades to phase 1 and reports no appeal (OPEN-6)', () => {
   const { me, them, all } = makeSpareDepthLeague()
   const flowers = them.players.find(p => p.name === 'Flowers')
@@ -1326,4 +1399,66 @@ test('holding the suggestion inside the band never unlocks a protected asset (OP
   pkg.assets.forEach(a => assert.ok(assetKeepScore(a, ctx) < PROTECT_THRESHOLD, a.name))
   if (pkg.alternative)
     pkg.alternative.assets.forEach(a => assert.ok(assetKeepScore(a, ctx) < PROTECT_THRESHOLD, a.name))
+})
+
+// ── A pick asset carries its IDENTITY, not just its label (2026-09-22) ──────
+// `pickLabel` is "{season} {suffix}" and drops the original owner, so a roster
+// can hold several picks under one label — measured live, SIX OF TEN rosters
+// do, one holding three 2027 2nds. Every consumer of a suggested package has
+// to get back to a real pick; the only honest way is for the asset to carry
+// the season/round/originalOwner triple that identifies it. `TradeAnalyzer`'s
+// `mapPackageToAssets` used to rebuild the label and `.find` the first match,
+// which loaded the Analyzer with a DIFFERENT REAL ASSET than the search chose.
+
+function makePickLeague() {
+  const P = (id, name, pos, value, age = 26) =>
+    ({ sleeperId: id, name, position: pos, value, age, isIR: false, isTaxi: false })
+  const mk = (rosterId, players, picks = []) => ({
+    rosterId, players, picks,
+    totalValue: players.reduce((s, p) => s + p.value, 0),
+    pickCapitalScore: 0, avgStarterAge: 26,
+  })
+  // Three 2027 2nds under ONE label, exactly the live shape.
+  const me = mk(1, [
+    P('101', 'My QB1', 'QB', 5200), P('102', 'My QB2', 'QB', 5000),
+    P('103', 'My RB1', 'RB', 4000), P('104', 'My RB2', 'RB', 3800),
+    P('107', 'My WR1', 'WR', 4200), P('108', 'My WR2', 'WR', 4000),
+    P('111', 'My TE1', 'TE', 3000),
+  ], [
+    { season: '2027', round: 2, originalOwner: 1, value: 1600 },
+    { season: '2027', round: 2, originalOwner: 3, value: 1600 },
+    { season: '2027', round: 2, originalOwner: 4, value: 1600 },
+  ])
+  const them = mk(2, [
+    P('201', 'Their QB1', 'QB', 6000), P('204', 'Target WR', 'WR', 1650),
+    P('205', 'Their WR1', 'WR', 5000),
+    P('206', 'Their RB1', 'RB', 600), P('207', 'Their TE1', 'TE', 500),
+  ])
+  const t3 = mk(3, [P('301', 'a', 'QB', 3000), P('302', 'b', 'RB', 3000), P('303', 'c', 'WR', 3000), P('304', 'd', 'TE', 1500)])
+  const t4 = mk(4, [P('401', 'a', 'QB', 2000), P('402', 'b', 'RB', 2000), P('403', 'c', 'WR', 2000), P('404', 'd', 'TE', 1000)])
+  return { me, them, all: [me, them, t3, t4] }
+}
+
+test('a suggested pick carries season + round + originalOwner, so it identifies ONE pick', () => {
+  const { me, them, all } = makePickLeague()
+  const target = them.players.find(p => p.name === 'Target WR')
+  const pkg = suggestFairPackage(target, me, all, them)
+  const picks = pkg.assets.filter(a => a.type === 'pick')
+  assert.ok(picks.length > 0, 'fixture precondition: the package reaches for a pick')
+
+  picks.forEach(a => {
+    assert.ok(a.season != null, 'season travels with the asset')
+    assert.equal(typeof a.round, 'number', 'round travels with the asset')
+    assert.ok(a.originalOwner != null, 'and the original owner, which the label drops')
+    // The triple resolves to exactly one of the three twins.
+    const matches = me.picks.filter(p =>
+      String(p.season) === String(a.season) &&
+      p.round === a.round &&
+      String(p.originalOwner) === String(a.originalOwner))
+    assert.equal(matches.length, 1, 'the identity resolves to exactly one real pick')
+  })
+
+  // The label alone resolves to three, which is why it cannot be the key.
+  const byLabel = me.picks.filter(p => `${p.season} 2nd` === picks[0].name)
+  assert.equal(byLabel.length, 3, 'one label, three distinct assets — a `.find` here is a coin toss')
 })

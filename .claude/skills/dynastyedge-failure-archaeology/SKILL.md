@@ -507,7 +507,59 @@ sessionStorage draft. The precedence rule (verified in
 - **Ruling for any new entry point into the Analyzer:** add it to the
   `hasNavState` disjunction, seed via lazy initializers or a consume-once
   mechanism, and hand over asset objects the builder already understands.
-  Never bypass or reorder the nav-state-over-draft precedence.
+  Never bypass or reorder the nav-state-over-draft precedence. **And resolve
+  them by identity, never by a rendered label — see §4f.**
+
+### 4f. A suggested pick was matched back by its LABEL (SETTLED 2026-09-22)
+
+The fourth member of §4's family, and the one that proves §4a's ruling needed a
+second half. §4a: *"a preload payload must resolve to the same asset objects the
+add sheet produces (same `id`), or toggles/dedupe/totals silently break."* True,
+and it says nothing about **how** you resolve them — so the resolution itself
+became the bug.
+
+- **Symptom: none.** That is the entry's point. Totals were right, the card and
+  the Analyzer agreed, no warning, no visual tell.
+- **Root cause:** `suggestFairPackage` named its pick assets with `pickLabel`
+  (`"{season} {suffix}"`) and dropped the `originalOwner`.
+  `TradeAnalyzer.jsx`'s `mapPackageToAssets` rebuilt that label and `.find`-ed
+  the first match — but **a roster can hold several picks under one label**, and
+  they are different real assets with different ids.
+- **Measured before fixing, and the measurement is the lesson.** Live
+  2026-09-22: **6 of 10 rosters** hold at least one colliding label (one holds
+  *three* 2027 2nds). Across all ten seats' Targets boards, **13 of 142 pick
+  handoffs (9%) loaded the wrong pick** — and **0 on the owner's own seat**,
+  because he holds only his own picks. It had been recorded in
+  `docs/open-items.md` as "a real but **narrow** bug"; it was off by an order of
+  magnitude, because the one seat anybody looks at is the one where it cannot
+  appear.
+- **Why it stayed invisible even where it fired:** twins share a round-median
+  price, so the totals, the fair band and the verdict were all correct. Only the
+  *identity* was wrong — i.e. the offer the owner would then send in Sleeper.
+  It stops being value-neutral the moment slots resolve, since the draft season
+  prices picks per slot rather than per round (§3b/§3c's calendar windows).
+- **Fix: at the root, not the consumer.** Pick assets now carry `season` +
+  `originalOwner` beside `round`, so identity travels with the asset. The MCP
+  tool that had just shipped a label index and an `ambiguous` flag deleted
+  both — **the ambiguity became impossible rather than merely detectable**,
+  which is the better of the two shapes whenever you can reach it.
+- **Standing ruling (extends §4a):** a preload must resolve by **identity**,
+  never by a rendered label. If a consumer needs to get back to a domain
+  object, the producer carries the key — do not re-derive it from a display
+  string, and do not `.find` on one. This is the two-DJ-Moores rule (the news
+  layer's `playerIds`) and §3e's `mfl_id`-not-`ktc_id` finding, arriving a third
+  time inside `src/`.
+- **Method note worth as much as the fix:** the bug was invisible on the owner's
+  roster and obvious across all ten seats. `scripts/dev/trade-fair-band-sweep.mjs`
+  had already established the ten-seat sweep as this repo's way of avoiding a
+  fit to one outlier roster (§4e-vi); the same instrument is how you size a bug.
+  **When you catch yourself writing "narrow", measure it.**
+- Evidence: `src/utils/tradeAnalysis.js` (`suggestFairPackage`'s asset build),
+  `src/components/trade/TradeAnalyzer.jsx` (`mapPackageToAssets`),
+  `mcp/tools/findTradeTargets.js` (`assetRow`), CLAUDE.md Feature 3's
+  two-phase section, `tests/tradeAnalysis.test.mjs` +
+  `tests/mcpFindTradeTargets.test.mjs` (a roster holding three picks under one
+  label, where a label match is a coin toss).
 
 ---
 
@@ -799,7 +851,7 @@ MCP-2c, `tests/lineupMoves.test.mjs` + `tests/projections.test.mjs`.
 | **FantasyPros CSV column quirks.** Header shortened to "FP", column made sortable, FP TIERS field drives tier grouping when FP-sorted; tiers captured during the fuzzy-match phase. | `0b977be` (2026-05-31), `src/components/draft/DraftBoard.jsx` | CSV parsing is positional (`cols[0]` rank, `cols[1]` tier, `cols[2]` name…); position strings like "RB1" are stripped of digits. Changing the CSV format breaks this silently — check `parseFantasyProsCsv` first. |
 | **Integration-review sweep.** Draft views used hand-rolled error UI; Tracker pick modals violated the sheet contract; LeagueActivity joined player IDs without `String()`. | `6ad6e24` (2026-06-12) | All joins normalize IDs with `String()`; all error UI is shared `ErrorState`; every bottom-docked panel honors the sheet contract — no exceptions for "small" modals. |
 | **FAAB is counted in BUDGETS, and the budget resets twice a league year.** `buildFaabStats` summed raw dollars across seasons; the budget went $100 (2023–25) → $1000 (2026), so the moment 2026 spend landed it was adding two scales. Fixed 2026-09-20. | `src/utils/managerAnalysis.js` (`budgetsCommitted` / `avgBidPct` / `valuePerBudget`), CLAUDE.md League Context + Feature 11, `docs/open-items.md` OPEN-1 | Measured live before/after: **four of ten** tendency chips were wrong and **two inverted** — the biggest raw spender ($1,071) wore "Aggressive bidder" while bidding 10.7% of budget, *below* the league's 12.5%. Two rulings. **(a)** No raw-dollar field may leave `buildFaabStats` — `dollars`, `avgBid`, `valuePer100` and `budgetPct` are all gone and a test pins their absence; a cross-season dollar total is a number in no unit. **(b)** The budget **resets twice a league year** (offseason, then the regular-season start, unspent offseason money lost), so `roster.settings.waiver_budget_used` is the CURRENT PERIOD only — `leagueState.js`'s `faabRemaining` is correct as written and must never be "reconciled" against a transaction-log total. A season's log routinely exceeds one budget (six manager-seasons do; **none has ever exceeded two**, which is the signature). A per-bid percent needs no period split — both periods carry the same `waiver_budget`. |
-| **Sign-in must not depend on FantasyCalc.** UX audit found a values-API outage could lock the user out. | `a3a34dc` (2026-06-20), `useLeague`'s Sleeper-only `signInRosters` | Never route LoginScreen data through FantasyCalc. Also from the same commit: sub-tab rows are the shared `SubTabBar` (fixes 390px label wrapping) — never hand-roll a sub-tab row. |
+| **Sign-in must not depend on FantasyCalc.** UX audit found a values-API outage could lock the user out. | `a3a34dc` (2026-06-20), `useLeague`'s Sleeper-only `signInRosters` | Never route LoginScreen data through FantasyCalc. Also from the same commit: sub-tab rows are the shared `SubTabBar` (fixes 390px label wrapping) — never hand-roll a sub-tab row. **`SubTabBar` was itself replaced by `SectionContents` in DESIGN-3 (2026-09-11)**, which wraps instead of scrolling; the ruling survives the rename. |
 
 ---
 
@@ -839,7 +891,10 @@ MCP-2c, `tests/lineupMoves.test.mjs` + `tests/projections.test.mjs`.
 
 ## Provenance and maintenance
 
-Written 2026-07-05 against local HEAD `6fb85f3` (2026-06-20). §4e was added
+Written 2026-07-05 against local HEAD `6fb85f3` (2026-06-20). §4f was added
+2026-09-22 from the trade-targets MCP tool work (branch
+`claude/mcp-trade-targets`), which found it while building a second consumer of
+`suggestFairPackage`. §4e was added
 2026-09-06 from the keep-score calibration work (branch
 `claude/trading-analyzer-review-acslwm`); §4e-vi and §4e-vii were added
 2026-09-07 from the trade-engine review (branch

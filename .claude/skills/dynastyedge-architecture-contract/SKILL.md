@@ -350,10 +350,15 @@ injectable/fixed seed.
 ## 7. UI architecture invariants (brief — depth lives in `/design-review` + CLAUDE.md)
 
 - **All UI routes through the design-system barrel** `src/components/ui`
-  (`Button`, `IconButton`, `Card`, `Sheet`/`SheetHeader`, `Modal`, `Chip`,
-  `Badge`, `Input`/`SearchInput`, `cn`, plus re-exported shared primitives).
-  Never hand-roll these inline. Run the repo's `/design-review` skill before
-  committing component work.
+  (`Button`, `IconButton`, `Card`, `Mark`, `PositionBand`, `Magnitude`,
+  `RuledList`, `Row`, `Lede`, `NavRow`, `Loading`, `Sheet`/`SheetHeader`,
+  `Modal`, `Chip`, `Badge`, `Input`/`SearchInput`, `Textarea`, `Select`, `cn`,
+  plus re-exported shared primitives). Never hand-roll these inline. Run the
+  repo's `/design-review` skill before committing component work — **its
+  judgement pass, not only its greps**, and audit for the SHAPE rather than the
+  API (a banned left accent rail survived three sweeps as a raw
+  `border-l-[3px]` after `Card`'s `accent` prop was deleted). CLAUDE.md's
+  **Design System** section is the live truth for the "Matchday" direction.
 - **Exactly two sanctioned hand-rolled sheets** (verified: the only components
   referencing `window.visualViewport` are
   `src/components/shared/PlayerSearchSheet.jsx` and
@@ -364,9 +369,18 @@ injectable/fixed seed.
   `bottom: 0`, safe-area clearance as *inside* padding). The body never
   scrolls; bottom sheets use `useScrollLock` + `useSheetDrag` +
   `overscroll-contain`. Never shorten `<main>` with a bottom offset.
-- **No bottom nav — ever.** Navigation is the side drawer (`SideDrawer.jsx`
-  `NAV_TREE`, always-expanded hierarchical map) + `SubTabBar` within sections.
-  This was re-affirmed in a usability review; it's a settled decision.
+- **Navigation is a BOTTOM TAB BAR** (`components/shared/TabBar.jsx`), with
+  `SectionContents` as the within-section contents rail. **This reverses what
+  this skill said until 2026-09-22** — it still carried "No bottom nav — ever …
+  a settled decision", describing `SideDrawer`'s `NAV_TREE` and `SubTabBar`,
+  both of which are gone. The owner reopened the question for the September
+  2026 design review and **reversed it** (DESIGN-3, 2026-09-11): the drawer was
+  the app's only map and hid all 21 destinations behind a full-screen overlay.
+  The drawer survives with **zero destinations** as the utility surface
+  (refresh, data status, theme, sign out). **Every navigable destination lives
+  in `src/navigation.js`** — the tab bar, the contents rails, the Index and
+  global search all read it, so a destination is added or moved exactly once.
+  CLAUDE.md's **Navigation** section is the live truth.
 - **Route redirect policy:** any moved/renamed path keeps a `<Navigate>` (or
   param-aware `RedirectParam`) redirect — see the redirect block at the bottom
   of `App.jsx`'s `<Routes>` (`/roster*` → `/my-team*`/`/league*`, `/lineup*`,

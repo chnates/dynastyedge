@@ -40552,12 +40552,75 @@ function assignWinWindowTiers(allRosters) {
 function getWinWindowTier(rosterId, allRosters) {
   return assignWinWindowTiers(allRosters)[rosterId] ?? "Middle";
 }
-var POSITION_DEPTH;
+function assetMovability({ depthRank, starts, weakensThem, theirDelta }) {
+  let m = 1;
+  m += Math.min(0.18, Math.max(0, depthRank) * 0.06);
+  if (!starts) m += 0.12;
+  if (weakensThem) m -= 0.3;
+  else if (theirDelta > 0) m += 0.05;
+  return Math.max(MOVABILITY_RANGE[0], Math.min(MOVABILITY_RANGE[1], m));
+}
+function buildMovabilityIndex(roster, leagueAverages) {
+  const theirDeltas = getPositionalDeltas(roster, leagueAverages);
+  const starterIds = buildValueLineup(roster.players).starterIds;
+  const depthRank = /* @__PURE__ */ new Map();
+  POSITIONS.forEach((pos) => {
+    roster.players.filter((p) => p.position === pos && !p.isIR).sort((a, b) => (b.value ?? 0) - (a.value ?? 0)).forEach((p, i) => depthRank.set(String(p.sleeperId), i));
+  });
+  return (player) => {
+    const id = String(player.sleeperId);
+    const withoutHim = roster.players.filter((x) => String(x.sleeperId) !== id);
+    const afterDelta = getPositionalDeltas({ players: withoutHim }, leagueAverages)[player.position] ?? 0;
+    const theirDelta = theirDeltas[player.position] ?? 0;
+    const starts = starterIds.has(id);
+    const weakensThem = afterDelta < 0 && afterDelta < theirDelta;
+    return {
+      theirDelta,
+      starts,
+      weakensThem,
+      depthRank: depthRank.get(id) ?? 0,
+      movability: assetMovability({ depthRank: depthRank.get(id) ?? 0, starts, weakensThem, theirDelta })
+    };
+  };
+}
+function getTopTradeTargets(myRoster, allRosters, limit = 20, opts = {}) {
+  if (!myRoster || !allRosters?.length) return [];
+  const { ownerRosterId = null, position = null } = opts;
+  const scoped = ownerRosterId != null;
+  const wantPos = position ? String(position).toUpperCase() : null;
+  const leagueAverages = computeLeagueAverages(allRosters);
+  const myDeltas = getPositionalDeltas(myRoster, leagueAverages);
+  const targets = [];
+  allRosters.filter((r) => r.rosterId !== myRoster.rosterId).filter((r) => !scoped || r.rosterId === ownerRosterId).forEach((r) => {
+    const movabilityFor = buildMovabilityIndex(r, leagueAverages);
+    r.players.filter((p) => !p.isIR && (p.value ?? 0) >= 1e3).filter((p) => !wantPos || p.position === wantPos).forEach((p) => {
+      const need = Math.max(0, -(myDeltas[p.position] ?? 0));
+      if (need === 0 && !scoped) return;
+      const { movability } = movabilityFor(p);
+      targets.push({
+        ...p,
+        ownerRosterId: r.rosterId,
+        owner: r.owner,
+        // Movability multiplies rather than gates: a player his team would
+        // hate to lose still belongs on the board, just below the ones they
+        // can spare. Nothing is ever hidden by it.
+        needScore: need * p.value * movability,
+        movability,
+        fillsNeed: need > 0,
+        positionDelta: myDeltas[p.position] ?? 0,
+        leagueAvgAtPos: leagueAverages[p.position] ?? 1
+      });
+    });
+  });
+  return targets.sort((a, b) => b.needScore - a.needScore || (b.value ?? 0) - (a.value ?? 0)).slice(0, limit);
+}
+var POSITION_DEPTH, MOVABILITY_RANGE;
 var init_rosterAnalysis = __esm({
   "src/utils/rosterAnalysis.js"() {
     init_constants();
     init_lineupBuild();
     POSITION_DEPTH = { QB: 3, RB: 5, WR: 5, TE: 3 };
+    MOVABILITY_RANGE = [0.7, 1.35];
   }
 });
 
@@ -41155,6 +41218,15 @@ var init_fairBand = __esm({
 });
 
 // src/utils/recommendations.js
+function pastPeakTilt(asset, myTier) {
+  const window = PEAK_WINDOWS[asset?.position];
+  const age = asset?.age;
+  if (!window || age == null || age <= 0) return 0;
+  const past = age - window[1];
+  if (past <= 0) return 0;
+  const magnitude = (AGE_TILT_BY_TIER[myTier] ?? AGE_TILT_BY_TIER.Middle) * (AGE_TILT_BY_POSITION[asset.position] ?? 0);
+  return -Math.min(1, past / AGE_TILT_SPAN) * magnitude;
+}
 function joinAnd(parts) {
   if (parts.length <= 1) return parts[0] ?? "";
   if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
@@ -41173,6 +41245,42 @@ function buildGivabilityContext(myRoster, allRosters) {
     posValues[pos] = mine.map((p) => p.value || 0);
   });
   return { myDeltas, myTier, posRank, posValues, leagueAverages };
+}
+function assetKeepScore(asset, ctx) {
+  const { myDeltas, myTier, posRank, posValues } = ctx;
+  if (asset.type === "pick") {
+    let keep2 = PICK_ROUND_KEEP[asset.round] ?? PICK_KEEP_DEFAULT;
+    if (myTier === "Rebuilding") keep2 += 0.3;
+    else if (myTier === "Contending") keep2 -= 0.3;
+    return clamp2(keep2, 0.05, PICK_KEEP_CAP);
+  }
+  const pos = asset.position;
+  const rank = posRank?.get(String(asset.sleeperId)) ?? 99;
+  const coreN = CORE_DEPTH[pos] ?? 2;
+  let keep = rank < coreN ? 0.85 : Math.max(0.2, 0.55 - (rank - coreN) * 0.12);
+  const delta = myDeltas?.[pos] ?? 0;
+  if (delta < 0) keep += 0.22;
+  else if (delta > 0 && rank >= coreN) keep -= 0.18;
+  if (rank === 0) {
+    const vals = posValues?.[pos] ?? [];
+    const top = vals[0] ?? 0;
+    const next = vals[1] ?? 0;
+    if (top > 0 && next / top < 0.5) keep = Math.max(keep, 0.95);
+  }
+  const age = asset.age ?? null;
+  if (myTier === "Contending") {
+    if (age != null && age <= 24 && (asset.value || 0) < 1500) keep -= 0.15;
+  } else if (myTier === "Rebuilding") {
+    if (age != null && age <= 24) keep += 0.2;
+  }
+  keep += pastPeakTilt(asset, myTier);
+  return clamp2(keep);
+}
+function getDeficitPositions(roster, allRosters) {
+  if (!roster || !allRosters?.length) return /* @__PURE__ */ new Set();
+  const leagueAverages = computeLeagueAverages(allRosters);
+  const deltas = getPositionalDeltas(roster, leagueAverages);
+  return new Set(POSITIONS.filter((pos) => deltas[pos] < 0));
 }
 function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 5, minValue = 600 } = {}) {
   if (!freeAgents?.length || !myRoster) return [];
@@ -41287,7 +41395,7 @@ function suggestSellMove(player, myRoster, allRosters) {
     summary: pick2.starts ? `Shop ${player.name} to ${partnerName} \u2014 he'd start for them.` : `Shop ${player.name} to ${partnerName} \u2014 they're thin at ${pos}.`
   };
 }
-var CORE_DEPTH, CASH_OUT_BAND;
+var CORE_DEPTH, PICK_ROUND_KEEP, PICK_KEEP_DEFAULT, PICK_KEEP_CAP, AGE_TILT_BY_POSITION, AGE_TILT_BY_TIER, AGE_TILT_SPAN, clamp2, PROTECT_THRESHOLD, CASH_OUT_BAND;
 var init_recommendations = __esm({
   "src/utils/recommendations.js"() {
     init_constants();
@@ -41297,6 +41405,14 @@ var init_recommendations = __esm({
     init_fairBand();
     init_teamName();
     CORE_DEPTH = { QB: 2, RB: 3, WR: 3, TE: 1 };
+    PICK_ROUND_KEEP = { 1: 0.65, 2: 0.5, 3: 0.4, 4: 0.3 };
+    PICK_KEEP_DEFAULT = 0.5;
+    PICK_KEEP_CAP = 0.85;
+    AGE_TILT_BY_POSITION = { RB: 1, WR: 0.65, QB: 0.4, TE: 0.15 };
+    AGE_TILT_BY_TIER = { Contending: 0.04, Middle: 0.1, Rebuilding: 0.16 };
+    AGE_TILT_SPAN = 3;
+    clamp2 = (v, lo = 0.05, hi = 1) => Math.max(lo, Math.min(hi, v));
+    PROTECT_THRESHOLD = 0.9;
     CASH_OUT_BAND = [1 / (1 + FAIR_BAND_PCT), 1 / (1 - FAIR_BAND_PCT)];
   }
 });
@@ -42779,7 +42895,201 @@ function adjustVerdictForInjuries(baseVerdict, liveIntelligence, giveAssets, get
   const updatedReasoning = notes.length > 0 ? `${reasoning} Note: ${notes.join("; ")}.` : reasoning;
   return { verdict, reasoning: updatedReasoning, adjustedByIntelligence: notes.length > 0 };
 }
-var MY_LINEUP_MATERIAL_PCT, SCARCITY_FLOOR, SCARCITY_GAP, PICK_SUFFIXES, addAsPlayer, SEAT_VOICE, VERDICT_UPGRADE, VERDICT_DOWNGRADE;
+function packageRationale(assets, ctx, starterIds) {
+  const playerPositions = [...new Set(
+    assets.filter((a) => a.type === "player").map((a) => a.position).filter(Boolean)
+  )];
+  const surplusPos = playerPositions.filter((p) => (ctx.myDeltas?.[p] ?? 0) > 0);
+  const hasPicks = assets.some((a) => a.type === "pick");
+  const parts = [];
+  if (surplusPos.length) parts.push(`your ${surplusPos.join("/")} surplus`);
+  if (hasPicks) parts.push(ctx.myTier === "Contending" ? "spare draft capital" : "draft capital");
+  if (!parts.length && playerPositions.length) parts.push("your roster depth");
+  const source = parts.length ? `Drawn from ${joinAnd(parts)}` : null;
+  const canCheck = starterIds instanceof Set;
+  const leaving = canCheck ? assets.filter((a) => a.type === "player" && starterIds.has(String(a.sleeperId))) : [];
+  if (leaving.length) {
+    const names = joinAnd(leaving.map((a) => a.name));
+    const verb = leaving.length > 1 ? "start" : "starts";
+    return source ? `${source} \u2014 but ${names} ${verb} in your best lineup.` : `${names} ${verb} in your best lineup.`;
+  }
+  if (!canCheck) return source ? `${source}.` : "Drawn from your roster depth.";
+  return source ? `${source} \u2014 protects your starters.` : "Protects your core starters.";
+}
+function suggestFairPackage(targetPlayer, myRoster, allRosters = null, opponentRoster = null, opts = {}) {
+  if (!targetPlayer || !myRoster) return null;
+  const targetValue = targetPlayer.value || 0;
+  if (targetValue === 0) return null;
+  const {
+    band = PACKAGE_BAND,
+    appealBonus = APPEAL_BONUS,
+    // Sweep hook only: false reproduces the pre-2026-09-21 behaviour, where the
+    // suggestion could be any package in the assembly window. The before/after
+    // in the memo is one command because of it.
+    requireFairBand = true
+  } = opts;
+  const ctx = buildGivabilityContext(myRoster, allRosters);
+  const opponentDeficits = getDeficitPositions(opponentRoster, allRosters);
+  const myStarterIds = buildValueLineup(myRoster.players).starterIds;
+  const allAssets = [
+    ...myRoster.players.filter((p) => !p.isIR).map((p) => ({
+      type: "player",
+      name: p.name,
+      value: p.value,
+      sleeperId: p.sleeperId,
+      position: p.position,
+      age: p.age
+    })),
+    ...myRoster.picks.map((p) => ({
+      type: "pick",
+      name: pickLabel(p),
+      value: p.value ?? 0,
+      round: p.round,
+      season: p.season,
+      originalOwner: p.originalOwner
+    }))
+  ].filter((a) => a.value > 0);
+  const available = allAssets.filter((a) => assetKeepScore(a, ctx) < PROTECT_THRESHOLD).sort((a, b) => a.value - b.value);
+  if (!available.length) return null;
+  const FLOOR = targetValue * band.floor;
+  const CAP = targetValue * band.cap;
+  const keepCache = available.map((a) => assetKeepScore(a, ctx));
+  const candidates = [];
+  let bestUnder = null;
+  const consider = (idxs) => {
+    let total = 0, pain = 0;
+    for (const i of idxs) {
+      total += available[i].value;
+      pain += keepCache[i];
+      if (opponentDeficits.has(available[i].position)) pain -= 0.08;
+    }
+    if (total > CAP) return;
+    if (total < FLOOR) {
+      if (!bestUnder || total > bestUnder.total) bestUnder = { idxs, total };
+      return;
+    }
+    pain += 0.2 * (idxs.length - 1);
+    pain += Math.abs(total - targetValue) / targetValue * 0.3;
+    const inFair2 = buildFairBand(total, targetValue)?.inside ?? false;
+    candidates.push({ idxs, total, pain, inFair: inFair2 });
+  };
+  const n = available.length;
+  for (let i = 0; i < n; i++) consider([i]);
+  for (let i = 0; i < n - 1; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (available[i].value + available[j].value > CAP) break;
+      consider([i, j]);
+    }
+  }
+  for (let i = 0; i < n - 2; i++) {
+    for (let j = i + 1; j < n - 1; j++) {
+      if (available[i].value + available[j].value > CAP) break;
+      for (let k = j + 1; k < n; k++) {
+        if (available[i].value + available[j].value + available[k].value > CAP) break;
+        consider([i, j, k]);
+      }
+    }
+  }
+  let best = null;
+  let alternative = null;
+  const inFair = requireFairBand ? candidates.filter((c) => c.inFair) : candidates;
+  const eligible = inFair.length ? inFair : candidates;
+  const fairReachable = inFair.length > 0;
+  if (candidates.length) {
+    candidates.sort((a, b) => a.pain - b.pain);
+    eligible.sort((a, b) => a.pain - b.pain);
+    const canScorePartner = !!opponentRoster && !!allRosters?.length;
+    if (!canScorePartner) {
+      best = eligible[0];
+    } else {
+      const leagueAverages = computeLeagueAverages(allRosters);
+      const winWindowTiers = assignWinWindowTiers(allRosters);
+      const getAssets = [{ ...targetPlayer, type: "player" }];
+      const scored = [];
+      const eligibleSet = new Set(eligible);
+      candidates.forEach((c) => {
+        const assets = c.idxs.map((i) => available[i]);
+        const fit = buildPartnerFit(assets, getAssets, opponentRoster, allRosters, {
+          leagueAverages,
+          winWindowTiers
+        });
+        if (!fit) return;
+        const rank = APPEAL_RANK[fit.appeal] ?? 0;
+        const netScore = (appealBonus[fit.appeal] ?? 0) - c.pain;
+        scored.push({ ...c, appealRank: rank, netScore, partnerFit: fit });
+        if (eligibleSet.has(c) && (!best || netScore > best.netScore)) {
+          best = { ...c, appealRank: rank, netScore, partnerFit: fit };
+        }
+      });
+      if (best) {
+        alternative = scored.filter((c) => c.appealRank > best.appealRank && (c.pain - best.pain >= ALTERNATIVE_MIN_SAVING || c.total > best.total)).sort((a, b) => b.appealRank - a.appealRank || a.pain - b.pain)[0] ?? null;
+      }
+      if (!best) best = eligible[0];
+    }
+  }
+  if (best) {
+    const assets = best.idxs.map((i) => available[i]);
+    const gapPct = Math.round(Math.abs(best.total - targetValue) / targetValue * 100);
+    const fit = best.partnerFit ?? null;
+    const mine = allRosters?.length ? buildSideFit([{ ...targetPlayer, type: "player" }], assets, myRoster, allRosters, { seat: "you" }) : null;
+    return {
+      assets,
+      totalValue: best.total,
+      gapPct,
+      over: best.total >= targetValue,
+      // The search's own objective value for the winning package — what this
+      // suggestion cost me, on assetKeepScore's 0..1-per-asset scale. Exposed
+      // so the sweep reports the number the search actually minimised rather
+      // than a re-derivation of the formula that could drift from it.
+      keepPain: best.pain,
+      rationale: packageRationale(assets, ctx, myStarterIds),
+      // What this package is worth to MY roster — the counterpart to `appeal`.
+      myAppeal: mine?.appeal ?? null,
+      mySummary: mine?.summary ?? null,
+      myStartersDelta: mine?.startersDelta ?? null,
+      myConcern: mine?.concerns?.[0] ?? null,
+      // The partner read this package was CHOSEN for, so a surface showing the
+      // suggestion can show what it's worth to them instead of implying it's
+      // agreeable. Null when there's no partner roster to read.
+      appeal: fit?.appeal ?? null,
+      partnerSummary: fit?.summary ?? null,
+      partnerStartersDelta: fit?.startersDelta ?? null,
+      partnerConcern: fit?.concerns?.[0] ?? null,
+      // Whether the suggestion itself lands inside buildFairBand. False only
+      // when no combination of my movable assets could — an honest near-miss
+      // rather than no answer at all — so a surface can say which it is looking
+      // at instead of implying the Analyzer will agree.
+      inFairBand: fairReachable,
+      // The package they'd want MORE that this declined to pay for, drawn from
+      // the whole assembly window. `premiumPct` is what it costs over the
+      // target — the number that makes it a decision rather than a footnote.
+      alternative: alternative ? {
+        assets: alternative.idxs.map((i) => available[i]),
+        totalValue: alternative.total,
+        appeal: alternative.partnerFit?.appeal ?? null,
+        premiumPct: Math.round((alternative.total - targetValue) / targetValue * 100)
+      } : null
+    };
+  }
+  if (bestUnder) {
+    const assets = bestUnder.idxs.map((i) => available[i]);
+    const gapPct = Math.round((targetValue - bestUnder.total) / targetValue * 100);
+    return {
+      assets,
+      totalValue: bestUnder.total,
+      gapPct,
+      over: false,
+      short: true,
+      // "without dealing a core starter" was the same unchecked claim in
+      // different words, and leaving it would now contradict the sentence
+      // above it on the very same line. The instruction survives; the
+      // assertion doesn't.
+      rationale: `${packageRationale(assets, ctx, myStarterIds)} Covers ~${100 - gapPct}% \u2014 add a piece to reach fair value.`
+    };
+  }
+  return null;
+}
+var MY_LINEUP_MATERIAL_PCT, SCARCITY_FLOOR, SCARCITY_GAP, APPEAL_RANK, PICK_SUFFIXES, addAsPlayer, SEAT_VOICE, VERDICT_UPGRADE, VERDICT_DOWNGRADE, ALTERNATIVE_MIN_SAVING, APPEAL_BONUS, PACKAGE_BAND;
 var init_tradeAnalysis = __esm({
   "src/utils/tradeAnalysis.js"() {
     init_rosterAnalysis();
@@ -42794,6 +43104,7 @@ var init_tradeAnalysis = __esm({
     MY_LINEUP_MATERIAL_PCT = 0.01;
     SCARCITY_FLOOR = 500;
     SCARCITY_GAP = 10;
+    APPEAL_RANK = { Weak: 0, Fair: 1, Strong: 2 };
     PICK_SUFFIXES = ["", "1st", "2nd", "3rd", "4th"];
     addAsPlayer = (a) => ({
       sleeperId: String(a.sleeperId),
@@ -42845,6 +43156,9 @@ var init_tradeAnalysis = __esm({
     };
     VERDICT_UPGRADE = { Decline: "Counter", Counter: "Accept", Accept: "Accept" };
     VERDICT_DOWNGRADE = { Accept: "Counter", Counter: "Decline", Decline: "Decline" };
+    ALTERNATIVE_MIN_SAVING = 0.25;
+    APPEAL_BONUS = { Weak: -1, Fair: 0, Strong: 0.4 };
+    PACKAGE_BAND = { floor: 0.9, cap: 1.15 };
   }
 });
 
@@ -44113,6 +44427,268 @@ var init_playerNews = __esm({
   }
 });
 
+// mcp/tools/findTradeTargets.js
+function playerRow3(p) {
+  return {
+    sleeperId: String(p.sleeperId),
+    name: p.name,
+    position: p.position,
+    nflTeam: p.team || null,
+    age: p.age ?? null,
+    // Rule 7: unpriced is null, never 0. A target is on the board because it
+    // is worth >= 1000, so this is never actually null here — the shape is
+    // uniform with every other tool on purpose.
+    value: p.unranked ? null : p.value ?? null,
+    unranked: !!p.unranked,
+    positionRank: p.positionRank ?? null,
+    trend30Day: p.trend30Day ?? 0
+  };
+}
+function assetRow2(a) {
+  if (a.type === "pick") {
+    const complete = a.season != null && a.round != null && a.originalOwner != null;
+    return {
+      id: complete ? `${a.season}-${a.round}-${a.originalOwner}` : null,
+      type: "pick",
+      name: a.name,
+      value: a.value ?? null,
+      round: a.round ?? void 0,
+      season: a.season != null ? String(a.season) : void 0
+    };
+  }
+  return {
+    id: String(a.sleeperId),
+    type: "player",
+    name: a.name,
+    position: a.position,
+    age: a.age ?? null,
+    value: a.value ?? null
+  };
+}
+function seatRow(appeal, summary, concern, startersDelta) {
+  return {
+    appeal: appeal ?? null,
+    summary: summary ?? null,
+    concern: concern ?? null,
+    startersDelta: startersDelta ?? null
+  };
+}
+function buildTradeTargetsAnswer(snapshot, { team, position, limit, myRosterId } = {}) {
+  const { league } = snapshot;
+  if (!league) throw new Error("League state unavailable");
+  if (!league.myRoster) {
+    return {
+      ok: false,
+      error: `No roster ${myRosterId} in this league, so there is no "my team" to find targets for. Pass a leagueId whose rosters include yours, or set DYNASTYEDGE_ROSTER_ID.`,
+      candidates: describeTeams(league.allRosters).map((d) => ({ rosterId: d.rosterId, teamName: d.teamName, username: d.username }))
+    };
+  }
+  const wantPos = position ? String(position).toUpperCase() : null;
+  if (wantPos && !POSITIONS3.includes(wantPos)) {
+    return {
+      ok: false,
+      error: `"${position}" is not a tradable position in this league. Use one of ${POSITIONS3.join(", ")} \u2014 there is no kicker, and a defense carries no dynasty value (FantasyCalc ranks zero of them), so no defense is ever a trade target here.`
+    };
+  }
+  let scopedRoster = null;
+  if (team != null && team !== "") {
+    const resolved = resolveTeam(league, team, null);
+    if (!resolved.roster) {
+      return { ok: false, error: resolved.error, candidates: resolved.candidates ?? [] };
+    }
+    if (resolved.roster.rosterId === league.myRoster.rosterId) {
+      return {
+        ok: false,
+        error: "That is your own roster. Trade targets are players on OTHER teams \u2014 omit `team` for the league-wide board, or name an opponent to scout one."
+      };
+    }
+    scopedRoster = resolved.roster;
+  }
+  const { myRoster, allRosters } = league;
+  const rosterById = new Map(allRosters.map((r) => [r.rosterId, r]));
+  const tiers = assignWinWindowTiers(allRosters);
+  const board = getTopTradeTargets(myRoster, allRosters, BOARD_DEPTH, {
+    ownerRosterId: scopedRoster?.rosterId ?? null,
+    position: wantPos
+  });
+  const cap = Math.max(1, Math.min(MAX_LIMIT2, limit ?? DEFAULT_LIMIT3));
+  const shown = board.slice(0, cap);
+  let unidentifiedPick = false;
+  const targets = shown.map((t) => {
+    const owner = rosterById.get(t.ownerRosterId);
+    const pkg = suggestFairPackage(t, myRoster, allRosters, owner);
+    if (pkg) {
+      pkg.assets.forEach((a) => {
+        if (a.type === "pick" && (a.season == null || a.originalOwner == null)) unidentifiedPick = true;
+      });
+    }
+    return {
+      player: playerRow3(t),
+      owner: {
+        rosterId: t.ownerRosterId,
+        teamName: getTeamName(t.owner),
+        winWindow: tiers[t.ownerRosterId] ?? null
+      },
+      // Why he is on the board. `fillsNeed` is false only in scoped mode,
+      // where an explicitly chosen team keeps its best movable pieces rather
+      // than rendering empty.
+      fillsNeed: !!t.fillsNeed,
+      // Three roster facts about the team that holds him, as a multiplier on
+      // need x value. A TILT, never a gate — nothing is hidden by it.
+      movability: Math.round((t.movability ?? 1) * 100) / 100,
+      package: pkg ? {
+        assets: pkg.assets.map(assetRow2),
+        totalValue: pkg.totalValue,
+        gapPct: pkg.gapPct,
+        over: !!pkg.over,
+        // Whether the offer is one the Analyzer will call fair. False only
+        // when nothing you can spare reaches the band — an honest near-miss
+        // rather than no answer.
+        inFairBand: pkg.short ? false : !!pkg.inFairBand,
+        short: !!pkg.short,
+        rationale: pkg.rationale,
+        you: seatRow(pkg.myAppeal, pkg.mySummary, pkg.myConcern, pkg.myStartersDelta),
+        them: seatRow(pkg.appeal, pkg.partnerSummary, pkg.partnerConcern, pkg.partnerStartersDelta),
+        // The package they'd want MORE that the search declined to pay for,
+        // and what it costs over the target. On most rows this is the most
+        // actionable field: a fairly-priced offer gives the other manager no
+        // edge on value, so the premium IS the thing that buys a yes.
+        alternative: pkg.alternative ? {
+          assets: pkg.alternative.assets.map(assetRow2),
+          totalValue: pkg.alternative.totalValue,
+          appeal: pkg.alternative.appeal ?? null,
+          premiumPct: pkg.alternative.premiumPct
+        } : null
+      } : null,
+      packageNote: pkg ? null : "Nothing you can spare comes close to his price without touching a core piece."
+    };
+  });
+  const deficits = [...getDeficitPositions(myRoster, allRosters)];
+  return {
+    ok: true,
+    asOf: snapshot.asOf,
+    league: {
+      leagueId: league.leagueId,
+      name: league.leagueInfo?.name ?? null,
+      season: snapshot.nflState?.season ?? null,
+      isOffseason: snapshot.isOffseason,
+      teams: allRosters.length
+    },
+    team: {
+      rosterId: myRoster.rosterId,
+      teamName: getTeamName(myRoster.owner),
+      winWindow: tiers[myRoster.rosterId] ?? null
+    },
+    // What the ranking is reasoning FROM. Without it "target a WR" is
+    // unfalsifiable.
+    positions: { deficits },
+    mode: scopedRoster ? "scoped" : "league-wide",
+    scopedTo: scopedRoster ? { rosterId: scopedRoster.rosterId, teamName: getTeamName(scopedRoster.owner) } : null,
+    filter: { position: wantPos },
+    counts: {
+      // The ranked board, before the output cap — so a reader can tell a short
+      // answer from a short board.
+      board: board.length,
+      returned: targets.length,
+      truncated: board.length > targets.length,
+      fillsNeed: targets.filter((t) => t.fillsNeed).length,
+      priced: targets.filter((t) => t.package).length,
+      inFairBand: targets.filter((t) => t.package?.inFairBand).length
+    },
+    targets,
+    notes: buildNotes9(snapshot, { board, targets, deficits, scopedRoster, wantPos, unidentifiedPick })
+  };
+}
+function buildNotes9(snapshot, { board, targets, deficits, scopedRoster, wantPos, unidentifiedPick }) {
+  const notes = [];
+  if (snapshot.asOf.stale) {
+    notes.push("At least one source failed to refresh, so this is cached data \u2014 see asOf.sources.");
+  }
+  if (board.length > targets.length) {
+    notes.push(
+      `Showing the top ${targets.length} of ${board.length} ranked targets \u2014 raise \`limit\` (max ${MAX_LIMIT2}) for more. Only the returned rows are priced, so a larger limit costs more time, not less accuracy.`
+    );
+  }
+  if (!board.length) {
+    notes.push(
+      scopedRoster ? `${getTeamName(scopedRoster.owner)} holds nobody worth ${wantPos ? `targeting at ${wantPos}` : "targeting"} above the 1,000 value floor.` : deficits.length ? `No opponent holds a ${wantPos ? `${wantPos} ` : ""}player above the 1,000 value floor at your deficit positions (${deficits.join(", ")}).` : "You are at or above league average everywhere, so no position is flagged as a deficit and the league-wide board is empty. Name a `team` to scout one roster anyway."
+    );
+  }
+  if (scopedRoster) {
+    const fills = targets.filter((t) => t.fillsNeed).length;
+    notes.push(
+      fills ? `Scouting one roster: ${fills} of ${targets.length} shown fill a positional deficit; the rest are their most valuable movable pieces.` : `Scouting one roster: nothing ${getTeamName(scopedRoster.owner)} holds fills a positional deficit of yours \u2014 these are their most valuable movable pieces.`
+    );
+  }
+  const weak = targets.filter((t) => t.package?.them?.appeal === "Weak").length;
+  if (weak) {
+    notes.push(
+      `${weak} of ${targets.length} packages read Weak to the other manager. That is a real property of a fairly-priced offer, not a search failure \u2014 at fair value they gain no edge on value. \`alternative\` names the premium that would change it.`
+    );
+  }
+  if (unidentifiedPick) {
+    notes.push(
+      "A pick in one of these packages is missing the season or original owner that forms its id, so its id is null rather than a guess. Call resolve_assets to identify it before analyze_trade."
+    );
+  }
+  notes.push(
+    `Packages are chosen to land inside the Analyzer's fair band (\xB15%); \`inFairBand: false\` means nothing you can spare reaches it. Hand \`package.assets[].id\` plus the target's \`sleeperId\` to analyze_trade for the graded verdict \u2014 this tool does not grade.`
+  );
+  notes.push(
+    "This is roster logic. Whether the other manager would ACCEPT is not modelled \u2014 per-manager behavioural profiling was tested on this league's full trade corpus and disconfirmed."
+  );
+  notes.push("Sleeper's API is read-only: you still have to send the offer in the Sleeper app.");
+  return notes;
+}
+function renderTradeTargetsText(a) {
+  if (!a.ok) {
+    const list = a.candidates?.length ? "\n" + a.candidates.map((c) => `  ${c.rosterId}. ${c.teamName} (@${c.username})`).join("\n") : "";
+    return `${a.error}${list}`;
+  }
+  const L = [];
+  L.push(`${a.team.teamName} \u2014 trade targets${a.filter.position ? ` \xB7 ${a.filter.position}` : ""}${a.scopedTo ? ` \xB7 scouting ${a.scopedTo.teamName}` : ""}`);
+  L.push(`${a.league.name ?? "League"} \xB7 ${a.team.winWindow} \xB7 deficits: ${a.positions.deficits.join(", ") || "none"}`);
+  L.push(`As of ${a.asOf.oldestSourceAt ?? "unknown"}${a.asOf.stale ? " \u2014 STALE, a source failed to refresh" : ""}`);
+  L.push("");
+  a.targets.forEach((t, i) => {
+    const p = t.player;
+    L.push(`${i + 1}. ${p.name} (${p.position}${p.nflTeam ? ` \xB7 ${p.nflTeam}` : ""}) \u2014 ${num5(p.value)}`);
+    L.push(`   ${t.owner.teamName}${t.owner.winWindow ? ` \xB7 ${t.owner.winWindow}` : ""}${t.fillsNeed ? " \xB7 fills your need" : " \xB7 depth piece"}`);
+    if (!t.package) {
+      L.push(`   ${t.packageNote}`);
+      L.push("");
+      return;
+    }
+    const k = t.package;
+    L.push(`   COST ${k.assets.map((x) => x.name).join(" + ")} (~${num5(k.totalValue)}${k.inFairBand ? ", inside the fair band" : `, ${k.short ? "short of" : "outside"} the fair band`})`);
+    L.push(`   ${k.rationale}`);
+    if (k.you.appeal) L.push(`   YOU  ${k.you.appeal} \u2014 ${k.you.concern ?? k.you.summary ?? ""} (lineup ${signed(k.you.startersDelta)})`);
+    if (k.them.appeal) L.push(`   THEM ${k.them.appeal} \u2014 ${k.them.summary ?? ""} (their lineup ${signed(k.them.startersDelta)})`);
+    if (k.alternative) {
+      L.push(`   TO GET A YES ${k.alternative.assets.map((x) => x.name).join(" + ")} (+${k.alternative.premiumPct}% over fair) \u2014 ${k.alternative.appeal} for them`);
+    }
+    L.push("");
+  });
+  a.notes.forEach((n) => L.push(`Note: ${n}`));
+  return L.join("\n").trimEnd();
+}
+var DEFAULT_LIMIT3, MAX_LIMIT2, BOARD_DEPTH, POSITIONS3, num5, signed;
+var init_findTradeTargets = __esm({
+  "mcp/tools/findTradeTargets.js"() {
+    init_rosterAnalysis();
+    init_tradeAnalysis();
+    init_recommendations();
+    init_teamName();
+    init_teams();
+    DEFAULT_LIMIT3 = 8;
+    MAX_LIMIT2 = 20;
+    BOARD_DEPTH = 20;
+    POSITIONS3 = ["QB", "RB", "WR", "TE"];
+    num5 = (n) => n == null ? "\u2014" : n.toLocaleString("en-US");
+    signed = (n) => n == null ? "\u2014" : `${n >= 0 ? "+" : ""}${Math.round(n).toLocaleString("en-US")}`;
+  }
+});
+
 // mcp/liveScores.js
 async function getLiveScores({
   leagueId,
@@ -44986,9 +45562,96 @@ function createServer({ env = process.env, fetcher, store } = {}) {
       };
     }
   );
+  server.registerTool(
+    "find_trade_targets",
+    {
+      title: "Find trade targets and what they would cost",
+      description: "Answers \"who should I call about, and what would it cost me?\" \u2014 the question that comes BEFORE grading a trade. Ranks opponents' players by your positional need x their value x how movable they are (three roster facts about the team that holds them), then prices each one with a concrete package from your own roster, held inside the Analyzer's fair band. Every row carries BOTH seats' appeal and, where one exists, the pricier package the search declined to pay for with the premium it would cost \u2014 on a fairly-priced offer that premium is usually the thing that buys a yes. Pass `team` to scout one opponent instead of the league. Works in season and offseason alike. It does NOT grade: hand the ids to analyze_trade for a verdict.",
+      inputSchema: {
+        position: external_exports.enum(["QB", "RB", "WR", "TE"]).optional().describe("Only target this position. Applied inside the ranking, not to the returned rows, so an empty answer means the league has nobody rather than your top few being someone else."),
+        team: external_exports.string().optional().describe("Scout ONE opponent: team name, manager handle, or roster id. Scoped mode also keeps their best movable pieces at positions you are not short of, flagged fillsNeed: false. Omit for the league-wide board. An ambiguous name returns candidates and refuses."),
+        limit: external_exports.number().int().min(1).max(MAX_LIMIT2).optional().describe(`How many targets to price (default ${DEFAULT_LIMIT3}, max ${MAX_LIMIT2}). The board is always ranked 20 deep, so counts.board is the true total either way.`),
+        leagueId: external_exports.string().optional().describe("Sleeper league id. Omit for the configured league."),
+        refresh: external_exports.boolean().optional().describe("Bypass the ~15 minute snapshot cache and refetch.")
+      },
+      outputSchema: {
+        ok: external_exports.boolean(),
+        error: external_exports.string().optional(),
+        candidates: external_exports.array(teamCandidate).optional(),
+        asOf: asOfSchema.optional(),
+        league: external_exports.object({
+          leagueId: external_exports.string().nullable(),
+          name: external_exports.string().nullable(),
+          season: external_exports.string().nullable(),
+          isOffseason: external_exports.boolean(),
+          teams: external_exports.number()
+        }).optional(),
+        team: external_exports.object({
+          rosterId: external_exports.number(),
+          teamName: external_exports.string(),
+          winWindow: external_exports.string().nullable()
+        }).optional(),
+        positions: external_exports.object({ deficits: external_exports.array(external_exports.string()) }).optional(),
+        mode: external_exports.enum(["league-wide", "scoped"]).optional(),
+        scopedTo: external_exports.object({ rosterId: external_exports.number(), teamName: external_exports.string() }).nullable().optional(),
+        filter: external_exports.object({ position: external_exports.string().nullable() }).optional(),
+        counts: external_exports.object({
+          board: external_exports.number(),
+          returned: external_exports.number(),
+          truncated: external_exports.boolean(),
+          fillsNeed: external_exports.number(),
+          priced: external_exports.number(),
+          inFairBand: external_exports.number()
+        }).optional(),
+        targets: external_exports.array(external_exports.object({
+          player: playerRowSchema,
+          owner: external_exports.object({
+            rosterId: external_exports.number(),
+            teamName: external_exports.string(),
+            winWindow: external_exports.string().nullable()
+          }),
+          fillsNeed: external_exports.boolean(),
+          movability: external_exports.number(),
+          package: external_exports.object({
+            assets: external_exports.array(packageAssetSchema),
+            totalValue: external_exports.number(),
+            gapPct: external_exports.number(),
+            over: external_exports.boolean(),
+            inFairBand: external_exports.boolean(),
+            short: external_exports.boolean(),
+            rationale: external_exports.string(),
+            you: seatAppealSchema,
+            them: seatAppealSchema,
+            alternative: external_exports.object({
+              assets: external_exports.array(packageAssetSchema),
+              totalValue: external_exports.number(),
+              appeal: external_exports.string().nullable(),
+              premiumPct: external_exports.number()
+            }).nullable()
+          }).nullable(),
+          packageNote: external_exports.string().nullable()
+        })).optional(),
+        notes: external_exports.array(external_exports.string()).optional()
+      }
+    },
+    async ({ position, team, limit, leagueId, refresh }) => {
+      const snapshot = await snapshotFor(leagueId, refresh);
+      const answer = buildTradeTargetsAnswer(snapshot, {
+        team,
+        position,
+        limit,
+        myRosterId: config2.defaultRosterId
+      });
+      return {
+        content: [{ type: "text", text: renderTradeTargetsText(answer) }],
+        structuredContent: answer,
+        isError: !answer.ok
+      };
+    }
+  );
   return { server, config: config2 };
 }
-var SERVER_NAME, SERVER_VERSION, sourceStamp, asOfSchema, teamCandidate, playerRowSchema, playerCandidateSchema, pickCandidateSchema, lineupPlayerSchema, newsItemSchema, tradeAssetSchema, sideFitSchema;
+var SERVER_NAME, SERVER_VERSION, sourceStamp, asOfSchema, teamCandidate, playerRowSchema, playerCandidateSchema, pickCandidateSchema, lineupPlayerSchema, newsItemSchema, tradeAssetSchema, sideFitSchema, packageAssetSchema, seatAppealSchema;
 var init_server3 = __esm({
   "mcp/server.js"() {
     init_mcp();
@@ -45011,6 +45674,7 @@ var init_server3 = __esm({
     init_lineupAdvice();
     init_playoffOdds2();
     init_playerNews();
+    init_findTradeTargets();
     init_liveScores();
     init_news();
     SERVER_NAME = "dynastyedge";
@@ -45163,6 +45827,22 @@ var init_server3 = __esm({
       benchNote: external_exports.string().nullable().optional(),
       starterLossNote: external_exports.string().nullable().optional(),
       landingSpots: external_exports.array(external_exports.any()).optional()
+    });
+    packageAssetSchema = external_exports.object({
+      id: external_exports.string().nullable(),
+      type: external_exports.enum(["player", "pick"]),
+      name: external_exports.string(),
+      position: external_exports.string().optional(),
+      age: external_exports.number().nullable().optional(),
+      value: external_exports.number().nullable(),
+      round: external_exports.number().optional(),
+      season: external_exports.string().optional()
+    });
+    seatAppealSchema = external_exports.object({
+      appeal: external_exports.string().nullable(),
+      summary: external_exports.string().nullable(),
+      concern: external_exports.string().nullable(),
+      startersDelta: external_exports.number().nullable()
     });
   }
 });
