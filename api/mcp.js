@@ -42940,7 +42940,14 @@ function suggestFairPackage(targetPlayer, myRoster, allRosters = null, opponentR
       position: p.position,
       age: p.age
     })),
-    ...myRoster.picks.map((p) => ({ type: "pick", name: pickLabel(p), value: p.value ?? 0, round: p.round }))
+    ...myRoster.picks.map((p) => ({
+      type: "pick",
+      name: pickLabel(p),
+      value: p.value ?? 0,
+      round: p.round,
+      season: p.season,
+      originalOwner: p.originalOwner
+    }))
   ].filter((a) => a.value > 0);
   const available = allAssets.filter((a) => assetKeepScore(a, ctx) < PROTECT_THRESHOLD).sort((a, b) => a.value - b.value);
   if (!available.length) return null;
@@ -44437,16 +44444,16 @@ function playerRow3(p) {
     trend30Day: p.trend30Day ?? 0
   };
 }
-function assetRow2(a, pickIdsByLabel) {
+function assetRow2(a) {
   if (a.type === "pick") {
-    const ids = pickIdsByLabel.get(a.name) ?? [];
+    const complete = a.season != null && a.round != null && a.originalOwner != null;
     return {
-      id: ids.length === 1 ? ids[0] : null,
+      id: complete ? `${a.season}-${a.round}-${a.originalOwner}` : null,
       type: "pick",
       name: a.name,
       value: a.value ?? null,
       round: a.round ?? void 0,
-      ambiguous: ids.length > 1 ? true : void 0
+      season: a.season != null ? String(a.season) : void 0
     };
   }
   return {
@@ -44506,21 +44513,13 @@ function buildTradeTargetsAnswer(snapshot, { team, position, limit, myRosterId }
   });
   const cap = Math.max(1, Math.min(MAX_LIMIT2, limit ?? DEFAULT_LIMIT3));
   const shown = board.slice(0, cap);
-  const pickIdsByLabel = /* @__PURE__ */ new Map();
-  const SUFFIX = ["", "1st", "2nd", "3rd", "4th"];
-  myRoster.picks.forEach((p) => {
-    const label = `${p.season} ${SUFFIX[p.round] ?? `R${p.round}`}`;
-    const ids = pickIdsByLabel.get(label) ?? [];
-    ids.push(`${p.season}-${p.round}-${p.originalOwner}`);
-    pickIdsByLabel.set(label, ids);
-  });
-  let ambiguousPick = false;
+  let unidentifiedPick = false;
   const targets = shown.map((t) => {
     const owner = rosterById.get(t.ownerRosterId);
     const pkg = suggestFairPackage(t, myRoster, allRosters, owner);
     if (pkg) {
       pkg.assets.forEach((a) => {
-        if (a.type === "pick" && (pickIdsByLabel.get(a.name)?.length ?? 0) > 1) ambiguousPick = true;
+        if (a.type === "pick" && (a.season == null || a.originalOwner == null)) unidentifiedPick = true;
       });
     }
     return {
@@ -44538,7 +44537,7 @@ function buildTradeTargetsAnswer(snapshot, { team, position, limit, myRosterId }
       // need x value. A TILT, never a gate — nothing is hidden by it.
       movability: Math.round((t.movability ?? 1) * 100) / 100,
       package: pkg ? {
-        assets: pkg.assets.map((a) => assetRow2(a, pickIdsByLabel)),
+        assets: pkg.assets.map(assetRow2),
         totalValue: pkg.totalValue,
         gapPct: pkg.gapPct,
         over: !!pkg.over,
@@ -44555,7 +44554,7 @@ function buildTradeTargetsAnswer(snapshot, { team, position, limit, myRosterId }
         // actionable field: a fairly-priced offer gives the other manager no
         // edge on value, so the premium IS the thing that buys a yes.
         alternative: pkg.alternative ? {
-          assets: pkg.alternative.assets.map((a) => assetRow2(a, pickIdsByLabel)),
+          assets: pkg.alternative.assets.map(assetRow2),
           totalValue: pkg.alternative.totalValue,
           appeal: pkg.alternative.appeal ?? null,
           premiumPct: pkg.alternative.premiumPct
@@ -44597,10 +44596,10 @@ function buildTradeTargetsAnswer(snapshot, { team, position, limit, myRosterId }
       inFairBand: targets.filter((t) => t.package?.inFairBand).length
     },
     targets,
-    notes: buildNotes9(snapshot, { board, targets, deficits, scopedRoster, wantPos, ambiguousPick })
+    notes: buildNotes9(snapshot, { board, targets, deficits, scopedRoster, wantPos, unidentifiedPick })
   };
 }
-function buildNotes9(snapshot, { board, targets, deficits, scopedRoster, wantPos, ambiguousPick }) {
+function buildNotes9(snapshot, { board, targets, deficits, scopedRoster, wantPos, unidentifiedPick }) {
   const notes = [];
   if (snapshot.asOf.stale) {
     notes.push("At least one source failed to refresh, so this is cached data \u2014 see asOf.sources.");
@@ -44627,9 +44626,9 @@ function buildNotes9(snapshot, { board, targets, deficits, scopedRoster, wantPos
       `${weak} of ${targets.length} packages read Weak to the other manager. That is a real property of a fairly-priced offer, not a search failure \u2014 at fair value they gain no edge on value. \`alternative\` names the premium that would change it.`
     );
   }
-  if (ambiguousPick) {
+  if (unidentifiedPick) {
     notes.push(
-      "A pick in one of these packages shares its label with another pick you own (same season and round, different original owner), so its id is null rather than a guess. Call resolve_assets to pick the right one before analyze_trade."
+      "A pick in one of these packages is missing the season or original owner that forms its id, so its id is null rather than a guess. Call resolve_assets to identify it before analyze_trade."
     );
   }
   notes.push(
@@ -45837,7 +45836,7 @@ var init_server3 = __esm({
       age: external_exports.number().nullable().optional(),
       value: external_exports.number().nullable(),
       round: external_exports.number().optional(),
-      ambiguous: external_exports.boolean().optional()
+      season: external_exports.string().optional()
     });
     seatAppealSchema = external_exports.object({
       appeal: external_exports.string().nullable(),

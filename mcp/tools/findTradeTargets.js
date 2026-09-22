@@ -70,25 +70,28 @@ function playerRow(p) {
 // A package asset, carrying the id `analyze_trade` will accept so the handoff
 // is one call rather than a re-resolution.
 //
-// A PICK ID IS EMITTED ONLY WHEN IT IS UNAMBIGUOUS. `suggestFairPackage`
-// labels its pick assets `"2027 1st"` and drops the season/round/originalOwner
-// triple that forms the id, so recovering it means matching on that label.
-// The app does exactly that (`TradeAnalyzer.jsx`'s `mapPackageToAssets`) with
-// a `.find`, which silently takes the first of two picks sharing a label — a
-// display bug on a screen, and a wrong asset in a graded trade through an LLM.
-// So two picks with one label resolve to NOTHING here and the note points at
-// `resolve_assets`, which is `MCP_DISCOVERY.md` §1's own rule applied to the
-// same class of collision.
-function assetRow(a, pickIdsByLabel) {
+// THE PICK ID IS READ OFF THE ASSET, NEVER RECOVERED FROM ITS LABEL.
+// `suggestFairPackage` carries `season` + `round` + `originalOwner` — the
+// triple that IS the id — precisely so no consumer has to reverse a
+// `pickLabel` back into an identity. It cannot be reversed: the label is
+// "{season} {suffix}" and a roster can hold several picks under one (measured
+// live 2026-09-22: **6 of 10 rosters** do). The first cut of this tool built a
+// label index and refused an ambiguous one, which was the right call given the
+// shape it had; carrying the identity is better, because it makes the
+// ambiguity impossible rather than detectable.
+//
+// A missing field still yields `id: null` rather than a guess — the same rule
+// resolve_assets keeps, kept here as a guard rather than as the mechanism.
+function assetRow(a) {
   if (a.type === 'pick') {
-    const ids = pickIdsByLabel.get(a.name) ?? []
+    const complete = a.season != null && a.round != null && a.originalOwner != null
     return {
-      id: ids.length === 1 ? ids[0] : null,
+      id: complete ? `${a.season}-${a.round}-${a.originalOwner}` : null,
       type: 'pick',
       name: a.name,
       value: a.value ?? null,
       round: a.round ?? undefined,
-      ambiguous: ids.length > 1 ? true : undefined,
+      season: a.season != null ? String(a.season) : undefined,
     }
   }
   return {
@@ -169,22 +172,13 @@ export function buildTradeTargetsAnswer(snapshot, { team, position, limit, myRos
 
   // Only the returned slice is priced — the search inside each target stays
   // untruncated (§4e-v), which is the bound that must not move.
-  const pickIdsByLabel = new Map()
-  const SUFFIX = ['', '1st', '2nd', '3rd', '4th']
-  myRoster.picks.forEach(p => {
-    const label = `${p.season} ${SUFFIX[p.round] ?? `R${p.round}`}`
-    const ids = pickIdsByLabel.get(label) ?? []
-    ids.push(`${p.season}-${p.round}-${p.originalOwner}`)
-    pickIdsByLabel.set(label, ids)
-  })
-
-  let ambiguousPick = false
+  let unidentifiedPick = false
   const targets = shown.map(t => {
     const owner = rosterById.get(t.ownerRosterId)
     const pkg = suggestFairPackage(t, myRoster, allRosters, owner)
     if (pkg) {
       pkg.assets.forEach(a => {
-        if (a.type === 'pick' && (pickIdsByLabel.get(a.name)?.length ?? 0) > 1) ambiguousPick = true
+        if (a.type === 'pick' && (a.season == null || a.originalOwner == null)) unidentifiedPick = true
       })
     }
     return {
@@ -203,7 +197,7 @@ export function buildTradeTargetsAnswer(snapshot, { team, position, limit, myRos
       movability: Math.round((t.movability ?? 1) * 100) / 100,
       package: pkg
         ? {
-          assets: pkg.assets.map(a => assetRow(a, pickIdsByLabel)),
+          assets: pkg.assets.map(assetRow),
           totalValue: pkg.totalValue,
           gapPct: pkg.gapPct,
           over: !!pkg.over,
@@ -221,7 +215,7 @@ export function buildTradeTargetsAnswer(snapshot, { team, position, limit, myRos
           // edge on value, so the premium IS the thing that buys a yes.
           alternative: pkg.alternative
             ? {
-              assets: pkg.alternative.assets.map(a => assetRow(a, pickIdsByLabel)),
+              assets: pkg.alternative.assets.map(assetRow),
               totalValue: pkg.alternative.totalValue,
               appeal: pkg.alternative.appeal ?? null,
               premiumPct: pkg.alternative.premiumPct,
@@ -271,11 +265,11 @@ export function buildTradeTargetsAnswer(snapshot, { team, position, limit, myRos
       inFairBand: targets.filter(t => t.package?.inFairBand).length,
     },
     targets,
-    notes: buildNotes(snapshot, { board, targets, deficits, scopedRoster, wantPos, ambiguousPick }),
+    notes: buildNotes(snapshot, { board, targets, deficits, scopedRoster, wantPos, unidentifiedPick }),
   }
 }
 
-function buildNotes(snapshot, { board, targets, deficits, scopedRoster, wantPos, ambiguousPick }) {
+function buildNotes(snapshot, { board, targets, deficits, scopedRoster, wantPos, unidentifiedPick }) {
   const notes = []
   if (snapshot.asOf.stale) {
     notes.push('At least one source failed to refresh, so this is cached data — see asOf.sources.')
@@ -311,10 +305,10 @@ function buildNotes(snapshot, { board, targets, deficits, scopedRoster, wantPos,
       'not a search failure — at fair value they gain no edge on value. `alternative` names the premium that would change it.'
     )
   }
-  if (ambiguousPick) {
+  if (unidentifiedPick) {
     notes.push(
-      'A pick in one of these packages shares its label with another pick you own (same season and round, different original owner), ' +
-      'so its id is null rather than a guess. Call resolve_assets to pick the right one before analyze_trade.'
+      'A pick in one of these packages is missing the season or original owner that forms its id, so its id is null rather than ' +
+      'a guess. Call resolve_assets to identify it before analyze_trade.'
     )
   }
   notes.push(

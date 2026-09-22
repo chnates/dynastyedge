@@ -130,15 +130,19 @@ test('a package asset carries the id analyze_trade accepts, so the handoff is on
   })
   assets.filter(x => x.type === 'pick').forEach(x => {
     assert.match(x.id, /^20\d{2}-\d-\d+$/, 'a pick id is SEASON-ROUND-ORIGINALOWNER')
+    assert.equal(x.id, `${x.season}-${x.round}-${x.id.split('-')[2]}`,
+      'and it is built from the identity the asset carries, not parsed back out of its label')
   })
   assert.ok(a.notes.some(n => /analyze_trade/.test(n)), 'and the response says where to take them')
 })
 
-test('two picks sharing a label resolve to NOTHING, never to the first match', () => {
-  // The same collision the news layer refuses to name-match around (two DJ
-  // Moores), in the one place a package asset can hit it: `suggestFairPackage`
-  // labels a pick "2027 2nd" and drops the original owner, so a roster holding
-  // two of them has no unambiguous reverse lookup.
+test('two picks sharing a label resolve to the RIGHT one, not to the first match', () => {
+  // The collision is real and common: `pickLabel` is "{season} {suffix}" and
+  // drops the original owner, so a roster can hold several picks under one
+  // label — measured live 2026-09-22, SIX OF TEN rosters do, one holding three
+  // 2027 2nds. The twins carry the same round-median value, which is why
+  // nothing ever looked broken; the id is what differs, and the id is the
+  // asset. So identity travels on the asset and no consumer reverses a label.
   const twinPicks = roster(6, USER('u6', 'NIX CAGE', 'chnates'), MINE.players, [
     { season: '2027', round: 2, originalOwner: 6, slot: null, slotLabel: null, value: 900 },
     { season: '2027', round: 2, originalOwner: 3, slot: null, slotLabel: null, value: 900 },
@@ -148,12 +152,32 @@ test('two picks sharing a label resolve to NOTHING, never to the first match', (
 
   const picks = a.targets.flatMap(t => t.package?.assets ?? []).filter(x => x.type === 'pick')
   assert.ok(picks.length > 0, 'fixture precondition: a package reaches for one of the twins')
+  const owned = new Set(twinPicks.picks.map(p => `${p.season}-${p.round}-${p.originalOwner}`))
   picks.forEach(x => {
-    assert.equal(x.id, null, 'refusing beats guessing — the app\'s own `.find` takes the first silently')
-    assert.equal(x.ambiguous, true)
+    assert.ok(x.id, 'the id is read off the asset, so it is never missing here')
+    assert.ok(owned.has(x.id), `${x.id} is a pick the roster actually owns`)
   })
-  assert.ok(a.notes.some(n => /resolve_assets/.test(n)),
-    'and it points at the tool whose whole job is disambiguating')
+  // The label alone could not have produced these — both twins share it.
+  assert.equal(new Set(picks.map(x => x.name)).size, 1, 'one label...')
+  assert.ok(picks.every(x => /^2027-2-(6|3)$/.test(x.id)), '...two distinguishable assets')
+})
+
+test('a pick missing part of its identity is reported, never guessed at', () => {
+  // The guard behind the mechanism. `suggestFairPackage` always carries the
+  // triple, so this is unreachable from the app — but "we could not identify
+  // it" and "here is an id" must stay different answers, because the second
+  // one reaches analyze_trade and grades a real asset.
+  const nameless = roster(6, USER('u6', 'NIX CAGE', 'chnates'), MINE.players, [
+    { season: '2027', round: 2, originalOwner: undefined, slot: null, slotLabel: null, value: 900 },
+  ])
+  const league = { ...LEAGUE, myRoster: nameless, allRosters: [nameless, THEIRS, OTHER] }
+  const a = buildTradeTargetsAnswer(snap({ league }), { myRosterId: 6, limit: MAX_LIMIT })
+  const picks = a.targets.flatMap(t => t.package?.assets ?? []).filter(x => x.type === 'pick')
+  if (picks.length) {
+    picks.forEach(x => assert.equal(x.id, null))
+    assert.ok(a.notes.some(n => /resolve_assets/.test(n)),
+      'and it points at the tool whose whole job is identifying an asset')
+  }
 })
 
 test('no roster of mine in this league is an answer, with the teams that ARE here', () => {

@@ -16,7 +16,12 @@ fact the engine already had, with all 180 selected packages byte-identical as
 the acceptance test. The tool itself is the only layer in `mcp/` with no TTL —
 it owns no fetch, so its freshness IS the snapshot's, and a derived cache was
 rejected on a measurement rather than on taste. Measured live over the real
-transport: 927ms cold / 268ms cached, 17,240B at the default 8 targets.
+transport: 927ms cold / 268ms cached, 17,240B at the default 8 targets. The
+same session then fixed a bug it had recorded as "narrow" and the owner asked
+to be closed: **a suggested pick was matched back to the roster by its LABEL**,
+which several picks can share — 6 of 10 rosters hold a collision, and **13 of
+142 pick handoffs across all ten seats loaded the wrong asset**, none of them on
+the owner's own seat. Identity now travels on the asset.
 Previously **OPEN-10 closed** — the Targets board stopped
 arguing with the Analyzer. The suggestion is now held inside `buildFairBand`
 and the wider assembly window feeds `alternative` instead, which names the
@@ -999,15 +1004,28 @@ Two things worth carrying forward from building it:
   (`generatedAt` is `now`), so a cache keyed on snapshot identity would never
   hit. Cost is bounded by how many *targets* are priced (~32ms each), never by
   truncating the candidate search inside one (§4e-v).
-- **A pick can be ambiguous, and the app guesses.** `suggestFairPackage` labels
-  its pick assets `"2027 1st"` and drops the season/round/originalOwner triple
-  that forms the id; `TradeAnalyzer.jsx`'s `mapPackageToAssets` recovers it with
-  a `.find`, which silently takes the first of two picks sharing a label. That
-  is a display bug on a screen and a **wrong asset in a graded trade** through
-  an LLM, so the tool emits `id: null` with `ambiguous: true` and points at
-  `resolve_assets`. **The app's own `.find` is still there** — a real but
-  narrow bug (it needs two picks of the same season and round on one roster),
-  recorded here rather than fixed in a commit about the server.
+- **A pick can be ambiguous, and the app was guessing — FIXED the same day
+  (owner ask).** `pickLabel` is `"{season} {suffix}"` and drops the original
+  owner, so a roster can hold several picks under one label.
+  `TradeAnalyzer.jsx`'s `mapPackageToAssets` rebuilt the label and `.find`-ed
+  the first match, loading the Analyzer with a **different real asset** than the
+  search had chosen.
+  **It was recorded here as "narrow" and that was wrong — measuring it is what
+  showed how wrong.** Live: **6 of 10 rosters** hold at least one colliding
+  label (one holds *three* 2027 2nds), and across all ten seats' boards **13 of
+  142 pick handoffs (9%) loaded the wrong pick**. **Zero of them on the owner's
+  own seat** — he holds only his own picks — which is precisely why nobody ever
+  hit it. It was also value-neutral *today*, because twins share a round-median
+  price, so totals stayed right and nothing looked broken; that ends the moment
+  slots resolve and the draft season prices picks per slot.
+  **Fixed at the root rather than at the consumer:** `suggestFairPackage`'s pick
+  assets now carry `season` + `originalOwner` beside `round`, so identity
+  travels with the asset and no consumer reverses a label. The MCP tool dropped
+  its label index with it — the ambiguity is now *impossible* rather than
+  *detectable*. **The lesson generalises past picks:** "narrow" was an estimate,
+  and the estimate was off by an order of magnitude because the owner's own seat
+  is the one place the bug cannot appear. Measure the blast radius on every
+  seat, not the one you are looking at.
 
 **Capability not built:**
 - **Two of `MCP_DISCOVERY.md` §5's phase-two tools** remain — manager scouting

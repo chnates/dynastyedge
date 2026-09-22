@@ -224,10 +224,11 @@ Build in this order. Each row names what it reuses and what must exist first.
 | 5 | `analyze_trade` | "Grade this trade." | `give[]`, `get[]` (resolved IDs only), `partner` | Verdict, reasoning, value split, both-seat appeal, landing spots, fair band, counter suggestion, pitch text | `tradeAnalysis.analyzeTrade` → `getTradeVerdict` → `adjustVerdictForInjuries` → `getCounterSuggestion` → `buildTradePitch`. Mirror `TradeAnalyzer.jsx:141-256`. |
 | 6 | `lineup_advice` | "What do I start, and what's it costing me?" | optional `week` | Moves with per-move gain, confidence %, must-fix flags, total points left on bench | `lineupMoves.buildLineupMoves` — pure, heavily tested. Needs projections (already committed), player DB, and the schedule for byes **and locks**. |
 
-> **This table is the original plan, kept as the record. Two tools shipped
-> beyond it** — `get_playoff_odds` (phase 2a, the first "deferred" item below)
-> and `get_player_news` (phase 2c). CLAUDE.md's **The MCP Server** section is
-> the live truth for all eight; this section is what was specified on
+> **This table is the original plan, kept as the record. Three tools shipped
+> beyond it** — `get_playoff_odds` (phase 2a, the first "deferred" item below),
+> `get_player_news` (phase 2c) and `find_trade_targets` (2026-09-22, the first
+> of the three deferred below). CLAUDE.md's **The MCP Server** section is
+> the live truth for all nine; this section is what was specified on
 > 2026-09-19.
 >
 > **Row 6 gained a requirement that was not foreseen here, and it cost a wrong

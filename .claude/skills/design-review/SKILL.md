@@ -87,7 +87,7 @@ rg -n 'appearance-none.*focus:border-accent' $FILES
 rg -n 'rounded-full.*uppercase tracking|bg-accent text-white border border-transparent' $FILES
 
 # Reimplemented shared primitives  → import from '../ui'
-rg -n 'function (ErrorState|SectionHeader|SubTabBar|Spinner|LoadingSpinner)\b' $FILES
+rg -n 'function (ErrorState|SectionHeader|SectionContents|Loading|Spinner|LoadingSpinner)\b' $FILES
 ```
 
 For every hit, the replacement is:
@@ -102,7 +102,7 @@ For every hit, the replacement is:
 | raw `<input>` with field styling                                             | `<Input>` / `<SearchInput>` |
 | raw `<select>` with field styling (`appearance-none` + the ▾ span)           | `<Select>` — and in the Trade section, `<PartnerSelect>` for an opponent picker |
 | `rounded-full uppercase` toggle pill / chip ladder                            | `<Chip active activeClass={POS_CHIP_ACTIVE[pos]}>` |
-| re-declared `ErrorState`/`SectionHeader`/`SubTabBar`/`Spinner`                | `import { … } from '../ui'` |
+| re-declared `ErrorState`/`SectionHeader`/`SectionContents`/`Loading`/`Spinner` | `import { … } from '../ui'` — and there is NO spinner in this app; `Loading` is a printing rule under a label |
 
 ## 3 — Exclude legitimate exceptions
 

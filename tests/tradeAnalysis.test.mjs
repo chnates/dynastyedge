@@ -1400,3 +1400,65 @@ test('holding the suggestion inside the band never unlocks a protected asset (OP
   if (pkg.alternative)
     pkg.alternative.assets.forEach(a => assert.ok(assetKeepScore(a, ctx) < PROTECT_THRESHOLD, a.name))
 })
+
+// ── A pick asset carries its IDENTITY, not just its label (2026-09-22) ──────
+// `pickLabel` is "{season} {suffix}" and drops the original owner, so a roster
+// can hold several picks under one label — measured live, SIX OF TEN rosters
+// do, one holding three 2027 2nds. Every consumer of a suggested package has
+// to get back to a real pick; the only honest way is for the asset to carry
+// the season/round/originalOwner triple that identifies it. `TradeAnalyzer`'s
+// `mapPackageToAssets` used to rebuild the label and `.find` the first match,
+// which loaded the Analyzer with a DIFFERENT REAL ASSET than the search chose.
+
+function makePickLeague() {
+  const P = (id, name, pos, value, age = 26) =>
+    ({ sleeperId: id, name, position: pos, value, age, isIR: false, isTaxi: false })
+  const mk = (rosterId, players, picks = []) => ({
+    rosterId, players, picks,
+    totalValue: players.reduce((s, p) => s + p.value, 0),
+    pickCapitalScore: 0, avgStarterAge: 26,
+  })
+  // Three 2027 2nds under ONE label, exactly the live shape.
+  const me = mk(1, [
+    P('101', 'My QB1', 'QB', 5200), P('102', 'My QB2', 'QB', 5000),
+    P('103', 'My RB1', 'RB', 4000), P('104', 'My RB2', 'RB', 3800),
+    P('107', 'My WR1', 'WR', 4200), P('108', 'My WR2', 'WR', 4000),
+    P('111', 'My TE1', 'TE', 3000),
+  ], [
+    { season: '2027', round: 2, originalOwner: 1, value: 1600 },
+    { season: '2027', round: 2, originalOwner: 3, value: 1600 },
+    { season: '2027', round: 2, originalOwner: 4, value: 1600 },
+  ])
+  const them = mk(2, [
+    P('201', 'Their QB1', 'QB', 6000), P('204', 'Target WR', 'WR', 1650),
+    P('205', 'Their WR1', 'WR', 5000),
+    P('206', 'Their RB1', 'RB', 600), P('207', 'Their TE1', 'TE', 500),
+  ])
+  const t3 = mk(3, [P('301', 'a', 'QB', 3000), P('302', 'b', 'RB', 3000), P('303', 'c', 'WR', 3000), P('304', 'd', 'TE', 1500)])
+  const t4 = mk(4, [P('401', 'a', 'QB', 2000), P('402', 'b', 'RB', 2000), P('403', 'c', 'WR', 2000), P('404', 'd', 'TE', 1000)])
+  return { me, them, all: [me, them, t3, t4] }
+}
+
+test('a suggested pick carries season + round + originalOwner, so it identifies ONE pick', () => {
+  const { me, them, all } = makePickLeague()
+  const target = them.players.find(p => p.name === 'Target WR')
+  const pkg = suggestFairPackage(target, me, all, them)
+  const picks = pkg.assets.filter(a => a.type === 'pick')
+  assert.ok(picks.length > 0, 'fixture precondition: the package reaches for a pick')
+
+  picks.forEach(a => {
+    assert.ok(a.season != null, 'season travels with the asset')
+    assert.equal(typeof a.round, 'number', 'round travels with the asset')
+    assert.ok(a.originalOwner != null, 'and the original owner, which the label drops')
+    // The triple resolves to exactly one of the three twins.
+    const matches = me.picks.filter(p =>
+      String(p.season) === String(a.season) &&
+      p.round === a.round &&
+      String(p.originalOwner) === String(a.originalOwner))
+    assert.equal(matches.length, 1, 'the identity resolves to exactly one real pick')
+  })
+
+  // The label alone resolves to three, which is why it cannot be the key.
+  const byLabel = me.picks.filter(p => `${p.season} 2nd` === picks[0].name)
+  assert.equal(byLabel.length, 3, 'one label, three distinct assets — a `.find` here is a coin toss')
+})

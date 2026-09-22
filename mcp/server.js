@@ -215,9 +215,11 @@ const sideFitSchema = z.object({
 })
 
 // One asset inside a suggested package, carrying the id analyze_trade accepts
-// so the handoff is a second call rather than a re-resolution. `id` is NULLABLE
-// on a pick for a reason: two picks on one roster can share a label
-// ("2027 1st"), and this server refuses to guess between them — the same rule
+// so the handoff is a second call rather than a re-resolution. A pick's id is
+// built from the season/round/originalOwner triple the asset carries — never
+// recovered from its label, which several picks on one roster can share
+// ("2027 1st"). `id` stays NULLABLE as a guard: an asset missing part of that
+// triple is reported unidentified rather than guessed at, the same rule
 // resolve_assets keeps about two players sharing a surname.
 const packageAssetSchema = z.object({
   id: z.string().nullable(),
@@ -227,7 +229,7 @@ const packageAssetSchema = z.object({
   age: z.number().nullable().optional(),
   value: z.number().nullable(),
   round: z.number().optional(),
-  ambiguous: z.boolean().optional(),
+  season: z.string().optional(),
 })
 
 // One seat's read of a suggested package — the compact form of sideFitSchema,

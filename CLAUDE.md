@@ -1608,13 +1608,14 @@ returning — `inFairBand`, both seats' appeal, and `alternative` with its
   all of.
 - **It never guesses which team you meant** (`team`), and scouting your own
   roster is refused rather than answered with an empty board.
-- **A pick id is emitted only when it is UNAMBIGUOUS.** `suggestFairPackage`
-  labels its pick assets `"2027 1st"` and drops the season/round/originalOwner
-  triple that forms the id, so recovering it means matching on that label —
-  which the app does with a `.find` that silently takes the first of two picks
-  sharing one. A display bug on a screen is a *wrong asset in a graded trade*
-  through an LLM, so two twins resolve to `id: null` with `ambiguous: true` and
-  a note pointing at `resolve_assets`. Same rule as the two DJ Moores.
+- **A pick's id is READ OFF THE ASSET, never recovered from its label.**
+  `suggestFairPackage` carries the `season` / `round` / `originalOwner` triple
+  that *is* the id — see Feature 3's note on why the label cannot be reversed.
+  The first cut of this tool built a label index and refused an ambiguous one,
+  which was right for the shape it had; carrying the identity is better,
+  because it makes the ambiguity **impossible rather than detectable**. A pick
+  missing part of the triple still reports `id: null` and points at
+  `resolve_assets` — kept as a guard, not as the mechanism.
 - **Bounded output, and the cap can never out-run the app.** Default **8**,
   max **20** — the app board's own depth — with `counts.board` reporting the
   full ranked total beside the returned slice and the truncation disclosed in
@@ -2757,6 +2758,25 @@ Counter or Decline.** The app proposed and then argued with itself.
     - These are **preference weights, not measured constants** — same status as
       `AGE_TILT_BY_TIER`. They break near-ties; the fair band and the protect
       threshold still bind first, and the search is still untruncated (§4e-v).
+  - **A SUGGESTED PICK CARRIES ITS IDENTITY, and that is load-bearing
+    (2026-09-22).** `pickLabel` is `"{season} {suffix}"` — it drops the original
+    owner, and **a roster can hold several picks under one label**. Measured on
+    the live league: **6 of 10 rosters** do, one holding *three* 2027 2nds. So
+    a consumer that recovers a pick by rebuilding its label is not doing a
+    lookup, it is tossing a coin between real, distinct assets.
+    `suggestFairPackage`'s pick assets therefore carry `season` +
+    `originalOwner` alongside `round`, and every consumer matches on the triple.
+    **`TradeAnalyzer.jsx`'s `mapPackageToAssets` did rebuild the label and
+    `.find` the first match**, which loaded the Analyzer with a **different real
+    asset** than the search had chosen. Measured across all ten seats' boards:
+    **13 of 142 pick handoffs (9%) loaded the wrong pick** — and **0 of them on
+    the owner's own seat**, because he currently holds no twins, which is
+    exactly why it was invisible. It was also value-neutral *today* (twins share
+    a round-median price, so totals stayed right and nothing looked broken) and
+    stops being so the moment slots resolve, since the draft season prices picks
+    per slot. 92657ae's ruling — *a preload must resolve to what the add sheet
+    produces* — is unchanged; what this adds is that **identity, not a rendered
+    label, is what it must resolve by.**
   - **A surviving `Weak` is real information, not a failure** — it means nothing
     you can spare interests them at this price. The card says so rather than
     hiding the row.
@@ -5646,7 +5666,7 @@ dynastyedge/
 │       ├── analyzeTrade.js         ← #5 "grade this trade" — IDS ONLY; a free-text name is rejected, never guessed
 │       ├── lineupAdvice.js         ← #6 "what do I start?" — IN-SEASON ONLY; a must-fix carries no confidence; a LOCKED slot is never a move
 │       ├── playerNews.js           ← #8 "what's the latest on him?" — injury body part + notes + the feed; an ambiguous name is refused, and silence is a gap in coverage, never good health
-│       └── findTradeTargets.js     ← #9 "who do I call about, and what would it cost?" — the question BEFORE analyze_trade. The one layer here with NO TTL: it owns no fetch, so its freshness IS the snapshot's and a number of its own would be a second clock. A pick sharing its label with another resolves to NOTHING, never to the first match
+│       └── findTradeTargets.js     ← #9 "who do I call about, and what would it cost?" — the question BEFORE analyze_trade. The one layer here with NO TTL: it owns no fetch, so its freshness IS the snapshot's and a number of its own would be a second clock. A pick's id is READ OFF the asset (season/round/originalOwner), never recovered from a label several picks can share
 ├── public/
 │   └── favicon.ico
 ├── src/
@@ -5828,7 +5848,7 @@ dynastyedge/
 │   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
 │   ├── appVersion.test.mjs          ← reload URL: ?v= before the hash (HashRouter), encoding, null build id
 │   ├── tradeTargets.test.mjs        ← Targets ranking: deficit gate + value floor league-wide, team-scoped mode keeps depth (never empty), fillsNeed flag, the movability TILT (band under 2×, spare depth outranks an equal-value untouchable, nothing ever hidden), and the POSITION filter applied inside the ranking rather than to the slice — pinned by the case where filtering the sliced top-1 returns nothing
-│   ├── tradeAnalysis.test.mjs       ← OPEN-10 (the suggestion lands inside buildFairBand — asked of that function, never a 0.95/1.05 literal; the pre-2026-09-21 search kept as an EXECUTABLE statement of the bug, so the fixture cannot silently stop exercising it; the overpay demoted to `alternative` with its premium; a target nothing can price fairly still answered and flagged; PROTECT_THRESHOLD unmoved), Layer 3's basis swap (odds score the window in season, tier is the offseason fallback byte-for-byte, a bubble team gets a real read, the printed stance is the one that scored it), the `alternative` (now always HIGHER-appeal — the pricier road the cost-aware search passed over), the phase-2 trade-off (a Strong package costing more than APPEAL_BONUS loses to a Fair one; the fair band and protect threshold still bind), Layer 4's fills/lineup-gain scored ONCE, the my-lineup verdict gate (downgrades an Accept, never upgrades, never fires on noise), verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge, Layer 4 (a benched acquisition reads Weak however valued; the gate downgrades an Accept but never lifts a Decline; landing spots both directions; the pitch speaks from their side), buildPartnerFit's extraction contract (standalone == via analyzeTrade) and its wrapper contract (== buildSideFit from the `them` seat), the my-side read (myFit's facts equal Layer 2's own, it speaks in the second person, and it can NEVER move a verdict — swapped for its opposite or removed, the whole ladder is deepEqual), the two depth charts (marker in/out, getContext read off the POST-trade roster so a WR-for-WR chart stays true), the package's my-side read (present without a partner roster, null without a league, computed after the choice so it never reorders), and the two-phase package builder (phase 2 rejects the piece they have no use for, never unlocks a protected asset, reports no appeal without a partner)
+│   ├── tradeAnalysis.test.mjs       ← OPEN-10 (the suggestion lands inside buildFairBand — asked of that function, never a 0.95/1.05 literal; the pre-2026-09-21 search kept as an EXECUTABLE statement of the bug, so the fixture cannot silently stop exercising it; the overpay demoted to `alternative` with its premium; a target nothing can price fairly still answered and flagged; PROTECT_THRESHOLD unmoved), Layer 3's basis swap (odds score the window in season, tier is the offseason fallback byte-for-byte, a bubble team gets a real read, the printed stance is the one that scored it), the `alternative` (now always HIGHER-appeal — the pricier road the cost-aware search passed over), the phase-2 trade-off (a Strong package costing more than APPEAL_BONUS loses to a Fair one; the fair band and protect threshold still bind), Layer 4's fills/lineup-gain scored ONCE, the my-lineup verdict gate (downgrades an Accept, never upgrades, never fires on noise), verdict ladder, % vs larger side, counter never re-suggests, lineup-sim fit (bench ≠ fill, starter-loss hurt), trajectory lens, draft nudge, Layer 4 (a benched acquisition reads Weak however valued; the gate downgrades an Accept but never lifts a Decline; landing spots both directions; the pitch speaks from their side), buildPartnerFit's extraction contract (standalone == via analyzeTrade) and its wrapper contract (== buildSideFit from the `them` seat), the my-side read (myFit's facts equal Layer 2's own, it speaks in the second person, and it can NEVER move a verdict — swapped for its opposite or removed, the whole ladder is deepEqual), the two depth charts (marker in/out, getContext read off the POST-trade roster so a WR-for-WR chart stays true), the package's my-side read (present without a partner roster, null without a league, computed after the choice so it never reorders), the two-phase package builder (phase 2 rejects the piece they have no use for, never unlocks a protected asset, reports no appeal without a partner), and a suggested PICK carrying the season/round/originalOwner triple that identifies it — pinned against a roster holding three picks under one label, where a label match is a coin toss
 │   ├── tradeContext.test.mjs        ← the five negotiating signals (fair band, scarcity, roster space, weekly impact, partner activity) — and the contract that NONE of them may move the verdict
 │   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
 │   ├── lineupBuild.test.mjs         ← slot-fill order (singles → FLEX → SFLX), IR/taxi excluded, who-starts identity
@@ -5861,7 +5881,7 @@ dynastyedge/
 │   ├── mcpPlayoffOdds.test.mjs      ← get_playoff_odds: the preseason returning a NULL percentage and a labelled PREVIEW (never 0, which reads as eliminated), a POSTED-but-unplayed schedule being ACTIVE rather than preseason, unavailable ≠ preseason, Σ odds === the field size, seedDist computed but not returned, and the stance being getDeadlineVerdict's so a trade grade cannot disagree
 │   ├── mcpNews.test.mjs             ← the news layer + tool 8: `playerIds` as THE join with NO headline-name fallback (the two-DJ-Moores collision, pinned from both sides), athleteIds as the second hop, a roundup FLAGGED as one, Class B degradation stated as a missing source rather than as "no news", and the stale-feed warning near kickoff
 │   ├── mcpLineupAdvice.test.mjs     ← lineup_advice: the offseason returning no summary and no zeros, per-move gains summing EXACTLY to the headline, a must-fix carrying NO confidence, confidencePct being a percentage not a fraction (the ×100 bug that printed "6530%"), and a blocked starter contributing 0
-│   ├── mcpFindTradeTargets.test.mjs ← find_trade_targets: the position filter applied INSIDE the ranking (a filter over the sliced top-1 returns nothing where the real answer is a row), the cap disclosed with the true board beside it, scoped mode keeping their depth pieces, a near-miss stated rather than implying the Analyzer will agree, and two picks sharing a label resolving to NOTHING (the app's own `.find` takes the first silently)
+│   ├── mcpFindTradeTargets.test.mjs ← find_trade_targets: the position filter applied INSIDE the ranking (a filter over the sliced top-1 returns nothing where the real answer is a row), the cap disclosed with the true board beside it, scoped mode keeping their depth pieces, a near-miss stated rather than implying the Analyzer will agree, and twin picks resolving to the RIGHT one rather than the first match (one label, two distinguishable assets)
 │   └── helpers/mcpFixtures.mjs      ← ONE synthetic league shared by the seven MCP tool suites — four tools read the same object, and four divergent copies is the drift prerequisite C removed from src/
 ├── index.html
 ├── eslint.config.js             ← ESLint 9 flat config (recommended + react-hooks, src/ + scripts/)
@@ -5875,9 +5895,9 @@ the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
 honestly:** instead of "cannot find module" it prints `# tests 636 / # pass 631
 / # fail 5`, which reads like a code regression. A file that cannot load never
-runs its tests, so the count silently drops from **740** to 697.
+runs its tests, so the count silently drops from **742** to 699.
 `npm run build` in the same state fails with `sh: 1: vite: not found`.
-**If the test count isn't 740, run `npm ci` before debugging anything.**
+**If the test count isn't 742, run `npm ci` before debugging anything.**
 
 The pair was re-measured 2026-09-19 (MCP phase 1b) by renaming `node_modules`
 aside, and it had drifted seven times before that: 178/130, 177/115, 219/136,
@@ -5900,8 +5920,9 @@ the broken-state count stayed at 152; the 2026-09-12 news-retention work moved
 both, because `newsRetention.test.mjs` imports only a zero-dependency pure
 module. **Re-measure both whenever the suite grows.**
 
-`find_trade_targets` plus SMALL-1 (2026-09-22) moved both by the same 21
-(719/676 → **740/697**), the gap holding at 43 — and here that equality is the
+`find_trade_targets`, SMALL-1 and the pick-identity fix (2026-09-22) moved
+both by the same 23 (719/676 → **742/699**), the gap holding at 43 — and here
+that equality is the
 check that matters: `mcpFindTradeTargets.test.mjs` drives a tool, so it would
 have shown up as a gap had the tool reached `zod` out of `mcp/server.js` or
 pulled React in through a util. It imports `mcp/tools/findTradeTargets.js` and
@@ -5958,7 +5979,7 @@ regression to the next session, which is the exact confusion the block exists
 to prevent, so re-measure rather than incrementing what is written.
 
 The useful invariant survived the drift and is worth preferring to either
-count: **the gap between them is 43 and has not moved.** 740 − 697 = 43,
+count: **the gap between them is 43 and has not moved.** 742 − 699 = 43,
 719 − 676 = 43, 714 − 671 = 43, 698 − 655 = 43,
 679 − 636 = 43, 669 − 626 = 43, 639 − 596 = 43,
 630 − 587 = 43, 589 − 546 = 43, and 538 − 495 = 43 before that. That is the number of tests living in the five files

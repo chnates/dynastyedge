@@ -16,7 +16,8 @@ description: >
 
 This repo's machine gates (re-verified 2026-09-04) are `npm run lint` (ESLint 9
 flat config, error severity) + `npm test` (`tests/*.test.mjs` on Node's
-built-in `node:test`, **242 passing**) + `npm run build` — enforced by `ci.yml`
+built-in `node:test`; **CLAUDE.md's `npm ci` block carries the live count —
+this line deliberately does not restate it**) + `npm run build` — enforced by `ci.yml`
 on every branch push/PR and by `deploy.yml` before publishing.
 
 > **Run `npm ci` first.** A fresh clone (what every remote session gets) has
@@ -287,7 +288,8 @@ case, and it's also a degradation contract (§5).
   as swipeable horizontal rows (League position ranking). Wide content
   scrolls inside its own container.
 - [ ] **Sub-tab overflow**: multi-word tabs ("Season Review", "Pick Trades")
-  must not wrap — `SubTabBar` handles this; if you bypassed it, that's also
+  must not wrap — `SectionContents` handles this (it WRAPS rather than
+  scrolling, so no entry can hide off-screen); if you bypassed it, that's also
   a design-review finding.
 - [ ] **Safe areas**: content isn't hidden behind the home indicator; sheets
   pad bottom with `env(safe-area-inset-bottom)`; `<main>` is never shortened

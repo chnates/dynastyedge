@@ -106,6 +106,19 @@ starters pin to their slots at their **real** score (from `players_points`);
 locked bench players leave the pool. Neither produces a move. See CLAUDE.md
 Feature 4's **Game locks** for the full contract.
 
+### An asset's ID travels with it — never rebuild it from a label
+
+`suggestFairPackage`'s pick assets carry `season` + `round` + `originalOwner`,
+the triple that forms the id `analyze_trade` accepts. That is not convenience:
+`pickLabel` is `"{season} {suffix}"` and drops the original owner, so a roster
+can hold several picks under one label — measured live 2026-09-22, **6 of 10
+rosters do**, one holding three 2027 2nds. A consumer recovering a pick from its
+label is tossing a coin between real, distinct assets, which the app itself did
+until that day (**13 of 142 pick handoffs, 9%, loaded the wrong pick**). This
+tool reads the id off the asset; `id: null` survives only as a guard for an
+asset missing part of the triple. The general rule for any new tool: **if a
+value has an identity, carry it — do not re-derive it from something rendered.**
+
 ### The in-season-only tools, and the one that is season-aware
 
 `get_playoff_odds` is the third member of this family and it answers a

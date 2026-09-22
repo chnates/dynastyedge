@@ -1283,7 +1283,19 @@ export function suggestFairPackage(targetPlayer, myRoster, allRosters = null, op
       // `round` is load-bearing: assetKeepScore prices a pick's keep-score by
       // round (PICK_ROUND_KEEP), and without it every pick falls back to the
       // flat default this replaced.
-      .map(p => ({ type: 'pick', name: pickLabel(p), value: p.value ?? 0, round: p.round })),
+      //
+      // `season` + `originalOwner` are load-bearing for a different reason:
+      // together with `round` they IDENTIFY the pick, and a consumer that has
+      // to recover that identity from `name` cannot. `pickLabel` is
+      // "{season} {suffix}" — it drops the original owner, and a roster can
+      // hold several picks sharing one label. Measured live 2026-09-22:
+      // **6 of 10 rosters** hold at least one colliding label, 10 collisions in
+      // all (one roster holds THREE 2027 2nds). So a reverse lookup by label
+      // is not a lookup, it is a coin toss between real, distinct assets.
+      .map(p => ({
+        type: 'pick', name: pickLabel(p), value: p.value ?? 0, round: p.round,
+        season: p.season, originalOwner: p.originalOwner,
+      })),
   ].filter(a => a.value > 0)
 
   const available = allAssets

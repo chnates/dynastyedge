@@ -40,7 +40,18 @@ function makeAsset(item, type) {
   }
 }
 
-// Map a suggestFairPackage result back to full roster asset objects
+// Map a suggestFairPackage result back to full roster asset objects.
+//
+// A pick is matched on its IDENTITY — season + round + original owner — never
+// on its label. It used to rebuild "{season} {suffix}" and `.find` the first
+// match, which is a coin toss rather than a lookup: `pickLabel` drops the
+// original owner, and measured live 2026-09-22 **6 of 10 rosters hold at least
+// one colliding label** (one holds three 2027 2nds). The wrong twin has the
+// same round-median value today, so totals stayed right and nothing looked
+// broken — but the Analyzer was loaded with a DIFFERENT REAL ASSET than the
+// one the search chose, and that is the offer the owner then sends in Sleeper.
+// It also stops being value-neutral the moment slots resolve, since the draft
+// season prices picks per slot rather than per round.
 function mapPackageToAssets(fairPackage, myRoster) {
   if (!fairPackage || !myRoster) return []
   return fairPackage.assets.map(a => {
@@ -48,11 +59,11 @@ function mapPackageToAssets(fairPackage, myRoster) {
       const player = myRoster.players.find(p => p.sleeperId === a.sleeperId)
       return player ? makeAsset(player, 'player') : null
     }
-    // pick: match by reconstructed label (season + round suffix)
-    const pick = myRoster.picks.find(p => {
-      const suffix = ['', '1st', '2nd', '3rd', '4th'][p.round] ?? `R${p.round}`
-      return `${p.season} ${suffix}` === a.name
-    })
+    const pick = myRoster.picks.find(p =>
+      String(p.season) === String(a.season) &&
+      p.round === a.round &&
+      String(p.originalOwner) === String(a.originalOwner)
+    )
     return pick ? makeAsset(pick, 'pick') : null
   }).filter(Boolean)
 }

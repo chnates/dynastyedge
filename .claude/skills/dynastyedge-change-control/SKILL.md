@@ -79,15 +79,16 @@ Run top to bottom before any merge to `main`:
 cd /home/user/dynastyedge
 npm ci                 # STEP 0 — see the trap below. Never `npm install`.
 npm run lint           # ESLint 9 flat config over src/ + scripts/, error severity
-npm test               # tests/*.test.mjs on node:test (698 passing as of 2026-09-21)
+npm test               # tests/*.test.mjs on node:test — live count in CLAUDE.md's `npm ci` block
 npm run build          # must end "✓ built in …"
 ```
 
 > **Trap — a fresh clone has no `node_modules`, and `npm test` lies about it.**
 > Remote sessions start from a fresh clone. Skip `npm ci` and you do *not* get
 > a clean "cannot find module" error — you get a handful of **failing tests**,
-> which reads exactly like a code regression (2026-09-21: `# tests 655` against
-> the real 698). Five files fail to load, so their tests never run: four that
+> which reads exactly like a code regression (observed 2026-09-21: `# tests 655`
+> against the real 698 — both numbers have moved since, which is the point).
+> Five files fail to load, so their tests never run: four that
 > reach `react` through a hook (`matchupWeeks`, `transactions`,
 > `sleeperDraft`, `draftLive`) and `mcpHttp`, which imports the MCP SDK — a
 > genuine runtime dependency no refactor will remove.
@@ -96,8 +97,8 @@ npm run build          # must end "✓ built in …"
 > no `node_modules`. CLAUDE.md's `npm ci` block is the one place the live
 > totals are maintained — don't restate them here.
 > `npm run build` in the same state fails with `sh: 1: vite: not found`.
-> **If the test count is not 242, install dependencies before debugging
-> anything.** (Observed 2026-08-08.)
+> **If the test count does not match CLAUDE.md's, install dependencies before
+> debugging anything.**
 
 1. **Lint + tests + build green.** All three verified working as of
    2026-07-19; `ci.yml` runs them on every branch push and PR, and
@@ -142,9 +143,15 @@ npm run build          # must end "✓ built in …"
    (`700ce00`, `d4f9e75`). A behavior commit without its CLAUDE.md hunk is
    incomplete — the next zero-context session inherits a lying doc.
 5. **No new npm dependencies without genuine need.** `package.json` as of
-   2026-07-05 has exactly 7 runtime deps (`@dnd-kit/*` ×3, `lucide-react`,
-   `react`, `react-dom`, `react-router-dom`) and 7 devDeps — even the icon
-   tooling (`sharp`, `png-to-ico`) sits in devDependencies. The house
+   2026-09-22 has exactly 7 runtime deps (`@dnd-kit/*` ×3,
+   `@modelcontextprotocol/sdk`, `react`, `react-dom`, `react-router-dom`) and
+   9 devDeps — even the icon tooling (`sharp`, `png-to-ico`) sits in
+   devDependencies. Two changes since 2026-07-05, and both are precedent-setting
+   in opposite directions: **`lucide-react` was REMOVED** (all 51 icons deleted
+   in the Matchday design work — a thin-line icon set is a named slop marker),
+   and **`@modelcontextprotocol/sdk` was ADDED with explicit owner approval**
+   (2026-09-19, PR #56) for the MCP server. That approval is **not** precedent
+   for the next dependency, which needs its own. The house
    `cn.js` exists specifically so nobody adds a classnames package. If you
    think you need a dep, first write the ~30-line vanilla version; only if
    that's genuinely worse, propose the dep *to the owner* — don't just add it.
