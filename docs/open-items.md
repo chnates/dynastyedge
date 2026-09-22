@@ -1094,13 +1094,27 @@ cold and 0 cached; 236 of 444 rookies scored, 208 with no feed entry and
 therefore null. It turned up **ROOKIE-1** (§2) — found, measured at 0 live
 occurrences, not fixed in a tool commit.
 
+**SHIPPED 2026-09-22: the manager-scouting tool.** `scout_managers` is the
+eleventh tool and closes §5's deferred list. The history walk was widened **in
+the open**: `getLedgerHistory` is its own function, built on top of the narrow
+`getLeagueHistory` (whose 14 requests and zero-transactions assertion are
+untouched), adding users + transaction weeks 1..`last_scored_leg` per past
+season. Measured: **68 requests cold, 508ms, 0 cached** — and every past
+season's week-18 bucket is empty, which is why it stops at `last_scored_leg`.
+Stated honestly, the app's walk over the same four seasons is ~72, so the
+economy is the per-season frozen cache, not a smaller fetch. Over the real
+transport: **1,219ms cold / 34ms cached, 10,041B** (80 upstream requests cold).
+The "never traded" contract is pinned from both directions. `tradeTimeTotals`
+moved out of `useTradeTimeValues` so the tool reads the trade-time archive by
+the phone's rule — and the archive's two trades both carry a null pick, so **0**
+ledger rows print the line today, which the notes say.
+
 **Capability not built:**
-- **One of `MCP_DISCOVERY.md` §5's phase-two tools** remains — manager scouting
-  (the biggest fetch burst; note `mcp/history.js`'s walk is deliberately narrow
-  and must NOT be quietly widened).
-- **Two of the four static feeds are still unread** — `values-history`,
-  `trade-values`. `get_player_news` read the first; `research_rookies` reads
-  `rookie-intel`.
+- **`MCP_DISCOVERY.md` §5's phase-two list is complete** (trade targets,
+  rookie research, manager scouting all shipped 2026-09-22).
+- **One of the four static feeds is still unread** — `values-history`.
+  `get_player_news` reads `news`, `research_rookies` reads `rookie-intel`,
+  `scout_managers` reads `trade-values`.
   So a second league gets no sparklines, no at-trade-time values and no rookie
   research, and the tools say so.
 - **`/league/{id}/winners_bracket` has still never been called**, so *"who won

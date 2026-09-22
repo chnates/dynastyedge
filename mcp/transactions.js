@@ -150,8 +150,10 @@ export async function getTransactions({
     )
   }
 
+  // `week` is stamped from the bucket, exactly as useTransactions does — the
+  // manager ledger reports it, and a raw Sleeper transaction does not carry it.
   const transactions = loaded
-    .flatMap(l => (Array.isArray(l.data) ? l.data : []))
+    .flatMap((l, i) => (Array.isArray(l.data) ? l.data.map(tx => ({ ...tx, week: weeks[i] })) : []))
     .filter(tx => tx?.status === 'complete')
     .sort((a, b) => (b.status_updated ?? 0) - (a.status_updated ?? 0))
 

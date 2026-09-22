@@ -113,7 +113,7 @@ test('tools/list answers over the transport with every tool stdio has', async ()
   assert.deepEqual(names, [
     'analyze_trade', 'find_sell_high', 'find_trade_targets', 'get_player_news',
     'get_playoff_odds', 'get_roster', 'lineup_advice', 'recommend_free_agents',
-    'research_rookies', 'resolve_assets',
+    'research_rookies', 'resolve_assets', 'scout_managers',
   ], 'the HTTP transport exposes the SAME tools as stdio — only transport differs, ' +
      'so a tool added to createServer must appear here without being forked')
 })
@@ -138,5 +138,5 @@ test('an authorized request carries authInfo through to the server', async () =>
   const res = await handler(post(rpc('tools/list')))
   assert.equal(res.status, 200)
   const body = await res.json()
-  assert.equal(body.result.tools.length, 10)
+  assert.equal(body.result.tools.length, 11)
 })
