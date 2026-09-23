@@ -32,7 +32,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 
 // src/constants.js
-var LEAGUE_ID, MY_ROSTER_ID, SLEEPER_BASE, SLEEPER_ROOT, FANTASYCALC_BASE, NEWS_FEED_URL, FANTASYCALC_PARAMS, PICK_YEARS, POSITIONS, ROSTER_SLOTS;
+var LEAGUE_ID, MY_ROSTER_ID, SLEEPER_BASE, SLEEPER_ROOT, FANTASYCALC_BASE, NEWS_FEED_URL, TRADE_VALUES_URL, ROOKIE_INTEL_URL, FANTASYCALC_PARAMS, PICK_YEARS, POSITIONS, ROSTER_SLOTS;
 var init_constants = __esm({
   "src/constants.js"() {
     LEAGUE_ID = "1313933520715907072";
@@ -41,6 +41,8 @@ var init_constants = __esm({
     SLEEPER_ROOT = "https://api.sleeper.app";
     FANTASYCALC_BASE = "https://api.fantasycalc.com";
     NEWS_FEED_URL = "https://raw.githubusercontent.com/chnates/dynastyedge/news-data/news.json";
+    TRADE_VALUES_URL = "https://raw.githubusercontent.com/chnates/dynastyedge/values-history/trade-values.json";
+    ROOKIE_INTEL_URL = "https://raw.githubusercontent.com/chnates/dynastyedge/rookie-intel/rookie-intel.json";
     FANTASYCALC_PARAMS = {
       isDynasty: true,
       numQbs: 2,
@@ -208,8 +210,8 @@ function resolvePickOwnership(tradedPicks, rosters, years) {
   const ownership = {};
   rosters.forEach((r) => {
     years.forEach((year) => {
-      for (let round = 1; round <= ROUNDS; round++) {
-        ownership[`${year}-${round}-${r.roster_id}`] = r.roster_id;
+      for (let round4 = 1; round4 <= ROUNDS; round4++) {
+        ownership[`${year}-${round4}-${r.roster_id}`] = r.roster_id;
       }
     });
   });
@@ -249,17 +251,17 @@ function findPickValue(pick2, pickEntries) {
   matches.sort((a, b) => a.value - b.value);
   return matches[Math.floor(matches.length / 2)]?.value ?? 0;
 }
-function findExactSlotValue({ season, round, slot }, pickEntries) {
+function findExactSlotValue({ season, round: round4, slot }, pickEntries) {
   if (slot != null) {
-    const name = `${season} Pick ${round}.${String(slot).padStart(2, "0")}`;
+    const name = `${season} Pick ${round4}.${String(slot).padStart(2, "0")}`;
     const entry = pickEntries.find((e) => e.name === name);
     if (entry) return entry.value;
   }
-  return findPickValue({ season, round }, pickEntries);
+  return findPickValue({ season, round: round4 }, pickEntries);
 }
-function slotForRound(position, round, type, teams) {
+function slotForRound(position, round4, type, teams) {
   if (position == null) return null;
-  return type === "snake" && round % 2 === 0 ? teams + 1 - position : position;
+  return type === "snake" && round4 % 2 === 0 ? teams + 1 - position : position;
 }
 function buildDraftSlots(draft, rosters) {
   if (!draft) return null;
@@ -309,10 +311,10 @@ function buildDraftPickIndex(draft, picks, rosters) {
 }
 function buildGenericRoundValues(pickEntries) {
   const byRound = {};
-  for (let round = 1; round < ROUND_SUFFIX.length; round++) {
-    const suffix = ROUND_SUFFIX[round];
+  for (let round4 = 1; round4 < ROUND_SUFFIX.length; round4++) {
+    const suffix = ROUND_SUFFIX[round4];
     const matches = (pickEntries ?? []).filter((e) => e.name.includes(suffix)).sort((a, b) => a.value - b.value);
-    byRound[round] = matches.length ? matches[Math.floor(matches.length / 2)].value : 0;
+    byRound[round4] = matches.length ? matches[Math.floor(matches.length / 2)].value : 0;
   }
   return byRound;
 }
@@ -1002,7 +1004,7 @@ async function getTransactions({
       `Transaction week(s) ${failedWeeks.join(", ")} did not load, so any moves made in them are absent from the activity read below \u2014 it understates how active a manager has been.`
     );
   }
-  const transactions = loaded.flatMap((l) => Array.isArray(l.data) ? l.data : []).filter((tx) => tx?.status === "complete").sort((a, b) => (b.status_updated ?? 0) - (a.status_updated ?? 0));
+  const transactions = loaded.flatMap((l, i) => Array.isArray(l.data) ? l.data.map((tx) => ({ ...tx, week: weeks[i] })) : []).filter((tx) => tx?.status === "complete").sort((a, b) => (b.status_updated ?? 0) - (a.status_updated ?? 0));
   const fetchedTimes = loaded.map((l) => l.fetchedAt).filter(Boolean);
   const oldest = fetchedTimes.length ? Math.min(...fetchedTimes) : null;
   return {
@@ -1126,7 +1128,97 @@ async function getLeagueHistory({
     notes: []
   };
 }
-var DEFAULT_HISTORY_TTL_MS, MAX_SEASONS_BACK, historyKeyFor, defaultStore5;
+function playedWeeks(leagueInfo) {
+  const last = Number(leagueInfo?.settings?.last_scored_leg);
+  return Number.isFinite(last) && last >= 1 ? Math.min(LEDGER_MAX_WEEK, last) : LEDGER_MAX_WEEK;
+}
+async function fetchSeasonLedger(get, leagueInfo) {
+  const id = leagueInfo.league_id;
+  const weeks = Array.from({ length: playedWeeks(leagueInfo) }, (_, i) => i + 1);
+  const [users, ...buckets] = await Promise.all([
+    get(`${SLEEPER_BASE}/league/${id}/users`, { label: "Sleeper users" }).catch(() => null),
+    ...weeks.map((w) => get(`${SLEEPER_BASE}/league/${id}/transactions/${w}`, { label: `Sleeper transactions w${w}` }).catch(() => null))
+  ]);
+  const failedWeeks = weeks.filter((_, i) => !Array.isArray(buckets[i]));
+  if (failedWeeks.length === weeks.length) {
+    throw new Error(`no transaction week of the ${leagueInfo.season} season could be loaded`);
+  }
+  const transactions = [];
+  buckets.forEach((txs, i) => {
+    ;
+    (Array.isArray(txs) ? txs : []).forEach((tx) => {
+      if (tx?.status === "complete") transactions.push({ ...tx, week: weeks[i] });
+    });
+  });
+  transactions.sort((a, b) => (b.status_updated ?? 0) - (a.status_updated ?? 0));
+  return { users: Array.isArray(users) ? users : [], usersFailed: !Array.isArray(users), transactions, failedWeeks, weeks: weeks.length };
+}
+async function getLedgerHistory({
+  leagueId,
+  leagueInfo,
+  ttlMs = DEFAULT_HISTORY_TTL_MS,
+  force = false,
+  fetcher,
+  concurrency = 6,
+  store = defaultStore5
+} = {}) {
+  const base = await getLeagueHistory({ leagueId, leagueInfo, ttlMs, force, fetcher, concurrency, store });
+  if (!base.available) {
+    return {
+      ...base,
+      ledgerSeasons: [],
+      failedSeasons: [],
+      partialSeasons: [],
+      notes: [
+        "This league's past seasons could not be loaded, so there is no multi-season trade ledger, FAAB record or draft record. That is a gap in our data \u2014 it says nothing about how any manager trades."
+      ]
+    };
+  }
+  const get = fetcher ?? createFetcher({ concurrency });
+  const ttl = force ? -1 : ttlMs;
+  const past = base.history.pastSeasons ?? [];
+  const loaded = await Promise.all(past.map((ps) => loadSource(store, ledgerSeasonKey(ps.leagueId), ttl, () => fetchSeasonLedger(get, ps.leagueInfo)).catch((err) => ({ data: null, fetchedAt: null, stale: false, error: err.message }))));
+  const failedSeasons = [];
+  const partialSeasons = [];
+  const pastSeasons = past.map((ps, i) => {
+    const l = loaded[i].data;
+    if (!l) {
+      failedSeasons.push(ps.season);
+      return { ...ps };
+    }
+    if (l.failedWeeks.length) partialSeasons.push({ season: ps.season, failedWeeks: l.failedWeeks });
+    return { ...ps, users: l.users, transactions: l.transactions };
+  });
+  const notes = [...base.notes];
+  if (failedSeasons.length) {
+    notes.push(
+      `The ${failedSeasons.join(", ")} season${failedSeasons.length > 1 ? "s" : ""}' transactions could not be loaded, so trades and FAAB from them are ABSENT \u2014 not zero. A manager showing few trades may have made more in the seasons we could not read.`
+    );
+  }
+  partialSeasons.forEach((p) => notes.push(
+    `${p.season}: transaction week(s) ${p.failedWeeks.join(", ")} did not load, so that season's ledger understates activity.`
+  ));
+  const times = [base.sources.history.fetchedAt, ...loaded.map((l) => l.fetchedAt)].filter(Boolean).map((t) => typeof t === "number" ? t : Date.parse(t));
+  const oldest = times.length ? Math.min(...times) : null;
+  return {
+    available: true,
+    reason: null,
+    history: { ...base.history, pastSeasons },
+    seasonsBack: past.length,
+    ledgerSeasons: pastSeasons.filter((_, i) => loaded[i].data).map((ps) => ps.season),
+    failedSeasons,
+    partialSeasons,
+    sources: {
+      history: stampSource({
+        fetchedAt: oldest,
+        stale: base.sources.history.stale || loaded.some((l) => l.stale),
+        error: failedSeasons.length ? `${failedSeasons.length} of ${past.length} past seasons' ledgers failed` : null
+      })
+    },
+    notes
+  };
+}
+var DEFAULT_HISTORY_TTL_MS, MAX_SEASONS_BACK, historyKeyFor, defaultStore5, LEDGER_MAX_WEEK, ledgerSeasonKey;
 var init_history = __esm({
   "mcp/history.js"() {
     init_constants();
@@ -1137,6 +1229,77 @@ var init_history = __esm({
     MAX_SEASONS_BACK = 8;
     historyKeyFor = (leagueId) => `history:${leagueId}`;
     defaultStore5 = memoryStore();
+    LEDGER_MAX_WEEK = 18;
+    ledgerSeasonKey = (seasonLeagueId) => `ledger:${seasonLeagueId}`;
+  }
+});
+
+// mcp/feeds.js
+async function loadFeed({ key, url: url2, label, valid, ttlMs, force, fetcher, concurrency, store }) {
+  const get = fetcher ?? createFetcher({ concurrency });
+  const loaded = await loadSource(store, key, force ? -1 : ttlMs, async () => {
+    const data2 = await get(url2, { label });
+    if (!valid(data2)) throw new Error(`${label} returned an unexpected shape`);
+    return data2;
+  }).catch((err) => ({ data: null, fetchedAt: null, stale: false, error: err.message }));
+  const data = loaded.data ?? null;
+  const updatedAt = data?.updatedAt ?? null;
+  return {
+    available: !!data,
+    data,
+    updatedAt,
+    ageHours: updatedAt ? Math.max(0, Math.round((Date.now() - new Date(updatedAt).getTime()) / 36e5 * 10) / 10) : null,
+    error: data ? null : loaded.error ?? "unknown error",
+    source: stampSource(loaded)
+  };
+}
+function getRookieIntel({
+  ttlMs = DEFAULT_FEED_TTL_MS,
+  force = false,
+  fetcher,
+  concurrency = 6,
+  store = defaultStore6
+} = {}) {
+  return loadFeed({
+    key: "feed:rookie-intel",
+    url: ROOKIE_INTEL_URL,
+    label: "DynastyEdge rookie intel",
+    valid: (d) => !!d?.players && typeof d.players === "object",
+    ttlMs,
+    force,
+    fetcher,
+    concurrency,
+    store
+  });
+}
+function getTradeValues({
+  ttlMs = DEFAULT_FEED_TTL_MS,
+  force = false,
+  fetcher,
+  concurrency = 6,
+  store = defaultStore6
+} = {}) {
+  return loadFeed({
+    key: "feed:trade-values",
+    url: TRADE_VALUES_URL,
+    label: "DynastyEdge trade-time values",
+    valid: (d) => !!d?.trades && typeof d.trades === "object",
+    ttlMs,
+    force,
+    fetcher,
+    concurrency,
+    store
+  });
+}
+var DEFAULT_FEED_TTL_MS, defaultStore6;
+var init_feeds = __esm({
+  "mcp/feeds.js"() {
+    init_constants();
+    init_limit();
+    init_snapshot();
+    init_store();
+    DEFAULT_FEED_TTL_MS = 60 * 60 * 1e3;
+    defaultStore6 = memoryStore();
   }
 });
 
@@ -1164,6 +1327,8 @@ function loadConfig(env = process.env) {
     frozenTtlMs: Number(env.DYNASTYEDGE_FROZEN_TTL_MS) || DEFAULT_FROZEN_TTL_MS,
     // Past seasons never change. The longest TTL here, and for that reason.
     historyTtlMs: Number(env.DYNASTYEDGE_HISTORY_TTL_MS) || DEFAULT_HISTORY_TTL_MS,
+    // rookie-intel and trade-values publish at most daily (mcp/feeds.js).
+    feedTtlMs: Number(env.DYNASTYEDGE_FEED_TTL_MS) || DEFAULT_FEED_TTL_MS,
     concurrency: Number(env.DYNASTYEDGE_CONCURRENCY) || 6,
     githubClientId: env.GITHUB_CLIENT_ID || DEFAULT_GITHUB_CLIENT_ID,
     // No default, deliberately. A server that starts without this would
@@ -1182,6 +1347,7 @@ var init_config = __esm({
     init_season();
     init_transactions();
     init_history();
+    init_feeds();
     DEFAULT_GITHUB_CLIENT_ID = "Ov23lipGgde1WRtguwMc";
     DEFAULT_ALLOWED_GITHUB_LOGIN = "chnates";
     DEFAULT_ORIGIN = "https://dynastyedge-mcp.vercel.app";
@@ -3110,8 +3276,8 @@ var init_doc = __esm({
         const lines = content.split("\n").filter((x) => x);
         const minIndent = Math.min(...lines.map((x) => x.length - x.trimStart().length));
         const dedented = lines.map((x) => x.slice(minIndent)).map((x) => " ".repeat(this.indent * 2) + x);
-        for (const line of dedented) {
-          this.content.push(line);
+        for (const line2 of dedented) {
+          this.content.push(line2);
         }
       }
       compile() {
@@ -25719,13 +25885,13 @@ var require_scope = __commonJS({
       }
     };
     exports.ValueScopeName = ValueScopeName;
-    var line = (0, code_1._)`\n`;
+    var line2 = (0, code_1._)`\n`;
     var ValueScope = class extends Scope {
       constructor(opts) {
         super(opts);
         this._values = {};
         this._scope = opts.scope;
-        this.opts = { ...opts, _n: opts.lines ? line : code_1.nil };
+        this.opts = { ...opts, _n: opts.lines ? line2 : code_1.nil };
       }
       get() {
         return this._scope;
@@ -32771,13 +32937,13 @@ var require_scope2 = __commonJS({
       }
     };
     exports.ValueScopeName = ValueScopeName;
-    var line = (0, code_1._)`\n`;
+    var line2 = (0, code_1._)`\n`;
     var ValueScope = class extends Scope {
       constructor(opts) {
         super(opts);
         this._values = {};
         this._scope = opts.scope;
-        this.opts = { ...opts, _n: opts.lines ? line : code_1.nil };
+        this.opts = { ...opts, _n: opts.lines ? line2 : code_1.nil };
       }
       get() {
         return this._scope;
@@ -40118,6 +40284,121 @@ function makeResolvers(playerMap, playerDB, pickEntries, pickIndex) {
   }
   return { playerAsset, pickAsset };
 }
+function buildTradeLedgers(seasons, resolvers) {
+  const byOwner = {};
+  seasons.forEach((s) => {
+    s.transactions.filter((tx) => tx.type === "trade").forEach((tx) => {
+      const rosterIds = tx.roster_ids ?? [];
+      rosterIds.forEach((rid) => {
+        const ownerId = s.ownerByRoster[rid];
+        if (!ownerId) return;
+        const got = [];
+        const gave = [];
+        Object.entries(tx.adds ?? {}).forEach(([pid, r]) => {
+          if (r === rid) got.push(resolvers.playerAsset(pid));
+        });
+        Object.entries(tx.drops ?? {}).forEach(([pid, r]) => {
+          if (r !== rid) return;
+          const receiverRoster = tx.adds?.[pid];
+          gave.push({
+            ...resolvers.playerAsset(pid),
+            receiverOwnerId: receiverRoster != null ? s.ownerByRoster[receiverRoster] ?? null : null
+          });
+        });
+        (tx.draft_picks ?? []).forEach((pk) => {
+          if (pk.owner_id === rid) got.push(resolvers.pickAsset(pk));
+          else if (pk.previous_owner_id === rid) gave.push({
+            ...resolvers.pickAsset(pk),
+            receiverOwnerId: s.ownerByRoster[pk.owner_id] ?? null
+          });
+        });
+        (tx.waiver_budget ?? []).forEach((wb) => {
+          if (wb.receiver === rid) {
+            got.push({ type: "faab", label: `$${wb.amount} FAAB`, value: 0, player: null });
+          }
+          if (wb.sender === rid) {
+            gave.push({
+              type: "faab",
+              label: `$${wb.amount} FAAB`,
+              value: 0,
+              player: null,
+              receiverOwnerId: s.ownerByRoster[wb.receiver] ?? null
+            });
+          }
+        });
+        if (got.length === 0 && gave.length === 0) return;
+        const gotValue = got.reduce((sum, a) => sum + a.value, 0);
+        const gaveValue = gave.reduce((sum, a) => sum + a.value, 0);
+        const net = gotValue - gaveValue;
+        const size = Math.max(gotValue, gaveValue);
+        const result = size > 0 && Math.abs(net) / size > TRADE_EDGE ? net > 0 ? "win" : "loss" : "even";
+        if (!byOwner[ownerId]) byOwner[ownerId] = [];
+        byOwner[ownerId].push({
+          txId: tx.transaction_id,
+          season: s.season,
+          week: tx.week,
+          date: tx.status_updated ?? null,
+          got,
+          gave,
+          gotValue,
+          gaveValue,
+          net,
+          result,
+          partnerOwnerIds: rosterIds.filter((r) => r !== rid).map((r) => s.ownerByRoster[r]).filter(Boolean)
+        });
+      });
+    });
+  });
+  const assetKey = (a) => a.type === "player" ? `p:${a.id}` : a.type === "pick" ? `k:${a.pickKey}` : null;
+  Object.values(byOwner).forEach((ledger) => {
+    ledger.sort((a, b) => (b.date ?? 0) - (a.date ?? 0));
+    ledger.forEach((trade) => {
+      trade.got.forEach((a) => {
+        const key = assetKey(a);
+        if (!key) return;
+        a.flipped = ledger.some(
+          (t2) => (t2.date ?? 0) > (trade.date ?? 0) && t2.gave.some((g) => assetKey(g) === key)
+        );
+      });
+    });
+  });
+  return byOwner;
+}
+function buildFaabStats(seasons, resolvers) {
+  const byOwner = {};
+  function entry(ownerId) {
+    if (!byOwner[ownerId]) {
+      byOwner[ownerId] = { budgetsCommitted: 0, claims: 0, valueAcquired: 0, faMoves: 0, bids: [] };
+    }
+    return byOwner[ownerId];
+  }
+  seasons.forEach((s) => {
+    const budget = faabBudgetOf(s.faabBudget);
+    s.transactions.forEach((tx) => {
+      const ownerId = s.ownerByRoster[tx.roster_ids?.[0]];
+      if (!ownerId) return;
+      const adds = Object.keys(tx.adds ?? {});
+      if (tx.type === "waiver" && adds.length > 0) {
+        const e = entry(ownerId);
+        const share = (tx.settings?.waiver_bid ?? 0) / budget;
+        e.claims += 1;
+        e.budgetsCommitted += share;
+        if (share > 0) e.bids.push(share * 100);
+        adds.forEach((pid) => {
+          e.valueAcquired += resolvers.playerAsset(pid).value;
+        });
+      } else if (tx.type === "free_agent" && adds.length > 0) {
+        entry(ownerId).faMoves += 1;
+      }
+    });
+  });
+  Object.values(byOwner).forEach((e) => {
+    e.avgBidPct = e.bids.length ? e.bids.reduce((a, b) => a + b, 0) / e.bids.length : null;
+    e.valuePerBudget = e.budgetsCommitted > 0 ? Math.round(e.valueAcquired / e.budgetsCommitted) : null;
+    delete e.bids;
+  });
+  return byOwner;
+}
 function buildDraftRecords(seasons, resolvers) {
   const byOwner = {};
   seasons.forEach((s) => {
@@ -40160,21 +40441,230 @@ function buildDraftRecords(seasons, resolvers) {
   });
   return result;
 }
+function avg(arr) {
+  return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+}
+function buildTendencies(ledger, faab, leagueAvgBidPct) {
+  const labels = [];
+  let picksGot = 0;
+  let picksGave = 0;
+  const agesGot = [];
+  const agesGave = [];
+  const posGot = {};
+  (ledger ?? []).forEach((t) => {
+    t.got.forEach((a) => {
+      if (a.type === "pick") picksGot += 1;
+      if (a.type === "player") {
+        if (a.age != null) agesGot.push(a.age);
+        if (a.position) posGot[a.position] = (posGot[a.position] ?? 0) + 1;
+      }
+    });
+    t.gave.forEach((a) => {
+      if (a.type === "pick") picksGave += 1;
+      if (a.type === "player" && a.age != null) agesGave.push(a.age);
+    });
+  });
+  if (picksGot - picksGave >= 2) labels.push("Accumulates picks");
+  else if (picksGave - picksGot >= 2) labels.push("Ships picks out");
+  const ageGot = avg(agesGot);
+  const ageGave = avg(agesGave);
+  if (ageGot != null && ageGave != null && agesGot.length >= 2 && agesGave.length >= 2) {
+    if (ageGave - ageGot >= 1.5) labels.push("Buys youth");
+    else if (ageGot - ageGave >= 1.5) labels.push("Buys veterans");
+  }
+  const topPos = Object.entries(posGot).sort((a, b) => b[1] - a[1])[0];
+  if (topPos && topPos[1] >= 3) labels.push(`Chases ${topPos[0]}s`);
+  if (faab?.avgBidPct != null && leagueAvgBidPct != null && leagueAvgBidPct > 0) {
+    if (faab.avgBidPct >= leagueAvgBidPct * 1.5) labels.push("Aggressive bidder");
+    else if (faab.avgBidPct <= leagueAvgBidPct * 0.5 && faab.claims >= 3) labels.push("Bargain hunter");
+  }
+  return { labels: labels.slice(0, 3), picksGot, picksGave, ageGot, ageGave, posGot };
+}
+function activityLabel(tradeCount, seasonCount) {
+  if (tradeCount === 0) return "No trades yet";
+  const rate = tradeCount / Math.max(1, seasonCount);
+  if (rate >= 2.5) return "Active dealer";
+  if (rate >= 1) return "Occasional dealer";
+  return "Rarely trades";
+}
+function rankOf(profiles, ownerId, metric, filterFn = () => true) {
+  const pool = profiles.filter(filterFn).sort((a, b) => metric(b) - metric(a));
+  const i = pool.findIndex((p) => p.ownerId === ownerId);
+  return i === -1 ? null : { rank: i + 1, of: pool.length };
+}
+function fmtNet(net) {
+  return `${net >= 0 ? "+" : "\u2212"}${Math.abs(Math.round(net)).toLocaleString()}`;
+}
+function buildMyInsights(profiles, me) {
+  if (!me) return { strengths: [], workOn: [] };
+  const strengths = [];
+  const workOn = [];
+  if (me.tradeCount > 0) {
+    const r = rankOf(profiles, me.ownerId, (p) => p.netValue, (p) => p.tradeCount > 0);
+    if (r && me.netValue > 0 && r.rank <= 3) {
+      strengths.push(`Your trades are up ${fmtNet(me.netValue)} at today's values \u2014 #${r.rank} dealmaker of ${r.of} who've traded.`);
+    } else if (me.netValue < -500) {
+      workOn.push(`Your trades are down ${fmtNet(me.netValue)} at today's values \u2014 get a second look before accepting.`);
+    }
+    const winRate = me.tradeWins / me.tradeCount;
+    if (me.tradeCount >= 3) {
+      if (winRate >= 0.6) strengths.push(`You've won ${me.tradeWins} of ${me.tradeCount} trades (beat the other side by 5%+).`);
+      else if (winRate <= 0.3) workOn.push(`Only ${me.tradeWins} of ${me.tradeCount} trades have gone your way \u2014 you may be anchoring on the wrong values.`);
+    }
+    if (me.biggestLoss && me.biggestLoss.net < -1e3) {
+      workOn.push(`Worst deal: gave up ${me.biggestLoss.gave.map((a) => a.label).join(", ")} (${fmtNet(me.biggestLoss.net)}) \u2014 study what went wrong.`);
+    }
+    if (me.biggestWin && me.biggestWin.net > 1e3) {
+      strengths.push(`Best deal: landed ${me.biggestWin.got.map((a) => a.label).join(", ")} (${fmtNet(me.biggestWin.net)}).`);
+    }
+  } else {
+    workOn.push(`You haven't completed a trade yet \u2014 the most active managers are reshaping their rosters around you.`);
+  }
+  if (me.faab.budgetsCommitted >= FAAB_COACHING_MIN_BUDGETS && me.faab.valuePerBudget != null) {
+    const r = rankOf(
+      profiles,
+      me.ownerId,
+      (p) => p.faab.valuePerBudget ?? -1,
+      (p) => (p.faab.budgetsCommitted ?? 0) >= FAAB_COACHING_MIN_BUDGETS
+    );
+    if (r && r.of >= 3) {
+      if (r.rank === 1) strengths.push(`Best FAAB efficiency in the league \u2014 ${me.faab.valuePerBudget.toLocaleString()} value per full budget spent.`);
+      else if (r.rank === r.of) workOn.push(`Lowest FAAB efficiency in the league (${me.faab.valuePerBudget.toLocaleString()} value per full budget) \u2014 save your dollars for real targets.`);
+    }
+  }
+  if (me.draft.count >= 3) {
+    if (me.draft.avgDelta >= 2) strengths.push(`Your rookie picks beat their draft slot by ${me.draft.avgDelta} spots on average \u2014 trust your board.`);
+    else if (me.draft.avgDelta <= -2) workOn.push(`Your rookie picks lag their slot by ${Math.abs(me.draft.avgDelta)} spots on average \u2014 consider trading picks for proven players.`);
+    if (me.draft.hits >= 2) strengths.push(`${me.draft.hits} of your ${me.draft.count} rookie picks are now worth 1,000+.`);
+  }
+  if (strengths.length === 0) strengths.push("No standout edge yet \u2014 your history is still building.");
+  if (workOn.length === 0) workOn.push("No glaring leaks in your trade, waiver, or draft history. Stay sharp.");
+  return { strengths: strengths.slice(0, 3), workOn: workOn.slice(0, 3) };
+}
+function tradeTimeTotals(archive, trade) {
+  const entry = archive?.trades?.[trade?.txId];
+  if (!entry) return null;
+  function sideTotal(assets) {
+    let total = 0;
+    for (const a of assets ?? []) {
+      if (a.type === "faab") continue;
+      const v = a.type === "player" ? entry.players?.[a.id] : entry.picks?.[a.pickKey];
+      if (v == null) return null;
+      total += v;
+    }
+    return total;
+  }
+  const gotThen = sideTotal(trade.got);
+  const gaveThen = sideTotal(trade.gave);
+  if (gotThen == null || gaveThen == null) return null;
+  return { gotThen, gaveThen };
+}
 function buildDraftGrades({ history, currentLeague, playerMap, pickEntries, playerDB }) {
   if (!currentLeague?.allRosters) return {};
   const seasons = normalizeSeasons(history, currentLeague);
   const resolvers = makeResolvers(playerMap, playerDB ?? {}, pickEntries ?? [], buildPickIndex(seasons));
   return buildDraftRecords(seasons, resolvers);
 }
-var ROUND_LABELS, STARTUP_ROUNDS, DRAFT_HIT_VALUE, STEAL_DELTA, DEFAULT_FAAB_BUDGET;
+function buildManagerProfiles({ history, currentLeague, playerMap, pickEntries, playerDB, myOwnerId }) {
+  const seasons = normalizeSeasons(history, currentLeague);
+  const pickIndex = buildPickIndex(seasons);
+  const resolvers = makeResolvers(playerMap, playerDB ?? {}, pickEntries ?? [], pickIndex);
+  const ledgers = buildTradeLedgers(seasons, resolvers);
+  const faabStats = buildFaabStats(seasons, resolvers);
+  const draftRecords = buildDraftRecords(seasons, resolvers);
+  const allBids = Object.values(faabStats).flatMap((f) => f.avgBidPct != null ? [f.avgBidPct] : []);
+  const leagueAvgBidPct = avg(allBids);
+  const seasonList = seasons.map((s) => s.season);
+  const currentSeason = seasonList[0];
+  const profiles = currentLeague.allRosters.filter((r) => r.owner?.user_id).map((r) => {
+    const ownerId = r.owner.user_id;
+    const ledger = ledgers[ownerId] ?? [];
+    const seasonsActive = seasons.filter((s) => Object.values(s.ownerByRoster).includes(ownerId)).map((s) => s.season);
+    const wins = ledger.filter((t) => t.result === "win").length;
+    const losses = ledger.filter((t) => t.result === "loss").length;
+    const netValue = ledger.reduce((sum, t) => sum + t.net, 0);
+    const byNet = [...ledger].sort((a, b) => b.net - a.net);
+    const faab = faabStats[ownerId] ?? { ...EMPTY_FAAB };
+    const tendencies = buildTendencies(ledger, faab, leagueAvgBidPct);
+    const aggRecord = { wins: 0, losses: 0, ties: 0 };
+    seasons.forEach((s) => {
+      const rec = s.recordByOwner[ownerId];
+      if (!rec) return;
+      aggRecord.wins += rec.wins ?? 0;
+      aggRecord.losses += rec.losses ?? 0;
+      aggRecord.ties += rec.ties ?? 0;
+    });
+    return {
+      ownerId,
+      rosterId: r.rosterId,
+      user: r.owner,
+      isMe: ownerId === myOwnerId,
+      seasonsActive,
+      record: aggRecord,
+      trades: ledger,
+      tradeCount: ledger.length,
+      tradeWins: wins,
+      tradeLosses: losses,
+      tradeEvens: ledger.length - wins - losses,
+      tradesThisSeason: ledger.filter((t) => t.season === currentSeason).length,
+      netValue,
+      biggestWin: byNet[0]?.net > 0 ? byNet[0] : null,
+      biggestLoss: byNet[byNet.length - 1]?.net < 0 ? byNet[byNet.length - 1] : null,
+      tendencies: tendencies.labels,
+      tendencyDetail: tendencies,
+      activity: activityLabel(ledger.length, seasonsActive.length),
+      faab,
+      draft: draftRecords[ownerId] ?? { picks: [], count: 0, totalValue: 0, hits: 0, avgDelta: 0, best: null }
+    };
+  });
+  const my = profiles.find((p) => p.isMe) ?? null;
+  if (my) {
+    const vsMe = {};
+    my.trades.forEach((t) => {
+      t.partnerOwnerIds.forEach((oid) => {
+        if (!vsMe[oid]) vsMe[oid] = { trades: 0, myNet: 0 };
+        vsMe[oid].trades += 1;
+        vsMe[oid].myNet += t.net;
+      });
+    });
+    profiles.forEach((p) => {
+      p.vsMe = p.isMe ? null : vsMe[p.ownerId] ?? null;
+    });
+  }
+  const userNameById = {};
+  seasons.forEach((s) => {
+    Object.values(s.userById ?? {}).forEach((u) => {
+      if (u?.user_id && !userNameById[u.user_id]) userNameById[u.user_id] = u;
+    });
+  });
+  return {
+    profiles,
+    my,
+    seasonList,
+    // ['2026', '2025', ...] newest first
+    userById: userNameById,
+    insights: buildMyInsights(profiles, my)
+  };
+}
+var ROUND_LABELS, TRADE_EDGE, STARTUP_ROUNDS, DRAFT_HIT_VALUE, STEAL_DELTA, FAAB_COACHING_MIN_BUDGETS, DEFAULT_FAAB_BUDGET, EMPTY_FAAB;
 var init_managerAnalysis = __esm({
   "src/utils/managerAnalysis.js"() {
     init_pickCapital();
     ROUND_LABELS = ["", "1st", "2nd", "3rd", "4th", "5th"];
+    TRADE_EDGE = 0.05;
     STARTUP_ROUNDS = 6;
     DRAFT_HIT_VALUE = 1e3;
     STEAL_DELTA = 5;
+    FAAB_COACHING_MIN_BUDGETS = 0.2;
     DEFAULT_FAAB_BUDGET = 100;
+    EMPTY_FAAB = {
+      budgetsCommitted: 0,
+      claims: 0,
+      valueAcquired: 0,
+      faMoves: 0,
+      avgBidPct: null,
+      valuePerBudget: null
+    };
   }
 });
 
@@ -40506,11 +40996,11 @@ function computeLeagueAverages(allRosters) {
     });
   });
   const n = allRosters.length || 1;
-  const avg = {};
+  const avg2 = {};
   POSITIONS.forEach((pos) => {
-    avg[pos] = sums[pos] / n;
+    avg2[pos] = sums[pos] / n;
   });
-  return avg;
+  return avg2;
 }
 function getPositionalDeltas(roster, leagueAverages) {
   const strength = getPositionalStrength(roster);
@@ -40693,7 +41183,7 @@ async function getNews({
   force = false,
   fetcher,
   concurrency = 6,
-  store = defaultStore6
+  store = defaultStore7
 } = {}) {
   const get = fetcher ?? createFetcher({ concurrency });
   const loaded = await loadSource(
@@ -40784,7 +41274,7 @@ function newsNotes(feed, { nearKickoff = false } = {}) {
   }
   return notes;
 }
-var DEFAULT_NEWS_TTL_MS, NEWS_STALE_MINUTES, NEWS_KEY, defaultStore6;
+var DEFAULT_NEWS_TTL_MS, NEWS_STALE_MINUTES, NEWS_KEY, defaultStore7;
 var init_news = __esm({
   "mcp/news.js"() {
     init_constants();
@@ -40794,7 +41284,7 @@ var init_news = __esm({
     DEFAULT_NEWS_TTL_MS = 10 * 60 * 1e3;
     NEWS_STALE_MINUTES = 35;
     NEWS_KEY = "news:feed";
-    defaultStore6 = memoryStore();
+    defaultStore7 = memoryStore();
   }
 });
 
@@ -41149,9 +41639,9 @@ function buildRosterTrajectory(roster, currentSeasonYear, curves, genericCurve) 
 }
 function seriesDirection(series) {
   if (!series?.length || !series[0]) return "stable";
-  const pct2 = (series[series.length - 1] - series[0]) / series[0];
-  if (pct2 > 0.05) return "ascending";
-  if (pct2 < -0.05) return "declining";
+  const pct3 = (series[series.length - 1] - series[0]) / series[0];
+  if (pct3 > 0.05) return "ascending";
+  if (pct3 < -0.05) return "declining";
   return "stable";
 }
 function getTrajectoryRead(trajectory) {
@@ -41966,9 +42456,9 @@ function parsePickQuery(raw) {
   const q = String(raw).trim().toLowerCase();
   const m = q.match(PICK_RE);
   if (m) {
-    const round = Number(m[2] ?? m[3] ?? m[4]);
+    const round4 = Number(m[2] ?? m[3] ?? m[4]);
     const slot = m[5] ? Number(m[5]) : null;
-    if (round >= 1 && round <= 6) return { season: m[1], round, slot };
+    if (round4 >= 1 && round4 <= 6) return { season: m[1], round: round4, slot };
   }
   const w = q.match(/^(20\d{2})\s*(first|second|third|fourth)\b/);
   if (w) return { season: w[1], round: WORD_ROUND[w[2]], slot: null };
@@ -42058,11 +42548,11 @@ function resolveOne(query, { universe, league, values }) {
     reason: candidates.length === 1 ? "Unique match." : candidates.length === 0 ? `No player matching "${raw}" is rostered in this league or priced by FantasyCalc.` : `"${raw}" matches ${candidates.length} players \u2014 pass the sleeperId of the one you mean.`
   };
 }
-function resolvePick(raw, { season, round, slot }, league, values) {
+function resolvePick(raw, { season, round: round4, slot }, league, values) {
   const owners = [];
   league.allRosters.forEach((r) => {
     r.picks.forEach((pk) => {
-      if (String(pk.season) !== String(season) || pk.round !== round) return;
+      if (String(pk.season) !== String(season) || pk.round !== round4) return;
       if (slot != null && pk.slot !== slot) return;
       owners.push({ roster: r, pick: pk });
     });
@@ -42085,17 +42575,17 @@ function resolvePick(raw, { season, round, slot }, league, values) {
     originalOwnerRosterId: pick2.originalOwner,
     originalOwnerTeam: pick2.originalOwner === roster.rosterId ? null : getTeamName(league.userMap[pick2.originalOwner])
   })).sort((a, b) => (a.slot ?? 99) - (b.slot ?? 99) || a.ownerRosterId - b.ownerRosterId);
-  const marketValue = slot != null ? findExactSlotValue({ season, round, slot }, values.pickEntries) : findPickValue({ season, round }, values.pickEntries);
+  const marketValue = slot != null ? findExactSlotValue({ season, round: round4, slot }, values.pickEntries) : findPickValue({ season, round: round4 }, values.pickEntries);
   return {
     query: raw,
     kind: "pick",
-    parsed: { season: String(season), round, slot },
+    parsed: { season: String(season), round: round4, slot },
     marketValue: marketValue || null,
     match: candidates.length === 1 ? candidates[0] : null,
     candidates: candidates.slice(0, MAX_CANDIDATES_PER_QUERY),
     truncated: candidates.length > MAX_CANDIDATES_PER_QUERY,
     totalCandidates: candidates.length,
-    reason: candidates.length === 1 ? "Unique match." : candidates.length === 0 ? `No team in this league owns a ${season} round ${round}${slot != null ? ` pick at slot ${slot}` : ""} pick. It may already have been spent, or the season may be outside the tradable three-year window.` : `${candidates.length} teams own a ${season} round ${round} pick \u2014 say whose, or pass the exact slot.`
+    reason: candidates.length === 1 ? "Unique match." : candidates.length === 0 ? `No team in this league owns a ${season} round ${round4}${slot != null ? ` pick at slot ${slot}` : ""} pick. It may already have been spent, or the season may be outside the tradable three-year window.` : `${candidates.length} teams own a ${season} round ${round4} pick \u2014 say whose, or pass the exact slot.`
   };
 }
 function describePlayer({ p, roster }) {
@@ -43118,8 +43608,8 @@ var init_tradeAnalysis = __esm({
     });
     SEAT_VOICE = {
       them: {
-        valueAhead: (pct2) => `They come out ${pct2}% ahead on raw dynasty value.`,
-        valueBehind: (pct2) => `They'd be giving up ${pct2}% more value than they get back.`,
+        valueAhead: (pct3) => `They come out ${pct3}% ahead on raw dynasty value.`,
+        valueBehind: (pct3) => `They'd be giving up ${pct3}% more value than they get back.`,
         benchedStack: (names, positions) => `${names} wouldn't crack their lineup \u2014 they're already above league average at ${positions}.`,
         marginalStack: (positions) => `They're already above league average at ${positions} \u2014 this is a marginal upgrade for them, not a hole filled.`,
         lineupGain: (n) => `Their best starting lineup gains ${n} in value.`,
@@ -43136,8 +43626,8 @@ var init_tradeAnalysis = __esm({
         }
       },
       you: {
-        valueAhead: (pct2) => `You come out ${pct2}% ahead on raw dynasty value.`,
-        valueBehind: (pct2) => `You'd be giving up ${pct2}% more value than you get back.`,
+        valueAhead: (pct3) => `You come out ${pct3}% ahead on raw dynasty value.`,
+        valueBehind: (pct3) => `You'd be giving up ${pct3}% more value than you get back.`,
         benchedStack: (names, positions) => `${names} wouldn't crack your lineup \u2014 you're already above league average at ${positions}.`,
         marginalStack: (positions) => `You're already above league average at ${positions} \u2014 this is a marginal upgrade, not a hole filled.`,
         lineupGain: (n) => `Your best starting lineup gains ${n} in value.`,
@@ -43555,7 +44045,7 @@ function renderTradeText(a) {
   }
   if (a.pitch) {
     L.push("PITCH IT");
-    String(a.pitch.text).split("\n").forEach((line) => L.push(`  ${line}`));
+    String(a.pitch.text).split("\n").forEach((line2) => L.push(`  ${line2}`));
     L.push("");
   }
   a.notes.forEach((n) => L.push(`Note: ${n}`));
@@ -44689,6 +45179,568 @@ var init_findTradeTargets = __esm({
   }
 });
 
+// src/utils/rookieAdp.js
+function buildRookieMap(playerDB) {
+  const map2 = {};
+  Object.entries(playerDB ?? {}).forEach(([player_id, p]) => {
+    const isRookie = p.years_exp === 0 || p.years_exp == null && p.age != null && p.age <= 25;
+    if (!isRookie) return;
+    if (!ROOKIE_POSITIONS.has(p.position)) return;
+    if (!p.name) return;
+    map2[player_id] = {
+      sleeperId: player_id,
+      name: p.name,
+      position: p.position,
+      team: p.team,
+      age: p.age,
+      value: 0
+    };
+  });
+  return map2;
+}
+function assignRookieAdp(prospects) {
+  const adpById = new Map(
+    prospects.filter((p) => p.overallRank != null).sort((a, b) => a.overallRank - b.overallRank).map((p, i) => [p.sleeperId, i + 1])
+  );
+  return prospects.map((p) => ({ ...p, adp: adpById.get(p.sleeperId) ?? null }));
+}
+function buildRookieProspects(rookieMap, playerMap) {
+  if (!rookieMap) return [];
+  const nameToFC = {};
+  if (playerMap) {
+    Object.values(playerMap).forEach((e) => {
+      if (e.name) nameToFC[e.name.toLowerCase()] = e;
+    });
+  }
+  return assignRookieAdp(Object.values(rookieMap).map((rookieEntry) => {
+    const mainEntry = playerMap?.[rookieEntry.sleeperId];
+    if (mainEntry) return { ...mainEntry };
+    const nameMatch = nameToFC[rookieEntry.name?.toLowerCase()];
+    if (nameMatch) return { ...nameMatch, sleeperId: rookieEntry.sleeperId };
+    return { ...rookieEntry, adpOnly: true };
+  }));
+}
+var ROOKIE_POSITIONS;
+var init_rookieAdp = __esm({
+  "src/utils/rookieAdp.js"() {
+    ROOKIE_POSITIONS = /* @__PURE__ */ new Set(["QB", "RB", "WR", "TE"]);
+  }
+});
+
+// src/utils/rookieResearch.js
+function depthBucket(rank) {
+  if (rank == null || rank >= 4) return 4;
+  return rank < 1 ? 1 : rank;
+}
+function depthScore(position, rank) {
+  const row = DEPTH_VALUE[position];
+  if (!row) return 0;
+  return row[depthBucket(rank)] / DEPTH_MAX;
+}
+function capitalScore(pick2) {
+  if (pick2 == null) return UDFA_SCORE;
+  if (pick2 <= 1) return 1;
+  return Math.max(0, 1 - Math.log(pick2) / Math.log(LAST_PICK));
+}
+function opportunityScore({ position, rank, pick: pick2 }) {
+  return DEPTH_WEIGHT * depthScore(position, rank) + (1 - DEPTH_WEIGHT) * capitalScore(pick2);
+}
+function dynastyOpportunityScore({ position, rank, pick: pick2, age }) {
+  const base = opportunityScore({ position, rank, pick: pick2 });
+  const z2 = ageAtDraftZ(position, age);
+  if (z2 == null) return base;
+  return Math.max(0, Math.min(1, base + AGE_Z_COEFF * z2));
+}
+function ageAtDraftZ(position, age) {
+  const b = AGE_BASELINE[position];
+  if (!b?.sd || age == null || !Number.isFinite(age)) return null;
+  return (b.mean - age) / b.sd;
+}
+function positionArticle(position) {
+  return position === "RB" ? "an" : "a";
+}
+function campMove(ranks) {
+  if (!Array.isArray(ranks)) return null;
+  const points = ranks.filter((r) => r != null);
+  if (points.length < 2) return null;
+  const from = points[0];
+  const to = points[points.length - 1];
+  if (from === to) return null;
+  return { from, to, delta: from - to, direction: to < from ? "up" : "down" };
+}
+function depthLabel(position, rank, ahead = []) {
+  if (rank == null) return "Not on the depth chart";
+  const blocker = ahead.length ? ahead[ahead.length - 1] : null;
+  if (rank === 1) return "Listed first at his spot";
+  if (rank === 2) {
+    if (position === "QB") return blocker ? `Backup behind ${blocker}` : "Listed second";
+    if (position === "RB") return blocker ? `Splitting behind ${blocker}` : "Listed second";
+    return blocker ? `One spot behind ${blocker}` : "Listed second";
+  }
+  if (rank === 3) return "Third at his spot";
+  return "Buried on the depth chart";
+}
+function scoreReasons({ position, rank, pick: pick2, round: round4, age }) {
+  const out = [];
+  if (pick2 != null) {
+    if (pick2 <= 32) out.push({ tone: "good", text: `First-round capital (pick ${pick2})` });
+    else if (pick2 <= 100) out.push({ tone: "good", text: `Day-two capital (round ${round4 ?? "2-3"}, pick ${pick2})` });
+    else out.push({ tone: "flat", text: `Day-three capital (pick ${pick2})` });
+  } else {
+    out.push({ tone: "bad", text: "Undrafted \u2014 no capital invested" });
+  }
+  const bucket = depthBucket(rank);
+  if (bucket === 1) out.push({ tone: "good", text: `Starting-caliber ${position} snaps in reach` });
+  else if (bucket === 2) out.push({ tone: "flat", text: "One move from a starting role" });
+  else if (bucket === 3) out.push({ tone: position === "RB" ? "flat" : "bad", text: "Third on the depth chart" });
+  else out.push({ tone: "bad", text: "No clear path to snaps yet" });
+  const ageZ = ageAtDraftZ(position, age);
+  const art = positionArticle(position);
+  if (ageZ != null && ageZ >= 0.75) {
+    out.push({ tone: "good", text: `Young for ${art} ${position} at ${age.toFixed(1)} \u2014 more upside years` });
+  } else if (ageZ != null && ageZ <= -0.75) {
+    out.push({ tone: "bad", text: `Old for ${art} ${position} at ${age.toFixed(1)} \u2014 fewer upside years` });
+  }
+  return out;
+}
+function buildRookieResearch(prospects, intel) {
+  if (!Array.isArray(prospects) || !prospects.length) return [];
+  const feed = intel?.players ?? null;
+  const rows = prospects.map((p) => {
+    const entry = feed?.[String(p.sleeperId)] ?? null;
+    const position = p.position ?? entry?.pos ?? null;
+    const rank = entry?.rank ?? null;
+    const pick2 = entry?.pick ?? null;
+    const base = {
+      sleeperId: String(p.sleeperId),
+      name: p.name ?? entry?.name ?? "Unknown",
+      position,
+      team: p.maybeTeam ?? p.team ?? entry?.team ?? null,
+      value: p.value ?? null,
+      overallRank: p.overallRank ?? null,
+      // positionRank and age are not used by the model — they are carried so a
+      // row can be handed straight to PlayerProfileDrawer, which grades and
+      // labels a player from them. Dropping them (the shape shipped first) made
+      // the drawer read `positionRank ?? 99` and stamp every rookie opened from
+      // this page "D — Deep Stash", with no age in the header.
+      positionRank: p.positionRank ?? null,
+      age: p.age ?? null,
+      trend30Day: p.trend30Day ?? null,
+      adp: p.adp ?? null,
+      rank,
+      slot: entry?.slot ?? null,
+      pick: pick2,
+      round: entry?.round ?? null,
+      ahead: entry?.ahead ?? [],
+      move: campMove(entry?.ranks),
+      // Measurables ride along untouched from the feed. They are DISPLAY ONLY
+      // (see the null above) — nothing below reads them, and `opportunityScore`
+      // is not passed them, so a feed that starts or stops carrying them can
+      // never move a single score.
+      ageAtDraft: entry?.age ?? null,
+      height: entry?.ht ?? null,
+      weight: entry?.wt ?? null,
+      forty: entry?.forty ?? null,
+      vert: entry?.vert ?? null,
+      broad: entry?.broad ?? null,
+      noData: !entry
+    };
+    if (!entry || !position) {
+      return { ...base, score: null, reasons: [], tier: null, depthText: null, ageTilted: false };
+    }
+    const score = dynastyOpportunityScore({ position, rank, pick: pick2, age: base.ageAtDraft });
+    return {
+      ...base,
+      score,
+      // Whether the age tilt actually applied. The UI says so rather than
+      // implying every score is on the same basis — an untilted rookie is
+      // scored on year-1 opportunity alone.
+      ageTilted: ageAtDraftZ(position, base.ageAtDraft) != null,
+      tier: tierOf(score),
+      reasons: scoreReasons({ position, rank, pick: pick2, round: base.round, age: base.ageAtDraft }),
+      depthText: depthLabel(position, rank, base.ahead)
+    };
+  });
+  const eligible = rows.filter((r) => r.score != null && r.value != null && r.value > 0 && r.position);
+  const marketRank = /* @__PURE__ */ new Map();
+  const modelRank = /* @__PURE__ */ new Map();
+  const byPosition = /* @__PURE__ */ new Map();
+  for (const r of eligible) {
+    if (!byPosition.has(r.position)) byPosition.set(r.position, []);
+    byPosition.get(r.position).push(r);
+  }
+  for (const group of byPosition.values()) {
+    [...group].sort((a, b) => b.value - a.value).forEach((r, i) => marketRank.set(r.sleeperId, i + 1));
+    [...group].sort((a, b) => b.score - a.score).forEach((r, i) => modelRank.set(r.sleeperId, i + 1));
+  }
+  return rows.map((r) => {
+    const mkt = marketRank.get(r.sleeperId) ?? null;
+    const mod = modelRank.get(r.sleeperId) ?? null;
+    return {
+      ...r,
+      marketRank: mkt,
+      modelRank: mod,
+      // Positive = the model likes him more than the market does, among the
+      // other rookies at his position.
+      divergence: mkt != null && mod != null ? mkt - mod : null
+    };
+  });
+}
+function buildTeamFit(rows, { deficits, tier } = {}) {
+  if (!Array.isArray(rows)) return [];
+  const needs = deficits instanceof Set ? deficits : new Set(deficits ?? []);
+  const maxValue = rows.reduce((m, r) => Math.max(m, r.value ?? 0), 0);
+  return rows.map((row) => {
+    const fitsNeed = row.position != null && needs.has(row.position);
+    if (row.score == null) return { ...row, fit: null, fitReasons: [], fitsNeed };
+    const market = maxValue > 0 ? (row.value ?? 0) / maxValue : 0;
+    let fit = (1 - FIT_MARKET_WEIGHT) * row.score + FIT_MARKET_WEIGHT * market;
+    const fitReasons = [];
+    if (fitsNeed) {
+      fit += FIT_NEED_BONUS;
+      fitReasons.push(`Fills your ${row.position} need`);
+    }
+    if (row.divergence != null && row.divergence >= 5) {
+      fit += FIT_DIVERGENCE_BONUS;
+      fitReasons.push(`Model rates him ${row.divergence} spots above the market`);
+    }
+    if (tier === "Contending" && depthBucket(row.rank) === 1) {
+      fit += FIT_WINDOW_BONUS;
+      fitReasons.push("In line to play right away \u2014 you're contending");
+    } else if (tier === "Rebuilding" && row.pick != null && row.pick <= EARLY_CAPITAL) {
+      fit += FIT_WINDOW_BONUS;
+      fitReasons.push("Early NFL capital worth developing \u2014 you're rebuilding");
+    }
+    return { ...row, fit, fitReasons, fitsNeed };
+  });
+}
+function topTargets(rows, { limit = 4 } = {}) {
+  return rows.filter((r) => r.fit != null).sort((a, b) => b.fit - a.fit || (b.value ?? 0) - (a.value ?? 0)).slice(0, limit);
+}
+function splitDivergence(rows, { minGap = 5, limit = 6 } = {}) {
+  const scored = rows.filter((r) => r.divergence != null);
+  const undervalued = scored.filter((r) => r.divergence >= minGap).sort((a, b) => b.divergence - a.divergence).slice(0, limit);
+  const overvalued = scored.filter((r) => r.divergence <= -minGap).sort((a, b) => a.divergence - b.divergence).slice(0, limit);
+  return { undervalued, overvalued };
+}
+function buildRookieBoard({ rookieMap, playerMap, intel, league } = {}) {
+  if (!rookieMap) return EMPTY_ROOKIE_BOARD;
+  const myRoster = league?.myRoster;
+  const allRosters = league?.allRosters;
+  const deficits = myRoster && allRosters?.length ? getDeficitPositions(myRoster, allRosters) : /* @__PURE__ */ new Set();
+  const tier = myRoster && allRosters?.length ? getWinWindowTier(myRoster.rosterId, allRosters) : null;
+  const prospects = buildRookieProspects(rookieMap, playerMap);
+  const rows = buildTeamFit(buildRookieResearch(prospects, intel), { deficits, tier });
+  return { rows, byId: new Map(rows.map((r) => [r.sleeperId, r])), deficits, tier };
+}
+var DEPTH_VALUE, DEPTH_WEIGHT, UDFA_SCORE, LAST_PICK, DEPTH_MAX, AGE_TILT_WEIGHT, AGE_Z_COEFF, AGE_BASELINE, tierOf, FIT_MARKET_WEIGHT, FIT_NEED_BONUS, FIT_DIVERGENCE_BONUS, FIT_WINDOW_BONUS, EARLY_CAPITAL, EMPTY_ROOKIE_BOARD;
+var init_rookieResearch = __esm({
+  "src/utils/rookieResearch.js"() {
+    init_rookieAdp();
+    init_recommendations();
+    init_rosterAnalysis();
+    DEPTH_VALUE = {
+      QB: { 1: 212, 2: 55, 3: 19, 4: 0 },
+      RB: { 1: 120, 2: 76, 3: 38, 4: 3 },
+      WR: { 1: 154, 2: 43, 3: 17, 4: 4 },
+      TE: { 1: 102, 2: 41, 3: 23, 4: 0 }
+    };
+    DEPTH_WEIGHT = 0.3;
+    UDFA_SCORE = 0.05;
+    LAST_PICK = 260;
+    DEPTH_MAX = Math.max(...Object.values(DEPTH_VALUE).flatMap((row) => Object.values(row)));
+    AGE_TILT_WEIGHT = 0.1;
+    AGE_Z_COEFF = 0.25 * AGE_TILT_WEIGHT / (1 - AGE_TILT_WEIGHT);
+    AGE_BASELINE = {
+      QB: { mean: 22.75, sd: 1.06 },
+      RB: { mean: 22.09, sd: 0.88 },
+      WR: { mean: 22.15, sd: 0.89 },
+      TE: { mean: 22.45, sd: 0.88 }
+    };
+    tierOf = (score) => score >= 0.62 ? "strong" : score >= 0.38 ? "fair" : "weak";
+    FIT_MARKET_WEIGHT = 0.45;
+    FIT_NEED_BONUS = 0.22;
+    FIT_DIVERGENCE_BONUS = 0.1;
+    FIT_WINDOW_BONUS = 0.08;
+    EARLY_CAPITAL = 64;
+    EMPTY_ROOKIE_BOARD = Object.freeze({ rows: [], byId: /* @__PURE__ */ new Map(), deficits: /* @__PURE__ */ new Set(), tier: null });
+  }
+});
+
+// mcp/tools/researchRookies.js
+function ownerIndex(league) {
+  const byPlayer = /* @__PURE__ */ new Map();
+  league.allRosters.forEach((r) => r.players.forEach((p) => byPlayer.set(String(p.sleeperId), r)));
+  return byPlayer;
+}
+function rookieRow(r, owners, myRosterId) {
+  const owner = owners.get(r.sleeperId) ?? null;
+  const priced = r.value != null && r.value > 0;
+  return {
+    sleeperId: r.sleeperId,
+    name: r.name,
+    position: r.position ?? null,
+    nflTeam: r.team || null,
+    // Rule 7: an unpriced rookie is null + unranked, never 0.
+    value: priced ? r.value : null,
+    unranked: !priced,
+    positionRank: priced ? r.positionRank ?? null : null,
+    rookieAdp: r.adp ?? null,
+    // THE score, 0-100 as the app shows it. Null without a feed entry.
+    score: pct2(r.score),
+    scoreTier: r.tier ?? null,
+    ageTilted: !!r.ageTilted,
+    reasons: (r.reasons ?? []).map((x) => x.text),
+    depth: {
+      rank: r.rank ?? null,
+      read: r.depthText ?? null,
+      campMove: r.move ?? null
+    },
+    nflDraft: r.pick != null ? { round: r.round ?? null, pick: r.pick } : null,
+    undrafted: !r.noData && r.pick == null,
+    noFeedEntry: !!r.noData,
+    // Within-position ranks; divergence > 0 = the model likes him more than
+    // the market among rookies at his position.
+    marketRank: r.marketRank ?? null,
+    modelRank: r.modelRank ?? null,
+    divergence: r.divergence ?? null,
+    fit: round3(r.fit),
+    fitReasons: r.fitReasons ?? [],
+    fitsNeed: !!r.fitsNeed,
+    ownerRosterId: owner?.rosterId ?? null,
+    ownerTeam: owner ? getTeamName(owner.owner) : null,
+    isYours: owner != null && owner.rosterId === myRosterId,
+    isFreeAgent: owner == null,
+    // DISPLAY ONLY. None of these reaches `score` or `fit` — CLAUDE.md
+    // Feature 19 records the measured nulls. Age is the one exception, and it
+    // is already inside `score` via the tilt; it is repeated here as a fact.
+    context: {
+      ageAtDraft: r.ageAtDraft ?? null,
+      heightIn: r.height ?? null,
+      weightLb: r.weight ?? null,
+      forty: r.forty ?? null,
+      vertical: r.vert ?? null,
+      broadJump: r.broad ?? null
+    }
+  };
+}
+function sortRows(rows, sort) {
+  const byValue = (a, b) => (b.value ?? 0) - (a.value ?? 0);
+  if (sort === "value") return [...rows].sort(byValue);
+  const key = sort === "score" ? "score" : "fit";
+  return [...rows].sort((a, b) => {
+    const av = a[key];
+    const bv = b[key];
+    if (av == null && bv == null) return byValue(a, b);
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    return bv - av || byValue(a, b);
+  });
+}
+function findRookie(rows, query) {
+  const raw = String(query).trim();
+  if (/^\d+$/.test(raw)) {
+    const hit = rows.find((r) => r.sleeperId === raw);
+    return hit ? { match: hit } : { match: null, candidates: [] };
+  }
+  const q = normalize(raw);
+  if (q.length < 2) return { match: null, candidates: [] };
+  const keyed = rows.map((r) => ({ r, key: normalize(r.name) }));
+  const exact = keyed.filter((x) => x.key === q);
+  if (exact.length === 1) return { match: exact[0].r };
+  const pool = exact.length > 1 ? exact : keyed.filter((x) => x.key.split(" ").some((w) => w === q) || x.key.includes(q));
+  if (pool.length === 1) return { match: pool[0].r };
+  return { match: null, candidates: pool.map((x) => x.r) };
+}
+function buildRookieResearchAnswer(snapshot, intelFeed, {
+  team,
+  position,
+  player,
+  sort = "fit",
+  limit = DEFAULT_LIMIT4,
+  defaultRosterId,
+  myRosterId
+} = {}) {
+  const { league } = snapshot;
+  if (!league) throw new Error("League state unavailable");
+  if (position != null && !POSITIONS4.includes(String(position).toUpperCase())) {
+    return {
+      ok: false,
+      error: `Rookie research covers ${POSITIONS4.join(" / ")}. A defense is never a rookie and this league rosters no kicker.`
+    };
+  }
+  const pos = position ? String(position).toUpperCase() : null;
+  const order = SORTS.includes(sort) ? sort : "fit";
+  const resolved = resolveTeam(league, team, defaultRosterId);
+  if (!resolved.roster) {
+    return { ok: false, error: resolved.error, candidates: resolved.candidates ?? [] };
+  }
+  const fitRoster = resolved.roster;
+  if (!snapshot.playerDB) {
+    return {
+      ok: false,
+      error: "The Sleeper player DB did not load, and the rookie class is read from it \u2014 so there is no rookie list to rank. Retry with refresh: true.",
+      asOf: snapshot.asOf
+    };
+  }
+  const available = !!intelFeed?.available;
+  const board = buildRookieBoard({
+    rookieMap: buildRookieMap(snapshot.playerDB),
+    playerMap: snapshot.values?.playerMap,
+    intel: available ? intelFeed.data : null,
+    // Roster fit is read for the requested team — the same fit the app reads
+    // for "me", computed from that team's seat.
+    league: { ...league, myRoster: fitRoster }
+  });
+  const owners = ownerIndex(league);
+  const rows = board.rows.map((r) => rookieRow(r, owners, myRosterId));
+  const rowById = new Map(rows.map((r) => [r.sleeperId, r]));
+  const cap = Math.min(Math.max(1, Number(limit) || DEFAULT_LIMIT4), MAX_LIMIT3);
+  const base = {
+    ok: true,
+    asOf: snapshot.asOf,
+    available,
+    feed: available ? { updatedAt: intelFeed.updatedAt, ageHours: intelFeed.ageHours, season: intelFeed.data?.season ?? null } : null,
+    team: {
+      rosterId: fitRoster.rosterId,
+      teamName: getTeamName(fitRoster.owner),
+      isYou: fitRoster.rosterId === myRosterId,
+      deficits: [...board.deficits].sort(),
+      winWindow: board.tier
+    }
+  };
+  const scored = rows.filter((r) => r.score != null).length;
+  const counts = {
+    rookieClass: rows.length,
+    scored,
+    noFeedEntry: rows.filter((r) => r.noFeedEntry).length
+  };
+  if (player) {
+    const found = findRookie(board.rows, player);
+    if (!found.match) {
+      return {
+        ...base,
+        ok: false,
+        error: found.candidates?.length ? `"${player}" matches ${found.candidates.length} rookies. Name which one \u2014 this tool will not guess between two players.` : `No rookie matching "${player}" in this year's class. Veterans are not on the rookie board.`,
+        rookieCandidates: (found.candidates ?? []).slice(0, 12).map((r) => ({
+          sleeperId: r.sleeperId,
+          name: r.name,
+          position: r.position ?? null,
+          nflTeam: r.team || null
+        }))
+      };
+    }
+    return {
+      ...base,
+      scope: "player",
+      rookie: rowById.get(found.match.sleeperId),
+      counts,
+      notes: buildNotes10({ available, intelFeed, scoped: "player", row: rowById.get(found.match.sleeperId), base })
+    };
+  }
+  const inPos = pos ? rows.filter((r) => r.position === pos) : rows;
+  const sorted = sortRows(inPos, order);
+  const returned = sorted.slice(0, cap);
+  const inPosIds = new Set(inPos.map((r) => r.sleeperId));
+  const boardInPos = board.rows.filter((r) => inPosIds.has(r.sleeperId));
+  const targets = topTargets(boardInPos, { limit: TARGETS }).map((r) => rowById.get(r.sleeperId));
+  const div = splitDivergence(boardInPos, { minGap: DIVERGENCE_MIN_GAP, limit: DIVERGENCE_LIMIT });
+  return {
+    ...base,
+    scope: "board",
+    filter: { position: pos, sort: order },
+    counts: { ...counts, matchingFilter: inPos.length, returned: returned.length, truncated: inPos.length > returned.length },
+    targets,
+    undervalued: div.undervalued.map((r) => rowById.get(r.sleeperId)),
+    overvalued: div.overvalued.map((r) => rowById.get(r.sleeperId)),
+    board: returned,
+    notes: buildNotes10({ available, intelFeed, scoped: "board", inPos, returned, order, base })
+  };
+}
+function buildNotes10({ available, intelFeed, scoped, row, inPos, returned, order, base }) {
+  const notes = [];
+  if (!available) {
+    notes.push(
+      `The rookie intel feed could not be read (${intelFeed?.error ?? "not loaded"}), so every opportunity score and fit is null \u2014 NOT zero \u2014 and the board is in dynasty-value order, the same state Draft \u203A Research shows. This is a gap in our data, not a verdict on any rookie.`
+    );
+  } else if (intelFeed.ageHours != null && intelFeed.ageHours > 36) {
+    notes.push(`The rookie intel feed was last published ${intelFeed.ageHours}h ago; it normally publishes daily.`);
+  }
+  notes.push(
+    "score is the ONE opportunity score the app ships: 30% NFL depth-chart standing / 70% NFL draft capital (back-tested at Spearman +0.664 vs rookie-season points), tilted 10% toward youth within position. Everything under `context` (age at the draft, height, weight, combine drills) is display only and never moves a score \u2014 athleticism was tested and is a measured null."
+  );
+  notes.push(
+    "marketRank / modelRank / divergence are computed WITHIN POSITION: FantasyCalc already prices Superflex QB scarcity and the shallow TE pool, so a cross-position comparison would measure the two yardsticks rather than disagree about a player."
+  );
+  notes.push(
+    `fit ranks the class for ${base.team.teamName}: the score blended 55/45 with market price, plus bonuses for a position below league average, a 5+ spot model-over-market gap, and the win window. It is a judgement call layered on the back-tested score, never a change to it.`
+  );
+  if (scoped === "board") {
+    if (inPos.length > returned.length) {
+      notes.push(`Showing the top ${returned.length} of ${inPos.length} by ${order}; raise limit (max ${MAX_LIMIT3}) for more.`);
+    }
+  } else if (row?.noFeedEntry && available) {
+    notes.push(`${row.name} has no entry in the rookie intel feed, so he is unscored \u2014 absence of feed data is not evidence of no opportunity.`);
+  }
+  return notes;
+}
+function line(r) {
+  const val = r.value == null ? "\u2014" : r.value.toLocaleString();
+  const score = r.score == null ? "unscored" : `${r.score}/100 ${r.scoreTier}`;
+  const cap = r.nflDraft ? `pick ${r.nflDraft.pick}` : r.noFeedEntry ? "no feed entry" : "undrafted";
+  const own = r.isYours ? " \xB7 yours" : r.ownerTeam ? ` \xB7 ${r.ownerTeam}` : " \xB7 free agent";
+  return `${r.name} (${r.position}, ${r.nflTeam ?? "FA"}) \u2014 ${score} \xB7 value ${val} \xB7 ${cap}${r.depth.read ? ` \xB7 ${r.depth.read}` : ""}${own}`;
+}
+function renderRookieResearchText(a) {
+  if (!a.ok) {
+    const c = a.rookieCandidates?.length ? `
+Candidates: ${a.rookieCandidates.map((r) => `${r.name} (${r.position}, ${r.sleeperId})`).join("; ")}` : "";
+    const t = a.candidates?.length ? `
+Teams: ${a.candidates.map((x) => x.teamName).join("; ")}` : "";
+    return `${a.error}${c}${t}`;
+  }
+  const out = [];
+  out.push(`Rookie research for ${a.team.teamName} \u2014 needs: ${a.team.deficits.join(", ") || "none"}; window: ${a.team.winWindow ?? "\u2014"}.`);
+  if (!a.available) out.push("Rookie intel feed unavailable: scores are null, board in dynasty-value order.");
+  if (a.scope === "player") {
+    const r = a.rookie;
+    out.push(line(r));
+    if (r.reasons.length) out.push(`Why: ${r.reasons.join("; ")}.`);
+    if (r.divergence != null) out.push(`Within ${r.position}s: market #${r.marketRank}, model #${r.modelRank} (${r.divergence >= 0 ? "+" : ""}${r.divergence}).`);
+    if (r.fitReasons.length) out.push(`Fit: ${r.fitReasons.join("; ")}.`);
+  } else {
+    if (a.targets.length) {
+      out.push("Targets:");
+      a.targets.forEach((r) => out.push(`  ${line(r)}${r.fitReasons.length ? ` \u2014 ${r.fitReasons.join("; ")}` : ""}`));
+    }
+    if (a.undervalued.length) out.push(`Model over market: ${a.undervalued.map((r) => `${r.name} (+${r.divergence})`).join(", ")}.`);
+    if (a.overvalued.length) out.push(`Market over model: ${a.overvalued.map((r) => `${r.name} (${r.divergence})`).join(", ")}.`);
+    out.push(`Board by ${a.filter.sort}${a.filter.position ? ` (${a.filter.position})` : ""}:`);
+    a.board.forEach((r, i) => out.push(`  ${i + 1}. ${line(r)}`));
+  }
+  a.notes.forEach((n) => out.push(`Note: ${n}`));
+  return out.join("\n");
+}
+var DEFAULT_LIMIT4, MAX_LIMIT3, TARGETS, DIVERGENCE_LIMIT, DIVERGENCE_MIN_GAP, POSITIONS4, SORTS, pct2, round3;
+var init_researchRookies = __esm({
+  "mcp/tools/researchRookies.js"() {
+    init_rookieResearch();
+    init_rookieAdp();
+    init_teamName();
+    init_teams();
+    init_resolveAssets();
+    DEFAULT_LIMIT4 = 12;
+    MAX_LIMIT3 = 40;
+    TARGETS = 4;
+    DIVERGENCE_LIMIT = 6;
+    DIVERGENCE_MIN_GAP = 5;
+    POSITIONS4 = ["QB", "RB", "WR", "TE"];
+    SORTS = ["fit", "score", "value"];
+    pct2 = (x) => x == null ? null : Math.round(x * 100);
+    round3 = (x) => x == null ? null : Math.round(x * 1e3) / 1e3;
+  }
+});
+
 // mcp/liveScores.js
 async function getLiveScores({
   leagueId,
@@ -44697,7 +45749,7 @@ async function getLiveScores({
   force = false,
   fetcher,
   concurrency = 6,
-  store = defaultStore7
+  store = defaultStore8
 } = {}) {
   const notes = [];
   if (!leagueId || !Number.isFinite(Number(week)) || Number(week) < 1) {
@@ -44723,7 +45775,7 @@ async function getLiveScores({
   });
   return { available: true, week: Number(week), pointsByRoster, source: stampSource(loaded), notes };
 }
-var DEFAULT_LIVE_TTL_MS, keyFor, defaultStore7;
+var DEFAULT_LIVE_TTL_MS, keyFor, defaultStore8;
 var init_liveScores = __esm({
   "mcp/liveScores.js"() {
     init_constants();
@@ -44732,7 +45784,615 @@ var init_liveScores = __esm({
     init_store();
     DEFAULT_LIVE_TTL_MS = 5 * 60 * 1e3;
     keyFor = (leagueId, week) => `live:${leagueId}_${week}`;
-    defaultStore7 = memoryStore();
+    defaultStore8 = memoryStore();
+  }
+});
+
+// src/utils/leagueResults.js
+function readBracketPlacements(bracket) {
+  const out = { champion: null, runnerUp: null, third: null, fourth: null, fifth: null, sixth: null };
+  if (!Array.isArray(bracket) || bracket.length === 0) return { ...out, decided: false, hasBracket: false };
+  for (const { p, win, lose } of PLACES) {
+    const game = bracket.find((g) => Number(g?.p) === p);
+    if (game && game.w != null) {
+      out[win] = Number(game.w);
+      out[lose] = game.l != null ? Number(game.l) : null;
+    }
+  }
+  return { ...out, decided: out.champion != null, hasBracket: true };
+}
+function buildSeasonResult({ season, bracket, rosters = [], users = [], metadataWinner = null, nameForOwner = null }) {
+  const placements = readBracketPlacements(bracket);
+  const userById = new Map((users ?? []).map((u) => [u.user_id, u]));
+  const rosterById = new Map((rosters ?? []).map((r) => [Number(r.roster_id), r]));
+  const teamName = (user) => user ? getTeamName(user) : null;
+  const describe3 = (rosterId) => {
+    if (rosterId == null) return null;
+    const r = rosterById.get(rosterId);
+    const ownerId = r?.owner_id ?? null;
+    const seasonName = teamName(userById.get(ownerId));
+    return {
+      rosterId,
+      ownerId,
+      // The name that season, when we have it; otherwise the caller's
+      // fallback (the owner's name today); otherwise a stable placeholder.
+      teamName: seasonName ?? (ownerId && nameForOwner ? nameForOwner(ownerId) : null) ?? `Roster ${rosterId}`
+    };
+  };
+  const standings = (rosters ?? []).map((r) => {
+    const s = r.settings ?? {};
+    return {
+      ...describe3(Number(r.roster_id)),
+      wins: s.wins ?? 0,
+      losses: s.losses ?? 0,
+      ties: s.ties ?? 0,
+      pointsFor: Math.round(((s.fpts ?? 0) + (s.fpts_decimal ?? 0) / 100) * 100) / 100
+    };
+  }).sort((a, b) => b.wins - a.wins || b.pointsFor - a.pointsFor).map((row, i) => ({ ...row, regularSeasonRank: i + 1 }));
+  const meta3 = metadataWinner != null && metadataWinner !== "" ? Number(metadataWinner) : null;
+  return {
+    season: String(season),
+    status: !placements.hasBracket ? "no-bracket" : placements.decided ? "complete" : "in-progress",
+    champion: describe3(placements.champion),
+    runnerUp: describe3(placements.runnerUp),
+    third: describe3(placements.third),
+    fourth: describe3(placements.fourth),
+    fifth: describe3(placements.fifth),
+    sixth: describe3(placements.sixth),
+    // Present only when the metadata names a winner; false is worth a note,
+    // because it means Sleeper's two records of the same fact disagree.
+    metadataAgrees: meta3 != null && placements.decided ? meta3 === placements.champion : null,
+    standings
+  };
+}
+function countTitles(results) {
+  const byOwner = /* @__PURE__ */ new Map();
+  for (const r of results ?? []) {
+    const c = r?.champion;
+    if (!c?.ownerId) continue;
+    const row = byOwner.get(c.ownerId) ?? { ownerId: c.ownerId, titles: 0, seasons: [] };
+    row.titles += 1;
+    row.seasons.push(r.season);
+    byOwner.set(c.ownerId, row);
+  }
+  return [...byOwner.values()].sort((a, b) => b.titles - a.titles || a.seasons[0].localeCompare(b.seasons[0]));
+}
+var PLACES;
+var init_leagueResults = __esm({
+  "src/utils/leagueResults.js"() {
+    init_teamName();
+    PLACES = [
+      { p: 1, win: "champion", lose: "runnerUp" },
+      { p: 3, win: "third", lose: "fourth" },
+      { p: 5, win: "fifth", lose: "sixth" }
+    ];
+  }
+});
+
+// mcp/tools/leagueResults.js
+function buildResultsAnswer(snapshot, results, { season } = {}) {
+  const { league } = snapshot;
+  if (!league) throw new Error("League state unavailable");
+  const currentSeason = String(league.leagueInfo?.season ?? snapshot.nflState?.season ?? "");
+  const currentByOwner = new Map(
+    league.allRosters.filter((r) => r.owner?.user_id).map((r) => [r.owner.user_id, r])
+  );
+  const nameForOwner = (ownerId) => {
+    const r = currentByOwner.get(ownerId);
+    return r ? getTeamName(r.owner) : null;
+  };
+  const currentRosters = league.allRosters.map((r) => ({
+    roster_id: r.rosterId,
+    owner_id: r.owner?.user_id ?? null,
+    settings: {
+      wins: r.record?.wins ?? 0,
+      losses: r.record?.losses ?? 0,
+      ties: r.record?.ties ?? 0,
+      fpts: r.pointsFor ?? 0,
+      fpts_decimal: 0
+    }
+  }));
+  const currentUsers = league.allRosters.map((r) => r.owner).filter(Boolean);
+  const seasons = [];
+  if (currentSeason) {
+    const bracket = results?.current?.bracket ?? null;
+    seasons.push({
+      ...buildSeasonResult({
+        season: currentSeason,
+        bracket,
+        rosters: currentRosters,
+        users: currentUsers,
+        nameForOwner
+      }),
+      ...bracket == null ? { status: "unavailable" } : {}
+    });
+  }
+  for (const s of results?.seasons ?? []) {
+    if (!s.bracket) {
+      seasons.push({
+        season: s.season,
+        status: "unavailable",
+        champion: null,
+        runnerUp: null,
+        third: null,
+        fourth: null,
+        fifth: null,
+        sixth: null,
+        metadataAgrees: null,
+        standings: []
+      });
+      continue;
+    }
+    seasons.push(buildSeasonResult({
+      season: s.season,
+      bracket: s.bracket,
+      rosters: s.rosters,
+      users: s.users,
+      metadataWinner: s.leagueInfo?.metadata?.latest_league_winner_roster_id ?? null,
+      nameForOwner
+    }));
+  }
+  const shaped = seasons.map((r) => ({
+    ...r,
+    standings: r.standings.slice(0, MAX_STANDINGS)
+  }));
+  const titles = countTitles(shaped.filter((r) => r.status === "complete")).map((t) => ({
+    ownerId: t.ownerId,
+    teamName: nameForOwner(t.ownerId) ?? shaped.find((r) => r.champion?.ownerId === t.ownerId)?.champion?.teamName ?? "a former manager",
+    stillInLeague: currentByOwner.has(t.ownerId),
+    titles: t.titles,
+    seasons: t.seasons
+  }));
+  const base = {
+    ok: true,
+    asOf: snapshot.asOf,
+    available: !!results?.available,
+    league: {
+      leagueId: league.leagueId ?? null,
+      name: league.leagueInfo?.name ?? null,
+      season: currentSeason || null,
+      teams: league.allRosters.length
+    }
+  };
+  const notes = [];
+  if (!results?.available) {
+    notes.push(
+      "This league's past seasons could not be loaded, so past champions are unknown. That is a gap in our data \u2014 it is not a claim that any season went without a winner."
+    );
+  }
+  const unavailable = shaped.filter((r) => r.status === "unavailable").map((r) => r.season);
+  if (unavailable.length) {
+    notes.push(
+      `The ${unavailable.join(", ")} bracket${unavailable.length > 1 ? "s" : ""} could not be read, so ${unavailable.length > 1 ? "those seasons carry" : "that season carries"} no champion here \u2014 unknown, not "nobody won". Retry with refresh: true.`
+    );
+  }
+  const live = shaped.find((r) => r.season === currentSeason && r.status === "in-progress");
+  if (live) {
+    notes.push(
+      `${currentSeason} is in progress: its bracket exists but no playoff game has been decided, so there is no champion yet. Playoffs start in week ${league.leagueInfo?.settings?.playoff_week_start ?? "?"}.`
+    );
+  }
+  shaped.filter((r) => r.metadataAgrees === false).forEach((r) => notes.push(
+    `${r.season}: the bracket and the league's own "latest winner" field disagree. The bracket is reported; treat this season as worth confirming in Sleeper.`
+  ));
+  notes.push(
+    "Champions are read from Sleeper's playoff bracket (the championship game's winner). Team names are the ones used that season where Sleeper still has them; titles are credited by manager, so a renamed team keeps its titles."
+  );
+  if (season != null && season !== "") {
+    const want = String(season).trim();
+    const hit = shaped.find((r) => r.season === want);
+    if (!hit) {
+      return {
+        ...base,
+        ok: false,
+        error: `No ${want} season in this league's history. Seasons available: ${shaped.map((r) => r.season).join(", ") || "none"}.`,
+        seasonsAvailable: shaped.map((r) => r.season)
+      };
+    }
+    return { ...base, seasons: [hit], titles, counts: { seasons: shaped.length, returned: 1 }, notes };
+  }
+  return { ...base, seasons: shaped, titles, counts: { seasons: shaped.length, returned: shaped.length }, notes };
+}
+function renderResultsText(a) {
+  if (!a.ok) return a.error;
+  const out = [];
+  for (const r of a.seasons) {
+    if (r.status === "complete") {
+      out.push(`${r.season}: champion ${who(r.champion)}, runner-up ${who(r.runnerUp)}, third ${who(r.third)}.`);
+      const top = r.standings[0];
+      if (top) out.push(`  Best regular season: ${top.teamName} ${top.wins}-${top.losses}${top.ties ? `-${top.ties}` : ""}, ${top.pointsFor} PF.`);
+    } else if (r.status === "in-progress") {
+      out.push(`${r.season}: in progress \u2014 no champion yet.`);
+    } else if (r.status === "no-bracket") {
+      out.push(`${r.season}: Sleeper has no playoff bracket for this season.`);
+    } else {
+      out.push(`${r.season}: bracket could not be read \u2014 champion unknown.`);
+    }
+  }
+  if (a.titles?.length) {
+    out.push(`Titles: ${a.titles.map((t) => `${t.teamName} ${t.titles} (${t.seasons.join(", ")})`).join("; ")}.`);
+  }
+  a.notes.forEach((n) => out.push(`Note: ${n}`));
+  return out.join("\n");
+}
+var MAX_STANDINGS, who;
+var init_leagueResults2 = __esm({
+  "mcp/tools/leagueResults.js"() {
+    init_leagueResults();
+    init_teamName();
+    MAX_STANDINGS = 32;
+    who = (p) => p ? p.teamName : "\u2014";
+  }
+});
+
+// mcp/results.js
+async function getLeagueResults({
+  leagueId,
+  leagueInfo,
+  ttlMs = DEFAULT_HISTORY_TTL_MS,
+  currentTtlMs = DEFAULT_CURRENT_BRACKET_TTL_MS,
+  force = false,
+  fetcher,
+  concurrency = 6,
+  store = defaultStore9
+} = {}) {
+  if (!leagueId) throw new Error("getLeagueResults requires a leagueId");
+  const get = fetcher ?? createFetcher({ concurrency });
+  const [base, current] = await Promise.all([
+    getLeagueHistory({ leagueId, leagueInfo, ttlMs, force, fetcher: get, concurrency, store }),
+    loadSource(store, currentKey(leagueId), force ? -1 : currentTtlMs, async () => {
+      const b = await get(`${SLEEPER_BASE}/league/${leagueId}/winners_bracket`, { label: "Sleeper winners bracket" });
+      if (!Array.isArray(b)) throw new Error("winners bracket returned an unexpected shape");
+      return b;
+    }).catch((err) => ({ data: null, fetchedAt: null, stale: false, error: err.message }))
+  ]);
+  if (!base.available) {
+    return {
+      available: false,
+      current: { bracket: current.data ?? null, error: current.error ?? null },
+      seasons: [],
+      failedSeasons: [],
+      sources: { history: base.sources.history, brackets: stampSource(current) },
+      notes: [
+        "This league's past seasons could not be loaded, so past champions are unknown. That is a gap in our data \u2014 it is not a claim that any season went without a winner."
+      ]
+    };
+  }
+  const past = base.history.pastSeasons ?? [];
+  const loaded = await Promise.all(past.map((ps) => loadSource(store, pastKey(ps.leagueId), force ? -1 : ttlMs, async () => {
+    const [bracket, users] = await Promise.all([
+      get(`${SLEEPER_BASE}/league/${ps.leagueId}/winners_bracket`, { label: "Sleeper winners bracket" }),
+      // Names only. Without them a champion is still named — by the owner's
+      // CURRENT team name, or "Roster N" — so a users failure never costs
+      // the result.
+      get(`${SLEEPER_BASE}/league/${ps.leagueId}/users`, { label: "Sleeper users" }).catch(() => null)
+    ]);
+    if (!Array.isArray(bracket)) throw new Error(`the ${ps.season} winners bracket returned an unexpected shape`);
+    return { bracket, users: Array.isArray(users) ? users : [] };
+  }).catch((err) => ({ data: null, fetchedAt: null, stale: false, error: err.message }))));
+  const failedSeasons = [];
+  const seasons = past.map((ps, i) => {
+    const l = loaded[i];
+    if (!l.data) failedSeasons.push(ps.season);
+    return {
+      season: ps.season,
+      leagueId: ps.leagueId,
+      leagueInfo: ps.leagueInfo,
+      rosters: ps.rosters ?? [],
+      users: l.data?.users ?? [],
+      bracket: l.data?.bracket ?? null,
+      error: l.data ? null : l.error ?? "unknown error"
+    };
+  });
+  const times = [current.fetchedAt, ...loaded.map((l) => l.fetchedAt)].filter(Boolean);
+  return {
+    available: true,
+    current: { bracket: current.data ?? null, error: current.data ? null : current.error ?? null },
+    seasons,
+    // past seasons, newest → oldest
+    failedSeasons,
+    sources: {
+      history: base.sources.history,
+      // The OLDEST contributing bracket, for the reason oldestSourceAt is the
+      // stalest source. Past brackets are frozen, so this is harmless.
+      brackets: stampSource({
+        fetchedAt: times.length ? Math.min(...times) : null,
+        stale: current.stale || loaded.some((l) => l.stale),
+        error: failedSeasons.length ? `${failedSeasons.length} of ${past.length} past brackets failed` : current.error ?? null
+      })
+    },
+    notes: []
+  };
+}
+var DEFAULT_CURRENT_BRACKET_TTL_MS, pastKey, currentKey, defaultStore9;
+var init_results = __esm({
+  "mcp/results.js"() {
+    init_constants();
+    init_limit();
+    init_snapshot();
+    init_store();
+    init_history();
+    DEFAULT_CURRENT_BRACKET_TTL_MS = 15 * 60 * 1e3;
+    pastKey = (seasonLeagueId) => `results:${seasonLeagueId}`;
+    currentKey = (leagueId) => `bracket:${leagueId}`;
+    defaultStore9 = memoryStore();
+  }
+});
+
+// mcp/tools/scoutManagers.js
+function assetRow3(a) {
+  return {
+    type: a.type,
+    id: a.type === "player" ? a.id : a.type === "pick" ? a.pickKey : null,
+    label: a.label,
+    position: a.position ?? null,
+    // Zero-value assets are unpriced (or FAAB, which counts 0 by rule) — null,
+    // never a raw 0 that reads as "worthless".
+    value: a.value > 0 ? a.value : null,
+    approx: !!a.approx,
+    flipped: !!a.flipped
+  };
+}
+function buildScoutAnswer(snapshot, { history, transactions, tradeValues } = {}, {
+  team,
+  limit = DEFAULT_TRADE_LIMIT,
+  defaultRosterId,
+  myRosterId
+} = {}) {
+  const { league, values } = snapshot;
+  if (!league) throw new Error("League state unavailable");
+  let scoped = null;
+  if (team != null && team !== "") {
+    const resolved = resolveTeam(league, team, defaultRosterId);
+    if (!resolved.roster) return { ok: false, error: resolved.error, candidates: resolved.candidates ?? [] };
+    scoped = resolved.roster;
+  }
+  const currentSeason = String(league.leagueInfo?.season ?? snapshot.nflState?.season ?? "");
+  const currentRead = !!transactions?.available;
+  const historyRead = !!history?.available;
+  const pastRead = historyRead ? history.ledgerSeasons ?? [] : [];
+  const seasonsRead = [...currentRead ? [currentSeason] : [], ...pastRead];
+  const seasonsMissing = [
+    ...currentRead ? [] : [currentSeason],
+    ...historyRead ? history.failedSeasons ?? [] : ["every past season"]
+  ];
+  const ledgerAvailable = seasonsRead.length > 0;
+  const ledgerComplete = ledgerAvailable && seasonsMissing.length === 0;
+  const myOwnerId = league.allRosters.find((r) => r.rosterId === myRosterId)?.owner?.user_id ?? null;
+  const analysis = buildManagerProfiles({
+    history: historyRead ? history.history : { currentSeason, currentDrafts: [], pastSeasons: [] },
+    currentLeague: {
+      season: currentSeason,
+      faabBudget: league.leagueInfo?.settings?.waiver_budget,
+      allRosters: league.allRosters,
+      transactions: currentRead ? transactions.transactions : []
+    },
+    playerMap: values.playerMap,
+    pickEntries: values.pickEntries,
+    playerDB: snapshot.playerDB,
+    myOwnerId
+  });
+  const nameOf = (ownerId) => {
+    const r = league.allRosters.find((x) => x.owner?.user_id === ownerId);
+    if (r) return getTeamName(r.owner);
+    const u = analysis.userById?.[ownerId];
+    return u ? getTeamName(u) : "a former manager";
+  };
+  const activityOf = (p) => {
+    if (!ledgerAvailable) return null;
+    if (p.tradeCount === 0 && !ledgerComplete) {
+      return `No trades in the ${seasonsRead.length} season${seasonsRead.length === 1 ? "" : "s"} we could read`;
+    }
+    return p.activity;
+  };
+  const archive = tradeValues?.available ? tradeValues.data : null;
+  const tradeRow = (t) => {
+    const then = archive ? tradeTimeTotals(archive, t) : null;
+    return {
+      txId: t.txId,
+      season: t.season,
+      week: t.week ?? null,
+      date: iso(t.date),
+      result: t.result,
+      gotValue: t.gotValue,
+      gaveValue: t.gaveValue,
+      net: t.net,
+      partners: t.partnerOwnerIds.map(nameOf),
+      got: t.got.map(assetRow3),
+      gave: t.gave.map(assetRow3),
+      atTradeTime: then ? { got: then.gotThen, gave: then.gaveThen } : null
+    };
+  };
+  const summary = (p) => ({
+    rosterId: p.rosterId,
+    teamName: getTeamName(p.user),
+    handle: p.user?.display_name || p.user?.username || null,
+    isYou: p.isMe,
+    seasonsActive: p.seasonsActive,
+    record: p.record,
+    activity: activityOf(p),
+    trades: ledgerAvailable ? {
+      count: p.tradeCount,
+      wins: p.tradeWins,
+      losses: p.tradeLosses,
+      evens: p.tradeEvens,
+      thisSeason: currentRead ? p.tradesThisSeason : null,
+      netValue: p.netValue
+    } : null,
+    tendencies: ledgerAvailable ? p.tendencies : [],
+    faab: ledgerAvailable ? {
+      budgetsCommitted: round(p.faab.budgetsCommitted, 2),
+      claims: p.faab.claims,
+      avgBidPct: round(p.faab.avgBidPct, 1),
+      valuePerBudget: p.faab.valuePerBudget,
+      faMoves: p.faab.faMoves
+    } : null,
+    draft: historyRead ? {
+      count: p.draft.count,
+      hits: p.draft.hits,
+      avgDelta: p.draft.avgDelta
+    } : null,
+    vsMe: p.vsMe && ledgerAvailable ? { trades: p.vsMe.trades, myNet: p.vsMe.myNet } : null
+  });
+  const profiles = analysis.profiles.slice(0, MAX_MANAGERS);
+  const me = analysis.my;
+  const cap = Math.min(Math.max(1, Number(limit) || DEFAULT_TRADE_LIMIT), MAX_TRADE_LIMIT);
+  const answer = {
+    ok: true,
+    asOf: snapshot.asOf,
+    league: {
+      leagueId: league.leagueId ?? null,
+      name: league.leagueInfo?.name ?? null,
+      season: currentSeason || null,
+      teams: league.allRosters.length
+    },
+    ledger: {
+      available: ledgerAvailable,
+      complete: ledgerComplete,
+      seasonsRead,
+      seasonsMissing,
+      tradeTimeArchive: !!archive
+    },
+    you: me ? {
+      ...summary(me),
+      strengths: ledgerAvailable ? analysis.insights.strengths : [],
+      // buildMyInsights writes "You haven't completed a trade yet" off an empty
+      // ledger. Over seasons we could not read that is the very claim this
+      // tool must not make, so it is dropped rather than reworded.
+      workOn: ledgerAvailable ? analysis.insights.workOn.filter((w) => ledgerComplete || !/haven't completed a trade/.test(w)) : []
+    } : null,
+    // Sorted by trade activity, as Trade › Managers sorts its cards.
+    managers: [...profiles].sort((a, b) => b.tradeCount - a.tradeCount || b.netValue - a.netValue).map(summary)
+  };
+  if (scoped) {
+    const p = analysis.profiles.find((x) => x.rosterId === scoped.rosterId);
+    if (!p) {
+      return { ...answer, ok: false, error: `${getTeamName(scoped.owner)} has no owner to profile.` };
+    }
+    const trades = ledgerAvailable ? p.trades.slice(0, cap).map(tradeRow) : [];
+    const withThen = trades.filter((t) => t.atTradeTime).length;
+    answer.manager = {
+      ...summary(p),
+      tendencyDetail: ledgerAvailable ? {
+        picksGot: p.tendencyDetail.picksGot,
+        picksGave: p.tendencyDetail.picksGave,
+        avgAgeGot: round(p.tendencyDetail.ageGot, 1),
+        avgAgeGave: round(p.tendencyDetail.ageGave, 1),
+        playersGotByPosition: p.tendencyDetail.posGot
+      } : null,
+      biggestWin: ledgerAvailable && p.biggestWin ? tradeRow(p.biggestWin) : null,
+      biggestLoss: ledgerAvailable && p.biggestLoss ? tradeRow(p.biggestLoss) : null,
+      draftPicks: historyRead ? p.draft.picks.slice(0, MAX_DRAFT_PICKS).map((d) => ({
+        season: d.season,
+        slotLabel: d.slotLabel,
+        overall: d.overall,
+        player: d.player.label,
+        position: d.player.position ?? null,
+        value: d.player.value > 0 ? d.player.value : null,
+        slotsBeaten: d.delta,
+        hit: d.hit
+      })) : [],
+      tradeLedger: trades
+    };
+    answer.counts = {
+      trades: ledgerAvailable ? p.tradeCount : null,
+      returned: trades.length,
+      truncated: ledgerAvailable && p.tradeCount > trades.length,
+      withTradeTimeValues: withThen,
+      draftPicks: historyRead ? p.draft.count : null
+    };
+  }
+  answer.notes = buildNotes11({ answer, history, transactions, tradeValues });
+  return answer;
+}
+function buildNotes11({ answer, history, transactions, tradeValues }) {
+  const notes = [];
+  const { ledger } = answer;
+  if (!ledger.available) {
+    notes.push(
+      "No season's transactions could be loaded, so every trade and FAAB field is null \u2014 this says NOTHING about whether anyone has traded. It is a gap in our data, not a fact about a manager."
+    );
+  } else if (!ledger.complete) {
+    notes.push(
+      `Transactions from ${ledger.seasonsMissing.join(", ")} could not be loaded, so trade and FAAB totals cover ${ledger.seasonsRead.join(", ")} only. Nobody is described as a non-trader over seasons we did not read.`
+    );
+  }
+  ;
+  (history?.notes ?? []).forEach((n) => {
+    if (!notes.includes(n)) notes.push(n);
+  });
+  (transactions?.notes ?? []).forEach((n) => notes.push(n));
+  notes.push(
+    `Trades are graded in HINDSIGHT at today's FantasyCalc prices ("did it age well?"), win/loss beyond \xB15% of the trade's size. A traded pick whose draft has happened is valued as the player it became; one that cannot be resolved is priced at its round median and marked approx. FAAB and unpriced assets count 0 and report value null.`
+  );
+  notes.push(
+    "FAAB is counted in BUDGETS, never dollars: this league's budget went $100 \u2192 $1000 for 2026 and resets twice a league year, so budgetsCommitted above 1 is normal over several seasons. avgBidPct is the average single bid as a percent of its own season's budget."
+  );
+  notes.push(
+    "Tendencies describe the RECORD, not what a manager will accept: modelling trade behaviour was tested on this league's full 95-trade corpus and disconfirmed."
+  );
+  if (answer.manager) {
+    if (answer.counts.truncated) {
+      notes.push(`Showing the ${answer.counts.returned} most recent of ${answer.counts.trades} trades; raise limit (max ${MAX_TRADE_LIMIT}) for more.`);
+    }
+    if (!tradeValues?.available) {
+      notes.push(`The trade-time value archive could not be read (${tradeValues?.error ?? "not loaded"}), so no "at trade time" line is shown.`);
+    } else {
+      notes.push(
+        `${answer.counts.withTradeTimeValues} of ${answer.counts.returned} trades shown carry an "at trade time" total. The archive began 2026-06 and records a trade only when EVERY asset on it was priced that day (an unpriceable pick is archived as null, never 0), so a missing line is expected, not an error.`
+      );
+    }
+  }
+  return notes;
+}
+function summaryLine(m) {
+  const t = m.trades;
+  const trades = t ? `${t.count} trades (${t.wins}W-${t.losses}L-${t.evens}E, ${signed2(t.netValue)})` : "trades unknown";
+  const faab = m.faab ? `FAAB ${m.faab.budgetsCommitted}\xD7 budgets` : "FAAB unknown";
+  const tend = m.tendencies.length ? ` \xB7 ${m.tendencies.join(", ")}` : "";
+  return `${m.teamName}${m.isYou ? " (you)" : ""}: ${m.activity ?? "activity unknown"} \xB7 ${trades} \xB7 ${faab}${tend}`;
+}
+function renderScoutText(a) {
+  if (!a.ok) {
+    const c = a.candidates?.length ? `
+Teams: ${a.candidates.map((x) => x.teamName).join("; ")}` : "";
+    return `${a.error}${c}`;
+  }
+  const out = [];
+  out.push(`Manager scouting \u2014 seasons read: ${a.ledger.seasonsRead.join(", ") || "none"}` + (a.ledger.seasonsMissing.length ? ` (missing: ${a.ledger.seasonsMissing.join(", ")})` : ""));
+  if (a.manager) {
+    const m = a.manager;
+    out.push(summaryLine(m));
+    if (m.vsMe) out.push(`Vs you: ${m.vsMe.trades} trades, your net ${signed2(m.vsMe.myNet)}.`);
+    if (m.draft) out.push(`Rookie drafting: ${m.draft.hits} of ${m.draft.count} picks now worth 1,000+, avg ${m.draft.avgDelta >= 0 ? "+" : ""}${m.draft.avgDelta} slots vs value rank.`);
+    m.tradeLedger.forEach((t) => {
+      const then = t.atTradeTime ? ` \xB7 at trade time ${t.atTradeTime.got.toLocaleString()} \u21C4 ${t.atTradeTime.gave.toLocaleString()}` : "";
+      out.push(`  ${t.season} wk${t.week ?? "?"} ${t.result.toUpperCase()} ${signed2(t.net)} with ${t.partners.join(", ")}: got ${t.got.map((x) => x.label).join(", ") || "\u2014"} / gave ${t.gave.map((x) => x.label).join(", ") || "\u2014"}${then}`);
+    });
+  } else {
+    if (a.you) {
+      out.push(summaryLine(a.you));
+      a.you.strengths.forEach((s) => out.push(`  + ${s}`));
+      a.you.workOn.forEach((s) => out.push(`  \u2212 ${s}`));
+    }
+    a.managers.filter((m) => !m.isYou).forEach((m) => out.push(`  ${summaryLine(m)}`));
+  }
+  a.notes.forEach((n) => out.push(`Note: ${n}`));
+  return out.join("\n");
+}
+var DEFAULT_TRADE_LIMIT, MAX_TRADE_LIMIT, MAX_DRAFT_PICKS, MAX_MANAGERS, round, iso, signed2;
+var init_scoutManagers = __esm({
+  "mcp/tools/scoutManagers.js"() {
+    init_managerAnalysis();
+    init_teamName();
+    init_teams();
+    DEFAULT_TRADE_LIMIT = 10;
+    MAX_TRADE_LIMIT = 40;
+    MAX_DRAFT_PICKS = 15;
+    MAX_MANAGERS = 32;
+    round = (x, d = 0) => x == null ? null : Math.round(x * 10 ** d) / 10 ** d;
+    iso = (ms) => ms ? new Date(ms).toISOString() : null;
+    signed2 = (n) => `${n >= 0 ? "+" : "\u2212"}${Math.abs(Math.round(n)).toLocaleString()}`;
   }
 });
 
@@ -44903,6 +46563,14 @@ function createServer({ env = process.env, fetcher, store } = {}) {
     ...store ? { store } : {}
   });
   const historyFor = (snapshot, leagueId, refresh) => getLeagueHistory({
+    leagueId: leagueId || config2.defaultLeagueId,
+    leagueInfo: snapshot.league?.leagueInfo ?? null,
+    ttlMs: config2.historyTtlMs,
+    force: !!refresh,
+    fetcher: get,
+    ...store ? { store } : {}
+  });
+  const ledgerHistoryFor = (snapshot, leagueId, refresh) => getLedgerHistory({
     leagueId: leagueId || config2.defaultLeagueId,
     leagueInfo: snapshot.league?.leagueInfo ?? null,
     ttlMs: config2.historyTtlMs,
@@ -45649,6 +47317,360 @@ function createServer({ env = process.env, fetcher, store } = {}) {
       };
     }
   );
+  const rookieRowSchema = external_exports.object({
+    sleeperId: external_exports.string(),
+    name: external_exports.string(),
+    position: external_exports.string().nullable(),
+    nflTeam: external_exports.string().nullable(),
+    value: external_exports.number().nullable(),
+    unranked: external_exports.boolean(),
+    positionRank: external_exports.number().nullable(),
+    rookieAdp: external_exports.number().nullable(),
+    score: external_exports.number().nullable(),
+    scoreTier: external_exports.string().nullable(),
+    ageTilted: external_exports.boolean(),
+    reasons: external_exports.array(external_exports.string()),
+    depth: external_exports.object({
+      rank: external_exports.number().nullable(),
+      read: external_exports.string().nullable(),
+      campMove: external_exports.object({
+        from: external_exports.number(),
+        to: external_exports.number(),
+        delta: external_exports.number(),
+        direction: external_exports.string()
+      }).nullable()
+    }),
+    nflDraft: external_exports.object({ round: external_exports.number().nullable(), pick: external_exports.number() }).nullable(),
+    undrafted: external_exports.boolean(),
+    noFeedEntry: external_exports.boolean(),
+    marketRank: external_exports.number().nullable(),
+    modelRank: external_exports.number().nullable(),
+    divergence: external_exports.number().nullable(),
+    fit: external_exports.number().nullable(),
+    fitReasons: external_exports.array(external_exports.string()),
+    fitsNeed: external_exports.boolean(),
+    ownerRosterId: external_exports.number().nullable(),
+    ownerTeam: external_exports.string().nullable(),
+    isYours: external_exports.boolean(),
+    isFreeAgent: external_exports.boolean(),
+    context: external_exports.object({
+      ageAtDraft: external_exports.number().nullable(),
+      heightIn: external_exports.number().nullable(),
+      weightLb: external_exports.number().nullable(),
+      forty: external_exports.number().nullable(),
+      vertical: external_exports.number().nullable(),
+      broadJump: external_exports.number().nullable()
+    })
+  });
+  server.registerTool(
+    "research_rookies",
+    {
+      title: "Research the rookie class",
+      description: 'Answers "which rookies become something, and which should I take?" \u2014 the question a dynasty value cannot, because value prices consensus rather than opportunity. Returns the ONE opportunity score the app ships (0-100: NFL depth-chart standing x NFL draft capital, back-tested, with a small youth tilt), the within-position disagreement between that model and the market, and a roster-fit ranking for one team. Age and combine numbers are returned as context only and never score. Pass `player` for one rookie. A rookie the feed has no entry for is unscored (null), never zero.',
+      inputSchema: {
+        player: external_exports.string().optional().describe("One rookie by name or Sleeper id. An ambiguous name returns candidates and refuses."),
+        position: external_exports.enum(["QB", "RB", "WR", "TE"]).optional().describe("Only this position (applies to the board, the shortlist and the divergence lists)."),
+        sort: external_exports.enum(["fit", "score", "value"]).optional().describe("fit (default, for the team) \xB7 score (opportunity alone) \xB7 value (dynasty market)."),
+        team: external_exports.string().optional().describe("Whose roster fit to read: team name, manager handle or roster id. Omit for your own."),
+        limit: external_exports.number().int().min(1).max(MAX_LIMIT3).optional().describe(`Board rows to return (default ${DEFAULT_LIMIT4}, max ${MAX_LIMIT3}). counts carries the true size.`),
+        leagueId: external_exports.string().optional().describe("Sleeper league id. Omit for the configured league."),
+        refresh: external_exports.boolean().optional().describe("Bypass the caches (~15 min snapshot, ~60 min feed) and refetch.")
+      },
+      outputSchema: {
+        ok: external_exports.boolean(),
+        error: external_exports.string().optional(),
+        candidates: external_exports.array(teamCandidate).optional(),
+        rookieCandidates: external_exports.array(external_exports.object({
+          sleeperId: external_exports.string(),
+          name: external_exports.string(),
+          position: external_exports.string().nullable(),
+          nflTeam: external_exports.string().nullable()
+        })).optional(),
+        asOf: asOfSchema.optional(),
+        // False means the rookie intel feed could not be read — every score
+        // is then null and the board is in dynasty-value order. Never "no
+        // rookies": the class comes from the player DB, not the feed.
+        available: external_exports.boolean().optional(),
+        feed: external_exports.object({
+          updatedAt: external_exports.string().nullable(),
+          ageHours: external_exports.number().nullable(),
+          season: external_exports.string().nullable()
+        }).nullable().optional(),
+        team: external_exports.object({
+          rosterId: external_exports.number(),
+          teamName: external_exports.string(),
+          isYou: external_exports.boolean(),
+          deficits: external_exports.array(external_exports.string()),
+          winWindow: external_exports.string().nullable()
+        }).optional(),
+        scope: external_exports.enum(["board", "player"]).optional(),
+        filter: external_exports.object({ position: external_exports.string().nullable(), sort: external_exports.string() }).optional(),
+        counts: external_exports.object({
+          rookieClass: external_exports.number(),
+          scored: external_exports.number(),
+          noFeedEntry: external_exports.number(),
+          matchingFilter: external_exports.number().optional(),
+          returned: external_exports.number().optional(),
+          truncated: external_exports.boolean().optional()
+        }).optional(),
+        rookie: rookieRowSchema.optional(),
+        targets: external_exports.array(rookieRowSchema).optional(),
+        undervalued: external_exports.array(rookieRowSchema).optional(),
+        overvalued: external_exports.array(rookieRowSchema).optional(),
+        board: external_exports.array(rookieRowSchema).optional(),
+        notes: external_exports.array(external_exports.string()).optional()
+      }
+    },
+    async ({ player, position, sort, team, limit, leagueId, refresh }) => {
+      const snapshot = await snapshotFor(leagueId, refresh);
+      const intel = await getRookieIntel({
+        force: !!refresh,
+        fetcher: get,
+        ttlMs: config2.feedTtlMs,
+        ...store ? { store } : {}
+      });
+      const answer = buildRookieResearchAnswer(snapshot, intel, {
+        player,
+        position,
+        sort,
+        team,
+        limit,
+        defaultRosterId: config2.defaultRosterId,
+        myRosterId: config2.defaultRosterId
+      });
+      if (answer.asOf && intel.available) {
+        answer.asOf = mergeAsOf(answer.asOf, { rookieIntel: intel.source });
+      }
+      return {
+        content: [{ type: "text", text: renderRookieResearchText(answer) }],
+        structuredContent: answer,
+        isError: !answer.ok
+      };
+    }
+  );
+  const assetRowSchema = external_exports.object({
+    type: external_exports.string(),
+    id: external_exports.string().nullable(),
+    label: external_exports.string(),
+    position: external_exports.string().nullable(),
+    value: external_exports.number().nullable(),
+    approx: external_exports.boolean(),
+    flipped: external_exports.boolean()
+  });
+  const scoutTradeSchema = external_exports.object({
+    txId: external_exports.string().nullable(),
+    season: external_exports.string(),
+    week: external_exports.number().nullable(),
+    date: external_exports.string().nullable(),
+    result: external_exports.string(),
+    gotValue: external_exports.number(),
+    gaveValue: external_exports.number(),
+    net: external_exports.number(),
+    partners: external_exports.array(external_exports.string()),
+    got: external_exports.array(assetRowSchema),
+    gave: external_exports.array(assetRowSchema),
+    atTradeTime: external_exports.object({ got: external_exports.number(), gave: external_exports.number() }).nullable()
+  });
+  const managerSummarySchema = external_exports.object({
+    rosterId: external_exports.number(),
+    teamName: external_exports.string(),
+    handle: external_exports.string().nullable(),
+    isYou: external_exports.boolean(),
+    seasonsActive: external_exports.array(external_exports.string()),
+    record: external_exports.object({ wins: external_exports.number(), losses: external_exports.number(), ties: external_exports.number() }),
+    // Null means we could not read the ledger — NEVER "no trades".
+    activity: external_exports.string().nullable(),
+    trades: external_exports.object({
+      count: external_exports.number(),
+      wins: external_exports.number(),
+      losses: external_exports.number(),
+      evens: external_exports.number(),
+      thisSeason: external_exports.number().nullable(),
+      netValue: external_exports.number()
+    }).nullable(),
+    tendencies: external_exports.array(external_exports.string()),
+    faab: external_exports.object({
+      budgetsCommitted: external_exports.number(),
+      claims: external_exports.number(),
+      avgBidPct: external_exports.number().nullable(),
+      valuePerBudget: external_exports.number().nullable(),
+      faMoves: external_exports.number()
+    }).nullable(),
+    draft: external_exports.object({ count: external_exports.number(), hits: external_exports.number(), avgDelta: external_exports.number() }).nullable(),
+    vsMe: external_exports.object({ trades: external_exports.number(), myNet: external_exports.number() }).nullable()
+  });
+  server.registerTool(
+    "scout_managers",
+    {
+      title: "Scout how a manager trades",
+      description: `Answers "how does this manager trade, and how have I done?" from every season of league history: each manager's trade record graded in hindsight at today's values, tendencies (pick accumulator, buys youth, chases a position, aggressive or bargain FAAB bidder), FAAB efficiency counted in BUDGETS rather than dollars, rookie-draft hit rate, and head-to-head with you \u2014 plus your own report card. Pass \`team\` to open one manager's full trade ledger, with an "at trade time" total where the archive has one. A season whose transactions could not be read is named, and nobody is called a non-trader over it. Tendencies describe the record; they do not predict acceptance.`,
+      inputSchema: {
+        team: external_exports.string().optional().describe("One manager to open in full: team name, manager handle or roster id. Omit for the league overview and your report card."),
+        limit: external_exports.number().int().min(1).max(MAX_TRADE_LIMIT).optional().describe(`Trades to return from that manager's ledger, newest first (default ${DEFAULT_TRADE_LIMIT}, max ${MAX_TRADE_LIMIT}).`),
+        leagueId: external_exports.string().optional().describe("Sleeper league id. Omit for the configured league."),
+        refresh: external_exports.boolean().optional().describe("Bypass the caches and refetch. Past seasons are frozen, so this rarely changes anything but the current season.")
+      },
+      outputSchema: {
+        ok: external_exports.boolean(),
+        error: external_exports.string().optional(),
+        candidates: external_exports.array(teamCandidate).optional(),
+        asOf: asOfSchema.optional(),
+        league: external_exports.object({
+          leagueId: external_exports.string().nullable(),
+          name: external_exports.string().nullable(),
+          season: external_exports.string().nullable(),
+          teams: external_exports.number()
+        }).optional(),
+        ledger: external_exports.object({
+          available: external_exports.boolean(),
+          complete: external_exports.boolean(),
+          seasonsRead: external_exports.array(external_exports.string()),
+          seasonsMissing: external_exports.array(external_exports.string()),
+          tradeTimeArchive: external_exports.boolean()
+        }).optional(),
+        you: managerSummarySchema.extend({
+          strengths: external_exports.array(external_exports.string()),
+          workOn: external_exports.array(external_exports.string())
+        }).nullable().optional(),
+        managers: external_exports.array(managerSummarySchema).optional(),
+        manager: managerSummarySchema.extend({
+          tendencyDetail: external_exports.object({
+            picksGot: external_exports.number(),
+            picksGave: external_exports.number(),
+            avgAgeGot: external_exports.number().nullable(),
+            avgAgeGave: external_exports.number().nullable(),
+            playersGotByPosition: external_exports.record(external_exports.string(), external_exports.number())
+          }).nullable(),
+          biggestWin: scoutTradeSchema.nullable(),
+          biggestLoss: scoutTradeSchema.nullable(),
+          draftPicks: external_exports.array(external_exports.object({
+            season: external_exports.string(),
+            slotLabel: external_exports.string(),
+            overall: external_exports.number().nullable(),
+            player: external_exports.string(),
+            position: external_exports.string().nullable(),
+            value: external_exports.number().nullable(),
+            slotsBeaten: external_exports.number(),
+            hit: external_exports.boolean()
+          })),
+          tradeLedger: external_exports.array(scoutTradeSchema)
+        }).optional(),
+        counts: external_exports.object({
+          trades: external_exports.number().nullable(),
+          returned: external_exports.number(),
+          truncated: external_exports.boolean(),
+          withTradeTimeValues: external_exports.number(),
+          draftPicks: external_exports.number().nullable()
+        }).optional(),
+        notes: external_exports.array(external_exports.string()).optional()
+      }
+    },
+    async ({ team, limit, leagueId, refresh }) => {
+      const snapshot = await snapshotFor(leagueId, refresh);
+      const [history, transactions, tradeValues] = await Promise.all([
+        ledgerHistoryFor(snapshot, leagueId, refresh),
+        transactionsFor(snapshot, leagueId, refresh),
+        getTradeValues({ force: !!refresh, fetcher: get, ttlMs: config2.feedTtlMs, ...store ? { store } : {} })
+      ]);
+      const answer = buildScoutAnswer(snapshot, { history, transactions, tradeValues }, {
+        team,
+        limit,
+        defaultRosterId: config2.defaultRosterId,
+        myRosterId: config2.defaultRosterId
+      });
+      if (answer.asOf) {
+        answer.asOf = mergeAsOf(answer.asOf, {
+          ...history.sources,
+          ...transactions.sources,
+          ...tradeValues.available ? { tradeValues: tradeValues.source } : {}
+        });
+      }
+      return {
+        content: [{ type: "text", text: renderScoutText(answer) }],
+        structuredContent: answer,
+        isError: !answer.ok
+      };
+    }
+  );
+  const placementSchema = external_exports.object({
+    rosterId: external_exports.number(),
+    ownerId: external_exports.string().nullable(),
+    teamName: external_exports.string()
+  }).nullable();
+  server.registerTool(
+    "get_league_results",
+    {
+      title: "Past league champions and results",
+      description: `Answers "who won our league in 2023?" and "who has the most titles?" from Sleeper's playoff bracket for every season of this league's history: champion, runner-up and third place, the regular-season standings, and titles counted by manager (so a renamed team keeps its titles). The current season reports in-progress until its championship game is decided. A season whose bracket could not be read is reported as unknown, never as having no winner.`,
+      inputSchema: {
+        season: external_exports.string().optional().describe(`One season, e.g. "2023". Omit for every season in the league's history.`),
+        leagueId: external_exports.string().optional().describe("Sleeper league id. Omit for the configured league."),
+        refresh: external_exports.boolean().optional().describe("Bypass the caches and refetch. Past brackets are frozen; this only matters for the current season.")
+      },
+      outputSchema: {
+        ok: external_exports.boolean(),
+        error: external_exports.string().optional(),
+        seasonsAvailable: external_exports.array(external_exports.string()).optional(),
+        asOf: asOfSchema.optional(),
+        available: external_exports.boolean().optional(),
+        league: external_exports.object({
+          leagueId: external_exports.string().nullable(),
+          name: external_exports.string().nullable(),
+          season: external_exports.string().nullable(),
+          teams: external_exports.number()
+        }).optional(),
+        seasons: external_exports.array(external_exports.object({
+          season: external_exports.string(),
+          status: external_exports.enum(["complete", "in-progress", "no-bracket", "unavailable"]),
+          champion: placementSchema,
+          runnerUp: placementSchema,
+          third: placementSchema,
+          fourth: placementSchema,
+          fifth: placementSchema,
+          sixth: placementSchema,
+          metadataAgrees: external_exports.boolean().nullable(),
+          standings: external_exports.array(external_exports.object({
+            rosterId: external_exports.number(),
+            ownerId: external_exports.string().nullable(),
+            teamName: external_exports.string(),
+            wins: external_exports.number(),
+            losses: external_exports.number(),
+            ties: external_exports.number(),
+            pointsFor: external_exports.number(),
+            regularSeasonRank: external_exports.number()
+          }))
+        })).optional(),
+        titles: external_exports.array(external_exports.object({
+          ownerId: external_exports.string(),
+          teamName: external_exports.string(),
+          stillInLeague: external_exports.boolean(),
+          titles: external_exports.number(),
+          seasons: external_exports.array(external_exports.string())
+        })).optional(),
+        counts: external_exports.object({ seasons: external_exports.number(), returned: external_exports.number() }).optional(),
+        notes: external_exports.array(external_exports.string()).optional()
+      }
+    },
+    async ({ season, leagueId, refresh }) => {
+      const snapshot = await snapshotFor(leagueId, refresh);
+      const results = await getLeagueResults({
+        leagueId: leagueId || config2.defaultLeagueId,
+        leagueInfo: snapshot.league?.leagueInfo ?? null,
+        ttlMs: config2.historyTtlMs,
+        currentTtlMs: config2.snapshotTtlMs,
+        force: !!refresh,
+        fetcher: get,
+        ...store ? { store } : {}
+      });
+      const answer = buildResultsAnswer(snapshot, results, { season });
+      if (answer.asOf) answer.asOf = mergeAsOf(answer.asOf, results.sources);
+      return {
+        content: [{ type: "text", text: renderResultsText(answer) }],
+        structuredContent: answer,
+        isError: !answer.ok
+      };
+    }
+  );
   return { server, config: config2 };
 }
 var SERVER_NAME, SERVER_VERSION, sourceStamp, asOfSchema, teamCandidate, playerRowSchema, playerCandidateSchema, pickCandidateSchema, lineupPlayerSchema, newsItemSchema, tradeAssetSchema, sideFitSchema, packageAssetSchema, seatAppealSchema;
@@ -45675,7 +47697,12 @@ var init_server3 = __esm({
     init_playoffOdds2();
     init_playerNews();
     init_findTradeTargets();
+    init_researchRookies();
     init_liveScores();
+    init_feeds();
+    init_leagueResults2();
+    init_results();
+    init_scoutManagers();
     init_news();
     SERVER_NAME = "dynastyedge";
     SERVER_VERSION = "0.1.0";
@@ -45724,7 +47751,17 @@ var init_server3 = __esm({
         // absent rather than erroring — but when it IS used it is stamped like
         // everything else, because an answer quoting a beat report has to be
         // datable.
-        news: sourceStamp.optional()
+        news: sourceStamp.optional(),
+        // The Actions-published rookie depth-chart + draft-capital feed, behind
+        // research_rookies. Class B like news: absent when the feed could not be
+        // read, stamped when it was used.
+        rookieIntel: sourceStamp.optional(),
+        // The permanent trade-time value archive, behind scout_managers' "at
+        // trade time" line. Class B; stamped only when it was read.
+        tradeValues: sourceStamp.optional(),
+        // Every season's playoff bracket, behind get_league_results. Stamps the
+        // OLDEST bracket read, for the reason oldestSourceAt is the stalest source.
+        brackets: sourceStamp.optional()
       })
     });
     teamCandidate = external_exports.object({

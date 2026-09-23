@@ -15,7 +15,7 @@ import { createFetcher } from './limit.js'
 import { getWeekly } from './weekly.js'
 import { getSeasonWeeks } from './season.js'
 import { getTransactions } from './transactions.js'
-import { getLeagueHistory } from './history.js'
+import { getLeagueHistory, getLedgerHistory } from './history.js'
 import { buildDraftGrades } from '../src/utils/managerAnalysis.js'
 import { buildPlayoffOutlook } from '../src/utils/playoffOdds.js'
 import { mergeAsOf } from './snapshot.js'
@@ -28,7 +28,12 @@ import { buildLineupAnswer, renderLineupText } from './tools/lineupAdvice.js'
 import { buildOddsAnswer, renderOddsText } from './tools/playoffOdds.js'
 import { buildNewsAnswer, renderNewsText, MAX_NEWS_LIMIT } from './tools/playerNews.js'
 import { buildTradeTargetsAnswer, renderTradeTargetsText, DEFAULT_LIMIT as TARGETS_DEFAULT_LIMIT, MAX_LIMIT as MAX_TARGETS } from './tools/findTradeTargets.js'
+import { buildRookieResearchAnswer, renderRookieResearchText, DEFAULT_LIMIT as ROOKIES_DEFAULT_LIMIT, MAX_LIMIT as MAX_ROOKIES } from './tools/researchRookies.js'
 import { getLiveScores } from './liveScores.js'
+import { getRookieIntel, getTradeValues } from './feeds.js'
+import { buildResultsAnswer, renderResultsText } from './tools/leagueResults.js'
+import { getLeagueResults } from './results.js'
+import { buildScoutAnswer, renderScoutText, DEFAULT_TRADE_LIMIT, MAX_TRADE_LIMIT } from './tools/scoutManagers.js'
 import { getNews } from './news.js'
 
 export const SERVER_NAME = 'dynastyedge'
@@ -87,6 +92,16 @@ const asOfSchema = z.object({
     // everything else, because an answer quoting a beat report has to be
     // datable.
     news: sourceStamp.optional(),
+    // The Actions-published rookie depth-chart + draft-capital feed, behind
+    // research_rookies. Class B like news: absent when the feed could not be
+    // read, stamped when it was used.
+    rookieIntel: sourceStamp.optional(),
+    // The permanent trade-time value archive, behind scout_managers' "at
+    // trade time" line. Class B; stamped only when it was read.
+    tradeValues: sourceStamp.optional(),
+    // Every season's playoff bracket, behind get_league_results. Stamps the
+    // OLDEST bracket read, for the reason oldestSourceAt is the stalest source.
+    brackets: sourceStamp.optional(),
   }),
 })
 
@@ -448,6 +463,18 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
   // The league-history walk, deliberately narrower than the app's ~169-request
   // one: leagues + rosters + drafts + picks, no transactions (see history.js).
   const historyFor = (snapshot, leagueId, refresh) => getLeagueHistory({
+    leagueId: leagueId || config.defaultLeagueId,
+    leagueInfo: snapshot.league?.leagueInfo ?? null,
+    ttlMs: config.historyTtlMs,
+    force: !!refresh,
+    fetcher: get,
+    ...(store ? { store } : {}),
+  })
+
+  // The WIDE walk: the narrow one above plus each past season's users and
+  // transaction buckets, which the trade ledger needs. Its own function with
+  // its own measured cost (see history.js), so historyFor stays narrow.
+  const ledgerHistoryFor = (snapshot, leagueId, refresh) => getLedgerHistory({
     leagueId: leagueId || config.defaultLeagueId,
     leagueInfo: snapshot.league?.leagueInfo ?? null,
     ttlMs: config.historyTtlMs,
@@ -1282,6 +1309,347 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
       })
       return {
         content: [{ type: 'text', text: renderTradeTargetsText(answer) }],
+        structuredContent: answer,
+        isError: !answer.ok,
+      }
+    }
+  )
+
+  // ── Tool 10 — research_rookies ──────────────────────────────────────────
+  //
+  // The second static feed the server reads. It adds ONE source to asOf —
+  // `rookieIntel`, declared in the closed object above — and only when the
+  // feed was actually used.
+
+  const rookieRowSchema = z.object({
+    sleeperId: z.string(),
+    name: z.string(),
+    position: z.string().nullable(),
+    nflTeam: z.string().nullable(),
+    value: z.number().nullable(),
+    unranked: z.boolean(),
+    positionRank: z.number().nullable(),
+    rookieAdp: z.number().nullable(),
+    score: z.number().nullable(),
+    scoreTier: z.string().nullable(),
+    ageTilted: z.boolean(),
+    reasons: z.array(z.string()),
+    depth: z.object({
+      rank: z.number().nullable(),
+      read: z.string().nullable(),
+      campMove: z.object({
+        from: z.number(), to: z.number(), delta: z.number(), direction: z.string(),
+      }).nullable(),
+    }),
+    nflDraft: z.object({ round: z.number().nullable(), pick: z.number() }).nullable(),
+    undrafted: z.boolean(),
+    noFeedEntry: z.boolean(),
+    marketRank: z.number().nullable(),
+    modelRank: z.number().nullable(),
+    divergence: z.number().nullable(),
+    fit: z.number().nullable(),
+    fitReasons: z.array(z.string()),
+    fitsNeed: z.boolean(),
+    ownerRosterId: z.number().nullable(),
+    ownerTeam: z.string().nullable(),
+    isYours: z.boolean(),
+    isFreeAgent: z.boolean(),
+    context: z.object({
+      ageAtDraft: z.number().nullable(),
+      heightIn: z.number().nullable(),
+      weightLb: z.number().nullable(),
+      forty: z.number().nullable(),
+      vertical: z.number().nullable(),
+      broadJump: z.number().nullable(),
+    }),
+  })
+
+  server.registerTool(
+    'research_rookies',
+    {
+      title: 'Research the rookie class',
+      description:
+        'Answers "which rookies become something, and which should I take?" — the question a dynasty ' +
+        'value cannot, because value prices consensus rather than opportunity. Returns the ONE opportunity ' +
+        'score the app ships (0-100: NFL depth-chart standing x NFL draft capital, back-tested, with a small ' +
+        'youth tilt), the within-position disagreement between that model and the market, and a roster-fit ' +
+        'ranking for one team. Age and combine numbers are returned as context only and never score. Pass ' +
+        '`player` for one rookie. A rookie the feed has no entry for is unscored (null), never zero.',
+      inputSchema: {
+        player: z.string().optional()
+          .describe('One rookie by name or Sleeper id. An ambiguous name returns candidates and refuses.'),
+        position: z.enum(['QB', 'RB', 'WR', 'TE']).optional()
+          .describe('Only this position (applies to the board, the shortlist and the divergence lists).'),
+        sort: z.enum(['fit', 'score', 'value']).optional()
+          .describe('fit (default, for the team) · score (opportunity alone) · value (dynasty market).'),
+        team: z.string().optional()
+          .describe('Whose roster fit to read: team name, manager handle or roster id. Omit for your own.'),
+        limit: z.number().int().min(1).max(MAX_ROOKIES).optional()
+          .describe(`Board rows to return (default ${ROOKIES_DEFAULT_LIMIT}, max ${MAX_ROOKIES}). counts carries the true size.`),
+        leagueId: z.string().optional()
+          .describe('Sleeper league id. Omit for the configured league.'),
+        refresh: z.boolean().optional()
+          .describe('Bypass the caches (~15 min snapshot, ~60 min feed) and refetch.'),
+      },
+      outputSchema: {
+        ok: z.boolean(),
+        error: z.string().optional(),
+        candidates: z.array(teamCandidate).optional(),
+        rookieCandidates: z.array(z.object({
+          sleeperId: z.string(), name: z.string(), position: z.string().nullable(), nflTeam: z.string().nullable(),
+        })).optional(),
+        asOf: asOfSchema.optional(),
+        // False means the rookie intel feed could not be read — every score
+        // is then null and the board is in dynasty-value order. Never "no
+        // rookies": the class comes from the player DB, not the feed.
+        available: z.boolean().optional(),
+        feed: z.object({
+          updatedAt: z.string().nullable(), ageHours: z.number().nullable(), season: z.string().nullable(),
+        }).nullable().optional(),
+        team: z.object({
+          rosterId: z.number(), teamName: z.string(), isYou: z.boolean(),
+          deficits: z.array(z.string()), winWindow: z.string().nullable(),
+        }).optional(),
+        scope: z.enum(['board', 'player']).optional(),
+        filter: z.object({ position: z.string().nullable(), sort: z.string() }).optional(),
+        counts: z.object({
+          rookieClass: z.number(), scored: z.number(), noFeedEntry: z.number(),
+          matchingFilter: z.number().optional(), returned: z.number().optional(), truncated: z.boolean().optional(),
+        }).optional(),
+        rookie: rookieRowSchema.optional(),
+        targets: z.array(rookieRowSchema).optional(),
+        undervalued: z.array(rookieRowSchema).optional(),
+        overvalued: z.array(rookieRowSchema).optional(),
+        board: z.array(rookieRowSchema).optional(),
+        notes: z.array(z.string()).optional(),
+      },
+    },
+    async ({ player, position, sort, team, limit, leagueId, refresh }) => {
+      const snapshot = await snapshotFor(leagueId, refresh)
+      const intel = await getRookieIntel({
+        force: !!refresh, fetcher: get, ttlMs: config.feedTtlMs, ...(store ? { store } : {}),
+      })
+      const answer = buildRookieResearchAnswer(snapshot, intel, {
+        player, position, sort, team, limit,
+        defaultRosterId: config.defaultRosterId,
+        myRosterId: config.defaultRosterId,
+      })
+      if (answer.asOf && intel.available) {
+        answer.asOf = mergeAsOf(answer.asOf, { rookieIntel: intel.source })
+      }
+      return {
+        content: [{ type: 'text', text: renderRookieResearchText(answer) }],
+        structuredContent: answer,
+        isError: !answer.ok,
+      }
+    }
+  )
+
+  // ── Tool 11 — scout_managers ────────────────────────────────────────────
+  //
+  // Three sources beyond the snapshot: the wide history walk (`history`), the
+  // current season's transactions (`transactions`) and the trade-time archive
+  // (`tradeValues`) — all three declared in the closed asOf object above.
+
+  const assetRowSchema = z.object({
+    type: z.string(), id: z.string().nullable(), label: z.string(), position: z.string().nullable(),
+    value: z.number().nullable(), approx: z.boolean(), flipped: z.boolean(),
+  })
+  const scoutTradeSchema = z.object({
+    txId: z.string().nullable(), season: z.string(), week: z.number().nullable(), date: z.string().nullable(),
+    result: z.string(), gotValue: z.number(), gaveValue: z.number(), net: z.number(),
+    partners: z.array(z.string()), got: z.array(assetRowSchema), gave: z.array(assetRowSchema),
+    atTradeTime: z.object({ got: z.number(), gave: z.number() }).nullable(),
+  })
+  const managerSummarySchema = z.object({
+    rosterId: z.number(),
+    teamName: z.string(),
+    handle: z.string().nullable(),
+    isYou: z.boolean(),
+    seasonsActive: z.array(z.string()),
+    record: z.object({ wins: z.number(), losses: z.number(), ties: z.number() }),
+    // Null means we could not read the ledger — NEVER "no trades".
+    activity: z.string().nullable(),
+    trades: z.object({
+      count: z.number(), wins: z.number(), losses: z.number(), evens: z.number(),
+      thisSeason: z.number().nullable(), netValue: z.number(),
+    }).nullable(),
+    tendencies: z.array(z.string()),
+    faab: z.object({
+      budgetsCommitted: z.number(), claims: z.number(), avgBidPct: z.number().nullable(),
+      valuePerBudget: z.number().nullable(), faMoves: z.number(),
+    }).nullable(),
+    draft: z.object({ count: z.number(), hits: z.number(), avgDelta: z.number() }).nullable(),
+    vsMe: z.object({ trades: z.number(), myNet: z.number() }).nullable(),
+  })
+
+  server.registerTool(
+    'scout_managers',
+    {
+      title: 'Scout how a manager trades',
+      description:
+        'Answers "how does this manager trade, and how have I done?" from every season of league history: ' +
+        'each manager\'s trade record graded in hindsight at today\'s values, tendencies (pick accumulator, ' +
+        'buys youth, chases a position, aggressive or bargain FAAB bidder), FAAB efficiency counted in BUDGETS ' +
+        'rather than dollars, rookie-draft hit rate, and head-to-head with you — plus your own report card. ' +
+        'Pass `team` to open one manager\'s full trade ledger, with an "at trade time" total where the ' +
+        'archive has one. A season whose transactions could not be read is named, and nobody is called a ' +
+        'non-trader over it. Tendencies describe the record; they do not predict acceptance.',
+      inputSchema: {
+        team: z.string().optional()
+          .describe('One manager to open in full: team name, manager handle or roster id. Omit for the league overview and your report card.'),
+        limit: z.number().int().min(1).max(MAX_TRADE_LIMIT).optional()
+          .describe(`Trades to return from that manager's ledger, newest first (default ${DEFAULT_TRADE_LIMIT}, max ${MAX_TRADE_LIMIT}).`),
+        leagueId: z.string().optional()
+          .describe('Sleeper league id. Omit for the configured league.'),
+        refresh: z.boolean().optional()
+          .describe('Bypass the caches and refetch. Past seasons are frozen, so this rarely changes anything but the current season.'),
+      },
+      outputSchema: {
+        ok: z.boolean(),
+        error: z.string().optional(),
+        candidates: z.array(teamCandidate).optional(),
+        asOf: asOfSchema.optional(),
+        league: z.object({
+          leagueId: z.string().nullable(), name: z.string().nullable(),
+          season: z.string().nullable(), teams: z.number(),
+        }).optional(),
+        ledger: z.object({
+          available: z.boolean(), complete: z.boolean(),
+          seasonsRead: z.array(z.string()), seasonsMissing: z.array(z.string()),
+          tradeTimeArchive: z.boolean(),
+        }).optional(),
+        you: managerSummarySchema.extend({
+          strengths: z.array(z.string()), workOn: z.array(z.string()),
+        }).nullable().optional(),
+        managers: z.array(managerSummarySchema).optional(),
+        manager: managerSummarySchema.extend({
+          tendencyDetail: z.object({
+            picksGot: z.number(), picksGave: z.number(),
+            avgAgeGot: z.number().nullable(), avgAgeGave: z.number().nullable(),
+            playersGotByPosition: z.record(z.string(), z.number()),
+          }).nullable(),
+          biggestWin: scoutTradeSchema.nullable(),
+          biggestLoss: scoutTradeSchema.nullable(),
+          draftPicks: z.array(z.object({
+            season: z.string(), slotLabel: z.string(), overall: z.number().nullable(),
+            player: z.string(), position: z.string().nullable(), value: z.number().nullable(),
+            slotsBeaten: z.number(), hit: z.boolean(),
+          })),
+          tradeLedger: z.array(scoutTradeSchema),
+        }).optional(),
+        counts: z.object({
+          trades: z.number().nullable(), returned: z.number(), truncated: z.boolean(),
+          withTradeTimeValues: z.number(), draftPicks: z.number().nullable(),
+        }).optional(),
+        notes: z.array(z.string()).optional(),
+      },
+    },
+    async ({ team, limit, leagueId, refresh }) => {
+      const snapshot = await snapshotFor(leagueId, refresh)
+      const [history, transactions, tradeValues] = await Promise.all([
+        ledgerHistoryFor(snapshot, leagueId, refresh),
+        transactionsFor(snapshot, leagueId, refresh),
+        getTradeValues({ force: !!refresh, fetcher: get, ttlMs: config.feedTtlMs, ...(store ? { store } : {}) }),
+      ])
+      const answer = buildScoutAnswer(snapshot, { history, transactions, tradeValues }, {
+        team, limit,
+        defaultRosterId: config.defaultRosterId,
+        myRosterId: config.defaultRosterId,
+      })
+      if (answer.asOf) {
+        answer.asOf = mergeAsOf(answer.asOf, {
+          ...history.sources,
+          ...transactions.sources,
+          ...(tradeValues.available ? { tradeValues: tradeValues.source } : {}),
+        })
+      }
+      return {
+        content: [{ type: 'text', text: renderScoutText(answer) }],
+        structuredContent: answer,
+        isError: !answer.ok,
+      }
+    }
+  )
+
+  // ── Tool 12 — get_league_results ────────────────────────────────────────
+  //
+  // "Who won our league in 2023?" — the first call this repo has ever made to
+  // /league/{id}/winners_bracket. Its own small tool rather than a field on
+  // scout_managers: it reads the NARROW walk plus a bracket per season, not
+  // the ledger's 68 requests. Adds `brackets` (declared above) and `history`.
+
+  const placementSchema = z.object({
+    rosterId: z.number(), ownerId: z.string().nullable(), teamName: z.string(),
+  }).nullable()
+
+  server.registerTool(
+    'get_league_results',
+    {
+      title: 'Past league champions and results',
+      description:
+        'Answers "who won our league in 2023?" and "who has the most titles?" from Sleeper\'s playoff bracket ' +
+        'for every season of this league\'s history: champion, runner-up and third place, the regular-season ' +
+        'standings, and titles counted by manager (so a renamed team keeps its titles). The current season ' +
+        'reports in-progress until its championship game is decided. A season whose bracket could not be read ' +
+        'is reported as unknown, never as having no winner.',
+      inputSchema: {
+        season: z.string().optional()
+          .describe('One season, e.g. "2023". Omit for every season in the league\'s history.'),
+        leagueId: z.string().optional()
+          .describe('Sleeper league id. Omit for the configured league.'),
+        refresh: z.boolean().optional()
+          .describe('Bypass the caches and refetch. Past brackets are frozen; this only matters for the current season.'),
+      },
+      outputSchema: {
+        ok: z.boolean(),
+        error: z.string().optional(),
+        seasonsAvailable: z.array(z.string()).optional(),
+        asOf: asOfSchema.optional(),
+        available: z.boolean().optional(),
+        league: z.object({
+          leagueId: z.string().nullable(), name: z.string().nullable(),
+          season: z.string().nullable(), teams: z.number(),
+        }).optional(),
+        seasons: z.array(z.object({
+          season: z.string(),
+          status: z.enum(['complete', 'in-progress', 'no-bracket', 'unavailable']),
+          champion: placementSchema,
+          runnerUp: placementSchema,
+          third: placementSchema,
+          fourth: placementSchema,
+          fifth: placementSchema,
+          sixth: placementSchema,
+          metadataAgrees: z.boolean().nullable(),
+          standings: z.array(z.object({
+            rosterId: z.number(), ownerId: z.string().nullable(), teamName: z.string(),
+            wins: z.number(), losses: z.number(), ties: z.number(), pointsFor: z.number(),
+            regularSeasonRank: z.number(),
+          })),
+        })).optional(),
+        titles: z.array(z.object({
+          ownerId: z.string(), teamName: z.string(), stillInLeague: z.boolean(),
+          titles: z.number(), seasons: z.array(z.string()),
+        })).optional(),
+        counts: z.object({ seasons: z.number(), returned: z.number() }).optional(),
+        notes: z.array(z.string()).optional(),
+      },
+    },
+    async ({ season, leagueId, refresh }) => {
+      const snapshot = await snapshotFor(leagueId, refresh)
+      const results = await getLeagueResults({
+        leagueId: leagueId || config.defaultLeagueId,
+        leagueInfo: snapshot.league?.leagueInfo ?? null,
+        ttlMs: config.historyTtlMs,
+        currentTtlMs: config.snapshotTtlMs,
+        force: !!refresh,
+        fetcher: get,
+        ...(store ? { store } : {}),
+      })
+      const answer = buildResultsAnswer(snapshot, results, { season })
+      if (answer.asOf) answer.asOf = mergeAsOf(answer.asOf, results.sources)
+      return {
+        content: [{ type: 'text', text: renderResultsText(answer) }],
         structuredContent: answer,
         isError: !answer.ok,
       }

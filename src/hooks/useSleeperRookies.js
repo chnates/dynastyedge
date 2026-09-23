@@ -1,31 +1,10 @@
 import { useMemo } from 'react'
 import { usePlayerDB, getCachedPlayerDB } from './usePlayerDB'
+import { buildRookieMap } from '../utils/rookieAdp'
 
-const VALID_POSITIONS = new Set(['QB', 'RB', 'WR', 'TE'])
-
-// Rookie map derived from the shared player DB cache (usePlayerDB).
-// years_exp===0 is definitive; years_exp==null with age<=25 catches freshly
-// drafted players whose Sleeper data hasn't updated post-draft yet.
+// The rookie-class rule lives in utils/rookieAdp.js (so the MCP server
+// builds the same class); this hook keeps only the per-DB memo.
 let rookieCache = { db: null, map: null }
-
-function buildRookieMap(playerDB) {
-  const map = {}
-  Object.entries(playerDB).forEach(([player_id, p]) => {
-    const isRookie = p.years_exp === 0 || (p.years_exp == null && p.age != null && p.age <= 25)
-    if (!isRookie) return
-    if (!VALID_POSITIONS.has(p.position)) return
-    if (!p.name) return
-    map[player_id] = {
-      sleeperId: player_id,
-      name: p.name,
-      position: p.position,
-      team: p.team,
-      age: p.age,
-      value: 0,
-    }
-  })
-  return map
-}
 
 function getRookieMap(playerDB) {
   if (rookieCache.db !== playerDB) {

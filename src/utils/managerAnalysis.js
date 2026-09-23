@@ -555,6 +555,38 @@ export function buildMyInsights(profiles, me) {
   return { strengths: strengths.slice(0, 3), workOn: workOn.slice(0, 3) }
 }
 
+// ── The "at trade time" line ─────────────────────────────────────────────────
+
+// "At trade time" totals for one ledger entry, from the permanent trade-value
+// archive (trade-values.json on the values-history branch). Returns
+// { gotThen, gaveThen }, or null when the trade isn't archived or ANY non-FAAB
+// asset on it is missing — a partial total would mislead. A null archive value
+// is a MISSING asset, never a 0: the archive writes null for a pick it could
+// not price precisely so that this line hides rather than under-counts.
+//
+// Lives here, not in useTradeTimeValues, so the MCP server's scouting tool
+// reads the same rule the phone does.
+export function tradeTimeTotals(archive, trade) {
+  const entry = archive?.trades?.[trade?.txId]
+  if (!entry) return null
+
+  function sideTotal(assets) {
+    let total = 0
+    for (const a of assets ?? []) {
+      if (a.type === 'faab') continue
+      const v = a.type === 'player' ? entry.players?.[a.id] : entry.picks?.[a.pickKey]
+      if (v == null) return null
+      total += v
+    }
+    return total
+  }
+
+  const gotThen = sideTotal(trade.got)
+  const gaveThen = sideTotal(trade.gave)
+  if (gotThen == null || gaveThen == null) return null
+  return { gotThen, gaveThen }
+}
+
 // ── Draft grades on their own ────────────────────────────────────────────────
 
 // Rookie-draft hindsight records, keyed by owner id — the same `draft` field

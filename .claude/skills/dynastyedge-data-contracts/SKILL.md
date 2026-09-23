@@ -105,6 +105,7 @@ League ID: `1313933520715907072` (constant `LEAGUE_ID`).
 | `/projections/nfl/regular/{season}/{week}` | `useLineupData` | Per-mount, in-season only |
 | `/schedule/nfl/regular/{season}` | `useLineupData` | Per-mount, in-season only. **`SLEEPER_ROOT` — NOT under `/v1`** (the `/v1` path 404s for every season). Best-effort `.catch(() => [])` |
 | `/stats/nfl/regular/{year}` | `usePlayerIntel` (`loadSeasonStats`) | Lazy (first profile open), session cache per year |
+| `/league/{id}/winners_bracket` | **MCP server only** — `mcp/results.js` (`get_league_results`); **the app never calls it** | Past seasons frozen, per-season key on the history TTL; current season on the snapshot TTL. Shape probed live 2026-09-22: `[{ m, r, t1, t2, w, l, p?, t1_from?, t2_from? }]`, champion = `w` of the `p: 1` game (see `src/utils/leagueResults.js`). The current season's bracket exists with every `w`/`l` **null** until played — in progress, never "no winner" |
 | `/stats/nfl/regular/{year}/{week}` | `useLineupData` (prev week, defense ranks) · `usePlayerIntel` (last 3 weeks) | useLineupData per-mount, best-effort `.catch(() => ({}))`; usePlayerIntel session cache per `${year}-${week}`. **Carries no `pos`/`opp`/`tm` — see below** |
 
 ### Response fields the code actually consumes
@@ -450,14 +451,19 @@ round median across every season listed, then **`null`**.
 Reader:
 `useTradeTimeValues.getTradeTimeTotals(trade)` returns `{gotThen, gaveThen}`
 or `null` when the trade isn't archived **or any non-FAAB asset is missing**
-(partial totals would mislead). FAAB assets skip valuation.
+(partial totals would mislead). FAAB assets skip valuation. Since 2026-09-22
+the rule itself is `tradeTimeTotals(archive, trade)` in
+`src/utils/managerAnalysis.js`; the hook calls it, and so does the MCP
+server's `scout_managers` (through `mcp/feeds.js`), so both read one rule.
 
 ### 3d. `ROOKIE_INTEL_URL` → rookie-intel.json (branch `rookie-intel`)
 
 Writer: `scripts/snapshot-rookie-intel.mjs`
 (`.github/workflows/rookie-intel.yml`, daily `23 10 * * *`). Reader:
 `src/hooks/useRookieIntel.js` → Draft › Research (Feature 19) and the side
-drawer's data-status block.
+drawer's data-status block. **Also read server-side** by the MCP server's
+`research_rookies` through `mcp/feeds.js` (same shape check: `players` must be
+an object, else it is a miss — never a partial answer).
 
 **Upstream is nflverse, not an API the app can call.** Three GitHub release
 CSVs — `draft_picks.csv`, `roster_{season}.csv`, `depth_charts_{season}.csv`

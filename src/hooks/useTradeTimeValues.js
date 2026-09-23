@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { TRADE_VALUES_URL } from '../constants'
 import { fetchJSON } from '../utils/fetchJSON'
+import { tradeTimeTotals } from '../utils/managerAnalysis'
 
 // Trade-time value archive, accumulated by the values-history GitHub Action:
 // for every trade completed while the pipeline runs, the asset values within
@@ -45,28 +46,10 @@ export function useTradeTimeValues() {
     return () => { cancelled = true }
   }, [])
 
-  // "At trade time" totals for one ledger entry. Returns { gotThen, gaveThen }
-  // or null when the trade isn't archived or any non-FAAB asset is missing
-  // (partial totals would mislead).
+  // "At trade time" totals for one ledger entry — the rule lives in
+  // utils/managerAnalysis.js (tradeTimeTotals) so the MCP server shares it.
   function getTradeTimeTotals(trade) {
-    const entry = archive?.trades?.[trade.txId]
-    if (!entry) return null
-
-    function sideTotal(assets) {
-      let total = 0
-      for (const a of assets) {
-        if (a.type === 'faab') continue
-        const v = a.type === 'player' ? entry.players?.[a.id] : entry.picks?.[a.pickKey]
-        if (v == null) return null
-        total += v
-      }
-      return total
-    }
-
-    const gotThen = sideTotal(trade.got)
-    const gaveThen = sideTotal(trade.gave)
-    if (gotThen == null || gaveThen == null) return null
-    return { gotThen, gaveThen }
+    return tradeTimeTotals(archive, trade)
   }
 
   return { archive, getTradeTimeTotals }

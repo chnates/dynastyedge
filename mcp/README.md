@@ -7,7 +7,15 @@ knowledge.
 Design spec: [`../MCP_DISCOVERY.md`](../MCP_DISCOVERY.md). Read it first — this
 file covers only what is built.
 
-**Nine tools, over stdio AND streamable HTTP.** The ninth,
+**Twelve tools, over stdio AND streamable HTTP.** The twelfth,
+`get_league_results` (2026-09-22), answers the one question §5 recorded as
+unanswerable — *"who won our league in 2023?"* — from
+`/league/{id}/winners_bracket`, an endpoint nothing here had called. The eleventh,
+`scout_managers` (2026-09-22), closes `MCP_DISCOVERY.md` §5's deferred list: a
+behavioural profile of every manager from every season, on a history walk
+widened in the open. The tenth, `research_rookies`
+(2026-09-22), is the second of §5's deferred phase-two tools and the second
+static feed the server reads (`rookie-intel.json`). The ninth,
 `find_trade_targets` (2026-09-22), is the first of `MCP_DISCOVERY.md` §5's
 three deferred phase-two tools and the question that comes *before*
 `analyze_trade` — the server could grade a trade you had already thought of and
@@ -77,9 +85,12 @@ Every tool also takes `leagueId` per call; these are only the fallbacks.
 | `lineup_advice` | "What do I start, and what's it costing me?" | **In-season only** — the offseason says so, never zeros |
 | `get_playoff_odds` | "Am I making the playoffs — buying or selling?" | The preseason returns a **null** percentage and a labelled preview, never a made-up one |
 | `get_player_news` | "What's the latest on Bowers?" / "Who on my team is hurt?" | Injury body part + notes + the feed; an ambiguous name is **refused**, and silence is a gap in coverage, never good health |
+| `research_rookies` | "Which rookies become something, and which should I take?" | The ONE opportunity score the app ships, within-position market-vs-model divergence, and roster fit for any team. No feed entry is **null**, never 0; an unreadable feed returns the class in value order, never "no rookies" |
+| `scout_managers` | "How does this manager trade, and how have I done?" | Hindsight ledger, tendencies, FAAB in **budgets**, draft hit rate, your report card. Names any season it could not read — nobody is called a non-trader over an outage |
+| `get_league_results` | "Who won our league in 2023?" / "Who has the most titles?" | Read from the playoff bracket; titles counted by **manager**, so a renamed team keeps them. An in-progress season has no champion yet; an unreadable bracket is **unknown**, never "no winner" |
 | `find_trade_targets` | "Who should I call about, and what would it cost?" | Both seats' appeal per row, the package held inside the Analyzer's **fair band**, and the premium that would buy a yes. It does **not** grade — hand the ids to `analyze_trade` |
 
-All nine are documented with their contracts and traps in CLAUDE.md's
+All twelve are documented with their contracts and traps in CLAUDE.md's
 **The MCP Server** section. Read that before changing one.
 
 ### The one layer with NO TTL, and that is the argument
@@ -155,7 +166,9 @@ mcp/
   transactions.js the season transaction feed, on a FOURTH and SPLIT TTL
   liveScores.js   this week's box score, on a FIFTH and deliberately SHORT TTL
   news.js         the player-news feed + the id-only matcher (Class B)
-  history.js      the deliberately narrow league-history walk
+  feeds.js        rookie-intel + trade-values: one Class B loader, 60-min TTL
+  results.js      every season's playoff bracket, on top of the narrow walk
+  history.js      the league-history walk: narrow (drafts) and wide (ledger)
   teams.js        resolveTeam — one definition, three tools
   limit.js        concurrency gate + retry/backoff
   config.js       league / identity / TTLs, env-first
@@ -165,13 +178,15 @@ mcp/
     getRoster.js  findSellHigh.js  recommendFreeAgents.js
     resolveAssets.js  analyzeTrade.js  lineupAdvice.js
     playoffOdds.js    playerNews.js  findTradeTargets.js
+    researchRookies.js  scoutManagers.js  leagueResults.js
 ```
 
 Tests live with the rest of the suite: `mcpLimit`, `mcpSnapshot`, `mcpWeekly`,
 `mcpSeason`, `mcpStore`, `mcpHttp`, `mcpOauth`, and one file per tool
 (`mcpGetRoster`, `mcpFindSellHigh`, `mcpRecommendFreeAgents`,
 `mcpResolveAssets`, `mcpAnalyzeTrade`, `mcpLineupAdvice`, `mcpPlayoffOdds`,
-`mcpNews`, `mcpFindTradeTargets`),
+`mcpNews`, `mcpFindTradeTargets`, `mcpResearchRookies`, `mcpScoutManagers`,
+`mcpLeagueResults`),
 plus `tests/leagueState.test.mjs` and `tests/playoffOdds.test.mjs` for the join
 and the model this all rests on. The tool suites share
 `tests/helpers/mcpFixtures.mjs` — one synthetic league, because several tools
@@ -281,14 +296,14 @@ first live call, before either reached a reader — which is the concrete payoff
   are `home`/`away`, not `home_team`/`away_team`. Both mistakes fail
   **silently** as "no games", which reads as "every team is on bye".
   `weekly.js` owns both and `tests/mcpWeekly.test.mjs` pins each.
-- **The history walk is narrow, and a future tool must widen it deliberately.**
-  `mcp/history.js` fetches leagues + rosters + drafts + picks — 14 requests
-  against `useLeagueHistory`'s ~169 — because draft grading reads none of the
-  weekly transaction buckets that make up the difference. A manager-scouting
-  tool needs the trade ledger and therefore needs those buckets; widen it
-  there with its own argument for the cost, and keep pairing this walk with
-  `buildDraftGrades` rather than `buildManagerProfiles`, whose empty ledger
-  would read as "this manager has never traded".
+- **The history walk has two widths, and the narrow one stays narrow.**
+  `getLeagueHistory` fetches leagues + rosters + drafts + picks — 14 requests —
+  because draft grading reads none of the weekly transaction buckets, and it
+  stays paired with `buildDraftGrades`. `getLedgerHistory` is the wide walk
+  `scout_managers` needs: built on top of the narrow one, it adds users and
+  weeks 1..`last_scored_leg` per past season — **68 requests cold, 0 cached**,
+  each frozen season under its own key. A season it could not read is named and
+  never cached as empty, so an outage never reads as "has never traded".
 - **`asOf.sources` is a CLOSED zod schema.** A new source that is not declared
   in `server.js`'s `asOfSchema` makes a real MCP client reject the whole
   response with *"must NOT have additional properties"* — and lint, the full
@@ -299,7 +314,9 @@ first live call, before either reached a reader — which is the concrete payoff
   `values-history.json`, `trade-values.json` and `rookie-intel.json` are
   published from this repo's own branches. A second league gets working
   rosters, values and trades — but no news, sparklines or rookie research.
-  No tool reads them yet; the ones that will must degrade cleanly and say so.
+  `news.json` (via `news.js`), `rookie-intel.json` and `trade-values.json`
+  (via `feeds.js`) are read, and all three degrade to `available: false` with a note — never an error,
+  never an empty answer that reads as a fact about the world.
 
 ## Auth (phase 2)
 
@@ -374,8 +391,8 @@ endpoint.
   functions from the **source** tree — `ci.yml` rebuilds and diffs it, so a
   stale bundle fails CI). The three findings that each cost a deploy cycle are
   in CLAUDE.md's Deployment section; read them before touching the packaging.
-- Still open: `myDraftGrade` and `partnerActivity` on `analyze_trade` (each
-  needs a fetch beyond the snapshot — the league-history walk and the
-  transaction feed), `MCP_DISCOVERY.md` §5's remaining phase-two tools (trade
-  targets, manager scouting, rookie research), and `/league/{id}/winners_bracket`,
-  which no code here has ever called.
+- Closed since: `myDraftGrade` and `partnerActivity` on `analyze_trade`
+  (phase 2b), all three of `MCP_DISCOVERY.md` §5's phase-two tools (trade
+  targets, rookie research, manager scouting — 2026-09-22), and
+  `/league/{id}/winners_bracket`, first called 2026-09-22 by
+  `get_league_results`. What remains is in `docs/open-items.md` MCP-CARRY.

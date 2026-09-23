@@ -5,8 +5,16 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-09-22 (**SMALL-1 closed and MCP-CARRY's trade-targets
-tool shipped** — `find_trade_targets`, the ninth MCP tool and the first of
+**Last reviewed:** 2026-09-22 (**MCP-CARRY's capability closed** — three more
+tools, `research_rookies`, `scout_managers` and `get_league_results`, make
+twelve and close `MCP_DISCOVERY.md` §5's deferred list plus the question it
+called unanswerable. Two extractions in the A–D shape came with them
+(`buildRookieBoard` / `buildRookieMap`, equivalence proved on live data; and
+`tradeTimeTotals`), the history walk was widened **openly** as its own
+function, and `/league/{id}/winners_bracket` was called for the first time.
+One small bug found and recorded rather than fixed: **ROOKIE-1**. Owed: the
+connector re-check on the phone. Previously **SMALL-1 closed and MCP-CARRY's
+trade-targets tool shipped** — `find_trade_targets`, the ninth MCP tool and the first of
 `MCP_DISCOVERY.md` §5's three deferred phase-two tools. The server could grade
 a trade you had already thought of and could not answer "who do I call about,
 and what would it cost?". SMALL-1 went first and its own instruction to
@@ -135,6 +143,7 @@ which beats any amount of feature value.
 | Next | Work | Why here |
 |---|---|---|
 | **1** | ~~SMALL-1 → then MCP-CARRY's trade-targets tool~~ — **DONE 2026-09-22.** Both shipped: the rationale now checks the lineup before claiming to have protected it, and `find_trade_targets` is the ninth tool. Two of §5's phase-two tools remain (manager scouting, rookie research) — neither is scheduled | The largest capability gap the server had: it could *grade* a trade you already thought of but not answer "who do I call about, and what would it cost?". SMALL-1 went first because `packageRationale` is the string that tool returns, and a false claim through an LLM is worse than one on a screen |
+| **1b** | ~~MCP-CARRY's remaining capability~~ — **DONE 2026-09-22.** `research_rookies`, `scout_managers` and `get_league_results` shipped; the server now has twelve tools and §5's list is closed. **Owed: the connector re-check on the owner's phone** for the four tools added since 2026-09-20 (see MCP-CARRY), and **ROOKIE-1**, a small identity fix found on the way (0 of 444 live) | The server could grade and find trades but could not answer the rookie, manager or history questions the app already answers on the phone. What MCP-CARRY still holds is known limits, not capability |
 | **2** | ~~NEWS-4 + NEWS-7~~ — **DONE 2026-09-22.** ESPN RSS removed (it answers Actions with an empty HTTP 202, not a throw); player cap 400 → 1200; `coverage.depthHours` added because `spanHours` turned out to be set by stragglers. **One follow-up: re-read `depthHours` on 2026-09-29** to learn whether the 7-day window binds | Both small. NEWS-5 is effectively settled — the docs are corrected and its option 2 is cosmetic |
 | **3** | **Phase 4b/4c** — normalize the three valuation sources and surface the disagreement | The biggest unbuilt owner-approved item, but 4d wants archive history and `values-consensus.json` holds one day as of 2026-09-21. It gets better by waiting, which nothing else on this list does |
 
@@ -1082,16 +1091,63 @@ Two things worth carrying forward from building it:
   is the one place the bug cannot appear. Measure the blast radius on every
   seat, not the one you are looking at.
 
+**SHIPPED 2026-09-22: the rookie research tool.** `research_rookies` is the
+tenth tool and the second of §5's deferred three. Prerequisite E lifted the
+board composition out of `useRookieResearch` (→ `buildRookieBoard`) and the
+class rule out of `useSleeperRookies` (→ `buildRookieMap`); the hooks keep the
+memo. Equivalence **proved on live data**, not inspected: both pre-extraction
+bodies lifted verbatim from git, `deepStrictEqual` on all 14 cases (444-rookie
+class, all ten identities, no identity, no feed, no FantasyCalc). Measured over
+the real transport: **943ms cold / 40ms cached, 25,888B**, 9 upstream requests
+cold and 0 cached; 236 of 444 rookies scored, 208 with no feed entry and
+therefore null. It turned up **ROOKIE-1** (§2) — found, measured at 0 live
+occurrences, not fixed in a tool commit.
+
+**SHIPPED 2026-09-22: the manager-scouting tool.** `scout_managers` is the
+eleventh tool and closes §5's deferred list. The history walk was widened **in
+the open**: `getLedgerHistory` is its own function, built on top of the narrow
+`getLeagueHistory` (whose 14 requests and zero-transactions assertion are
+untouched), adding users + transaction weeks 1..`last_scored_leg` per past
+season. Measured: **68 requests cold, 508ms, 0 cached** — and every past
+season's week-18 bucket is empty, which is why it stops at `last_scored_leg`.
+Stated honestly, the app's walk over the same four seasons is ~72, so the
+economy is the per-season frozen cache, not a smaller fetch. Over the real
+transport: **1,219ms cold / 34ms cached, 10,041B** (80 upstream requests cold).
+The "never traded" contract is pinned from both directions. `tradeTimeTotals`
+moved out of `useTradeTimeValues` so the tool reads the trade-time archive by
+the phone's rule — and the archive's two trades both carry a null pick, so **0**
+ledger rows print the line today, which the notes say.
+
+**SHIPPED 2026-09-22: "who won our league in 2023?"** — `get_league_results`,
+the twelfth tool, and the first call this repo has made to
+`/league/{id}/winners_bracket`. The shape was probed live before writing
+against it; the `p: 1` game's winner matched each past league's own
+`metadata.latest_league_winner_roster_id` on all three complete seasons. **Its
+own tool, not a field on `scout_managers`**: a different question at a third of
+the cost — it reads the narrow walk plus a bracket and a users call per season
+(**29 requests cold**, 0 cached, no transaction bucket) where the ledger costs
+80. Over the real transport: **1,165ms cold / 27ms cached, 10,089B**. Answer:
+**Post Mahomes (today Mahomes Depot) won 2023**, Ministry Of Touchdowns 2024 and
+2025; titles are credited by owner, so the rename does not orphan the title.
+
+**Owed on the phone (the owner's, since no sandbox can do it):** the connector
+re-check for the four tools added since the last one on 2026-09-20 —
+`find_trade_targets`, `research_rookies`, `scout_managers`,
+`get_league_results` — i.e. confirm all **twelve** appear in the connector's
+own tool list after this deploys, and ask each one question. That is the end of
+the chain no probe reaches.
+
 **Capability not built:**
-- **Two of `MCP_DISCOVERY.md` §5's phase-two tools** remain — manager scouting
-  (the biggest fetch burst; note `mcp/history.js`'s walk is deliberately narrow
-  and must NOT be quietly widened) and rookie research.
-- **Three of the four static feeds are still unread** — `values-history`,
-  `trade-values`, `rookie-intel`. `get_player_news` was the first to read one.
+- **Nothing on `MCP_DISCOVERY.md` §5's list remains** (trade targets, rookie
+  research and manager scouting shipped 2026-09-22, and so did the question §5
+  called unanswerable).
+- **One of the four static feeds is still unread** — `values-history`.
+  `get_player_news` reads `news`, `research_rookies` reads `rookie-intel`,
+  `scout_managers` reads `trade-values`.
   So a second league gets no sparklines, no at-trade-time values and no rookie
   research, and the tools say so.
-- **`/league/{id}/winners_bracket` has still never been called**, so *"who won
-  our league in 2023?"* remains unanswerable. One endpoint.
+- ~~`/league/{id}/winners_bracket` has still never been called~~ — **closed
+  2026-09-22** by `get_league_results` (above).
 
 **Known limits, stated rather than hidden:**
 - **`mcp/limit.js` backs off on a fixed schedule.** `fetchJSON` throws an
@@ -1630,6 +1686,27 @@ curl -s 'https://api.sleeper.app/v1/league/1313933520715907072/drafts' | grep -c
 
 ## 2. Deferred — waiting on a trigger
 
+### ROOKIE-1 — `buildRookieProspects`' name fallback is position-unguarded
+
+**Status:** open, found 2026-09-22 while building `research_rookies`.
+**Trigger:** ready work, small; deliberately not folded into the tool commit.
+
+`utils/rookieAdp.js`'s `buildRookieProspects` enriches each rookie with his
+FantasyCalc entry by `sleeperId`, and **falls back to a lower-cased full-name
+match** when the id misses. That fallback checks no position, so a rookie who
+shares a name with a priced player — the two-DJ-Moores shape — takes the
+*other* player's value, rank and position. The tool test's fixture hit it on
+its first run: an unpriced RB "Jaylen Smith" came back as the priced WR.
+
+**Measured live, it fires on 0 of 444 rookies** (69 join by id, 375 are
+unpriced, 0 by name) — which is why it is recorded rather than fixed inside a
+tool commit that owed only orchestration. The fix is the one the rookie-intel
+pipeline already carries (*"every name-based match is position-guarded"*):
+require the positions to agree, and prefer dropping the fallback entirely if a
+re-measure still shows 0 hits across a full offseason. Either change moves app
+behaviour (Draft Board, Tracker, Research, Pick Trades all read it), so it gets
+its own commit and its own before/after count.
+
 ### OPEN-1 — ~~Normalize FAAB stats to percent-of-budget~~ **CLOSED 2026-09-20**
 
 **The trigger fired and the fix shipped.** 2026 week 1 alone carried 21
@@ -2167,7 +2244,7 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 | Item | Closed | How |
 |---|---|---|
 | NEWS-7 — ESPN RSS gave Actions nothing | 2026-09-22 | The recorded diagnosis ("catch branch, so it throws — 403 or timeout") was wrong on every count: the log read `0 items` in ~95ms, not `FAILED`. The script was made to print what a zero-item 2xx returned, and the next run read **HTTP 202 · text/html · 0 bytes** — a bot-manager deferral, which `res.ok` accepts. Same URL + UA from outside Actions: 200, 29 items. **Removed** at 8 of 12 consecutive misses; the zero-item diagnostic stays. Detail in §1 |
-| OPS-2 — a branch dispatch could publish production data | 2026-09-22 | Found by the owner's review question. `news.yml` and `values-history.yml` had no default-branch guard on their publish steps (`rookie-intel.yml` did), so NEWS-4/NEWS-7's verification runs, and the 2026-09-12 retention verification before them, force-pushed feature-branch code to the live `news-data` feed. Both now carry `if: github.ref_name == github.event.repository.default_branch`; a branch dispatch is a dry run. |
+| OPS-2 — a branch dispatch could publish production data | 2026-09-22 | Found by the owner's review question. `news.yml` and `values-history.yml` had no default-branch guard on their publish steps (`rookie-intel.yml` did), so NEWS-4/NEWS-7's verification runs, and the 2026-09-12 retention verification before them, force-pushed feature-branch code to the live `news-data` feed. Both now carry `if: github.ref_name == github.event.repository.default_branch`; a branch dispatch is a dry run. **Post-merge check done 2026-09-22:** `news.yml` dispatched on `main` (run 1237) and the PUBLISHED `news.json` read via git off `news-data`: `playerCap` 1200, `depthHours` 53, ten sources, no `ESPN RSS` key, every `sourceMisses` 0. |
 | NEWS-4 — the news cap was binding at 400 | 2026-09-22 | Cap-bound at 56h with breadth healthy (207 players), so raised to **1200** (~7.1 retained/h × 168h; ~144KB wire projected vs 54KB). News page now paged at 50. The raise exposed that **`spanHours` is set by stragglers** (54 → 147h on three items while p90 depth went 51 → 52h), so `coverage.depthHours` was added and the drawer reads it. The 7-day claim is **pending**: re-read `depthHours` 2026-09-29. Detail in §1 |
 | SMALL-1 — the package rationale claimed what it hadn't checked | 2026-09-22 | *"Protects your starters"* printed on **180 of 180** suggestions and was false on **11 of the owner's 20** and **77 of 180** league-wide — it meant "touched nothing ≥ `PROTECT_THRESHOLD`", and a core starter sits at 0.85. `packageRationale` now takes `buildValueLineup(...).starterIds` and names the starter instead; 0 and 0 after, with the claim surviving on 103 of 180 where it is true. Every one of the 180 selected packages is byte-identical, which was the acceptance test — a changed package would mean the search moved, not the copy. Shipped as the prerequisite to MCP-CARRY's trade-targets tool. Detail in §2 |
 | OPEN-10 — the two "fair" windows disagreed | 2026-09-21 | The board proposed an offer and the Analyzer, one tap later, called it an overpay: **0 of 20** suggestions on the owner's board and **35 of 180** across all ten seats landed inside `buildFairBand`, at a mean of 1.0965× the target. The mechanism was not the window but the price of an appeal step — crossing 1.05 hands the partner a whole appeal point (worth 1.0 keep-pain) against a ~0.027 distance penalty. Fixed by a **split**, not a narrowing: the suggestion must land inside `buildFairBand` (asked of that function, never a literal), the assembly window feeds `alternative`, which now carries its premium. Owner's board: keep-pain 17.24 → 15.19, value sent −7.3%, in band 0/20 → 20/20, my-side 3 Fair/17 Weak → 18 Fair/2 Weak, verdicts 3A/16C/1D → 8A/12C/0D. All ten seats: value −4.6%, in band 35 → 161 of 180, Weak-for-me 74 → 9. The price: Weak-for-them 31 → 106, stated rather than buried. `APPEAL_BONUS` re-swept and unmoved. Detail in §2 |
