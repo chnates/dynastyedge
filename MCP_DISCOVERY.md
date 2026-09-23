@@ -224,11 +224,13 @@ Build in this order. Each row names what it reuses and what must exist first.
 | 5 | `analyze_trade` | "Grade this trade." | `give[]`, `get[]` (resolved IDs only), `partner` | Verdict, reasoning, value split, both-seat appeal, landing spots, fair band, counter suggestion, pitch text | `tradeAnalysis.analyzeTrade` → `getTradeVerdict` → `adjustVerdictForInjuries` → `getCounterSuggestion` → `buildTradePitch`. Mirror `TradeAnalyzer.jsx:141-256`. |
 | 6 | `lineup_advice` | "What do I start, and what's it costing me?" | optional `week` | Moves with per-move gain, confidence %, must-fix flags, total points left on bench | `lineupMoves.buildLineupMoves` — pure, heavily tested. Needs projections (already committed), player DB, and the schedule for byes **and locks**. |
 
-> **This table is the original plan, kept as the record. Five tools shipped
+> **This table is the original plan, kept as the record. Six tools shipped
 > beyond it** — `get_playoff_odds` (phase 2a, the first "deferred" item below),
-> `get_player_news` (phase 2c), and `find_trade_targets`, `research_rookies`
-> and `scout_managers` (2026-09-22, all three deferred below). CLAUDE.md's
-> **The MCP Server** section is the live truth for all eleven; this section is what was specified on
+> `get_player_news` (phase 2c), `find_trade_targets`, `research_rookies` and
+> `scout_managers` (2026-09-22, all three deferred below), and
+> `get_league_results` (2026-09-22, the question below that was "not
+> answerable today"). CLAUDE.md's **The MCP Server** section is the live truth
+> for all twelve; this section is what was specified on
 > 2026-09-19.
 >
 > **Row 6 gained a requirement that was not foreseen here, and it cost a wrong
@@ -269,7 +271,18 @@ the Actions-published branches as app-only. `get_player_news` reads
 second lookup — and it keeps the app's own Class B contract (a miss is
 `available: false` with a note, never an error and never "there is no news").
 
-### The one question that is NOT answerable today
+### The one question that was NOT answerable — ANSWERED 2026-09-22
+
+> **Closed by `get_league_results`.** The bracket's live shape was probed
+> before writing against it (`[{ m, r, t1, t2, w, l, p? }]`, the champion is
+> the `p: 1` game's winner) and it agreed with each past league's own
+> `metadata.latest_league_winner_roster_id` in all three complete seasons. It
+> is its own tool rather than a field on `scout_managers`: a different question
+> at a third of the cost (29 requests cold against the ledger's 80), because it
+> needs the narrow history walk plus a bracket and a users call per season, not
+> the trade ledger. Live answer: **Post Mahomes (today Mahomes Depot) won
+> 2023**; Ministry Of Touchdowns won 2024 and 2025. The text below is the
+> record of the gap as it was specified.
 
 **"Who won our league in 2023?"** `grep` for `winners_bracket` across `src/` and
 `scripts/` returns nothing. `useLeagueHistory.js:58-75` fetches past seasons'

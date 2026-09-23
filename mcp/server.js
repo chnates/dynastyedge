@@ -31,6 +31,8 @@ import { buildTradeTargetsAnswer, renderTradeTargetsText, DEFAULT_LIMIT as TARGE
 import { buildRookieResearchAnswer, renderRookieResearchText, DEFAULT_LIMIT as ROOKIES_DEFAULT_LIMIT, MAX_LIMIT as MAX_ROOKIES } from './tools/researchRookies.js'
 import { getLiveScores } from './liveScores.js'
 import { getRookieIntel, getTradeValues } from './feeds.js'
+import { buildResultsAnswer, renderResultsText } from './tools/leagueResults.js'
+import { getLeagueResults } from './results.js'
 import { buildScoutAnswer, renderScoutText, DEFAULT_TRADE_LIMIT, MAX_TRADE_LIMIT } from './tools/scoutManagers.js'
 import { getNews } from './news.js'
 
@@ -97,6 +99,9 @@ const asOfSchema = z.object({
     // The permanent trade-time value archive, behind scout_managers' "at
     // trade time" line. Class B; stamped only when it was read.
     tradeValues: sourceStamp.optional(),
+    // Every season's playoff bracket, behind get_league_results. Stamps the
+    // OLDEST bracket read, for the reason oldestSourceAt is the stalest source.
+    brackets: sourceStamp.optional(),
   }),
 })
 
@@ -1561,6 +1566,90 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
       }
       return {
         content: [{ type: 'text', text: renderScoutText(answer) }],
+        structuredContent: answer,
+        isError: !answer.ok,
+      }
+    }
+  )
+
+  // ── Tool 12 — get_league_results ────────────────────────────────────────
+  //
+  // "Who won our league in 2023?" — the first call this repo has ever made to
+  // /league/{id}/winners_bracket. Its own small tool rather than a field on
+  // scout_managers: it reads the NARROW walk plus a bracket per season, not
+  // the ledger's 68 requests. Adds `brackets` (declared above) and `history`.
+
+  const placementSchema = z.object({
+    rosterId: z.number(), ownerId: z.string().nullable(), teamName: z.string(),
+  }).nullable()
+
+  server.registerTool(
+    'get_league_results',
+    {
+      title: 'Past league champions and results',
+      description:
+        'Answers "who won our league in 2023?" and "who has the most titles?" from Sleeper\'s playoff bracket ' +
+        'for every season of this league\'s history: champion, runner-up and third place, the regular-season ' +
+        'standings, and titles counted by manager (so a renamed team keeps its titles). The current season ' +
+        'reports in-progress until its championship game is decided. A season whose bracket could not be read ' +
+        'is reported as unknown, never as having no winner.',
+      inputSchema: {
+        season: z.string().optional()
+          .describe('One season, e.g. "2023". Omit for every season in the league\'s history.'),
+        leagueId: z.string().optional()
+          .describe('Sleeper league id. Omit for the configured league.'),
+        refresh: z.boolean().optional()
+          .describe('Bypass the caches and refetch. Past brackets are frozen; this only matters for the current season.'),
+      },
+      outputSchema: {
+        ok: z.boolean(),
+        error: z.string().optional(),
+        seasonsAvailable: z.array(z.string()).optional(),
+        asOf: asOfSchema.optional(),
+        available: z.boolean().optional(),
+        league: z.object({
+          leagueId: z.string().nullable(), name: z.string().nullable(),
+          season: z.string().nullable(), teams: z.number(),
+        }).optional(),
+        seasons: z.array(z.object({
+          season: z.string(),
+          status: z.enum(['complete', 'in-progress', 'no-bracket', 'unavailable']),
+          champion: placementSchema,
+          runnerUp: placementSchema,
+          third: placementSchema,
+          fourth: placementSchema,
+          fifth: placementSchema,
+          sixth: placementSchema,
+          metadataAgrees: z.boolean().nullable(),
+          standings: z.array(z.object({
+            rosterId: z.number(), ownerId: z.string().nullable(), teamName: z.string(),
+            wins: z.number(), losses: z.number(), ties: z.number(), pointsFor: z.number(),
+            regularSeasonRank: z.number(),
+          })),
+        })).optional(),
+        titles: z.array(z.object({
+          ownerId: z.string(), teamName: z.string(), stillInLeague: z.boolean(),
+          titles: z.number(), seasons: z.array(z.string()),
+        })).optional(),
+        counts: z.object({ seasons: z.number(), returned: z.number() }).optional(),
+        notes: z.array(z.string()).optional(),
+      },
+    },
+    async ({ season, leagueId, refresh }) => {
+      const snapshot = await snapshotFor(leagueId, refresh)
+      const results = await getLeagueResults({
+        leagueId: leagueId || config.defaultLeagueId,
+        leagueInfo: snapshot.league?.leagueInfo ?? null,
+        ttlMs: config.historyTtlMs,
+        currentTtlMs: config.snapshotTtlMs,
+        force: !!refresh,
+        fetcher: get,
+        ...(store ? { store } : {}),
+      })
+      const answer = buildResultsAnswer(snapshot, results, { season })
+      if (answer.asOf) answer.asOf = mergeAsOf(answer.asOf, results.sources)
+      return {
+        content: [{ type: 'text', text: renderResultsText(answer) }],
         structuredContent: answer,
         isError: !answer.ok,
       }

@@ -45788,6 +45788,337 @@ var init_liveScores = __esm({
   }
 });
 
+// src/utils/leagueResults.js
+function readBracketPlacements(bracket) {
+  const out = { champion: null, runnerUp: null, third: null, fourth: null, fifth: null, sixth: null };
+  if (!Array.isArray(bracket) || bracket.length === 0) return { ...out, decided: false, hasBracket: false };
+  for (const { p, win, lose } of PLACES) {
+    const game = bracket.find((g) => Number(g?.p) === p);
+    if (game && game.w != null) {
+      out[win] = Number(game.w);
+      out[lose] = game.l != null ? Number(game.l) : null;
+    }
+  }
+  return { ...out, decided: out.champion != null, hasBracket: true };
+}
+function buildSeasonResult({ season, bracket, rosters = [], users = [], metadataWinner = null, nameForOwner = null }) {
+  const placements = readBracketPlacements(bracket);
+  const userById = new Map((users ?? []).map((u) => [u.user_id, u]));
+  const rosterById = new Map((rosters ?? []).map((r) => [Number(r.roster_id), r]));
+  const teamName = (user) => user ? getTeamName(user) : null;
+  const describe3 = (rosterId) => {
+    if (rosterId == null) return null;
+    const r = rosterById.get(rosterId);
+    const ownerId = r?.owner_id ?? null;
+    const seasonName = teamName(userById.get(ownerId));
+    return {
+      rosterId,
+      ownerId,
+      // The name that season, when we have it; otherwise the caller's
+      // fallback (the owner's name today); otherwise a stable placeholder.
+      teamName: seasonName ?? (ownerId && nameForOwner ? nameForOwner(ownerId) : null) ?? `Roster ${rosterId}`
+    };
+  };
+  const standings = (rosters ?? []).map((r) => {
+    const s = r.settings ?? {};
+    return {
+      ...describe3(Number(r.roster_id)),
+      wins: s.wins ?? 0,
+      losses: s.losses ?? 0,
+      ties: s.ties ?? 0,
+      pointsFor: Math.round(((s.fpts ?? 0) + (s.fpts_decimal ?? 0) / 100) * 100) / 100
+    };
+  }).sort((a, b) => b.wins - a.wins || b.pointsFor - a.pointsFor).map((row, i) => ({ ...row, regularSeasonRank: i + 1 }));
+  const meta3 = metadataWinner != null && metadataWinner !== "" ? Number(metadataWinner) : null;
+  return {
+    season: String(season),
+    status: !placements.hasBracket ? "no-bracket" : placements.decided ? "complete" : "in-progress",
+    champion: describe3(placements.champion),
+    runnerUp: describe3(placements.runnerUp),
+    third: describe3(placements.third),
+    fourth: describe3(placements.fourth),
+    fifth: describe3(placements.fifth),
+    sixth: describe3(placements.sixth),
+    // Present only when the metadata names a winner; false is worth a note,
+    // because it means Sleeper's two records of the same fact disagree.
+    metadataAgrees: meta3 != null && placements.decided ? meta3 === placements.champion : null,
+    standings
+  };
+}
+function countTitles(results) {
+  const byOwner = /* @__PURE__ */ new Map();
+  for (const r of results ?? []) {
+    const c = r?.champion;
+    if (!c?.ownerId) continue;
+    const row = byOwner.get(c.ownerId) ?? { ownerId: c.ownerId, titles: 0, seasons: [] };
+    row.titles += 1;
+    row.seasons.push(r.season);
+    byOwner.set(c.ownerId, row);
+  }
+  return [...byOwner.values()].sort((a, b) => b.titles - a.titles || a.seasons[0].localeCompare(b.seasons[0]));
+}
+var PLACES;
+var init_leagueResults = __esm({
+  "src/utils/leagueResults.js"() {
+    init_teamName();
+    PLACES = [
+      { p: 1, win: "champion", lose: "runnerUp" },
+      { p: 3, win: "third", lose: "fourth" },
+      { p: 5, win: "fifth", lose: "sixth" }
+    ];
+  }
+});
+
+// mcp/tools/leagueResults.js
+function buildResultsAnswer(snapshot, results, { season } = {}) {
+  const { league } = snapshot;
+  if (!league) throw new Error("League state unavailable");
+  const currentSeason = String(league.leagueInfo?.season ?? snapshot.nflState?.season ?? "");
+  const currentByOwner = new Map(
+    league.allRosters.filter((r) => r.owner?.user_id).map((r) => [r.owner.user_id, r])
+  );
+  const nameForOwner = (ownerId) => {
+    const r = currentByOwner.get(ownerId);
+    return r ? getTeamName(r.owner) : null;
+  };
+  const currentRosters = league.allRosters.map((r) => ({
+    roster_id: r.rosterId,
+    owner_id: r.owner?.user_id ?? null,
+    settings: {
+      wins: r.record?.wins ?? 0,
+      losses: r.record?.losses ?? 0,
+      ties: r.record?.ties ?? 0,
+      fpts: r.pointsFor ?? 0,
+      fpts_decimal: 0
+    }
+  }));
+  const currentUsers = league.allRosters.map((r) => r.owner).filter(Boolean);
+  const seasons = [];
+  if (currentSeason) {
+    const bracket = results?.current?.bracket ?? null;
+    seasons.push({
+      ...buildSeasonResult({
+        season: currentSeason,
+        bracket,
+        rosters: currentRosters,
+        users: currentUsers,
+        nameForOwner
+      }),
+      ...bracket == null ? { status: "unavailable" } : {}
+    });
+  }
+  for (const s of results?.seasons ?? []) {
+    if (!s.bracket) {
+      seasons.push({
+        season: s.season,
+        status: "unavailable",
+        champion: null,
+        runnerUp: null,
+        third: null,
+        fourth: null,
+        fifth: null,
+        sixth: null,
+        metadataAgrees: null,
+        standings: []
+      });
+      continue;
+    }
+    seasons.push(buildSeasonResult({
+      season: s.season,
+      bracket: s.bracket,
+      rosters: s.rosters,
+      users: s.users,
+      metadataWinner: s.leagueInfo?.metadata?.latest_league_winner_roster_id ?? null,
+      nameForOwner
+    }));
+  }
+  const shaped = seasons.map((r) => ({
+    ...r,
+    standings: r.standings.slice(0, MAX_STANDINGS)
+  }));
+  const titles = countTitles(shaped.filter((r) => r.status === "complete")).map((t) => ({
+    ownerId: t.ownerId,
+    teamName: nameForOwner(t.ownerId) ?? shaped.find((r) => r.champion?.ownerId === t.ownerId)?.champion?.teamName ?? "a former manager",
+    stillInLeague: currentByOwner.has(t.ownerId),
+    titles: t.titles,
+    seasons: t.seasons
+  }));
+  const base = {
+    ok: true,
+    asOf: snapshot.asOf,
+    available: !!results?.available,
+    league: {
+      leagueId: league.leagueId ?? null,
+      name: league.leagueInfo?.name ?? null,
+      season: currentSeason || null,
+      teams: league.allRosters.length
+    }
+  };
+  const notes = [];
+  if (!results?.available) {
+    notes.push(
+      "This league's past seasons could not be loaded, so past champions are unknown. That is a gap in our data \u2014 it is not a claim that any season went without a winner."
+    );
+  }
+  const unavailable = shaped.filter((r) => r.status === "unavailable").map((r) => r.season);
+  if (unavailable.length) {
+    notes.push(
+      `The ${unavailable.join(", ")} bracket${unavailable.length > 1 ? "s" : ""} could not be read, so ${unavailable.length > 1 ? "those seasons carry" : "that season carries"} no champion here \u2014 unknown, not "nobody won". Retry with refresh: true.`
+    );
+  }
+  const live = shaped.find((r) => r.season === currentSeason && r.status === "in-progress");
+  if (live) {
+    notes.push(
+      `${currentSeason} is in progress: its bracket exists but no playoff game has been decided, so there is no champion yet. Playoffs start in week ${league.leagueInfo?.settings?.playoff_week_start ?? "?"}.`
+    );
+  }
+  shaped.filter((r) => r.metadataAgrees === false).forEach((r) => notes.push(
+    `${r.season}: the bracket and the league's own "latest winner" field disagree. The bracket is reported; treat this season as worth confirming in Sleeper.`
+  ));
+  notes.push(
+    "Champions are read from Sleeper's playoff bracket (the championship game's winner). Team names are the ones used that season where Sleeper still has them; titles are credited by manager, so a renamed team keeps its titles."
+  );
+  if (season != null && season !== "") {
+    const want = String(season).trim();
+    const hit = shaped.find((r) => r.season === want);
+    if (!hit) {
+      return {
+        ...base,
+        ok: false,
+        error: `No ${want} season in this league's history. Seasons available: ${shaped.map((r) => r.season).join(", ") || "none"}.`,
+        seasonsAvailable: shaped.map((r) => r.season)
+      };
+    }
+    return { ...base, seasons: [hit], titles, counts: { seasons: shaped.length, returned: 1 }, notes };
+  }
+  return { ...base, seasons: shaped, titles, counts: { seasons: shaped.length, returned: shaped.length }, notes };
+}
+function renderResultsText(a) {
+  if (!a.ok) return a.error;
+  const out = [];
+  for (const r of a.seasons) {
+    if (r.status === "complete") {
+      out.push(`${r.season}: champion ${who(r.champion)}, runner-up ${who(r.runnerUp)}, third ${who(r.third)}.`);
+      const top = r.standings[0];
+      if (top) out.push(`  Best regular season: ${top.teamName} ${top.wins}-${top.losses}${top.ties ? `-${top.ties}` : ""}, ${top.pointsFor} PF.`);
+    } else if (r.status === "in-progress") {
+      out.push(`${r.season}: in progress \u2014 no champion yet.`);
+    } else if (r.status === "no-bracket") {
+      out.push(`${r.season}: Sleeper has no playoff bracket for this season.`);
+    } else {
+      out.push(`${r.season}: bracket could not be read \u2014 champion unknown.`);
+    }
+  }
+  if (a.titles?.length) {
+    out.push(`Titles: ${a.titles.map((t) => `${t.teamName} ${t.titles} (${t.seasons.join(", ")})`).join("; ")}.`);
+  }
+  a.notes.forEach((n) => out.push(`Note: ${n}`));
+  return out.join("\n");
+}
+var MAX_STANDINGS, who;
+var init_leagueResults2 = __esm({
+  "mcp/tools/leagueResults.js"() {
+    init_leagueResults();
+    init_teamName();
+    MAX_STANDINGS = 32;
+    who = (p) => p ? p.teamName : "\u2014";
+  }
+});
+
+// mcp/results.js
+async function getLeagueResults({
+  leagueId,
+  leagueInfo,
+  ttlMs = DEFAULT_HISTORY_TTL_MS,
+  currentTtlMs = DEFAULT_CURRENT_BRACKET_TTL_MS,
+  force = false,
+  fetcher,
+  concurrency = 6,
+  store = defaultStore9
+} = {}) {
+  if (!leagueId) throw new Error("getLeagueResults requires a leagueId");
+  const get = fetcher ?? createFetcher({ concurrency });
+  const [base, current] = await Promise.all([
+    getLeagueHistory({ leagueId, leagueInfo, ttlMs, force, fetcher: get, concurrency, store }),
+    loadSource(store, currentKey(leagueId), force ? -1 : currentTtlMs, async () => {
+      const b = await get(`${SLEEPER_BASE}/league/${leagueId}/winners_bracket`, { label: "Sleeper winners bracket" });
+      if (!Array.isArray(b)) throw new Error("winners bracket returned an unexpected shape");
+      return b;
+    }).catch((err) => ({ data: null, fetchedAt: null, stale: false, error: err.message }))
+  ]);
+  if (!base.available) {
+    return {
+      available: false,
+      current: { bracket: current.data ?? null, error: current.error ?? null },
+      seasons: [],
+      failedSeasons: [],
+      sources: { history: base.sources.history, brackets: stampSource(current) },
+      notes: [
+        "This league's past seasons could not be loaded, so past champions are unknown. That is a gap in our data \u2014 it is not a claim that any season went without a winner."
+      ]
+    };
+  }
+  const past = base.history.pastSeasons ?? [];
+  const loaded = await Promise.all(past.map((ps) => loadSource(store, pastKey(ps.leagueId), force ? -1 : ttlMs, async () => {
+    const [bracket, users] = await Promise.all([
+      get(`${SLEEPER_BASE}/league/${ps.leagueId}/winners_bracket`, { label: "Sleeper winners bracket" }),
+      // Names only. Without them a champion is still named — by the owner's
+      // CURRENT team name, or "Roster N" — so a users failure never costs
+      // the result.
+      get(`${SLEEPER_BASE}/league/${ps.leagueId}/users`, { label: "Sleeper users" }).catch(() => null)
+    ]);
+    if (!Array.isArray(bracket)) throw new Error(`the ${ps.season} winners bracket returned an unexpected shape`);
+    return { bracket, users: Array.isArray(users) ? users : [] };
+  }).catch((err) => ({ data: null, fetchedAt: null, stale: false, error: err.message }))));
+  const failedSeasons = [];
+  const seasons = past.map((ps, i) => {
+    const l = loaded[i];
+    if (!l.data) failedSeasons.push(ps.season);
+    return {
+      season: ps.season,
+      leagueId: ps.leagueId,
+      leagueInfo: ps.leagueInfo,
+      rosters: ps.rosters ?? [],
+      users: l.data?.users ?? [],
+      bracket: l.data?.bracket ?? null,
+      error: l.data ? null : l.error ?? "unknown error"
+    };
+  });
+  const times = [current.fetchedAt, ...loaded.map((l) => l.fetchedAt)].filter(Boolean);
+  return {
+    available: true,
+    current: { bracket: current.data ?? null, error: current.data ? null : current.error ?? null },
+    seasons,
+    // past seasons, newest → oldest
+    failedSeasons,
+    sources: {
+      history: base.sources.history,
+      // The OLDEST contributing bracket, for the reason oldestSourceAt is the
+      // stalest source. Past brackets are frozen, so this is harmless.
+      brackets: stampSource({
+        fetchedAt: times.length ? Math.min(...times) : null,
+        stale: current.stale || loaded.some((l) => l.stale),
+        error: failedSeasons.length ? `${failedSeasons.length} of ${past.length} past brackets failed` : current.error ?? null
+      })
+    },
+    notes: []
+  };
+}
+var DEFAULT_CURRENT_BRACKET_TTL_MS, pastKey, currentKey, defaultStore9;
+var init_results = __esm({
+  "mcp/results.js"() {
+    init_constants();
+    init_limit();
+    init_snapshot();
+    init_store();
+    init_history();
+    DEFAULT_CURRENT_BRACKET_TTL_MS = 15 * 60 * 1e3;
+    pastKey = (seasonLeagueId) => `results:${seasonLeagueId}`;
+    currentKey = (leagueId) => `bracket:${leagueId}`;
+    defaultStore9 = memoryStore();
+  }
+});
+
 // mcp/tools/scoutManagers.js
 function assetRow3(a) {
   return {
@@ -47261,6 +47592,85 @@ function createServer({ env = process.env, fetcher, store } = {}) {
       };
     }
   );
+  const placementSchema = external_exports.object({
+    rosterId: external_exports.number(),
+    ownerId: external_exports.string().nullable(),
+    teamName: external_exports.string()
+  }).nullable();
+  server.registerTool(
+    "get_league_results",
+    {
+      title: "Past league champions and results",
+      description: `Answers "who won our league in 2023?" and "who has the most titles?" from Sleeper's playoff bracket for every season of this league's history: champion, runner-up and third place, the regular-season standings, and titles counted by manager (so a renamed team keeps its titles). The current season reports in-progress until its championship game is decided. A season whose bracket could not be read is reported as unknown, never as having no winner.`,
+      inputSchema: {
+        season: external_exports.string().optional().describe(`One season, e.g. "2023". Omit for every season in the league's history.`),
+        leagueId: external_exports.string().optional().describe("Sleeper league id. Omit for the configured league."),
+        refresh: external_exports.boolean().optional().describe("Bypass the caches and refetch. Past brackets are frozen; this only matters for the current season.")
+      },
+      outputSchema: {
+        ok: external_exports.boolean(),
+        error: external_exports.string().optional(),
+        seasonsAvailable: external_exports.array(external_exports.string()).optional(),
+        asOf: asOfSchema.optional(),
+        available: external_exports.boolean().optional(),
+        league: external_exports.object({
+          leagueId: external_exports.string().nullable(),
+          name: external_exports.string().nullable(),
+          season: external_exports.string().nullable(),
+          teams: external_exports.number()
+        }).optional(),
+        seasons: external_exports.array(external_exports.object({
+          season: external_exports.string(),
+          status: external_exports.enum(["complete", "in-progress", "no-bracket", "unavailable"]),
+          champion: placementSchema,
+          runnerUp: placementSchema,
+          third: placementSchema,
+          fourth: placementSchema,
+          fifth: placementSchema,
+          sixth: placementSchema,
+          metadataAgrees: external_exports.boolean().nullable(),
+          standings: external_exports.array(external_exports.object({
+            rosterId: external_exports.number(),
+            ownerId: external_exports.string().nullable(),
+            teamName: external_exports.string(),
+            wins: external_exports.number(),
+            losses: external_exports.number(),
+            ties: external_exports.number(),
+            pointsFor: external_exports.number(),
+            regularSeasonRank: external_exports.number()
+          }))
+        })).optional(),
+        titles: external_exports.array(external_exports.object({
+          ownerId: external_exports.string(),
+          teamName: external_exports.string(),
+          stillInLeague: external_exports.boolean(),
+          titles: external_exports.number(),
+          seasons: external_exports.array(external_exports.string())
+        })).optional(),
+        counts: external_exports.object({ seasons: external_exports.number(), returned: external_exports.number() }).optional(),
+        notes: external_exports.array(external_exports.string()).optional()
+      }
+    },
+    async ({ season, leagueId, refresh }) => {
+      const snapshot = await snapshotFor(leagueId, refresh);
+      const results = await getLeagueResults({
+        leagueId: leagueId || config2.defaultLeagueId,
+        leagueInfo: snapshot.league?.leagueInfo ?? null,
+        ttlMs: config2.historyTtlMs,
+        currentTtlMs: config2.snapshotTtlMs,
+        force: !!refresh,
+        fetcher: get,
+        ...store ? { store } : {}
+      });
+      const answer = buildResultsAnswer(snapshot, results, { season });
+      if (answer.asOf) answer.asOf = mergeAsOf(answer.asOf, results.sources);
+      return {
+        content: [{ type: "text", text: renderResultsText(answer) }],
+        structuredContent: answer,
+        isError: !answer.ok
+      };
+    }
+  );
   return { server, config: config2 };
 }
 var SERVER_NAME, SERVER_VERSION, sourceStamp, asOfSchema, teamCandidate, playerRowSchema, playerCandidateSchema, pickCandidateSchema, lineupPlayerSchema, newsItemSchema, tradeAssetSchema, sideFitSchema, packageAssetSchema, seatAppealSchema;
@@ -47290,6 +47700,8 @@ var init_server3 = __esm({
     init_researchRookies();
     init_liveScores();
     init_feeds();
+    init_leagueResults2();
+    init_results();
     init_scoutManagers();
     init_news();
     SERVER_NAME = "dynastyedge";
@@ -47346,7 +47758,10 @@ var init_server3 = __esm({
         rookieIntel: sourceStamp.optional(),
         // The permanent trade-time value archive, behind scout_managers' "at
         // trade time" line. Class B; stamped only when it was read.
-        tradeValues: sourceStamp.optional()
+        tradeValues: sourceStamp.optional(),
+        // Every season's playoff bracket, behind get_league_results. Stamps the
+        // OLDEST bracket read, for the reason oldestSourceAt is the stalest source.
+        brackets: sourceStamp.optional()
       })
     });
     teamCandidate = external_exports.object({

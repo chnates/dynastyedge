@@ -7,7 +7,10 @@ knowledge.
 Design spec: [`../MCP_DISCOVERY.md`](../MCP_DISCOVERY.md). Read it first — this
 file covers only what is built.
 
-**Eleven tools, over stdio AND streamable HTTP.** The eleventh,
+**Twelve tools, over stdio AND streamable HTTP.** The twelfth,
+`get_league_results` (2026-09-22), answers the one question §5 recorded as
+unanswerable — *"who won our league in 2023?"* — from
+`/league/{id}/winners_bracket`, an endpoint nothing here had called. The eleventh,
 `scout_managers` (2026-09-22), closes `MCP_DISCOVERY.md` §5's deferred list: a
 behavioural profile of every manager from every season, on a history walk
 widened in the open. The tenth, `research_rookies`
@@ -84,9 +87,10 @@ Every tool also takes `leagueId` per call; these are only the fallbacks.
 | `get_player_news` | "What's the latest on Bowers?" / "Who on my team is hurt?" | Injury body part + notes + the feed; an ambiguous name is **refused**, and silence is a gap in coverage, never good health |
 | `research_rookies` | "Which rookies become something, and which should I take?" | The ONE opportunity score the app ships, within-position market-vs-model divergence, and roster fit for any team. No feed entry is **null**, never 0; an unreadable feed returns the class in value order, never "no rookies" |
 | `scout_managers` | "How does this manager trade, and how have I done?" | Hindsight ledger, tendencies, FAAB in **budgets**, draft hit rate, your report card. Names any season it could not read — nobody is called a non-trader over an outage |
+| `get_league_results` | "Who won our league in 2023?" / "Who has the most titles?" | Read from the playoff bracket; titles counted by **manager**, so a renamed team keeps them. An in-progress season has no champion yet; an unreadable bracket is **unknown**, never "no winner" |
 | `find_trade_targets` | "Who should I call about, and what would it cost?" | Both seats' appeal per row, the package held inside the Analyzer's **fair band**, and the premium that would buy a yes. It does **not** grade — hand the ids to `analyze_trade` |
 
-All eleven are documented with their contracts and traps in CLAUDE.md's
+All twelve are documented with their contracts and traps in CLAUDE.md's
 **The MCP Server** section. Read that before changing one.
 
 ### The one layer with NO TTL, and that is the argument
@@ -163,6 +167,7 @@ mcp/
   liveScores.js   this week's box score, on a FIFTH and deliberately SHORT TTL
   news.js         the player-news feed + the id-only matcher (Class B)
   feeds.js        rookie-intel + trade-values: one Class B loader, 60-min TTL
+  results.js      every season's playoff bracket, on top of the narrow walk
   history.js      the league-history walk: narrow (drafts) and wide (ledger)
   teams.js        resolveTeam — one definition, three tools
   limit.js        concurrency gate + retry/backoff
@@ -173,14 +178,15 @@ mcp/
     getRoster.js  findSellHigh.js  recommendFreeAgents.js
     resolveAssets.js  analyzeTrade.js  lineupAdvice.js
     playoffOdds.js    playerNews.js  findTradeTargets.js
-    researchRookies.js  scoutManagers.js
+    researchRookies.js  scoutManagers.js  leagueResults.js
 ```
 
 Tests live with the rest of the suite: `mcpLimit`, `mcpSnapshot`, `mcpWeekly`,
 `mcpSeason`, `mcpStore`, `mcpHttp`, `mcpOauth`, and one file per tool
 (`mcpGetRoster`, `mcpFindSellHigh`, `mcpRecommendFreeAgents`,
 `mcpResolveAssets`, `mcpAnalyzeTrade`, `mcpLineupAdvice`, `mcpPlayoffOdds`,
-`mcpNews`, `mcpFindTradeTargets`, `mcpResearchRookies`, `mcpScoutManagers`),
+`mcpNews`, `mcpFindTradeTargets`, `mcpResearchRookies`, `mcpScoutManagers`,
+`mcpLeagueResults`),
 plus `tests/leagueState.test.mjs` and `tests/playoffOdds.test.mjs` for the join
 and the model this all rests on. The tool suites share
 `tests/helpers/mcpFixtures.mjs` — one synthetic league, because several tools
@@ -385,8 +391,8 @@ endpoint.
   functions from the **source** tree — `ci.yml` rebuilds and diffs it, so a
   stale bundle fails CI). The three findings that each cost a deploy cycle are
   in CLAUDE.md's Deployment section; read them before touching the packaging.
-- Still open: `myDraftGrade` and `partnerActivity` on `analyze_trade` (each
-  needs a fetch beyond the snapshot — the league-history walk and the
-  transaction feed), `MCP_DISCOVERY.md` §5's remaining phase-two tools (trade
-  targets, manager scouting, rookie research), and `/league/{id}/winners_bracket`,
-  which no code here has ever called.
+- Closed since: `myDraftGrade` and `partnerActivity` on `analyze_trade`
+  (phase 2b), all three of `MCP_DISCOVERY.md` §5's phase-two tools (trade
+  targets, rookie research, manager scouting — 2026-09-22), and
+  `/league/{id}/winners_bracket`, first called 2026-09-22 by
+  `get_league_results`. What remains is in `docs/open-items.md` MCP-CARRY.

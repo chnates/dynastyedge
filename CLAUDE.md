@@ -177,6 +177,7 @@ No authentication required. Read-only. Stay under 1,000 API calls per minute.
 |NFL schedule                   |`/schedule/nfl/regular/{year}` — **NOT under `/v1`** (see below)|
 |League drafts (rookie draft sync)|`/league/1313933520715907072/drafts`           |
 |Live draft picks / in-draft pick trades|`/draft/{draft_id}/picks` · `/draft/{draft_id}/traded_picks`|
+|Playoff bracket (**MCP server only** — `get_league_results`)|`/league/{id}/winners_bracket` — champion = `w` of the `p: 1` game; see Tool 12|
 |League history (manager scouting)|`/league/{id}` → `previous_league_id` chain, then per past season: users · rosters · transactions · drafts + picks (lazy, once per session, via `useLeagueHistory`)|
 
 **Critical Sleeper note:** Roster endpoints return **numeric player IDs only** —
@@ -891,7 +892,7 @@ app's own analysis code** — not general knowledge. Design spec and the
 owner-confirmed decisions: `MCP_DISCOVERY.md`.
 
 **Status: phase 2c — LIVE and CONNECTED at `https://dynastyedge-mcp.vercel.app/mcp`.**
-**Eleven** tools answer over **both** transports: stdio for local runs,
+**Twelve** tools answer over **both** transports: stdio for local runs,
 streamable HTTP for the Claude apps, authenticated by GitHub against a
 single-account allowlist. Six are `MCP_DISCOVERY.md` §5's set; the seventh,
 `get_playoff_odds`, came with phase 2a (2026-09-20) alongside the wiring that
@@ -907,7 +908,11 @@ reads (`rookie-intel.json`): it answers the question a dynasty value cannot —
 *"which rookies become something, and which should I take?"*. The eleventh,
 **`scout_managers`** (2026-09-22), is the last of the three: Trade › Managers
 for the chat, on a history walk widened **openly** as its own function so the
-narrow one `analyze_trade` reads stays exactly as it was.
+narrow one `analyze_trade` reads stays exactly as it was. The twelfth,
+**`get_league_results`** (2026-09-22), answers the one question
+`MCP_DISCOVERY.md` §5 recorded as unanswerable — *"who won our league in
+2023?"* — from `/league/{id}/winners_bracket`, the first call this repo has
+ever made to it.
 
 Phase 1 shipped the three prerequisite refactors plus `get_roster`; phase 1b
 added `find_sell_high`, `recommend_free_agents`, `resolve_assets`,
@@ -918,8 +923,9 @@ transport (`http.js`), stateless OAuth 2.1 (`oauth.js` / `oauthRoutes.js` /
 
 **All SEVEN tools confirmed in the connector's own tool list, 2026-09-20** —
 the owner's phone, after phase 2b deployed (phase 2c's `get_player_news` and
-2026-09-22's `find_trade_targets`, `research_rookies` and `scout_managers` make
-eleven, and the same re-check is owed after each deploys): Grade a trade · Find a sell-high
+2026-09-22's `find_trade_targets`, `research_rookies`, `scout_managers` and
+`get_league_results` make twelve, and the same re-check is owed after each
+deploys): Grade a trade · Find a sell-high
 candidate · Rest-of-season playoff odds · Get a team roster · Weekly start/sit
 advice · Recommend free agents · Resolve player and pick names to ids. That is
 the end of the chain no probe can reach — what the client actually enumerates
@@ -979,6 +985,7 @@ mcp/
   feeds.js      rookie-intel.json + trade-values.json — the other static feeds, Class B
   history.js    the league-history walk: NARROW (analyze_trade) and WIDE (scout_managers)
   transactions.js  the current season's transaction feed, on a SPLIT TTL
+  results.js    every season's playoff bracket, on top of the NARROW walk
   teams.js      resolveTeam — shared by get_roster, analyze_trade, lineup_advice
   limit.js      concurrency gate + retry/backoff
   config.js     league / identity / TTLs, env-first
@@ -987,7 +994,7 @@ mcp/
     getRoster.js  findSellHigh.js  recommendFreeAgents.js
     resolveAssets.js  analyzeTrade.js  lineupAdvice.js
     playoffOdds.js    playerNews.js  findTradeTargets.js
-    researchRookies.js  scoutManagers.js
+    researchRookies.js  scoutManagers.js  leagueResults.js
 ```
 
 ### The HTTP transport (phase 2) — stateless, by necessity
@@ -1818,6 +1825,56 @@ cached); one manager's ledger 32ms / 21,665B at the default 10, 24,677B at
 Ministry Of Touchdowns, 42 trades, +15,340; my card read *"11 trades
 (4W-7L-0E, −8,310) · FAAB 1.73× budgets"*.
 
+### Tool 12 — `get_league_results`
+
+"Who won our league in 2023?" / "Who has the most titles?" Optional `season`,
+`leagueId`, `refresh`. `leagueResults.buildSeasonResult` + `countTitles`
+(`src/utils/leagueResults.js`, new and pure, so an app screen of past champions
+would read the same rule) over `mcp/results.js`.
+
+**It closes the one question `MCP_DISCOVERY.md` §5 recorded as unanswerable.**
+Past records and points-for were always in hand; the champion lives only in
+`/league/{id}/winners_bracket`, which nothing in this repo had called.
+
+- **The shape was PROBED LIVE before any code was written against it**
+  (2026-09-22): `[{ m, r, t1, t2, w, l, p?, t1_from?, t2_from? }]`. `p` marks
+  a placement game — `p: 1` is the championship (`w` champion, `l`
+  runner-up), `p: 3` third place, `p: 5` fifth. On all three complete seasons
+  the `p: 1` winner matched each league's own
+  `metadata.latest_league_winner_roster_id`, so the **bracket is read and the
+  metadata kept only as a cross-check** (`metadataAgrees`; a disagreement is a
+  note, not a silent pick).
+- **Its own tool, not a field on `scout_managers`, and the reason is cost.**
+  It reads the NARROW history walk (chain + rosters, usually already cached)
+  plus a bracket and a users call per season: **29 requests cold** — the
+  snapshot's 8, the narrow walk's 14, 3 users, 4 brackets — against
+  `scout_managers`' 80. Folding it in would charge every "who won?" for a
+  trade ledger it never reads. It adds **no transaction bucket**, pinned by
+  test.
+- **Titles are credited by `owner_id`**, because a roster id is
+  season-scoped. So a title won under an old team name follows the manager:
+  2023's champion **Post Mahomes** is today's **Mahomes Depot**, and the titles
+  line says so. A placement is named by that season's user when Sleeper still
+  has it, then the owner's current team name, then `Roster N` — never
+  undefined.
+- **Three states that must not be confused.** A current season's bracket
+  **exists in September with every `w`/`l` null**: that is `in-progress`,
+  never "nobody won". A bracket we could not read is `unavailable` — no
+  champion, named in the notes, **not cached**, retried next call. A season
+  Sleeper has no bracket for is `no-bracket`. None of them is ever reported as
+  a champion-less season.
+- **Two TTLs, argued.** A past bracket is frozen (the chain only holds seasons
+  that renewed) and rides the history TTL under its own per-season key; the
+  current season's fills in over the playoff weeks and rides the snapshot's
+  15 minutes — a title game decided at 11pm should not wait six hours.
+- **It adds ONE source to `asOf`** — `brackets`, declared in the closed object,
+  stamping the oldest bracket read — beside `history`.
+
+Measured live over the real transport (2026 Week 3): **1,165ms cold / 27ms
+cached, 10,089B** for every season; one season 4,117B. The answer: **2023 Post
+Mahomes** (bracket and metadata agree), **2024 and 2025 Ministry Of
+Touchdowns**, 2026 in progress with the playoffs starting in week 15.
+
 ### The board's freshness — the one layer here with NO TTL of its own
 
 `weekly.js`, `season.js`, `transactions.js` and `liveScores.js` each argue a
@@ -2092,8 +2149,9 @@ gate and not a formality. A new source must be added to that schema. Phase 2c
 added two more — `liveScores` and `news` — and declared both; the trap is
 recorded twice now because it is the single easiest way to ship a response no
 client will accept. **2026-09-22 added two more, declared with them:**
-`rookieIntel` (`research_rookies`) and `tradeValues` (`scout_managers`) — and
-both were verified over the real transport, not assumed.
+`rookieIntel` (`research_rookies`), `tradeValues` (`scout_managers`) and
+`brackets` (`get_league_results`) — and all three were verified over the real
+transport, not assumed.
 **`find_trade_targets` adds none, deliberately** — it reads
 the snapshot and nothing else, so its `asOf.sources` is the base three and the
 closed object stays satisfied by construction. That was still verified by
@@ -2166,9 +2224,10 @@ dressed up as "there is no news", "there are no rookies" or "this trade was
 never archived". **`values-history.json` is the one still unread** — no tool
 answers a sparkline question yet.
 
-**"Who won our league in 2023?" is still unanswerable.** It needs
-`/league/{id}/winners_bracket`, an endpoint this app has never called
-(`MCP_DISCOVERY.md` §5).
+**"Who won our league in 2023?" is answerable — by the server, not the app.**
+`get_league_results` reads `/league/{id}/winners_bracket` (first called
+2026-09-22); the app still never calls it, and a champions screen would reuse
+`src/utils/leagueResults.js` rather than re-derive the rule.
 
 -----
 
@@ -5883,6 +5942,7 @@ dynastyedge/
 │   ├── transactions.js         ← the season-wide transaction feed behind analyze_trade's partner-activity read. A FOURTH TTL and the only SPLIT one: a settled bucket is frozen, the live week rides the SNAPSHOT's 15 minutes because its events are the ones that make a roster wrong. Reads weeks 1..current only — a later bucket is empty by construction (measured: 71/6/0/0/0), so 2 requests where the phone spends 18
 │   ├── history.js              ← the league-history walk, TWO widths. getLeagueHistory is DELIBERATELY narrow: leagues + rosters + drafts + picks, no transactions and no users, 14 requests — feeds ONLY buildDraftGrades. getLedgerHistory is the WIDE walk scout_managers needs, widened in the open as its own function on top of the narrow one: + users + transaction weeks 1..last_scored_leg per past season, 68 cold / 0 cached, each frozen season cached under its own key, and a season that could not be read is NAMED, never cached as empty
 │   ├── liveScores.js           ← this week's box score. A FIFTH TTL and the only SHORT one (5 min): every other layer here caches LONGER than instinct, because their inputs change on an event, a drip, or once a week — a live score changes every few plays. NOT season.js's cache, whose long TTL exists BECAUSE the odds model discards a partially-played week
+│   ├── results.js              ← every season's playoff bracket (/league/{id}/winners_bracket — first called 2026-09-22) behind get_league_results, built on the NARROW history walk: +1 bracket +1 users per season, no transaction bucket. Past brackets frozen per-season on the history TTL, the current one on the snapshot's; an unreadable bracket is NAMED and never cached
 │   ├── feeds.js                ← rookie-intel.json + trade-values.json: ONE Class B loader for the other two static feeds the server reads. Never throws; a 200 with the wrong shape is a miss and is never cached; 60-minute TTL because both publish at most daily
 │   ├── news.js                 ← the player-news feed + the matcher. `playerIds` only, NO headline-name fallback: the pipeline already name-matched server-side, and the live player DB holds TWO "DJ Moore"s. Carries its own age so a tool can say when to confirm against a live source instead of being silently 30 minutes behind
 │   ├── season.js               ← every regular-season week's matchups, on a THIRD TTL with its own argument (a completed week is frozen forever; the model discards a partially-played one, so the odds move once a WEEK). Owns the state that must never happen: 14 empty weeks and a season that hasn't started are identical, so a total outage is never reported as a preseason
@@ -5892,7 +5952,7 @@ dynastyedge/
 │   ├── config.js               ← league / identity / TTLs, env-first: leagueId and rosterId are parameters, not constants
 │   ├── register.mjs            ← registers loader.mjs (deliberate copy of the test suite's — a runnable server must not depend on .claude/skills/)
 │   ├── loader.mjs              ← the extensionless-import resolver hook
-│   └── tools/                  ← all NINE are orchestration only, in the shape of TradeAnalyzer.jsx
+│   └── tools/                  ← all TWELVE are orchestration only, in the shape of TradeAnalyzer.jsx
 │       ├── getRoster.js            ← #1 "what's on my team?"
 │       ├── findSellHigh.js         ← #2 "who's my best sell-high?" — names a CONCRETE partner and return
 │       ├── recommendFreeAgents.js  ← #3 "who should I pick up?" — dynasty value AND this week's projection; a defense is never a general pickup
@@ -5900,6 +5960,7 @@ dynastyedge/
 │       ├── analyzeTrade.js         ← #5 "grade this trade" — IDS ONLY; a free-text name is rejected, never guessed
 │       ├── lineupAdvice.js         ← #6 "what do I start?" — IN-SEASON ONLY; a must-fix carries no confidence; a LOCKED slot is never a move
 │       ├── playerNews.js           ← #8 "what's the latest on him?" — injury body part + notes + the feed; an ambiguous name is refused, and silence is a gap in coverage, never good health
+│       ├── leagueResults.js        ← #12 "who won our league in 2023?" — the p:1 game's winner from the bracket, titles credited by OWNER so a renamed team keeps them; in-progress and unreadable are never reported as "no champion"
 │       ├── scoutManagers.js        ← #11 "how does this manager trade, and how have I done?" — buildManagerProfiles, the SAME function Trade › Managers runs; tracks which seasons it READ, so an unread season never makes anyone a non-trader; FAAB in budgets; the "at trade time" line from trade-values.json via tradeTimeTotals
 │       ├── researchRookies.js      ← #10 "which rookies become something, and which should I take?" — buildRookieBoard, the SAME board Draft › Research reads; ONE score (the age tilt included), combine numbers as context only; no feed entry is score NULL, never 0; an unreadable feed is available:false with the board in value order, never "no rookies"
 │       └── findTradeTargets.js     ← #9 "who do I call about, and what would it cost?" — the question BEFORE analyze_trade. The one layer here with NO TTL: it owns no fetch, so its freshness IS the snapshot's and a number of its own would be a second clock. A pick's id is READ OFF the asset (season/round/originalOwner), never recovered from a label several picks can share
@@ -6042,6 +6103,7 @@ dynastyedge/
 │   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation
 │   │   ├── seasonWindow.js      ← THE "has the rookie draft happened yet?" resolver — the live pick window + which draft the Tracker shows (replaced the hand-rolled PICK_YEARS)
 │   │   ├── pickCapital.js       ← pick ownership resolution logic (year weights are relative to the window, never literal years); also THE spent-pick answer shared by League › Activity and the manager ledger — buildDraftPickIndex (what it became) + buildGenericRoundValues ("a 2nd is a 2nd")
+│   │   ├── leagueResults.js     ← THE bracket reader (readBracketPlacements / buildSeasonResult / countTitles): champion = w of the p:1 game, placements carry owner_id, standings by W then PF. Pure; read by the MCP server's get_league_results, and by any future champions screen
 │   │   ├── rookieAdp.js         ← derived rookie-class ADP for the Draft section + buildRookieMap, THE rookie-class rule (moved out of useSleeperRookies)
 │   │   ├── rookieResearch.js    ← rookie opportunity model: depth × capital, market-vs-model divergence; buildRookieBoard is THE whole-board composition (extracted from useRookieResearch; equivalence proved on live data)
 │   │   ├── positionalValue.js   ← scarcity / value over replacement — replacement levels LEARNED from the live league, DISPLAY ONLY
@@ -6113,6 +6175,7 @@ dynastyedge/
 │   ├── mcpResolveAssets.test.mjs    ← resolve_assets: an ambiguous name resolving to NOTHING (never the higher-valued of two), pick parsing to the season-round-originalOwner id analyze_trade accepts, rule 7 keeping unranked players findable
 │   ├── mcpAnalyzeTrade.test.mjs     ← analyze_trade: a free-text name REJECTED even when unambiguous (the tool does no name matching at all), an id on the wrong roster refused, the price read from the owning roster not the caller, both seats graded, concerns as a subset of reasons, and windowBasis naming the tier
 │   ├── mcpTransactions.test.mjs     ← the transaction feed: weeks 1..current only (a later bucket is empty by construction), the SPLIT TTL proved by a cached refresh costing ONE request, and the degradation contract from BOTH sides — an outage is never reported as "they made no moves", and a genuinely quiet partner still is
+│   ├── mcpLeagueResults.test.mjs    ← get_league_results + the bracket reader + mcp/results.js: the p:1 winner on the live 2023 payload, a posted-but-unplayed bracket IN PROGRESS (never "nobody won"), titles by owner across seasons, name fallbacks that never go undefined, the walk adding brackets + users and NO transaction bucket, and an unreadable bracket named, not cached, and reported as unknown
 │   ├── mcpScoutManagers.test.mjs    ← scout_managers + the wide walk, the "never traded" contract from BOTH directions (a quiet manager read in full IS reported as one; nothing read makes every trade field null; a partial read never calls anyone a non-trader and drops "you haven't completed a trade"), FAAB in budgets with no dollar field leaving the tool, zero-value assets as null, an archived null hiding the at-trade-time line, and the wide walk reading weeks 1..last_scored_leg while the narrow walk still fetches no transactions or users; a season whose buckets all fail is named and NOT cached
 │   ├── mcpHistory.test.mjs          ← the narrow walk: zero transaction URLs and zero user URLs (the ~169-vs-14 claim, proved rather than asserted), '0' as the chain sentinel, a broken hop ending the chain rather than failing it, and a failed drafts LIST reported as unavailable instead of as "this league has never drafted"
 │   ├── mcpSeason.test.mjs           ← the rest-of-season layer: THE contract that a total fetch failure is never reported as a preseason (the two shapes are identical on the wire), one bad bucket degrading alone, the week range read from league settings, per-week + per-league cache keys, and the TTL pinned as its OWN literal so re-deriving weekly.js's can never silently move it
@@ -6132,11 +6195,11 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 730 / # pass 725
+honestly:** instead of "cannot find module" it prints `# tests 740 / # pass 735
 / # fail 5`, which reads like a code regression. A file that cannot load never
-runs its tests, so the count silently drops from **773** to 730.
+runs its tests, so the count silently drops from **783** to 740.
 `npm run build` in the same state fails with `sh: 1: vite: not found`.
-**If the test count isn't 773, run `npm ci` before debugging anything.**
+**If the test count isn't 783, run `npm ci` before debugging anything.**
 
 The pair was re-measured 2026-09-19 (MCP phase 1b) by renaming `node_modules`
 aside, and it had drifted seven times before that: 178/130, 177/115, 219/136,
@@ -6158,6 +6221,11 @@ those four raise only the first number. The 2026-09-07 trade-engine work added
 the broken-state count stayed at 152; the 2026-09-12 news-retention work moved
 both, because `newsRetention.test.mjs` imports only a zero-dependency pure
 module. **Re-measure both whenever the suite grows.**
+
+`get_league_results` and the bracket reader (2026-09-22) moved both by the
+same 10 (773/730 → **783/740**), the gap holding at 43 —
+`src/utils/leagueResults.js` imports only `teamName.js`, and the tool suite
+reaches neither React nor `zod`.
 
 `scout_managers` and the wide history walk (2026-09-22) moved both by the
 same 12 (761/718 → **773/730**), the gap holding at 43 — `managerAnalysis.js`
@@ -6232,7 +6300,8 @@ regression to the next session, which is the exact confusion the block exists
 to prevent, so re-measure rather than incrementing what is written.
 
 The useful invariant survived the drift and is worth preferring to either
-count: **the gap between them is 43 and has not moved.** 773 − 730 = 43,
+count: **the gap between them is 43 and has not moved.** 783 − 740 = 43,
+773 − 730 = 43,
 761 − 718 = 43,
 747 − 704 = 43,
 742 − 699 = 43,
