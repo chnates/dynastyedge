@@ -124,7 +124,9 @@ network ── fetchJSON (the ONLY fetch path) ── hook layer (all caching) �
 
 `src/utils/fetchJSON.js`: wraps `fetch` with an **AbortController hard
 timeout** (default 15 000 ms, per-call override), throws on non-2xx with a
-labeled message, parses JSON. **Invariant: no raw `fetch()` anywhere in app
+labeled message (carrying `status` and the raw `retryAfter` header as
+properties since 2026-09-25 — additive, read only by the MCP server's
+`mcp/limit.js`; fetchJSON itself still never retries), parses JSON. **Invariant: no raw `fetch()` anywhere in app
 code.** The timeout exists so a hung API can never leave the app on a
 permanent spinner — a real failure mode on mobile Safari. (Sanctioned
 non-fetchJSON network surfaces: static `<img>` avatar tags in

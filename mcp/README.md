@@ -378,12 +378,16 @@ endpoint.
   (`POST <url>` with `["GET", key]`) that Upstash and its work-alikes serve,
   and it round-trips through a fake transport in the tests — but no hosted KV
   has been provisioned, so under `dynastyedge-validation-and-qa`'s evidence
-  bar this is synthetic-only and does **not** count as done. The vendor
+  bar this is synthetic-only and does **not** count as done. **Re-checked
+  2026-09-25 and explicitly deferred:** production does not use it at all —
+  `vercelEntry.js` calls `createApp()` with no `store` — and provisioning a
+  store is the owner's call. The three-step path to close it is in
+  `docs/open-items.md` MCP-CARRY. The vendor
   specifics are confined to one function: a different KV is a different
   `command`, not a change anywhere else.
 - **`restKvStore` does not use `fetchJSON`, deliberately.** `fetchJSON` is
   GET-only with no headers and no body, so it structurally cannot issue an
-  authenticated POST; teaching it to would change the app's 21-line wrapper to
+  authenticated POST; teaching it to would change the app's small fetch wrapper to
   serve a server's needs, the exact trade `limit.js` already declined. The
   rule that wrapper enforces — a hung request must never hang the caller — is
   kept here with the same AbortController discipline. It also deliberately

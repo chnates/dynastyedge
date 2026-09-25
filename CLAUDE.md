@@ -1323,7 +1323,15 @@ own verbatim copy of `loadSource` — correct for a long-lived stdio process,
 where a cached snapshot resolves in **1ms against a 658ms cold assembly**, and
 impossible for the serverless HTTP transport, which has no warm process to hold
 a Map. Both now call one `loadSource(store, key, ttlMs, load)`. stdio keeps
-`memoryStore()` and is unchanged; HTTP passes a KV-backed store. Two copies of
+`memoryStore()` and is unchanged. **HTTP in production ALSO runs
+`memoryStore()` — no KV is wired** (corrected 2026-09-25: this line said "HTTP
+passes a KV-backed store", which was the design, never the deployment).
+`vercelEntry.js` calls `createApp()` with no `store`, and nothing reads a KV
+environment variable, so the cache lives in the warm instance and a cold start
+refetches — measured at 21ms for a second request on a warm instance, which is
+why KV was never needed. `restKvStore` exists, is tested against a fake
+transport, and has **never run against a live store**; see
+`docs/open-items.md` MCP-CARRY for what verifying it would take. Two copies of
 the stale-fallback contract was the same drift prerequisite C removed from
 `src/`, so the refactor *deletes* a duplicate rather than adding a layer.
 
@@ -1343,7 +1351,11 @@ asserting it throws where a keeping store answers.
 player DB is **1.20 MB** — at or over the per-value limit of a typical hosted
 KV. Gzipped they are **208 KB** and **180 KB**. `node:zlib` is built in, so
 entries are gzip+base64 on the way out and inflated on the way back for no
-dependency, fewer bytes, and no size question.
+dependency, fewer bytes, and no size question. **Re-measured 2026-09-25 and it
+has grown:** the trimmed player DB entry (three injury/ESPN fields added in
+phase 2c) is **2.0 MB raw → 303 KB as the stored gzip+base64 string** — the
+number a KV's per-value limit actually applies to, and a third larger than the
+gzip figure because base64 is. The value-history feed entry is 262 KB → 108 KB.
 
 **`fetchedAt` must round-trip byte-for-byte.** It is the provenance the whole
 design rests on — it becomes `asOf.sources[*].fetchedAt` and feeds
@@ -6289,11 +6301,11 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 740 / # pass 735
+honestly:** instead of "cannot find module" it prints `# tests 765 / # pass 760
 / # fail 5`, which reads like a code regression. A file that cannot load never
-runs its tests, so the count silently drops from **783** to 740.
+runs its tests, so the count silently drops from **808** to 765.
 `npm run build` in the same state fails with `sh: 1: vite: not found`.
-**If the test count isn't 783, run `npm ci` before debugging anything.**
+**If the test count isn't 808, run `npm ci` before debugging anything.**
 
 The pair was re-measured 2026-09-19 (MCP phase 1b) by renaming `node_modules`
 aside, and it had drifted seven times before that: 178/130, 177/115, 219/136,
@@ -6315,6 +6327,15 @@ those four raise only the first number. The 2026-09-07 trade-engine work added
 the broken-state count stayed at 152; the 2026-09-12 news-retention work moved
 both, because `newsRetention.test.mjs` imports only a zero-dependency pure
 module. **Re-measure both whenever the suite grows.**
+
+The MCP-CARRY closeout (2026-09-25) moved both by the same 25
+(783/740 → **808/765**), the gap holding at 43, across four commits: ROOKIE-1's
+`rookieAdp.test.mjs` (+4), `get_value_history` and the extracted sparkline
+rule (`valueHistory.test.mjs` +5, `mcpValueHistory.test.mjs` +9, the transport
+parity test's count moved rather than added), and the `Retry-After` limiter
+(+7, in `mcpLimit.test.mjs`). The equality is the check that matters for the
+last one: those tests import `fetchJSON.js` and `limit.js` and nothing else, so
+a limiter that had reached the SDK would have shown up as a gap.
 
 `get_league_results` and the bracket reader (2026-09-22) moved both by the
 same 10 (773/730 → **783/740**), the gap holding at 43 —
@@ -6394,7 +6415,8 @@ regression to the next session, which is the exact confusion the block exists
 to prevent, so re-measure rather than incrementing what is written.
 
 The useful invariant survived the drift and is worth preferring to either
-count: **the gap between them is 43 and has not moved.** 783 − 740 = 43,
+count: **the gap between them is 43 and has not moved.** 808 − 765 = 43,
+783 − 740 = 43,
 773 − 730 = 43,
 761 − 718 = 43,
 747 − 704 = 43,
