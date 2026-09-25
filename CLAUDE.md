@@ -726,6 +726,17 @@ architecture as the news pipeline:
   stamps that source's own `scrape_date` — live it read **2026-09-18**, three
   days stale — and a reader can tell a fresh reading from a repeat rather than
   counting five identical columns as five observations.
+  **DynastyProcess's board DEPTH also moves every week, so a DP null is not a
+  value collapse** (measured 2026-09-25, PIPE-3). Its `values-players.csv`
+  publishes weekly (Fridays) and truncates the FantasyPros tail at whatever
+  depth that week's ECR reaches: **640 → 441 → 494 → 346 rows** over four
+  consecutive publishes. The 09-25 drop took 151 players off the board, worth
+  **0.14%** of its value (max 130, most 1–20); our join held at 344 of 346.
+  The archive recorded them as **null, never 0**, which is the contract
+  working. The consequence is for 4b/4d: **compare sources only over players
+  every source priced that day**. A player who goes from a value to null in
+  DP has left the list; nothing says his value fell. A coverage-drop alarm was
+  considered and not built, because a ±30% weekly swing is normal here.
   **It does NOT replace FantasyCalc and does NOT average the sources**
   (§10 4c): every model in the app is calibrated on FantasyCalc's scale, and
   at ~0.96 overall agreement an average *is* FantasyCalc with the

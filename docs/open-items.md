@@ -158,6 +158,7 @@ which beats any amount of feature value.
 | **1c** | ~~MCP-CARRY closeout~~ — **DONE 2026-09-25.** ROOKIE-1 closed (fallback dropped), `get_value_history` (tool 13, the last static feed), `Retry-After` in the limiter; `restKvStore` explicitly deferred to the owner (provisioning may cost money — path recorded in MCP-CARRY). **Owed: the phone re-check for five tools** | What was left after 1b was one correctness fix, one unread feed and two known limits; three are closed and the fourth is now a decision rather than an unknown |
 | **1b** | ~~MCP-CARRY's remaining capability~~ — **DONE 2026-09-22.** `research_rookies`, `scout_managers` and `get_league_results` shipped; the server now has twelve tools and §5's list is closed. **Owed: the connector re-check on the owner's phone** for the four tools added since 2026-09-20 (see MCP-CARRY), and **ROOKIE-1**, a small identity fix found on the way (0 of 444 live) | The server could grade and find trades but could not answer the rookie, manager or history questions the app already answers on the phone. What MCP-CARRY still holds is known limits, not capability |
 | **2** | ~~NEWS-4 + NEWS-7~~ — **DONE 2026-09-22.** ESPN RSS removed (it answers Actions with an empty HTTP 202, not a throw); player cap 400 → 1200; `coverage.depthHours` added because `spanHours` turned out to be set by stragglers. **One follow-up: re-read `depthHours` on 2026-09-29** to learn whether the 7-day window binds | Both small. NEWS-5 is effectively settled — the docs are corrected and its option 2 is cosmetic |
+| **2b** | ~~PIPE-3~~ — **CLOSED 2026-09-25**: DynastyProcess's 485 → 344 drop is upstream board depth, not our join (see PIPE-3). **Next: OPEN-3, the FAAB bid recommender**, which the owner approved as the next build on 2026-09-25 | In-season, you bid on every waiver run. The research is already done (`faab-bid-corpus-2026-08.md`) |
 | **3** | **Phase 4b/4c** — normalize the three valuation sources and surface the disagreement | The biggest unbuilt owner-approved item, but 4d wants archive history and `values-consensus.json` holds one day as of 2026-09-21. It gets better by waiting, which nothing else on this list does |
 
 **Deliberately NOT next**, so nobody picks one up by accident: OPEN-8 (trigger
@@ -805,6 +806,45 @@ reading from a repeat, rather than by changing cadence. And **FantasyCalc's
 top value is now 10758**, above the 0–10000 scale CLAUDE.md documents and
 `Magnitude` pins its reference to; unrelated to this work and worth its own
 look — see VALUE-1.
+
+### PIPE-3 — DynastyProcess coverage fell 485 → 344 **CLOSED 2026-09-25 — upstream, no code change**
+
+**Symptom.** `values-consensus.json`'s DynastyProcess column read 485 players
+on 09-22/23/24, then 344 on 09-25. FantasyCalc (395) and KTC (460) were flat.
+The source-health alarm stayed quiet, as designed, because the column was not
+empty.
+
+**Cause: the source file shrank. Our join did not.** Live 09-25
+`values-players.csv` has **346 player rows**; `readDynastyProcess` joins
+**344** (2 unjoined deep TEs, value ≤ 4), so it loses nothing. DP's own git
+history shows the board depth moving every weekly (Friday) publish:
+
+| publish | rows | deepest QB/RB/WR/TE ECR |
+|---|---|---|
+| 2026-09-10 | 640 | — |
+| 2026-09-11 | 441 | — |
+| 2026-09-18 | 494 | 76 / 132 / 191 / 89 |
+| 2026-09-25 | 346 | 45 / 94 / 111 / 75 |
+
+151 players left the board on 09-25 (3 were added). Together they held
+**0.14%** of the board's value: the highest was 130, and most were 1–20.
+It's a tail truncation, not a missing section.
+
+**The pipeline held its contract:** today's column has **0 zeros**, and 143
+players went from a value to **null**. Nothing was lost that we could have
+kept, and nothing was fabricated.
+
+**Why no code change:**
+- It's upstream, and every dropped player is still available from the other
+  two sources.
+- A coverage-drop alarm would page on a normal week, since depth swings
+  ±30% week to week. That is exactly the "alarm that cries at hiccups" the
+  source-health design rules out.
+
+**What it changes downstream (4b/4c/4d):** cross-source comparisons must use
+the players every source priced **that day**. In DP, value → null means the
+player left the list, not that his value fell. Recorded in CLAUDE.md's
+consensus-archive section.
 
 ### VALUE-1 — FantasyCalc's scale now exceeds the documented 0–10000
 
@@ -1886,7 +1926,7 @@ CLAUDE.md's Constants File section and Features 1, 10 and 13.
 
 ### OPEN-3 — FAAB bid recommender **[owner ask required]**
 
-**Status:** research complete, build gated.
+**Status:** research complete. **The owner asked for it on 2026-09-25 as the next build.** That ask arrived in Week 3, before the ~6 weeks of $1000-scale data the trigger below prefers, so the build has to check how much 2026 in-season evidence exists before it trusts the rule spec.
 **Trigger:** an explicit owner ask, ideally after ~6 weeks of live 2026 waiver
 data on the $1000 scale (the first evidence that tests the rule spec without
 hindsight).
