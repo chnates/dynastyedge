@@ -881,6 +881,15 @@ GET https://api.fantasycalc.com/values/current
 "Rk ADP" is derived locally (`utils/rookieAdp.js`): the Sleeper-verified rookie
 class re-ranked 1..N by FantasyCalc overall rank. Rookies with no FantasyCalc
 rank show `—` and sort to the bottom.
+**The rookie→FantasyCalc join is by `sleeperId` ONLY — there is no name
+fallback** (ROOKIE-1, dropped 2026-09-25). `playerMap` is keyed by
+FantasyCalc's own `sleeperId`, so a name hit could only land on an entry
+FantasyCalc had attached to a *different* Sleeper player. Measured live: 0 of
+444 rookies ever joined by name, all 395 FantasyCalc player ids resolve in the
+player DB under the same name (nothing for a fallback to rescue), and 7 rookies
+share both name **and** position with another player — so a position guard
+would not have closed the collision. Draft Board, Tracker, Pick Trades,
+Research and `research_rookies` all read this one join.
 
 -----
 
@@ -1751,12 +1760,14 @@ FantasyCalc — `deepStrictEqual` on all **14**.
 - **It adds ONE source to `asOf`** — `rookieIntel`, declared in the closed
   object, stamped only when the feed was actually used.
 
-**A latent identity bug found on the way, and NOT fixed here** — see
-`docs/open-items.md` **ROOKIE-1**: `buildRookieProspects`' name fallback is
-**position-unguarded**, so a rookie who shares a name with a priced player
-takes that player's FantasyCalc entry. Measured live it fires on **0 of 444**
-(69 join by id, 375 are unpriced, 0 by name), which is why it is recorded
-rather than fixed inside a tool commit.
+**A latent identity bug found on the way — ROOKIE-1, CLOSED 2026-09-25 in its
+own commit.** `buildRookieProspects`' name fallback was position-unguarded, so
+a rookie who shared a name with a priced player took that player's FantasyCalc
+entry. It was **dropped rather than guarded** (see the Rookie ADP rule): 0 of
+444 live joins ever used it, and a guard would not have covered the 7 rookies
+who share name *and* position with someone. The class's output was
+`deepStrictEqual` before and after on the live payloads. `research_rookies`'
+test now looks up the unpriced Jaylen Smith (905) and gets the RB.
 
 Measured live over the real transport (2026 Week 3): **943ms cold / 40ms
 cached, 25,888B** at the default 12 rows (9 upstream requests cold, 0 cached);

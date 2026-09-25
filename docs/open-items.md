@@ -1686,10 +1686,34 @@ curl -s 'https://api.sleeper.app/v1/league/1313933520715907072/drafts' | grep -c
 
 ## 2. Deferred — waiting on a trigger
 
-### ROOKIE-1 — `buildRookieProspects`' name fallback is position-unguarded
+### ROOKIE-1 — ~~`buildRookieProspects`' name fallback is position-unguarded~~ **CLOSED 2026-09-25**
 
-**Status:** open, found 2026-09-22 while building `research_rookies`.
-**Trigger:** ready work, small; deliberately not folded into the tool commit.
+**The fallback was dropped, not guarded.** Re-measured on the live league
+before touching it (2026 Week 3): **444 rookies — 67 join by id, 377 unpriced,
+0 by name.** The deciding measurement was a second one: `playerMap` is keyed by
+FantasyCalc's own `sleeperId`, so a name hit can only land on an entry
+FantasyCalc attached to a *different* Sleeper player — and **all 395** of
+FantasyCalc's player ids resolve in the live player DB under the same name (one
+position differs: Travis Hunter, WR in FantasyCalc, DB in Sleeper). There is no
+stale-id case for a fallback to rescue, only collisions for it to cause, and a
+position guard would not have covered them: **7 rookies share both name and
+position** with another player in the DB.
+
+**Before/after, all four consumers' inputs** (Draft Board, Tracker, Pick
+Trades and Research all call `buildRookieProspects(rookieMap, playerMap)`,
+and `research_rookies` through `buildRookieBoard`): the output was
+`deepStrictEqual` on the live payloads with FantasyCalc, without it, and with
+no rookie map — 444 rows, 67 priced, identical — which is what 0 name hits
+predicts. So the change is invisible today and closes the case for the day it
+would have fired. Pinned by `tests/rookieAdp.test.mjs` (the two Jaylen Smiths,
+and the same-name-same-position veteran a guard would have missed), and
+`research_rookies`' test now asks for **905** and gets the RB, `value: null`.
+Four assertions fail against the old code.
+
+The original entry is kept below as the record.
+
+**Status:** ~~open, found 2026-09-22 while building `research_rookies`.~~
+**Trigger:** ~~ready work, small; deliberately not folded into the tool commit.~~
 
 `utils/rookieAdp.js`'s `buildRookieProspects` enriches each rookie with his
 FantasyCalc entry by `sleeperId`, and **falls back to a lower-cased full-name

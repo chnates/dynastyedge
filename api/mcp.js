@@ -45206,17 +45206,9 @@ function assignRookieAdp(prospects) {
 }
 function buildRookieProspects(rookieMap, playerMap) {
   if (!rookieMap) return [];
-  const nameToFC = {};
-  if (playerMap) {
-    Object.values(playerMap).forEach((e) => {
-      if (e.name) nameToFC[e.name.toLowerCase()] = e;
-    });
-  }
   return assignRookieAdp(Object.values(rookieMap).map((rookieEntry) => {
     const mainEntry = playerMap?.[rookieEntry.sleeperId];
     if (mainEntry) return { ...mainEntry };
-    const nameMatch = nameToFC[rookieEntry.name?.toLowerCase()];
-    if (nameMatch) return { ...nameMatch, sleeperId: rookieEntry.sleeperId };
     return { ...rookieEntry, adpOnly: true };
   }));
 }

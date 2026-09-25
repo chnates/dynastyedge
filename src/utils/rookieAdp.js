@@ -48,22 +48,26 @@ export function assignRookieAdp(prospects) {
   return prospects.map(p => ({ ...p, adp: adpById.get(p.sleeperId) ?? null }))
 }
 
-// Shared prospect builder for the Draft section (Board + Tracker): enrich the
-// Sleeper rookie map with FantasyCalc data (by sleeperId, falling back to
-// name match) and assign derived rookie ADP.
+// Shared prospect builder for the Draft section (Board + Tracker + Pick Trades)
+// and Rookie Research: enrich the Sleeper rookie map with FantasyCalc data and
+// assign derived rookie ADP.
+//
+// The join is BY SLEEPER ID ONLY (rule 2). There used to be a lower-cased
+// full-name fallback, and it was dropped rather than position-guarded
+// (ROOKIE-1, 2026-09-25) because of what `playerMap` is: it is KEYED by
+// FantasyCalc's own sleeperId, so a name hit could only ever land on an entry
+// FantasyCalc had explicitly attached to a DIFFERENT Sleeper player. Measured
+// live: 0 of 444 rookies joined by name (67 by id, 377 unpriced), and all 395
+// of FantasyCalc's player ids resolve in the player DB under the same name —
+// there is no stale-id case for the fallback to rescue, only collisions for it
+// to cause. A position guard would not have closed them either: 7 rookies
+// share BOTH name and position with another player in the DB. An unpriced
+// rookie is shown with `—` (rule 7), never with his namesake's value.
 export function buildRookieProspects(rookieMap, playerMap) {
   if (!rookieMap) return []
-  const nameToFC = {}
-  if (playerMap) {
-    Object.values(playerMap).forEach(e => {
-      if (e.name) nameToFC[e.name.toLowerCase()] = e
-    })
-  }
   return assignRookieAdp(Object.values(rookieMap).map(rookieEntry => {
     const mainEntry = playerMap?.[rookieEntry.sleeperId]
     if (mainEntry) return { ...mainEntry }
-    const nameMatch = nameToFC[rookieEntry.name?.toLowerCase()]
-    if (nameMatch) return { ...nameMatch, sleeperId: rookieEntry.sleeperId }
     return { ...rookieEntry, adpOnly: true }
   }))
 }
