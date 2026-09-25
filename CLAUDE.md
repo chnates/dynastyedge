@@ -1358,7 +1358,7 @@ throwing write killed an already-fetched answer, which is what the test caught.
 
 ### Rate discipline lives in `mcp/`, never in `fetchJSON`
 
-`src/utils/fetchJSON.js` is 21 lines with an AbortController timeout and
+`src/utils/fetchJSON.js` is a ~30-line AbortController timeout and
 **nothing else** — no retry, no backoff, no 429 handling — and there is no
 concurrency limiter anywhere in the app. That is fine for one phone making ~47
 calls on a cold start; it is not fine for a server driven by an eager model,
@@ -1373,11 +1373,24 @@ spends the rate budget.
 
 Putting any of this in `fetchJSON` would change the *app's* behaviour to fix a
 *server* problem. Don't.
-**Known limit, stated rather than hidden:** `fetchJSON` throws an `Error` whose
-message embeds the status and discards the `Response`, so a 429's
-`Retry-After` is unreachable from the limiter. The backoff schedule is fixed
-rather than server-advised. Revisit only if `fetchJSON` ever surfaces the
-response.
+**`Retry-After` is honoured (2026-09-25) — without `fetchJSON` retrying.**
+This was the known limit here: `fetchJSON` discarded the `Response`, so a
+429's advice was unreachable. The fix is **additive and app-neutral**:
+`fetchJSON` attaches `status` and the raw `retryAfter` header to the `Error` it
+already threw, with the **message byte-identical**. Proved by the suite, not by
+reading: all 801 pre-existing test results were identical with the change in
+place and before `limit.js` was touched. `limit.js` parses both RFC 9110 forms
+(delta-seconds and HTTP-date; a date in the past means now; anything else —
+`"-5"`, `"1.5"`, `"soon"` — falls back to the jittered schedule exactly as
+before), **caps the wait at `MAX_RETRY_AFTER_MS` (4s)** so an hour-long advisory
+cannot hold a serverless invocation open (the retry may 429 again, and
+`MAX_ATTEMPTS` then surfaces it), and still never retries a 404, advice or
+not. `isRetryable` prefers the attached `status` and keeps the message regex
+for an error that did not come through `fetchJSON`'s `!ok` branch.
+`get.stats().advised` counts the retries that followed a server's advice.
+(A browser only exposes `Retry-After` cross-origin when the server lists it in
+`Access-Control-Expose-Headers`; the app reads neither field, so that changes
+nothing there.)
 
 ### Tool 1 — `get_roster`
 
@@ -6025,7 +6038,7 @@ dynastyedge/
 │   ├── season.js               ← every regular-season week's matchups, on a THIRD TTL with its own argument (a completed week is frozen forever; the model discards a partially-played one, so the odds move once a WEEK). Owns the state that must never happen: 14 empty weeks and a season that hasn't started are identical, so a total outage is never reported as a preseason
 │   ├── weekly.js               ← projections + the schedule, on their OWN ~60-min TTL (league data changes on an EVENT, projections on a 0.06%/10h DRIP). Owns the two silent traps: the schedule is off /v1 (SLEEPER_ROOT) and its fields are home/away
 │   ├── teams.js                ← resolveTeam, shared by get_roster / analyze_trade / lineup_advice so "which team did they mean?" has one definition. Reads display_name — Sleeper's /users returns NO username
-│   ├── limit.js                ← concurrency gate + backoff. Lives here, NEVER in fetchJSON — that would change the app's behaviour to fix a server problem
+│   ├── limit.js                ← concurrency gate + backoff, honouring a 429/503's Retry-After (both forms, capped at 4s) off the status fetchJSON now attaches. Lives here, NEVER in fetchJSON — that would change the app's behaviour to fix a server problem
 │   ├── config.js               ← league / identity / TTLs, env-first: leagueId and rosterId are parameters, not constants
 │   ├── register.mjs            ← registers loader.mjs (deliberate copy of the test suite's — a runnable server must not depend on .claude/skills/)
 │   ├── loader.mjs              ← the extensionless-import resolver hook

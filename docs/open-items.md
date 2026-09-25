@@ -1155,11 +1155,15 @@ the chain no probe reaches.
   2026-09-22** by `get_league_results` (above).
 
 **Known limits, stated rather than hidden:**
-- **`mcp/limit.js` backs off on a fixed schedule.** `fetchJSON` throws an
-  `Error` that embeds the status and discards the `Response`, so a 429's
-  `Retry-After` is unreachable. One user makes this academic; a hosted
-  endpoint may not. **Do not fix it by adding retry logic to `fetchJSON`** —
-  that changes the app's behaviour to solve a server problem.
+- ~~**`mcp/limit.js` backs off on a fixed schedule.**~~ **Closed
+  2026-09-25.** `fetchJSON` now attaches `status` and the raw `retryAfter` to
+  the `Error` it already threw — message byte-identical, no retry added there,
+  and all 801 pre-existing test results identical with the change in place.
+  `limit.js` honours both RFC 9110 forms, capped at 4s, falling back to the
+  jittered schedule when the header is absent or unparseable; a 404 is never
+  retried, advice or not. Seven new tests pin 429-with-header, 429-without, the
+  HTTP-date form, an absurd value (86,400s → capped, still bounded by
+  `MAX_ATTEMPTS`), a 404 carrying the header, and the attached fields.
 - **`restKvStore` has never been verified against a live store.** KV was not
   needed (a warm instance holds the cache; the second request measured 21ms),
   so the code path exists untested.

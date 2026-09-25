@@ -107,7 +107,7 @@ const KV_TIMEOUT_MS = 5000
 //
 // WHY THIS DOES NOT USE fetchJSON: fetchJSON is GET-only with no headers and
 // no body, so it structurally cannot issue an authenticated POST. Teaching it
-// to would change the app's 21-line wrapper to serve a server's needs, which
+// to would change the app's small fetch wrapper to serve a server's needs, which
 // is the exact trade mcp/limit.js already declined to make. The rule that
 // wrapper exists to enforce — a hung request must never hang the caller — is
 // kept here instead, with the same AbortController discipline.

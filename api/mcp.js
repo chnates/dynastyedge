@@ -127,7 +127,12 @@ function fetchJSON(url2, { timeoutMs = DEFAULT_TIMEOUT_MS, label = "Request" } =
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   return fetch(url2, { signal: controller.signal }).then((r) => {
-    if (!r.ok) throw new Error(`${label} ${r.status}: ${url2}`);
+    if (!r.ok) {
+      const err = new Error(`${label} ${r.status}: ${url2}`);
+      err.status = r.status;
+      err.retryAfter = r.headers?.get?.("retry-after") ?? null;
+      throw err;
+    }
     return r.json();
   }).catch((err) => {
     if (err.name === "AbortError") {
@@ -144,6 +149,20 @@ var init_fetchJSON = __esm({
 });
 
 // mcp/limit.js
+function parseRetryAfter(value, now = Date.now()) {
+  if (value == null) return null;
+  const v = String(value).trim();
+  if (v === "") return null;
+  if (/^\d+$/.test(v)) return Number(v) * 1e3;
+  if (!/[A-Za-z]/.test(v)) return null;
+  const at = Date.parse(v);
+  if (Number.isNaN(at)) return null;
+  return Math.max(0, at - now);
+}
+function isRetryable(err) {
+  if (typeof err?.status === "number") return RETRYABLE_STATUS.has(err.status);
+  return RETRYABLE.test(err?.message ?? "");
+}
 function createLimiter(concurrency = DEFAULT_CONCURRENCY) {
   let active = 0;
   const queue = [];
@@ -171,10 +190,17 @@ function createLimiter(concurrency = DEFAULT_CONCURRENCY) {
   run.stats = () => ({ active, queued: queue.length, concurrency });
   return run;
 }
-function createFetcher({ concurrency = DEFAULT_CONCURRENCY, limiter } = {}) {
+function createFetcher({
+  concurrency = DEFAULT_CONCURRENCY,
+  limiter,
+  sleep = realSleep,
+  random = Math.random,
+  now = Date.now
+} = {}) {
   const run = limiter ?? createLimiter(concurrency);
   let requests = 0;
   let retries = 0;
+  let advised = 0;
   async function get(url2, opts = {}) {
     return run(async () => {
       for (let attempt = 1; ; attempt++) {
@@ -182,27 +208,34 @@ function createFetcher({ concurrency = DEFAULT_CONCURRENCY, limiter } = {}) {
           requests++;
           return await fetchJSON(url2, opts);
         } catch (err) {
-          const retryable = RETRYABLE.test(err.message);
-          if (!retryable || attempt >= MAX_ATTEMPTS) throw err;
+          if (!isRetryable(err) || attempt >= MAX_ATTEMPTS) throw err;
           retries++;
-          const ceiling = BASE_BACKOFF_MS * 2 ** (attempt - 1);
-          await sleep(Math.random() * ceiling);
+          const advice = parseRetryAfter(err.retryAfter, now());
+          if (advice != null) {
+            advised++;
+            await sleep(Math.min(advice, MAX_RETRY_AFTER_MS));
+          } else {
+            const ceiling = BASE_BACKOFF_MS * 2 ** (attempt - 1);
+            await sleep(random() * ceiling);
+          }
         }
       }
     });
   }
-  get.stats = () => ({ requests, retries, ...run.stats() });
+  get.stats = () => ({ requests, retries, advised, ...run.stats() });
   return get;
 }
-var DEFAULT_CONCURRENCY, MAX_ATTEMPTS, BASE_BACKOFF_MS, RETRYABLE, sleep;
+var DEFAULT_CONCURRENCY, MAX_ATTEMPTS, BASE_BACKOFF_MS, MAX_RETRY_AFTER_MS, RETRYABLE_STATUS, RETRYABLE, realSleep;
 var init_limit = __esm({
   "mcp/limit.js"() {
     init_fetchJSON();
     DEFAULT_CONCURRENCY = 6;
     MAX_ATTEMPTS = 3;
     BASE_BACKOFF_MS = 500;
+    MAX_RETRY_AFTER_MS = 4e3;
+    RETRYABLE_STATUS = /* @__PURE__ */ new Set([408, 425, 429, 500, 502, 503, 504]);
     RETRYABLE = /\b(408|425|429|500|502|503|504)\b/;
-    sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    realSleep = (ms) => new Promise((r) => setTimeout(r, ms));
   }
 });
 

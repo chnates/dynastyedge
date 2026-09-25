@@ -1,6 +1,6 @@
 // limit.js — the rate discipline the app does not have.
 //
-// WHY THIS LIVES HERE AND NOT IN fetchJSON.js: fetchJSON is 21 lines and does
+// WHY THIS LIVES HERE AND NOT IN fetchJSON.js: fetchJSON is ~30 lines and does
 // exactly one thing — an AbortController timeout. It has no retry, no backoff
 // and no 429 handling, and in the app that is fine: one phone makes ~47 calls
 // on a cold start, spread across a human's attention span. A server driven by
@@ -9,14 +9,19 @@
 // 1,000 calls/minute.
 //
 // Putting this in fetchJSON would change the app's behaviour to fix a server
-// problem. So the app keeps its 21-line wrapper and the server wraps that.
+// problem. So the app keeps its small wrapper and the server wraps that.
 //
-// KNOWN LIMIT, stated rather than hidden: fetchJSON throws an Error whose
-// message embeds the status (`${label} ${status}: ${url}`) and discards the
-// Response, so a 429's `Retry-After` header is unreachable from here without
-// changing fetchJSON. We therefore back off on a fixed exponential schedule
-// with jitter rather than honouring the server's own advice. Good enough for
-// one user; revisit if fetchJSON ever surfaces the response.
+// RETRY-AFTER IS HONOURED (2026-09-25). This used to be a known limit:
+// fetchJSON discarded the Response, so a 429's advice was unreachable and the
+// limiter backed off on a fixed schedule. fetchJSON now attaches `status` and
+// the raw `retryAfter` header to the Error it already threw — additive, the
+// message byte-identical, the app's behaviour unchanged (proved by the full
+// suite producing identical results before and after). fetchJSON still does
+// NOT retry; that stays here.
+//
+// The advice is parsed in both forms RFC 9110 allows (delta-seconds and
+// HTTP-date), CAPPED, and used in place of the jittered schedule only when it
+// parses. Anything unparseable falls back to the schedule exactly as before.
 
 import { fetchJSON } from '../src/utils/fetchJSON.js'
 
@@ -24,11 +29,44 @@ export const DEFAULT_CONCURRENCY = 6
 const MAX_ATTEMPTS = 3
 const BASE_BACKOFF_MS = 500
 
+// The longest we will wait on a server's advice before one retry. A serverless
+// invocation has a wall-clock budget and a model is waiting on the answer:
+// with MAX_ATTEMPTS = 3 this bounds the total advised sleep at 8s. An advisory
+// longer than the cap is clamped rather than obeyed — the retry may well 429
+// again, and MAX_ATTEMPTS then surfaces it as the honest "rate limited" it is,
+// instead of holding a request open for an hour because a header said so.
+export const MAX_RETRY_AFTER_MS = 4000
+
 // Statuses worth retrying: rate limiting and transient upstream failures.
 // A 404 is an answer, not a failure, and must never be retried.
+const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504])
 const RETRYABLE = /\b(408|425|429|500|502|503|504)\b/
 
-const sleep = ms => new Promise(r => setTimeout(r, ms))
+const realSleep = ms => new Promise(r => setTimeout(r, ms))
+
+// Retry-After → milliseconds, or null when absent/unparseable. Two forms
+// (RFC 9110 §10.2.3): delta-seconds ("120") or an HTTP-date. A date in the
+// past means "now" (0). Negative or fractional seconds are not the grammar,
+// so they fall back to the schedule rather than being guessed at.
+export function parseRetryAfter(value, now = Date.now()) {
+  if (value == null) return null
+  const v = String(value).trim()
+  if (v === '') return null
+  if (/^\d+$/.test(v)) return Number(v) * 1000
+  // An HTTP-date always names a weekday and a month. Without letters, Date.parse
+  // happily reads "-5" as the year -5 and "1.5" as January — neither is advice.
+  if (!/[A-Za-z]/.test(v)) return null
+  const at = Date.parse(v)
+  if (Number.isNaN(at)) return null
+  return Math.max(0, at - now)
+}
+
+function isRetryable(err) {
+  // Prefer the status fetchJSON now attaches; the message test remains for an
+  // error that did not come through fetchJSON's !ok branch.
+  if (typeof err?.status === 'number') return RETRYABLE_STATUS.has(err.status)
+  return RETRYABLE.test(err?.message ?? '')
+}
 
 // A fixed-size gate. Callers queue; at most `concurrency` run at once.
 export function createLimiter(concurrency = DEFAULT_CONCURRENCY) {
@@ -62,10 +100,16 @@ export function createLimiter(concurrency = DEFAULT_CONCURRENCY) {
 
 // One rate-disciplined fetch: queued behind the limiter, retried with
 // exponential backoff + jitter on a retryable status, never on anything else.
-export function createFetcher({ concurrency = DEFAULT_CONCURRENCY, limiter } = {}) {
+//
+// `sleep`, `random` and `now` are injectable so the schedule can be pinned by
+// test without real waits; production passes none of them.
+export function createFetcher({
+  concurrency = DEFAULT_CONCURRENCY, limiter, sleep = realSleep, random = Math.random, now = Date.now,
+} = {}) {
   const run = limiter ?? createLimiter(concurrency)
   let requests = 0
   let retries = 0
+  let advised = 0
 
   async function get(url, opts = {}) {
     return run(async () => {
@@ -74,18 +118,24 @@ export function createFetcher({ concurrency = DEFAULT_CONCURRENCY, limiter } = {
           requests++
           return await fetchJSON(url, opts)
         } catch (err) {
-          const retryable = RETRYABLE.test(err.message)
-          if (!retryable || attempt >= MAX_ATTEMPTS) throw err
+          if (!isRetryable(err) || attempt >= MAX_ATTEMPTS) throw err
           retries++
-          // Full jitter: with several requests failing at once, a fixed delay
-          // would send them all back in the same instant.
-          const ceiling = BASE_BACKOFF_MS * 2 ** (attempt - 1)
-          await sleep(Math.random() * ceiling)
+          const advice = parseRetryAfter(err.retryAfter, now())
+          if (advice != null) {
+            // The server said how long. Honour it, capped.
+            advised++
+            await sleep(Math.min(advice, MAX_RETRY_AFTER_MS))
+          } else {
+            // Full jitter: with several requests failing at once, a fixed
+            // delay would send them all back in the same instant.
+            const ceiling = BASE_BACKOFF_MS * 2 ** (attempt - 1)
+            await sleep(random() * ceiling)
+          }
         }
       }
     })
   }
 
-  get.stats = () => ({ requests, retries, ...run.stats() })
+  get.stats = () => ({ requests, retries, advised, ...run.stats() })
   return get
 }
