@@ -406,8 +406,17 @@ writer and reader:
 - Reader: `useValueHistory` (lazy first-consumer-mount, session cache).
   Shape guard: `Array.isArray(data.dates) && data.players`.
   `getSeries(sleeperId)` strips nulls and returns `null` below
-  **`MIN_SPARKLINE_POINTS = 4`** (exported from `useValueHistory.js`) —
-  fewer points draw as a misleading straight segment, so sparklines hide.
+  **`MIN_SPARKLINE_POINTS = 4`** (defined in `src/utils/valueHistory.js`,
+  re-exported from `useValueHistory.js`) — fewer points draw as a misleading
+  straight segment, so sparklines hide. **The rule itself is
+  `getValueSeries(history, sleeperId)` in `src/utils/valueHistory.js`** since
+  2026-09-25; the hook's `getSeries` delegates to it.
+- **Also read server-side** by the MCP server's `get_value_history` through
+  `mcp/feeds.js` (`getValueHistoryFeed` — same shape check, a wrong-shape 200
+  is a miss and never cached, **6-hour TTL** because the file carries one
+  column per UTC day). Measured 2026-09-25: 90 dates × 615 players,
+  ~260KB raw / ~82KB on the wire. With this, all four static feeds are read by
+  the server.
 
 ### 3c. `TRADE_VALUES_URL` → trade-values.json (same `values-history` branch)
 

@@ -611,7 +611,9 @@ architecture as the news pipeline:
   current value (players already tracked keep their row until it's all-null).
   One column per UTC day; re-runs on the same day replace that column.
 - The app fetches `VALUES_HISTORY_URL` lazily (first consumer mount) once per
-  session via `useValueHistory`. `getSeries(sleeperId)` returns the non-null
+  session via `useValueHistory`. `getSeries(sleeperId)` (since 2026-09-25 a
+  thin call to `getValueSeries` in `src/utils/valueHistory.js`, which the MCP
+  server's `get_value_history` reads too) returns the non-null
   points, or `null` when fewer than `MIN_SPARKLINE_POINTS` (4) exist — with
   fewer, the "graph" is a straight segment that reads as broken, so it hides
   until the daily pipeline has accumulated enough shape. The team-value line
@@ -881,6 +883,15 @@ GET https://api.fantasycalc.com/values/current
 "Rk ADP" is derived locally (`utils/rookieAdp.js`): the Sleeper-verified rookie
 class re-ranked 1..N by FantasyCalc overall rank. Rookies with no FantasyCalc
 rank show `—` and sort to the bottom.
+**The rookie→FantasyCalc join is by `sleeperId` ONLY — there is no name
+fallback** (ROOKIE-1, dropped 2026-09-25). `playerMap` is keyed by
+FantasyCalc's own `sleeperId`, so a name hit could only land on an entry
+FantasyCalc had attached to a *different* Sleeper player. Measured live: 0 of
+444 rookies ever joined by name, all 395 FantasyCalc player ids resolve in the
+player DB under the same name (nothing for a fallback to rescue), and 7 rookies
+share both name **and** position with another player — so a position guard
+would not have closed the collision. Draft Board, Tracker, Pick Trades,
+Research and `research_rookies` all read this one join.
 
 -----
 
@@ -892,7 +903,7 @@ app's own analysis code** — not general knowledge. Design spec and the
 owner-confirmed decisions: `MCP_DISCOVERY.md`.
 
 **Status: phase 2c — LIVE and CONNECTED at `https://dynastyedge-mcp.vercel.app/mcp`.**
-**Twelve** tools answer over **both** transports: stdio for local runs,
+**Thirteen** tools answer over **both** transports: stdio for local runs,
 streamable HTTP for the Claude apps, authenticated by GitHub against a
 single-account allowlist. Six are `MCP_DISCOVERY.md` §5's set; the seventh,
 `get_playoff_odds`, came with phase 2a (2026-09-20) alongside the wiring that
@@ -912,7 +923,9 @@ narrow one `analyze_trade` reads stays exactly as it was. The twelfth,
 **`get_league_results`** (2026-09-22), answers the one question
 `MCP_DISCOVERY.md` §5 recorded as unanswerable — *"who won our league in
 2023?"* — from `/league/{id}/winners_bracket`, the first call this repo has
-ever made to it.
+ever made to it. The thirteenth, **`get_value_history`** (2026-09-25), reads
+the last of the four static feeds (`values-history.json`) and answers *"how
+has his value moved?"* by the same rule the app's sparklines draw by.
 
 Phase 1 shipped the three prerequisite refactors plus `get_roster`; phase 1b
 added `find_sell_high`, `recommend_free_agents`, `resolve_assets`,
@@ -924,8 +937,8 @@ transport (`http.js`), stateless OAuth 2.1 (`oauth.js` / `oauthRoutes.js` /
 **All SEVEN tools confirmed in the connector's own tool list, 2026-09-20** —
 the owner's phone, after phase 2b deployed (phase 2c's `get_player_news` and
 2026-09-22's `find_trade_targets`, `research_rookies`, `scout_managers` and
-`get_league_results` make twelve, and the same re-check is owed after each
-deploys): Grade a trade · Find a sell-high
+`get_league_results` make twelve, 2026-09-25's `get_value_history` thirteen,
+and the same re-check is owed after each deploys): Grade a trade · Find a sell-high
 candidate · Rest-of-season playoff odds · Get a team roster · Weekly start/sit
 advice · Recommend free agents · Resolve player and pick names to ids. That is
 the end of the chain no probe can reach — what the client actually enumerates
@@ -982,7 +995,7 @@ mcp/
   season.js     every regular-season week's matchups, on a THIRD TTL
   liveScores.js this week's box score, on a FIFTH and DELIBERATELY SHORT TTL
   news.js       the aggregated player-news feed + the id-only matcher
-  feeds.js      rookie-intel.json + trade-values.json — the other static feeds, Class B
+  feeds.js      rookie-intel + trade-values + values-history — the other static feeds, Class B
   history.js    the league-history walk: NARROW (analyze_trade) and WIDE (scout_managers)
   transactions.js  the current season's transaction feed, on a SPLIT TTL
   results.js    every season's playoff bracket, on top of the NARROW walk
@@ -995,6 +1008,7 @@ mcp/
     resolveAssets.js  analyzeTrade.js  lineupAdvice.js
     playoffOdds.js    playerNews.js  findTradeTargets.js
     researchRookies.js  scoutManagers.js  leagueResults.js
+    valueHistory.js
 ```
 
 ### The HTTP transport (phase 2) — stateless, by necessity
@@ -1311,7 +1325,15 @@ own verbatim copy of `loadSource` — correct for a long-lived stdio process,
 where a cached snapshot resolves in **1ms against a 658ms cold assembly**, and
 impossible for the serverless HTTP transport, which has no warm process to hold
 a Map. Both now call one `loadSource(store, key, ttlMs, load)`. stdio keeps
-`memoryStore()` and is unchanged; HTTP passes a KV-backed store. Two copies of
+`memoryStore()` and is unchanged. **HTTP in production ALSO runs
+`memoryStore()` — no KV is wired** (corrected 2026-09-25: this line said "HTTP
+passes a KV-backed store", which was the design, never the deployment).
+`vercelEntry.js` calls `createApp()` with no `store`, and nothing reads a KV
+environment variable, so the cache lives in the warm instance and a cold start
+refetches — measured at 21ms for a second request on a warm instance, which is
+why KV was never needed. `restKvStore` exists, is tested against a fake
+transport, and has **never run against a live store**; see
+`docs/open-items.md` MCP-CARRY for what verifying it would take. Two copies of
 the stale-fallback contract was the same drift prerequisite C removed from
 `src/`, so the refactor *deletes* a duplicate rather than adding a layer.
 
@@ -1331,7 +1353,11 @@ asserting it throws where a keeping store answers.
 player DB is **1.20 MB** — at or over the per-value limit of a typical hosted
 KV. Gzipped they are **208 KB** and **180 KB**. `node:zlib` is built in, so
 entries are gzip+base64 on the way out and inflated on the way back for no
-dependency, fewer bytes, and no size question.
+dependency, fewer bytes, and no size question. **Re-measured 2026-09-25 and it
+has grown:** the trimmed player DB entry (three injury/ESPN fields added in
+phase 2c) is **2.0 MB raw → 303 KB as the stored gzip+base64 string** — the
+number a KV's per-value limit actually applies to, and a third larger than the
+gzip figure because base64 is. The value-history feed entry is 262 KB → 108 KB.
 
 **`fetchedAt` must round-trip byte-for-byte.** It is the provenance the whole
 design rests on — it becomes `asOf.sources[*].fetchedAt` and feeds
@@ -1346,7 +1372,7 @@ throwing write killed an already-fetched answer, which is what the test caught.
 
 ### Rate discipline lives in `mcp/`, never in `fetchJSON`
 
-`src/utils/fetchJSON.js` is 21 lines with an AbortController timeout and
+`src/utils/fetchJSON.js` is a ~30-line AbortController timeout and
 **nothing else** — no retry, no backoff, no 429 handling — and there is no
 concurrency limiter anywhere in the app. That is fine for one phone making ~47
 calls on a cold start; it is not fine for a server driven by an eager model,
@@ -1361,11 +1387,24 @@ spends the rate budget.
 
 Putting any of this in `fetchJSON` would change the *app's* behaviour to fix a
 *server* problem. Don't.
-**Known limit, stated rather than hidden:** `fetchJSON` throws an `Error` whose
-message embeds the status and discards the `Response`, so a 429's
-`Retry-After` is unreachable from the limiter. The backoff schedule is fixed
-rather than server-advised. Revisit only if `fetchJSON` ever surfaces the
-response.
+**`Retry-After` is honoured (2026-09-25) — without `fetchJSON` retrying.**
+This was the known limit here: `fetchJSON` discarded the `Response`, so a
+429's advice was unreachable. The fix is **additive and app-neutral**:
+`fetchJSON` attaches `status` and the raw `retryAfter` header to the `Error` it
+already threw, with the **message byte-identical**. Proved by the suite, not by
+reading: all 801 pre-existing test results were identical with the change in
+place and before `limit.js` was touched. `limit.js` parses both RFC 9110 forms
+(delta-seconds and HTTP-date; a date in the past means now; anything else —
+`"-5"`, `"1.5"`, `"soon"` — falls back to the jittered schedule exactly as
+before), **caps the wait at `MAX_RETRY_AFTER_MS` (4s)** so an hour-long advisory
+cannot hold a serverless invocation open (the retry may 429 again, and
+`MAX_ATTEMPTS` then surfaces it), and still never retries a 404, advice or
+not. `isRetryable` prefers the attached `status` and keeps the message regex
+for an error that did not come through `fetchJSON`'s `!ok` branch.
+`get.stats().advised` counts the retries that followed a server's advice.
+(A browser only exposes `Retry-After` cross-origin when the server lists it in
+`Access-Control-Expose-Headers`; the app reads neither field, so that changes
+nothing there.)
 
 ### Tool 1 — `get_roster`
 
@@ -1522,11 +1561,14 @@ before `analyze_trade`.**
   returns `{ text, lines, bullets }`, not a string.** Both were wrong on the
   first cut and both were caught by the zod **output** schema before they
   reached a reader — the concrete first payoff of the validation §7 asked for.
-- **Layer 3 is scored on the win-window TIER here, and the response SAYS so**
-  (`winWindow.basis: 'tier'`). The server does not fetch the rest-of-season
-  simulation, and in season the app scores that layer on live playoff odds,
-  which track the starting lineup far more closely (Spearman 0.988 vs 0.721).
-  Naming the basis is what stops a reader assuming the stronger one.
+- **Layer 3 is scored on LIVE PLAYOFF ODDS in season, exactly as the app
+  scores it, and the response SAYS which basis ran** (`winWindow.basis`:
+  `'odds'` in season, `'tier'` in the offseason or when the schedule would not
+  load). Odds track the starting lineup at Spearman 0.988 against the tier's
+  0.721. *This bullet said "tier" until 2026-09-25* — that was the phase-1b
+  truth, superseded the day phase 2a wired `myPlayoffPct`; the detail is in
+  **Layer 3 now scores on LIVE ODDS in `analyze_trade`** below. Naming the
+  basis is what stops a reader assuming the stronger one when the fallback ran.
 - **All eight of `analyzeTrade`'s optional signals are now wired** (phase 2b,
   2026-09-20). `myPlayoffPct` came with phase 2a and is the only one that
   moves a **score**; `partnerActivity` and `myDraftGrade` are context, and the
@@ -1751,12 +1793,14 @@ FantasyCalc — `deepStrictEqual` on all **14**.
 - **It adds ONE source to `asOf`** — `rookieIntel`, declared in the closed
   object, stamped only when the feed was actually used.
 
-**A latent identity bug found on the way, and NOT fixed here** — see
-`docs/open-items.md` **ROOKIE-1**: `buildRookieProspects`' name fallback is
-**position-unguarded**, so a rookie who shares a name with a priced player
-takes that player's FantasyCalc entry. Measured live it fires on **0 of 444**
-(69 join by id, 375 are unpriced, 0 by name), which is why it is recorded
-rather than fixed inside a tool commit.
+**A latent identity bug found on the way — ROOKIE-1, CLOSED 2026-09-25 in its
+own commit.** `buildRookieProspects`' name fallback was position-unguarded, so
+a rookie who shared a name with a priced player took that player's FantasyCalc
+entry. It was **dropped rather than guarded** (see the Rookie ADP rule): 0 of
+444 live joins ever used it, and a guard would not have covered the 7 rookies
+who share name *and* position with someone. The class's output was
+`deepStrictEqual` before and after on the live payloads. `research_rookies`'
+test now looks up the unpriced Jaylen Smith (905) and gets the RB.
 
 Measured live over the real transport (2026 Week 3): **943ms cold / 40ms
 cached, 25,888B** at the default 12 rows (9 upstream requests cold, 0 cached);
@@ -1774,6 +1818,16 @@ app's loaders throw `bad shape` on. **60 minutes** (`DYNASTYEDGE_FEED_TTL_MS`),
 argued per feed: rookie intel publishes once a day and its depth signal is
 weekly-granular; the trade archive is append-only and grows at most daily.
 Anything shorter buys nothing either feed can deliver.
+
+**`values-history.json` joined it on 2026-09-25 with its OWN number — six
+hours** (`DYNASTYEDGE_VALUE_HISTORY_TTL_MS`), and the argument is not the other
+two's. The file carries one column per UTC day (a same-day re-run *replaces*
+that column), so between publishes there is nothing newer to fetch, and "how
+has his value moved over weeks?" does not turn on hours. The one number that
+does — where the line ends today — is deliberately not the feed's job: the tool
+reports FantasyCalc's current value from the 15-minute snapshot beside the
+series. The file is **~260KB raw / ~82KB on the wire** (measured 2026-09-25),
+so the longer TTL saves ~4 fetches a day for nothing a reader could notice.
 
 ### Tool 11 — `scout_managers`
 
@@ -1874,6 +1928,53 @@ Measured live over the real transport (2026 Week 3): **1,165ms cold / 27ms
 cached, 10,089B** for every season; one season 4,117B. The answer: **2023 Post
 Mahomes** (bracket and metadata agree), **2024 and 2025 Ministry Of
 Touchdowns**, 2026 in progress with the playoffs starting in week 15.
+
+### Tool 13 — `get_value_history`
+
+"How has his value moved?" / "How has my team's value moved, and who drove
+it?" Optional `player`, `team`, `days` (4–90), `limit`, `leagueId`, `refresh`.
+Reads `values-history.json` — the rolling 90-day daily snapshot behind every
+sparkline in the app — the **fourth and last** static feed the server reads.
+
+- **The rule is the app's, extracted rather than copied.** `getSeries` lived as
+  a closure inside `useValueHistory`, so no server could reach it. It moved to
+  `src/utils/valueHistory.js` as **`getValueSeries`** (the hook now calls it),
+  with `getDatedValueSeries` (same filter, same threshold, plus dates — pinned
+  equal by test), `valueHistoryCoverage`, `sliceValueHistory` and
+  `summarizeValueSeries` beside it. Equivalence **proved, not inspected**: the
+  pre-extraction body lifted verbatim from git and run beside the new function
+  over the live feed (615 players × 90 dates), a 3-column truncation of it, and
+  the empty/null shapes — `deepStrictEqual` on all **2,314** cases. The team
+  line is The Edge's own `buildTeamValueSeries`, unchanged.
+- **Its own tool, not a field on `get_roster` / `get_player_news`.** Folding
+  it in would put an ~82KB wire fetch behind every roster question that never
+  asked about the past, and 26 per-player 90-point series would blow
+  `get_roster`'s ~9KB bounded answer several times over. News says what
+  happened; this says what the market did about it — separate questions.
+- **"Not enough history yet" is an answer, never a flat line and never 0.**
+  Under `MIN_SPARKLINE_POINTS` (4) there is `series: null`, `summary: null`, the
+  point count and a sentence saying so. **Tracked-with-too-few-points and
+  untracked are distinct statuses** (`not-enough-history` / `untracked`): the
+  feed keeps the top 500 by value, so an unranked stash has no row at all,
+  which is different from a value that did not move.
+- **The team line is TODAY'S roster valued back through the window**, exactly
+  as The Edge draws it (carry-forward on a missing day, picks excluded — they
+  are not in the feed), and the notes say so: a player acquired last week
+  counts across the whole window. Risers and fallers are per-player
+  first→last over the same window, bounded (default 5, max 15 per direction)
+  with the true totals in `counts`.
+- The resolver discipline holds (**"Brown" returns six and refuses**); a pick
+  is refused (the feed tracks players). Rule 7: an unranked player's
+  `currentValue` is null.
+- **It adds ONE source to `asOf`** — `valueHistory`, declared in the closed
+  object, stamped only when the feed was read.
+
+Measured live over the real transport (2026 Week 3): **1,372ms cold / 26ms
+cached, 8,100B** for the owner's team (9 upstream requests cold — the
+snapshot's 8 plus the feed — and 0 cached); one player 5,084B; `days: 30` at
+`limit: 15` 9,697B. The answer: Nix Cage's current roster **70,262 → 67,019
+(−4.6%) over 90 days**, led up by Jonathan Taylor (+715) and down by Brock
+Bowers (−796); Bo Nix 4,582 → 4,075, peaking 5,167 on 2026-09-14.
 
 ### The board's freshness — the one layer here with NO TTL of its own
 
@@ -2214,15 +2315,18 @@ contract `LineupOptimizer` honours.
 **The four static feeds are not parameterized.** `news.json`,
 `values-history.json`, `trade-values.json` and `rookie-intel.json` are
 published from *this* repo's branches. A second league gets working rosters,
-values, trades, lineups and odds — but no news, sparklines or rookie research.
-**`news.json` is read** (by `get_player_news`, `lineup_advice` and
-`get_roster` — see `mcp/news.js`), and so are **`rookie-intel.json`** (by
-`research_rookies`) and **`trade-values.json`** (by `scout_managers`), both
-through `mcp/feeds.js`. All three degrade exactly as the contract demands:
-`available: false` with a note, never an error and never an empty result
-dressed up as "there is no news", "there are no rookies" or "this trade was
-never archived". **`values-history.json` is the one still unread** — no tool
-answers a sparkline question yet.
+values, trades, lineups and odds — but no news, value history or rookie
+research. **All four are now read** (2026-09-25): `news.json` by
+`get_player_news`, `lineup_advice` and `get_roster` (`mcp/news.js`), and the
+other three through `mcp/feeds.js` — **`rookie-intel.json`** by
+`research_rookies`, **`trade-values.json`** by `scout_managers`, and
+**`values-history.json`** by `get_value_history`. All four degrade exactly as
+the contract demands: `available: false` with a note, never an error and never
+an empty result dressed up as "there is no news", "there are no rookies",
+"this trade was never archived" or "his value has not moved". (For the second
+league the value history is *this* league's feed of league-agnostic
+FantasyCalc values, so the per-player lines are still true there — only
+`values-history.json`'s top-500 cut and publish schedule are ours.)
 
 **"Who won our league in 2023?" is answerable — by the server, not the app.**
 `get_league_results` reads `/league/{id}/winners_bracket` (first called
@@ -5938,21 +6042,21 @@ dynastyedge/
 │   ├── oauth.js                ← THE auth crypto + policy: HMAC tokens (no JWT lib, no `alg` to confuse), HKDF-derived key, PKCE S256-only, audience binding. Documents what signed-not-stored COSTS: no revocation (1h tokens), no single-use codes (60s + PKCE)
 │   ├── oauthRoutes.js          ← the five OAuth endpoints. Owns THE load-bearing check: redirect-URI origin allowlist, exact-hostname, checked BEFORE anything is minted, failing to an error page because redirecting an unvalidated URI IS the attack
 │   ├── http.js                 ← THE streamable-HTTP transport: a Web-standard (Request) => Response, so the host is a packaging decision. STATELESS by necessity (a serverless instance cannot hold a session — the failure is intermittent, warm-passes/cold-fails). Owns the auth gate, which fails CLOSED
-│   ├── store.js                ← THE cache backend boundary + the ONE freshness policy (loadSource). Backend is a parameter (memory for stdio, KV for HTTP); the policy is shared. Owns the two traps: a store-level TTL would break the stale-fallback contract, and the 1.20MB player DB must be gzipped into KV
+│   ├── store.js                ← THE cache backend boundary + the ONE freshness policy (loadSource). Backend is a parameter (memory for stdio AND, today, for the deployed HTTP server — no KV is wired; `restKvStore` exists but has never run against a live store); the policy is shared. Owns the two traps: a store-level TTL would break the stale-fallback contract, and the 1.20MB player DB must be gzipped into KV
 │   ├── transactions.js         ← the season-wide transaction feed behind analyze_trade's partner-activity read. A FOURTH TTL and the only SPLIT one: a settled bucket is frozen, the live week rides the SNAPSHOT's 15 minutes because its events are the ones that make a roster wrong. Reads weeks 1..current only — a later bucket is empty by construction (measured: 71/6/0/0/0), so 2 requests where the phone spends 18
 │   ├── history.js              ← the league-history walk, TWO widths. getLeagueHistory is DELIBERATELY narrow: leagues + rosters + drafts + picks, no transactions and no users, 14 requests — feeds ONLY buildDraftGrades. getLedgerHistory is the WIDE walk scout_managers needs, widened in the open as its own function on top of the narrow one: + users + transaction weeks 1..last_scored_leg per past season, 68 cold / 0 cached, each frozen season cached under its own key, and a season that could not be read is NAMED, never cached as empty
 │   ├── liveScores.js           ← this week's box score. A FIFTH TTL and the only SHORT one (5 min): every other layer here caches LONGER than instinct, because their inputs change on an event, a drip, or once a week — a live score changes every few plays. NOT season.js's cache, whose long TTL exists BECAUSE the odds model discards a partially-played week
 │   ├── results.js              ← every season's playoff bracket (/league/{id}/winners_bracket — first called 2026-09-22) behind get_league_results, built on the NARROW history walk: +1 bracket +1 users per season, no transaction bucket. Past brackets frozen per-season on the history TTL, the current one on the snapshot's; an unreadable bracket is NAMED and never cached
-│   ├── feeds.js                ← rookie-intel.json + trade-values.json: ONE Class B loader for the other two static feeds the server reads. Never throws; a 200 with the wrong shape is a miss and is never cached; 60-minute TTL because both publish at most daily
+│   ├── feeds.js                ← rookie-intel.json + trade-values.json + values-history.json: ONE Class B loader for the other three static feeds the server reads. Never throws; a 200 with the wrong shape is a miss and is never cached; 60-minute TTL for the first two (both publish at most daily), SIX hours for value history (one column per UTC day, and the live endpoint comes from the snapshot, not the feed)
 │   ├── news.js                 ← the player-news feed + the matcher. `playerIds` only, NO headline-name fallback: the pipeline already name-matched server-side, and the live player DB holds TWO "DJ Moore"s. Carries its own age so a tool can say when to confirm against a live source instead of being silently 30 minutes behind
 │   ├── season.js               ← every regular-season week's matchups, on a THIRD TTL with its own argument (a completed week is frozen forever; the model discards a partially-played one, so the odds move once a WEEK). Owns the state that must never happen: 14 empty weeks and a season that hasn't started are identical, so a total outage is never reported as a preseason
 │   ├── weekly.js               ← projections + the schedule, on their OWN ~60-min TTL (league data changes on an EVENT, projections on a 0.06%/10h DRIP). Owns the two silent traps: the schedule is off /v1 (SLEEPER_ROOT) and its fields are home/away
 │   ├── teams.js                ← resolveTeam, shared by get_roster / analyze_trade / lineup_advice so "which team did they mean?" has one definition. Reads display_name — Sleeper's /users returns NO username
-│   ├── limit.js                ← concurrency gate + backoff. Lives here, NEVER in fetchJSON — that would change the app's behaviour to fix a server problem
+│   ├── limit.js                ← concurrency gate + backoff, honouring a 429/503's Retry-After (both forms, capped at 4s) off the status fetchJSON now attaches. Lives here, NEVER in fetchJSON — that would change the app's behaviour to fix a server problem
 │   ├── config.js               ← league / identity / TTLs, env-first: leagueId and rosterId are parameters, not constants
 │   ├── register.mjs            ← registers loader.mjs (deliberate copy of the test suite's — a runnable server must not depend on .claude/skills/)
 │   ├── loader.mjs              ← the extensionless-import resolver hook
-│   └── tools/                  ← all TWELVE are orchestration only, in the shape of TradeAnalyzer.jsx
+│   └── tools/                  ← all THIRTEEN are orchestration only, in the shape of TradeAnalyzer.jsx
 │       ├── getRoster.js            ← #1 "what's on my team?"
 │       ├── findSellHigh.js         ← #2 "who's my best sell-high?" — names a CONCRETE partner and return
 │       ├── recommendFreeAgents.js  ← #3 "who should I pick up?" — dynasty value AND this week's projection; a defense is never a general pickup
@@ -5960,6 +6064,7 @@ dynastyedge/
 │       ├── analyzeTrade.js         ← #5 "grade this trade" — IDS ONLY; a free-text name is rejected, never guessed
 │       ├── lineupAdvice.js         ← #6 "what do I start?" — IN-SEASON ONLY; a must-fix carries no confidence; a LOCKED slot is never a move
 │       ├── playerNews.js           ← #8 "what's the latest on him?" — injury body part + notes + the feed; an ambiguous name is refused, and silence is a gap in coverage, never good health
+│       ├── valueHistory.js         ← #13 "how has his value moved?" — the last static feed read; the series rule is getValueSeries (lifted out of useValueHistory, equivalence proved on the live feed) and the team line is The Edge's buildTeamValueSeries; fewer than 4 snapshots is "not enough history yet", never a flat line or 0, and untracked is kept distinct from too-few-points
 │       ├── leagueResults.js        ← #12 "who won our league in 2023?" — the p:1 game's winner from the bracket, titles credited by OWNER so a renamed team keeps them; in-progress and unreadable are never reported as "no champion"
 │       ├── scoutManagers.js        ← #11 "how does this manager trade, and how have I done?" — buildManagerProfiles, the SAME function Trade › Managers runs; tracks which seasons it READ, so an unread season never makes anyone a non-trader; FAAB in budgets; the "at trade time" line from trade-values.json via tradeTimeTotals
 │       ├── researchRookies.js      ← #10 "which rookies become something, and which should I take?" — buildRookieBoard, the SAME board Draft › Research reads; ONE score (the age tilt included), combine numbers as context only; no feed entry is score NULL, never 0; an unreadable feed is available:false with the board in value order, never "no rookies"
@@ -6072,7 +6177,7 @@ dynastyedge/
 │   │   ├── useLastVisit.js      ← The Edge's "since your last visit" anchor
 │   │   ├── useLeagueNews.js     ← news feed matched to my roster + watchlist
 │   │   ├── useNewsFeed.js       ← full aggregated feed for the News section
-│   │   ├── useValueHistory.js   ← daily value snapshots for sparklines (best-effort)
+│   │   ├── useValueHistory.js   ← daily value snapshots for sparklines (best-effort); getSeries now delegates to utils/valueHistory.js's getValueSeries
 │   │   ├── useRookieIntel.js    ← rookie depth-chart + draft-capital feed (best-effort; `enabled` keeps it unfetched for a consumer with no rookie to show)
 │   │   ├── useRookieResearch.js ← THE rookie board's memo for Draft › Research AND the profile drawer's per-player row — the composition itself is utils/rookieResearch.js's buildRookieBoard (so the MCP server builds the same board)
 │   │   ├── usePlayerIntel.js    ← production stats + depth chart + ESPN news
@@ -6088,7 +6193,7 @@ dynastyedge/
 │   │   ├── fetchJSON.js         ← shared fetch wrapper with timeout — use everywhere
 │   │   ├── leagueState.js       ← THE five-source join (buildLeagueState): the object EVERY analysis function eats. Extracted from useLeague's useMemo so it runs under plain Node; equivalence to the old memo proved against live payloads, not inspected
 │   │   ├── teamName.js         ← getTeamName — in utils, not hooks, so the analysis layer stays React-free (re-exported from useLeague for the 22 components that import it there)
-│   │   ├── valueHistory.js     ← MIN_SPARKLINE_POINTS, same reason (re-exported from useValueHistory)
+│   │   ├── valueHistory.js     ← MIN_SPARKLINE_POINTS, same reason (re-exported from useValueHistory), plus THE per-player series rule (getValueSeries — the body of the hook's getSeries, extracted 2026-09-25 so get_value_history draws by the phone's rule) and its dated/coverage/slice/summary companions
 │   │   ├── appVersion.js        ← pure reload-URL builder for the version self-heal
 │   │   ├── positionColors.js    ← position identity color class maps — use everywhere
 │   │   ├── roundColors.js       ← pick round color classes (PickBadge, TeamCard)
@@ -6154,6 +6259,8 @@ dynastyedge/
 │   ├── freeAgents.test.mjs          ← waiver options: the DEF blind spot (FantasyCalc must not gate the list), TEAM_* offense-totals guard, rule-7 `—` for unranked, rostered exclusion, and the one-defense rule (a skill slot never returns a DEF, however it projects)
 │   ├── lineupHistory.test.mjs       ← optimal-lineup slot-fill order (singles → FLEX → SFLX)
 │   ├── matchupWeeks.test.mjs        ← mocked-fetch: one fetch/week across both consumers, all-fail rejection
+│   ├── rookieAdp.test.mjs           ← ROOKIE-1: the rookie→FantasyCalc join is by sleeperId only — the two Jaylen Smiths (the unpriced RB never takes the priced WR's entry) and a same-name-SAME-POSITION veteran (the collision a position guard would have missed); no FantasyCalc still renders the whole class, unpriced
+│   ├── valueHistory.test.mjs        ← the extracted sparkline rule: the 4-point threshold, the dated series carrying exactly getValueSeries' values, tracked-short vs untracked, trailing-window slicing that never widens, and a summary that never divides by a zero start
 │   ├── rookieResearch.test.mjs      ← opportunity blend, shared points scale (the backup-TE trap), within-position divergence, roster-fit re-ranking (need/window bonuses, score untouched), drawer hand-off fields, best-effort feed degradation, and the measurables NULL (age/combine can never move a score)
 │   ├── recommendations.test.mjs     ← suggestSellMove's two-sided partner pick (a concrete return beats a needier team with nothing, the neediest-team fallback, startsForThem, nav-ready shape); pick keep-scores by round (strict ordering under every tier, nothing auto-excluded, unknown round falls back); the past-peak age tilt (decline-only, per-position, saturating, never positive, cliff protection survives it); and the cash-out board (value-at-risk selection, the reach/premium labels, and the pin that its gap equals buildFairBand's)
 │   ├── fantasyCalcValues.test.mjs   ← the pipelines' FantasyCalc reader: a synthetic non-numeric id is a PICK (the live bug), a pick with no id still is (the pre-2026-07 shape), the season-median → generic-median → NULL ladder, a slot entry never polluting a round median, and the old presence-based classifier kept as an executable regression statement
@@ -6182,6 +6289,7 @@ dynastyedge/
 │   ├── mcpPlayoffOdds.test.mjs      ← get_playoff_odds: the preseason returning a NULL percentage and a labelled PREVIEW (never 0, which reads as eliminated), a POSTED-but-unplayed schedule being ACTIVE rather than preseason, unavailable ≠ preseason, Σ odds === the field size, seedDist computed but not returned, and the stance being getDeadlineVerdict's so a trade grade cannot disagree
 │   ├── mcpNews.test.mjs             ← the news layer + tool 8: `playerIds` as THE join with NO headline-name fallback (the two-DJ-Moores collision, pinned from both sides), athleteIds as the second hop, a roundup FLAGGED as one, Class B degradation stated as a missing source rather than as "no news", and the stale-feed warning near kickoff
 │   ├── mcpLineupAdvice.test.mjs     ← lineup_advice: the offseason returning no summary and no zeros, per-move gains summing EXACTLY to the headline, a must-fix carrying NO confidence, confidencePct being a percentage not a fraction (the ×100 bug that printed "6530%"), and a blocked starter contributing 0
+│   ├── mcpValueHistory.test.mjs     ← get_value_history + its loader: a dated series beside the LIVE current value, "not enough history yet" as null series/summary (never flat, never 0), untracked distinct from too-few, the team line IS buildTeamValueSeries, movers bounded with true counts, an unreadable feed ok:true/available:false, an ambiguous name refused; the loader never throws, never caches a wrong shape, and has its own longer TTL
 │   ├── mcpResearchRookies.test.mjs ← research_rookies + mcp/feeds.js: the tool's score IS the util's, a faster 40 moves neither score nor fit, no feed entry is null never 0, an unreadable feed returns the whole class in value order rather than an empty board, an ambiguous name refuses, bounded output with the true count; and the loader never throws, never caches a wrong-shape 200
 │   ├── mcpFindTradeTargets.test.mjs ← find_trade_targets: the position filter applied INSIDE the ranking (a filter over the sliced top-1 returns nothing where the real answer is a row), the cap disclosed with the true board beside it, scoped mode keeping their depth pieces, a near-miss stated rather than implying the Analyzer will agree, and twin picks resolving to the RIGHT one rather than the first match (one label, two distinguishable assets)
 │   └── helpers/mcpFixtures.mjs      ← ONE synthetic league shared by the MCP tool suites — four tools read the same object, and four divergent copies is the drift prerequisite C removed from src/
@@ -6195,11 +6303,11 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 740 / # pass 735
+honestly:** instead of "cannot find module" it prints `# tests 765 / # pass 760
 / # fail 5`, which reads like a code regression. A file that cannot load never
-runs its tests, so the count silently drops from **783** to 740.
+runs its tests, so the count silently drops from **808** to 765.
 `npm run build` in the same state fails with `sh: 1: vite: not found`.
-**If the test count isn't 783, run `npm ci` before debugging anything.**
+**If the test count isn't 808, run `npm ci` before debugging anything.**
 
 The pair was re-measured 2026-09-19 (MCP phase 1b) by renaming `node_modules`
 aside, and it had drifted seven times before that: 178/130, 177/115, 219/136,
@@ -6221,6 +6329,15 @@ those four raise only the first number. The 2026-09-07 trade-engine work added
 the broken-state count stayed at 152; the 2026-09-12 news-retention work moved
 both, because `newsRetention.test.mjs` imports only a zero-dependency pure
 module. **Re-measure both whenever the suite grows.**
+
+The MCP-CARRY closeout (2026-09-25) moved both by the same 25
+(783/740 → **808/765**), the gap holding at 43, across four commits: ROOKIE-1's
+`rookieAdp.test.mjs` (+4), `get_value_history` and the extracted sparkline
+rule (`valueHistory.test.mjs` +5, `mcpValueHistory.test.mjs` +9, the transport
+parity test's count moved rather than added), and the `Retry-After` limiter
+(+7, in `mcpLimit.test.mjs`). The equality is the check that matters for the
+last one: those tests import `fetchJSON.js` and `limit.js` and nothing else, so
+a limiter that had reached the SDK would have shown up as a gap.
 
 `get_league_results` and the bracket reader (2026-09-22) moved both by the
 same 10 (773/730 → **783/740**), the gap holding at 43 —
@@ -6300,7 +6417,8 @@ regression to the next session, which is the exact confusion the block exists
 to prevent, so re-measure rather than incrementing what is written.
 
 The useful invariant survived the drift and is worth preferring to either
-count: **the gap between them is 43 and has not moved.** 783 − 740 = 43,
+count: **the gap between them is 43 and has not moved.** 808 − 765 = 43,
+783 − 740 = 43,
 773 − 730 = 43,
 761 − 718 = 43,
 747 − 704 = 43,

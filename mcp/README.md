@@ -7,7 +7,10 @@ knowledge.
 Design spec: [`../MCP_DISCOVERY.md`](../MCP_DISCOVERY.md). Read it first — this
 file covers only what is built.
 
-**Twelve tools, over stdio AND streamable HTTP.** The twelfth,
+**Thirteen tools, over stdio AND streamable HTTP.** The thirteenth,
+`get_value_history` (2026-09-25), reads the last of the four static feeds
+(`values-history.json`) and answers *"how has his value moved?"* by the rule
+the app's sparklines draw by. The twelfth,
 `get_league_results` (2026-09-22), answers the one question §5 recorded as
 unanswerable — *"who won our league in 2023?"* — from
 `/league/{id}/winners_bracket`, an endpoint nothing here had called. The eleventh,
@@ -88,9 +91,10 @@ Every tool also takes `leagueId` per call; these are only the fallbacks.
 | `research_rookies` | "Which rookies become something, and which should I take?" | The ONE opportunity score the app ships, within-position market-vs-model divergence, and roster fit for any team. No feed entry is **null**, never 0; an unreadable feed returns the class in value order, never "no rookies" |
 | `scout_managers` | "How does this manager trade, and how have I done?" | Hindsight ledger, tendencies, FAAB in **budgets**, draft hit rate, your report card. Names any season it could not read — nobody is called a non-trader over an outage |
 | `get_league_results` | "Who won our league in 2023?" / "Who has the most titles?" | Read from the playoff bracket; titles counted by **manager**, so a renamed team keeps them. An in-progress season has no champion yet; an unreadable bracket is **unknown**, never "no winner" |
+| `get_value_history` | "How has his value moved?" / "How has my team's value moved, and who drove it?" | A dated series from the daily snapshots behind the app's sparklines, beside the **live** current value. Fewer than 4 points is "not enough history yet" — **never a flat line and never 0**; untracked is a different answer from too few points |
 | `find_trade_targets` | "Who should I call about, and what would it cost?" | Both seats' appeal per row, the package held inside the Analyzer's **fair band**, and the premium that would buy a yes. It does **not** grade — hand the ids to `analyze_trade` |
 
-All twelve are documented with their contracts and traps in CLAUDE.md's
+All thirteen are documented with their contracts and traps in CLAUDE.md's
 **The MCP Server** section. Read that before changing one.
 
 ### The one layer with NO TTL, and that is the argument
@@ -274,15 +278,18 @@ first live call, before either reached a reader — which is the concrete payoff
 
 ## Known limits
 
-- **Rate limiting is approximate.** `fetchJSON` throws an `Error` with the
-  status in its message and discards the `Response`, so a 429's `Retry-After`
-  is unreachable without changing `fetchJSON` — which would change the app's
-  behaviour to fix a server problem. `limit.js` backs off on a fixed
-  exponential schedule with jitter instead.
+- **Rate limiting honours `Retry-After` (2026-09-25).** `fetchJSON` now
+  attaches `status` and the raw `retryAfter` header to the `Error` it already
+  threw — additive, message unchanged, and `fetchJSON` still never retries.
+  `limit.js` reads it (seconds or HTTP-date), caps the wait at 4s, and falls
+  back to its jittered exponential schedule when there is no usable advice. A
+  404 is never retried.
 - **The cache backend is now a parameter** (`mcp/store.js`). stdio keeps
   `memoryStore()` — process-global, the app's hook-singleton pattern, and
-  correct here (1ms cached against a 658ms cold assembly). The HTTP transport
-  passes a KV-backed store instead. The freshness POLICY is shared by both, in
+  correct here (1ms cached against a 658ms cold assembly). **The deployed HTTP
+  server uses `memoryStore()` too** — `vercelEntry.js` wires no KV (corrected
+  2026-09-25; this line used to say it passed a KV-backed store). A warm
+  instance holds the cache; see the KV note below. The freshness POLICY is shared by both, in
   one `loadSource`, because two copies of the stale-fallback contract is the
   drift prerequisite C removed from `src/`.
   Two traps it exists to hold, both pinned by `tests/mcpStore.test.mjs`:
@@ -374,12 +381,16 @@ endpoint.
   (`POST <url>` with `["GET", key]`) that Upstash and its work-alikes serve,
   and it round-trips through a fake transport in the tests — but no hosted KV
   has been provisioned, so under `dynastyedge-validation-and-qa`'s evidence
-  bar this is synthetic-only and does **not** count as done. The vendor
+  bar this is synthetic-only and does **not** count as done. **Re-checked
+  2026-09-25 and explicitly deferred:** production does not use it at all —
+  `vercelEntry.js` calls `createApp()` with no `store` — and provisioning a
+  store is the owner's call. The three-step path to close it is in
+  `docs/open-items.md` MCP-CARRY. The vendor
   specifics are confined to one function: a different KV is a different
   `command`, not a change anywhere else.
 - **`restKvStore` does not use `fetchJSON`, deliberately.** `fetchJSON` is
   GET-only with no headers and no body, so it structurally cannot issue an
-  authenticated POST; teaching it to would change the app's 21-line wrapper to
+  authenticated POST; teaching it to would change the app's small fetch wrapper to
   serve a server's needs, the exact trade `limit.js` already declined. The
   rule that wrapper enforces — a hung request must never hang the caller — is
   kept here with the same AbortController discipline. It also deliberately

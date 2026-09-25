@@ -135,12 +135,16 @@ test('an ambiguous name returns candidates and refuses — never the higher-valu
   assert.equal(a.ok, false)
   assert.equal(a.rookieCandidates.length, 2)
   assert.equal(a.rookie, undefined)
-  // The id resolves him exactly. (904, the priced one: see open-items ROOKIE-1
-  // on buildRookieProspects' position-unguarded name fallback, which would
-  // hand the unpriced 905 his namesake's FantasyCalc entry.)
-  const b = ask(available(), { player: '904' })
-  assert.equal(b.rookie.sleeperId, '904')
-  assert.equal(b.rookie.position, 'WR')
+  // The id resolves him exactly — including 905, the UNPRICED one. Before
+  // ROOKIE-1 closed, buildRookieProspects' name fallback handed him his
+  // namesake's FantasyCalc entry and 905 came back as the priced WR.
+  const b = ask(available(), { player: '905' })
+  assert.equal(b.rookie.sleeperId, '905')
+  assert.equal(b.rookie.position, 'RB')
+  assert.equal(b.rookie.value, null, 'unpriced is null, never his namesake\'s 1,200')
+  const w = ask(available(), { player: '904' })
+  assert.equal(w.rookie.position, 'WR')
+  assert.equal(w.rookie.value, 1200)
 })
 
 test('the board is bounded, and the true count rides beside it', () => {

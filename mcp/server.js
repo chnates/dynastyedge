@@ -30,11 +30,12 @@ import { buildNewsAnswer, renderNewsText, MAX_NEWS_LIMIT } from './tools/playerN
 import { buildTradeTargetsAnswer, renderTradeTargetsText, DEFAULT_LIMIT as TARGETS_DEFAULT_LIMIT, MAX_LIMIT as MAX_TARGETS } from './tools/findTradeTargets.js'
 import { buildRookieResearchAnswer, renderRookieResearchText, DEFAULT_LIMIT as ROOKIES_DEFAULT_LIMIT, MAX_LIMIT as MAX_ROOKIES } from './tools/researchRookies.js'
 import { getLiveScores } from './liveScores.js'
-import { getRookieIntel, getTradeValues } from './feeds.js'
+import { getRookieIntel, getTradeValues, getValueHistoryFeed } from './feeds.js'
 import { buildResultsAnswer, renderResultsText } from './tools/leagueResults.js'
 import { getLeagueResults } from './results.js'
 import { buildScoutAnswer, renderScoutText, DEFAULT_TRADE_LIMIT, MAX_TRADE_LIMIT } from './tools/scoutManagers.js'
 import { getNews } from './news.js'
+import { buildValueHistoryAnswer, renderValueHistoryText, DEFAULT_MOVERS, MAX_MOVERS, MIN_DAYS, MAX_DAYS } from './tools/valueHistory.js'
 
 export const SERVER_NAME = 'dynastyedge'
 export const SERVER_VERSION = '0.1.0'
@@ -102,6 +103,10 @@ const asOfSchema = z.object({
     // Every season's playoff bracket, behind get_league_results. Stamps the
     // OLDEST bracket read, for the reason oldestSourceAt is the stalest source.
     brackets: sourceStamp.optional(),
+    // The rolling 90-day daily value snapshot behind get_value_history — the
+    // last of the four static feeds to be read. Class B; stamped only when
+    // it was read.
+    valueHistory: sourceStamp.optional(),
   }),
 })
 
@@ -1650,6 +1655,111 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
       if (answer.asOf) answer.asOf = mergeAsOf(answer.asOf, results.sources)
       return {
         content: [{ type: 'text', text: renderResultsText(answer) }],
+        structuredContent: answer,
+        isError: !answer.ok,
+      }
+    }
+  )
+
+  // ── Tool 13 — get_value_history ─────────────────────────────────────────
+  //
+  // The fourth and last static feed the server reads. Adds ONE source to
+  // asOf — `valueHistory`, declared in the closed object above — stamped only
+  // when the feed was actually read.
+
+  const datedPoint = z.object({ date: z.string().nullable(), value: z.number() })
+  const seriesSummary = z.object({
+    first: datedPoint, last: datedPoint, high: datedPoint, low: datedPoint,
+    change: z.number(), changePct: z.number().nullable(), points: z.number(),
+  })
+  const moverRow = z.object({
+    sleeperId: z.string(), name: z.string().nullable(), position: z.string().nullable(),
+    from: datedPoint, to: datedPoint, change: z.number(), changePct: z.number().nullable(),
+  })
+
+  server.registerTool(
+    'get_value_history',
+    {
+      title: 'How a dynasty value has moved',
+      description:
+        'Answers "how has his value moved?" or "how has my team\'s value moved, and who drove it?" from the ' +
+        'daily FantasyCalc snapshots behind the app\'s sparklines (a rolling 90-day window, one point per UTC day). ' +
+        'Pass `player` for one player\'s dated series with first/last/high/low; omit it for a team\'s value line ' +
+        '(today\'s roster valued back through the window, exactly the line the app draws) plus its biggest risers and ' +
+        'fallers. Fewer than 4 snapshots is "not enough history yet" — never a flat line and never zero.',
+      inputSchema: {
+        player: z.string().optional()
+          .describe('One player by name or Sleeper id. An ambiguous name returns candidates and refuses.'),
+        team: z.string().optional()
+          .describe('Whose value line: team name, manager handle or roster id. Omit for your own. Ignored with `player`.'),
+        days: z.number().int().min(MIN_DAYS).max(MAX_DAYS).optional()
+          .describe(`Only the last N daily snapshots (${MIN_DAYS}-${MAX_DAYS}). Omit for the whole feed.`),
+        limit: z.number().int().min(1).max(MAX_MOVERS).optional()
+          .describe(`Risers and fallers to return per direction in team mode (default ${DEFAULT_MOVERS}, max ${MAX_MOVERS}).`),
+        leagueId: z.string().optional()
+          .describe('Sleeper league id. Omit for the configured league.'),
+        refresh: z.boolean().optional()
+          .describe('Bypass the caches (~15 min snapshot, ~6 h value history) and refetch.'),
+      },
+      outputSchema: {
+        ok: z.boolean(),
+        error: z.string().optional(),
+        candidates: z.array(teamCandidate).optional(),
+        playerCandidates: z.array(z.object({
+          sleeperId: z.string().nullable(), name: z.string().nullable(), position: z.string().nullable(),
+          nflTeam: z.string().nullable(), ownerTeam: z.string().nullable(),
+        })).optional(),
+        asOf: asOfSchema.optional(),
+        // False means values-history.json could not be read. Never "nothing
+        // moved": the current value still comes from the live snapshot.
+        available: z.boolean().optional(),
+        feed: z.object({ updatedAt: z.string().nullable(), ageHours: z.number().nullable() }).nullable().optional(),
+        window: z.object({
+          requestedDays: z.number().nullable(), from: z.string().nullable(), to: z.string().nullable(),
+          snapshots: z.number(),
+        }).nullable().optional(),
+        scope: z.enum(['player', 'team']).optional(),
+        player: z.object({
+          sleeperId: z.string(), name: z.string(), position: z.string().nullable(), nflTeam: z.string().nullable(),
+          currentValue: z.number().nullable(), unranked: z.boolean(), trend30Day: z.number().nullable(),
+          ownerTeam: z.string().nullable(), isYours: z.boolean(),
+        }).optional(),
+        history: z.object({
+          status: z.enum(['ok', 'not-enough-history', 'untracked', 'unavailable']),
+          points: z.number(),
+          series: z.array(datedPoint).nullable(),
+          summary: seriesSummary.nullable(),
+        }).optional(),
+        team: z.object({ rosterId: z.number(), teamName: z.string(), isYou: z.boolean() }).optional(),
+        teamHistory: z.object({
+          status: z.enum(['ok', 'not-enough-history', 'unavailable']),
+          series: z.array(datedPoint).nullable(),
+          summary: seriesSummary.nullable(),
+        }).optional(),
+        risers: z.array(moverRow).optional(),
+        fallers: z.array(moverRow).optional(),
+        counts: z.object({
+          rostered: z.number(), withSeries: z.number(), tooFewPoints: z.number(), untracked: z.number(),
+          risers: z.number(), fallers: z.number(), returnedPerDirection: z.number(),
+        }).optional(),
+        notes: z.array(z.string()).optional(),
+      },
+    },
+    async ({ player, team, days, limit, leagueId, refresh }) => {
+      const snapshot = await snapshotFor(leagueId, refresh)
+      const feed = await getValueHistoryFeed({
+        force: !!refresh, fetcher: get, ttlMs: config.valueHistoryTtlMs, ...(store ? { store } : {}),
+      })
+      const answer = buildValueHistoryAnswer(snapshot, feed, {
+        player, team, days, limit,
+        defaultRosterId: config.defaultRosterId,
+        myRosterId: config.defaultRosterId,
+      })
+      if (answer.asOf && feed.available) {
+        answer.asOf = mergeAsOf(answer.asOf, { valueHistory: feed.source })
+      }
+      return {
+        content: [{ type: 'text', text: renderValueHistoryText(answer) }],
         structuredContent: answer,
         isError: !answer.ok,
       }

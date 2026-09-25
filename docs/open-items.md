@@ -5,7 +5,19 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-09-22 (**MCP-CARRY's capability closed** — three more
+**Last reviewed:** 2026-09-25 (**MCP-CARRY closed out** — four commits.
+**ROOKIE-1 closed** by dropping the rookie name fallback rather than guarding
+it (0 of 444 name joins live; all 395 FantasyCalc ids resolve to the same name
+in the player DB; 7 same-name-same-position rookies a guard would have
+missed). **`get_value_history`**, the thirteenth tool, reads the last unread
+static feed, on the sparkline rule extracted from `useValueHistory`
+(equivalence proved, 2,314 cases). **`Retry-After` is honoured** by
+`mcp/limit.js` off an additive `fetchJSON` field, app behaviour proved
+unchanged by the suite. **`restKvStore` explicitly deferred** — production
+does not use KV at all (CLAUDE.md said it did; corrected), and provisioning
+is the owner's call; the three-step path is recorded. Tests 808 / 765 with no
+`node_modules`, gap 43. Owed: the connector re-check on the phone, now for
+**five** tools. Previously, 2026-09-22: **MCP-CARRY's capability closed** — three more
 tools, `research_rookies`, `scout_managers` and `get_league_results`, make
 twelve and close `MCP_DISCOVERY.md` §5's deferred list plus the question it
 called unanswerable. Two extractions in the A–D shape came with them
@@ -143,6 +155,7 @@ which beats any amount of feature value.
 | Next | Work | Why here |
 |---|---|---|
 | **1** | ~~SMALL-1 → then MCP-CARRY's trade-targets tool~~ — **DONE 2026-09-22.** Both shipped: the rationale now checks the lineup before claiming to have protected it, and `find_trade_targets` is the ninth tool. Two of §5's phase-two tools remain (manager scouting, rookie research) — neither is scheduled | The largest capability gap the server had: it could *grade* a trade you already thought of but not answer "who do I call about, and what would it cost?". SMALL-1 went first because `packageRationale` is the string that tool returns, and a false claim through an LLM is worse than one on a screen |
+| **1c** | ~~MCP-CARRY closeout~~ — **DONE 2026-09-25.** ROOKIE-1 closed (fallback dropped), `get_value_history` (tool 13, the last static feed), `Retry-After` in the limiter; `restKvStore` explicitly deferred to the owner (provisioning may cost money — path recorded in MCP-CARRY). **Owed: the phone re-check for five tools** | What was left after 1b was one correctness fix, one unread feed and two known limits; three are closed and the fourth is now a decision rather than an unknown |
 | **1b** | ~~MCP-CARRY's remaining capability~~ — **DONE 2026-09-22.** `research_rookies`, `scout_managers` and `get_league_results` shipped; the server now has twelve tools and §5's list is closed. **Owed: the connector re-check on the owner's phone** for the four tools added since 2026-09-20 (see MCP-CARRY), and **ROOKIE-1**, a small identity fix found on the way (0 of 444 live) | The server could grade and find trades but could not answer the rookie, manager or history questions the app already answers on the phone. What MCP-CARRY still holds is known limits, not capability |
 | **2** | ~~NEWS-4 + NEWS-7~~ — **DONE 2026-09-22.** ESPN RSS removed (it answers Actions with an empty HTTP 202, not a throw); player cap 400 → 1200; `coverage.depthHours` added because `spanHours` turned out to be set by stragglers. **One follow-up: re-read `depthHours` on 2026-09-29** to learn whether the 7-day window binds | Both small. NEWS-5 is effectively settled — the docs are corrected and its option 2 is cosmetic |
 | **3** | **Phase 4b/4c** — normalize the three valuation sources and surface the disagreement | The biggest unbuilt owner-approved item, but 4d wants archive history and `values-consensus.json` holds one day as of 2026-09-21. It gets better by waiting, which nothing else on this list does |
@@ -330,9 +343,9 @@ storage. A multi-tenant server would still want it.
 item always wanted: `find_sell_high` returned the live two-sided move (Jaxson
 Dart → Crippled Gang for Chris Olave) with every source stamped fresh.
 
-**Still open, unchanged:** `mcp/limit.js` backs off on a fixed schedule because
-`fetchJSON` discards the `Response`, so a 429's `Retry-After` is unreachable.
-One user makes this academic; a hosted endpoint may not.
+~~**Still open, unchanged:** `mcp/limit.js` backs off on a fixed schedule because
+`fetchJSON` discards the `Response`, so a 429's `Retry-After` is unreachable.~~
+**Closed 2026-09-25** — see MCP-CARRY.
 
 **Historical — the trigger, now discharged:**
 
@@ -354,10 +367,8 @@ One user makes this academic; a hosted endpoint may not.
   process. §6 calls for external KV.
 - **The resolver hook.** A deployed server must not depend on `mcp/loader.mjs`.
   Use the bundling step MCP-1 verified.
-- **The rate limiter's blind spot.** `mcp/limit.js` backs off on a fixed
-  schedule because `fetchJSON` discards the `Response`, so a 429's
-  `Retry-After` is unreachable. One user over stdio makes this academic; a
-  hosted endpoint may not.
+- ~~**The rate limiter's blind spot.**~~ Closed 2026-09-25 (MCP-CARRY):
+  `Retry-After` is now honoured, capped at 4s, without `fetchJSON` retrying.
 
 **Not blocked on any of the above: the remaining five tools** (`find_sell_high`,
 `recommend_free_agents`, `resolve_assets`, `analyze_trade`, `lineup_advice` —
@@ -1130,10 +1141,18 @@ the cost — it reads the narrow walk plus a bracket and a users call per season
 **Post Mahomes (today Mahomes Depot) won 2023**, Ministry Of Touchdowns 2024 and
 2025; titles are credited by owner, so the rename does not orphan the title.
 
+**SHIPPED 2026-09-25: the MCP-CARRY closeout.** ROOKIE-1 (§2, closed),
+`get_value_history` (the capability bullet below), `Retry-After` (the known
+limit below, closed) and `restKvStore` (explicitly deferred below). Pre-flight
+before it: `main` (e96b280, PR #67) carried a `Vercel: success` commit status
+and a Production deployment, and the production alias answered an
+unauthenticated POST with **401 + `WWW-Authenticate: Bearer
+resource_metadata=…`** — the integration is intact.
+
 **Owed on the phone (the owner's, since no sandbox can do it):** the connector
-re-check for the four tools added since the last one on 2026-09-20 —
+re-check for the five tools added since the last one on 2026-09-20 —
 `find_trade_targets`, `research_rookies`, `scout_managers`,
-`get_league_results` — i.e. confirm all **twelve** appear in the connector's
+`get_league_results`, `get_value_history` — i.e. confirm all **thirteen** appear in the connector's
 own tool list after this deploys, and ask each one question. That is the end of
 the chain no probe reaches.
 
@@ -1141,23 +1160,57 @@ the chain no probe reaches.
 - **Nothing on `MCP_DISCOVERY.md` §5's list remains** (trade targets, rookie
   research and manager scouting shipped 2026-09-22, and so did the question §5
   called unanswerable).
-- **One of the four static feeds is still unread** — `values-history`.
-  `get_player_news` reads `news`, `research_rookies` reads `rookie-intel`,
-  `scout_managers` reads `trade-values`.
-  So a second league gets no sparklines, no at-trade-time values and no rookie
-  research, and the tools say so.
+- ~~**One of the four static feeds is still unread** — `values-history`.~~
+  **Closed 2026-09-25** by `get_value_history`, the thirteenth tool: all four
+  static feeds are now read (`news` by `get_player_news`, `rookie-intel` by
+  `research_rookies`, `trade-values` by `scout_managers`, `values-history` by
+  `get_value_history`). The sparkline rule was extracted from the hook into
+  `src/utils/valueHistory.js` first (`getValueSeries`, equivalence proved on
+  the live feed, 2,314 cases). Its own tool rather than a `get_roster` field —
+  an ~82KB wire fetch behind every roster question is the wrong cost. Measured
+  live over the real transport: **1,372ms cold / 26ms cached, 8,100B**, 9
+  upstream requests cold and 0 cached; a single player 5,084B.
 - ~~`/league/{id}/winners_bracket` has still never been called~~ — **closed
   2026-09-22** by `get_league_results` (above).
 
 **Known limits, stated rather than hidden:**
-- **`mcp/limit.js` backs off on a fixed schedule.** `fetchJSON` throws an
-  `Error` that embeds the status and discards the `Response`, so a 429's
-  `Retry-After` is unreachable. One user makes this academic; a hosted
-  endpoint may not. **Do not fix it by adding retry logic to `fetchJSON`** —
-  that changes the app's behaviour to solve a server problem.
-- **`restKvStore` has never been verified against a live store.** KV was not
-  needed (a warm instance holds the cache; the second request measured 21ms),
-  so the code path exists untested.
+- ~~**`mcp/limit.js` backs off on a fixed schedule.**~~ **Closed
+  2026-09-25.** `fetchJSON` now attaches `status` and the raw `retryAfter` to
+  the `Error` it already threw — message byte-identical, no retry added there,
+  and all 801 pre-existing test results identical with the change in place.
+  `limit.js` honours both RFC 9110 forms, capped at 4s, falling back to the
+  jittered schedule when the header is absent or unparseable; a 404 is never
+  retried, advice or not. Seven new tests pin 429-with-header, 429-without, the
+  HTTP-date form, an absurd value (86,400s → capped, still bounded by
+  `MAX_ATTEMPTS`), a 404 carrying the header, and the attached fields.
+- **`restKvStore` has never been verified against a live store — EXPLICITLY
+  DEFERRED 2026-09-25, owner's call.** Checked read-only: **no KV is in use,
+  and none can be from the current code** — `vercelEntry.js` calls
+  `createApp()` with no `store`, and nothing reads a KV environment variable,
+  so production runs `memoryStore()` in the warm instance. (CLAUDE.md said
+  "HTTP passes a KV-backed store"; corrected.) Whether a store is *provisioned*
+  could not be confirmed: this session's Vercel connector sees the team but
+  returns 404 for the project and 403 for integrations, so neither env var
+  names nor Marketplace installs were readable. **Nothing was provisioned.**
+  What closing it would take, in order:
+  1. **Owner:** provision a Redis-over-HTTP store for the `dynastyedge-mcp`
+     project (Upstash via the Vercel Marketplace is the shape `restKvStore`
+     speaks — `POST <url>` with `["GET", key]`). This may cost money; check the
+     plan's per-value limit against the numbers below.
+  2. **Code, ~5 lines:** in `vercelEntry.js`, pass
+     `restKvStore({ url, token })` to `createApp` when both env vars are set,
+     `memoryStore()` otherwise (so an unset store degrades to today's
+     behaviour, never to a failed boot).
+  3. **Verify over the real HTTP transport**, three checks: `fetchedAt`
+     round-trips byte-for-byte (a cold instance's `asOf` must quote the
+     *writer's* fetch time, not its own); the largest entry fits — measured
+     2026-09-25, the player DB is **303 KB** as the stored gzip+base64 string
+     (2.0 MB raw) and value history **108 KB**; and a KV that rejects writes
+     (revoke the token) leaves answers correct and merely slower, which
+     `loadSource`'s guard already promises and `tests/mcpStore.test.mjs` pins
+     synthetically.
+  Why it can wait: one user on one warm instance measured a 21ms second
+  request; KV buys cold-start latency, not correctness.
 - **The news feed can trail a wire report by HOURS near kickoff — not the
   ~35 minutes previously recorded.** It *asks* to publish twice an hour
   through a ~5-minute CDN cache, but GitHub delivers ~7.4 runs/day at a 3.26h
@@ -1686,10 +1739,34 @@ curl -s 'https://api.sleeper.app/v1/league/1313933520715907072/drafts' | grep -c
 
 ## 2. Deferred — waiting on a trigger
 
-### ROOKIE-1 — `buildRookieProspects`' name fallback is position-unguarded
+### ROOKIE-1 — ~~`buildRookieProspects`' name fallback is position-unguarded~~ **CLOSED 2026-09-25**
 
-**Status:** open, found 2026-09-22 while building `research_rookies`.
-**Trigger:** ready work, small; deliberately not folded into the tool commit.
+**The fallback was dropped, not guarded.** Re-measured on the live league
+before touching it (2026 Week 3): **444 rookies — 67 join by id, 377 unpriced,
+0 by name.** The deciding measurement was a second one: `playerMap` is keyed by
+FantasyCalc's own `sleeperId`, so a name hit can only land on an entry
+FantasyCalc attached to a *different* Sleeper player — and **all 395** of
+FantasyCalc's player ids resolve in the live player DB under the same name (one
+position differs: Travis Hunter, WR in FantasyCalc, DB in Sleeper). There is no
+stale-id case for a fallback to rescue, only collisions for it to cause, and a
+position guard would not have covered them: **7 rookies share both name and
+position** with another player in the DB.
+
+**Before/after, all four consumers' inputs** (Draft Board, Tracker, Pick
+Trades and Research all call `buildRookieProspects(rookieMap, playerMap)`,
+and `research_rookies` through `buildRookieBoard`): the output was
+`deepStrictEqual` on the live payloads with FantasyCalc, without it, and with
+no rookie map — 444 rows, 67 priced, identical — which is what 0 name hits
+predicts. So the change is invisible today and closes the case for the day it
+would have fired. Pinned by `tests/rookieAdp.test.mjs` (the two Jaylen Smiths,
+and the same-name-same-position veteran a guard would have missed), and
+`research_rookies`' test now asks for **905** and gets the RB, `value: null`.
+Four assertions fail against the old code.
+
+The original entry is kept below as the record.
+
+**Status:** ~~open, found 2026-09-22 while building `research_rookies`.~~
+**Trigger:** ~~ready work, small; deliberately not folded into the tool commit.~~
 
 `utils/rookieAdp.js`'s `buildRookieProspects` enriches each rookie with his
 FantasyCalc entry by `sleeperId`, and **falls back to a lower-cased full-name
@@ -2246,6 +2323,9 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 | NEWS-7 — ESPN RSS gave Actions nothing | 2026-09-22 | The recorded diagnosis ("catch branch, so it throws — 403 or timeout") was wrong on every count: the log read `0 items` in ~95ms, not `FAILED`. The script was made to print what a zero-item 2xx returned, and the next run read **HTTP 202 · text/html · 0 bytes** — a bot-manager deferral, which `res.ok` accepts. Same URL + UA from outside Actions: 200, 29 items. **Removed** at 8 of 12 consecutive misses; the zero-item diagnostic stays. Detail in §1 |
 | OPS-2 — a branch dispatch could publish production data | 2026-09-22 | Found by the owner's review question. `news.yml` and `values-history.yml` had no default-branch guard on their publish steps (`rookie-intel.yml` did), so NEWS-4/NEWS-7's verification runs, and the 2026-09-12 retention verification before them, force-pushed feature-branch code to the live `news-data` feed. Both now carry `if: github.ref_name == github.event.repository.default_branch`; a branch dispatch is a dry run. **Post-merge check done 2026-09-22:** `news.yml` dispatched on `main` (run 1237) and the PUBLISHED `news.json` read via git off `news-data`: `playerCap` 1200, `depthHours` 53, ten sources, no `ESPN RSS` key, every `sourceMisses` 0. |
 | NEWS-4 — the news cap was binding at 400 | 2026-09-22 | Cap-bound at 56h with breadth healthy (207 players), so raised to **1200** (~7.1 retained/h × 168h; ~144KB wire projected vs 54KB). News page now paged at 50. The raise exposed that **`spanHours` is set by stragglers** (54 → 147h on three items while p90 depth went 51 → 52h), so `coverage.depthHours` was added and the drawer reads it. The 7-day claim is **pending**: re-read `depthHours` 2026-09-29. Detail in §1 |
+| ROOKIE-1 — the rookie name fallback could borrow a namesake's value | 2026-09-25 | Dropped rather than position-guarded. `playerMap` is keyed by FantasyCalc's own `sleeperId`, so a name hit could only land on an entry attached to a *different* Sleeper player; live, 0 of 444 rookies joined by name and all 395 FantasyCalc ids resolve to the same name in the player DB, while 7 rookies share name *and* position with someone (a guard would have missed them). All four Draft consumers' input `deepStrictEqual` before/after. Detail in §2 |
+| MCP-CARRY: `Retry-After` unreachable from the limiter | 2026-09-25 | `fetchJSON` attaches `status` + `retryAfter` to the error it already threw (message unchanged; 801 pre-existing test results identical); `limit.js` honours both forms, capped at 4s, schedule fallback otherwise, 404 never retried |
+| MCP-CARRY: `values-history.json` unread | 2026-09-25 | `get_value_history`, tool 13 — 1,372ms cold / 26ms cached, 8,100B, 9 upstream cold / 0 cached |
 | SMALL-1 — the package rationale claimed what it hadn't checked | 2026-09-22 | *"Protects your starters"* printed on **180 of 180** suggestions and was false on **11 of the owner's 20** and **77 of 180** league-wide — it meant "touched nothing ≥ `PROTECT_THRESHOLD`", and a core starter sits at 0.85. `packageRationale` now takes `buildValueLineup(...).starterIds` and names the starter instead; 0 and 0 after, with the claim surviving on 103 of 180 where it is true. Every one of the 180 selected packages is byte-identical, which was the acceptance test — a changed package would mean the search moved, not the copy. Shipped as the prerequisite to MCP-CARRY's trade-targets tool. Detail in §2 |
 | OPEN-10 — the two "fair" windows disagreed | 2026-09-21 | The board proposed an offer and the Analyzer, one tap later, called it an overpay: **0 of 20** suggestions on the owner's board and **35 of 180** across all ten seats landed inside `buildFairBand`, at a mean of 1.0965× the target. The mechanism was not the window but the price of an appeal step — crossing 1.05 hands the partner a whole appeal point (worth 1.0 keep-pain) against a ~0.027 distance penalty. Fixed by a **split**, not a narrowing: the suggestion must land inside `buildFairBand` (asked of that function, never a literal), the assembly window feeds `alternative`, which now carries its premium. Owner's board: keep-pain 17.24 → 15.19, value sent −7.3%, in band 0/20 → 20/20, my-side 3 Fair/17 Weak → 18 Fair/2 Weak, verdicts 3A/16C/1D → 8A/12C/0D. All ten seats: value −4.6%, in band 35 → 161 of 180, Weak-for-me 74 → 9. The price: Weak-for-them 31 → 106, stated rather than buried. `APPEAL_BONUS` re-swept and unmoved. Detail in §2 |
 | NEWS-6 — a dead source was invisible in both pipelines | 2026-09-21 | Owner asked whether anything warns us when a source changes shape. Zeros were never the risk (nulls, by design) but the silence was real: three snapshot steps are `continue-on-error` and a failed news source is a logged `0`. Checking turned up a LIVE case — **ESPN RSS contributing 0 while returning 25 items to a hand probe** — the second after FantasyPros. Shipped a shared, tested alarm that fails the workflow after a **persistent** gap (never a blip), runs after publish so it cannot cost data, and treats a missing file as an alarm. Detail in §1 |

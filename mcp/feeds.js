@@ -1,5 +1,6 @@
 // feeds.js — the Actions-published static feeds other than news, as
-// server-side sources: rookie-intel.json and trade-values.json.
+// server-side sources: rookie-intel.json, trade-values.json and
+// values-history.json.
 //
 // news.js was the first static feed the server read and carries its own
 // matcher and kickoff-staleness logic. These two need none of that — they are
@@ -31,13 +32,28 @@
 // values-history workflow — an entry, once written, never changes (trades are
 // immutable, and 2026-09-21's self-heal rewrites a 0 to null exactly once). New
 // entries arrive at most daily. Same hour, same reason.
+//
+// values-history publishes ONCE A DAY too (values-history.yml, cron 09:41 UTC,
+// delivered whenever GitHub gets round to it), but its argument is not the
+// other two's, so it gets its own number: SIX HOURS. The file's resolution is
+// one column per UTC day — a same-day re-run REPLACES that column rather than
+// adding one — so between publishes there is nothing newer to fetch, and the
+// question it answers ("how has his value moved over the last weeks?") does
+// not turn on hours. The one thing that does is the endpoint of the line, and
+// that is deliberately not this feed's job: the tool reports FantasyCalc's
+// current value from the 15-minute snapshot beside the series, so the freshest
+// number is never the series' last column. Worst case, six hours behind a new
+// publish, the line is one day short and says which day it ends on. The file
+// is ~260KB raw / ~82KB on the wire (measured 2026-09-25), which a cache hit
+// saves ~4x a day over the hourly TTL for nothing the reader could notice.
 
-import { ROOKIE_INTEL_URL, TRADE_VALUES_URL } from '../src/constants.js'
+import { ROOKIE_INTEL_URL, TRADE_VALUES_URL, VALUES_HISTORY_URL } from '../src/constants.js'
 import { createFetcher } from './limit.js'
 import { stampSource } from './snapshot.js'
 import { memoryStore, loadSource } from './store.js'
 
 export const DEFAULT_FEED_TTL_MS = 60 * 60 * 1000
+export const DEFAULT_VALUE_HISTORY_TTL_MS = 6 * 60 * 60 * 1000
 
 const defaultStore = memoryStore()
 
@@ -85,6 +101,17 @@ export function getTradeValues({
   return loadFeed({
     key: 'feed:trade-values', url: TRADE_VALUES_URL, label: 'DynastyEdge trade-time values',
     valid: d => !!d?.trades && typeof d.trades === 'object',
+    ttlMs, force, fetcher, concurrency, store,
+  })
+}
+
+// The same checks useValueHistory's loader throws 'bad shape' on.
+export function getValueHistoryFeed({
+  ttlMs = DEFAULT_VALUE_HISTORY_TTL_MS, force = false, fetcher, concurrency = 6, store = defaultStore,
+} = {}) {
+  return loadFeed({
+    key: 'feed:values-history', url: VALUES_HISTORY_URL, label: 'DynastyEdge value history',
+    valid: d => Array.isArray(d?.dates) && !!d?.players && typeof d.players === 'object',
     ttlMs, force, fetcher, concurrency, store,
   })
 }

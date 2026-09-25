@@ -224,14 +224,15 @@ Build in this order. Each row names what it reuses and what must exist first.
 | 5 | `analyze_trade` | "Grade this trade." | `give[]`, `get[]` (resolved IDs only), `partner` | Verdict, reasoning, value split, both-seat appeal, landing spots, fair band, counter suggestion, pitch text | `tradeAnalysis.analyzeTrade` → `getTradeVerdict` → `adjustVerdictForInjuries` → `getCounterSuggestion` → `buildTradePitch`. Mirror `TradeAnalyzer.jsx:141-256`. |
 | 6 | `lineup_advice` | "What do I start, and what's it costing me?" | optional `week` | Moves with per-move gain, confidence %, must-fix flags, total points left on bench | `lineupMoves.buildLineupMoves` — pure, heavily tested. Needs projections (already committed), player DB, and the schedule for byes **and locks**. |
 
-> **This table is the original plan, kept as the record. Six tools shipped
+> **This table is the original plan, kept as the record. Seven tools shipped
 > beyond it** — `get_playoff_odds` (phase 2a, the first "deferred" item below),
 > `get_player_news` (phase 2c), `find_trade_targets`, `research_rookies` and
-> `scout_managers` (2026-09-22, all three deferred below), and
+> `scout_managers` (2026-09-22, all three deferred below),
 > `get_league_results` (2026-09-22, the question below that was "not
-> answerable today"). CLAUDE.md's **The MCP Server** section is the live truth
-> for all twelve; this section is what was specified on
-> 2026-09-19.
+> answerable today"), and `get_value_history` (2026-09-25, the last of the four
+> static feeds §6 said a second league would lack). CLAUDE.md's **The MCP
+> Server** section is the live truth for all thirteen; this section is what was
+> specified on 2026-09-19.
 >
 > **Row 6 gained a requirement that was not foreseen here, and it cost a wrong
 > answer to find.** "The schedule for byes" is incomplete: the same payload's
@@ -265,7 +266,10 @@ the second static feed the server reads).
 > without that split the tool would have returned offers `analyze_trade` then
 > called an overpay, i.e. the app arguing with itself over MCP.
 
-**Not foreseen here and shipped anyway: reading the static feeds.** §6 treats
+**Not foreseen here and shipped anyway: reading the static feeds** — all four
+of them as of 2026-09-25 (`news.json` by `get_player_news`,
+`rookie-intel.json` by `research_rookies`, `trade-values.json` by
+`scout_managers`, `values-history.json` by `get_value_history`). §6 treats
 the Actions-published branches as app-only. `get_player_news` reads
 `news.json`, which is what makes "should I start Bowers?" answerable without a
 second lookup — and it keeps the app's own Class B contract (a miss is
@@ -321,6 +325,9 @@ parameterize the four static feeds, which are published from
 `raw.githubusercontent.com/chnates/dynastyedge/*` for *this* repo only
 (`src/constants.js:25-41`). A second league would get working rosters, values,
 trades, lineups and odds — but no news, no sparklines, no rookie research.
+*(2026-09-25: all four feeds are now read by the server, each degrading to
+`available: false` with a note — see CLAUDE.md's "What the server can never
+do".)*
 Design those tools to degrade cleanly and say so, rather than pretend.
 
 -----
