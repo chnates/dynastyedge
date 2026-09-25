@@ -325,6 +325,9 @@ parameterize the four static feeds, which are published from
 `raw.githubusercontent.com/chnates/dynastyedge/*` for *this* repo only
 (`src/constants.js:25-41`). A second league would get working rosters, values,
 trades, lineups and odds — but no news, no sparklines, no rookie research.
+*(2026-09-25: all four feeds are now read by the server, each degrading to
+`available: false` with a note — see CLAUDE.md's "What the server can never
+do".)*
 Design those tools to degrade cleanly and say so, rather than pretend.
 
 -----

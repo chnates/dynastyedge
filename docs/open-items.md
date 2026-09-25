@@ -343,9 +343,9 @@ storage. A multi-tenant server would still want it.
 item always wanted: `find_sell_high` returned the live two-sided move (Jaxson
 Dart → Crippled Gang for Chris Olave) with every source stamped fresh.
 
-**Still open, unchanged:** `mcp/limit.js` backs off on a fixed schedule because
-`fetchJSON` discards the `Response`, so a 429's `Retry-After` is unreachable.
-One user makes this academic; a hosted endpoint may not.
+~~**Still open, unchanged:** `mcp/limit.js` backs off on a fixed schedule because
+`fetchJSON` discards the `Response`, so a 429's `Retry-After` is unreachable.~~
+**Closed 2026-09-25** — see MCP-CARRY.
 
 **Historical — the trigger, now discharged:**
 
@@ -367,10 +367,8 @@ One user makes this academic; a hosted endpoint may not.
   process. §6 calls for external KV.
 - **The resolver hook.** A deployed server must not depend on `mcp/loader.mjs`.
   Use the bundling step MCP-1 verified.
-- **The rate limiter's blind spot.** `mcp/limit.js` backs off on a fixed
-  schedule because `fetchJSON` discards the `Response`, so a 429's
-  `Retry-After` is unreachable. One user over stdio makes this academic; a
-  hosted endpoint may not.
+- ~~**The rate limiter's blind spot.**~~ Closed 2026-09-25 (MCP-CARRY):
+  `Retry-After` is now honoured, capped at 4s, without `fetchJSON` retrying.
 
 **Not blocked on any of the above: the remaining five tools** (`find_sell_high`,
 `recommend_free_agents`, `resolve_assets`, `analyze_trade`, `lineup_advice` —

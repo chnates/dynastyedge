@@ -278,15 +278,18 @@ first live call, before either reached a reader — which is the concrete payoff
 
 ## Known limits
 
-- **Rate limiting is approximate.** `fetchJSON` throws an `Error` with the
-  status in its message and discards the `Response`, so a 429's `Retry-After`
-  is unreachable without changing `fetchJSON` — which would change the app's
-  behaviour to fix a server problem. `limit.js` backs off on a fixed
-  exponential schedule with jitter instead.
+- **Rate limiting honours `Retry-After` (2026-09-25).** `fetchJSON` now
+  attaches `status` and the raw `retryAfter` header to the `Error` it already
+  threw — additive, message unchanged, and `fetchJSON` still never retries.
+  `limit.js` reads it (seconds or HTTP-date), caps the wait at 4s, and falls
+  back to its jittered exponential schedule when there is no usable advice. A
+  404 is never retried.
 - **The cache backend is now a parameter** (`mcp/store.js`). stdio keeps
   `memoryStore()` — process-global, the app's hook-singleton pattern, and
-  correct here (1ms cached against a 658ms cold assembly). The HTTP transport
-  passes a KV-backed store instead. The freshness POLICY is shared by both, in
+  correct here (1ms cached against a 658ms cold assembly). **The deployed HTTP
+  server uses `memoryStore()` too** — `vercelEntry.js` wires no KV (corrected
+  2026-09-25; this line used to say it passed a KV-backed store). A warm
+  instance holds the cache; see the KV note below. The freshness POLICY is shared by both, in
   one `loadSource`, because two copies of the stale-fallback contract is the
   drift prerequisite C removed from `src/`.
   Two traps it exists to hold, both pinned by `tests/mcpStore.test.mjs`:
