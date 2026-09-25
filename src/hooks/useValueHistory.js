@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { VALUES_HISTORY_URL } from '../constants'
 import { fetchJSON } from '../utils/fetchJSON'
-import { MIN_SPARKLINE_POINTS } from '../utils/valueHistory'
+import { MIN_SPARKLINE_POINTS, getValueSeries } from '../utils/valueHistory'
 
 // Daily dynasty-value snapshots accumulated by the values-history GitHub
 // Action. Fetched lazily (first consumer mount) and cached for the session.
@@ -65,12 +65,10 @@ export function useValueHistory() {
   }, [])
 
   // Series for one player, nulls (missing days) removed. Callers get null
-  // until MIN_SPARKLINE_POINTS snapshots exist.
+  // until MIN_SPARKLINE_POINTS snapshots exist. The rule lives in
+  // utils/valueHistory.js so the MCP server's value-history tool reads it too.
   function getSeries(sleeperId) {
-    const raw = history?.players?.[String(sleeperId)]
-    if (!raw) return null
-    const points = raw.filter(v => v != null)
-    return points.length >= MIN_SPARKLINE_POINTS ? points : null
+    return getValueSeries(history, sleeperId)
   }
 
   return { history, getSeries }

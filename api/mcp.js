@@ -32,7 +32,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 
 // src/constants.js
-var LEAGUE_ID, MY_ROSTER_ID, SLEEPER_BASE, SLEEPER_ROOT, FANTASYCALC_BASE, NEWS_FEED_URL, TRADE_VALUES_URL, ROOKIE_INTEL_URL, FANTASYCALC_PARAMS, PICK_YEARS, POSITIONS, ROSTER_SLOTS;
+var LEAGUE_ID, MY_ROSTER_ID, SLEEPER_BASE, SLEEPER_ROOT, FANTASYCALC_BASE, NEWS_FEED_URL, VALUES_HISTORY_URL, TRADE_VALUES_URL, ROOKIE_INTEL_URL, FANTASYCALC_PARAMS, PICK_YEARS, POSITIONS, ROSTER_SLOTS;
 var init_constants = __esm({
   "src/constants.js"() {
     LEAGUE_ID = "1313933520715907072";
@@ -41,6 +41,7 @@ var init_constants = __esm({
     SLEEPER_ROOT = "https://api.sleeper.app";
     FANTASYCALC_BASE = "https://api.fantasycalc.com";
     NEWS_FEED_URL = "https://raw.githubusercontent.com/chnates/dynastyedge/news-data/news.json";
+    VALUES_HISTORY_URL = "https://raw.githubusercontent.com/chnates/dynastyedge/values-history/values-history.json";
     TRADE_VALUES_URL = "https://raw.githubusercontent.com/chnates/dynastyedge/values-history/trade-values.json";
     ROOKIE_INTEL_URL = "https://raw.githubusercontent.com/chnates/dynastyedge/rookie-intel/rookie-intel.json";
     FANTASYCALC_PARAMS = {
@@ -1291,7 +1292,26 @@ function getTradeValues({
     store
   });
 }
-var DEFAULT_FEED_TTL_MS, defaultStore6;
+function getValueHistoryFeed({
+  ttlMs = DEFAULT_VALUE_HISTORY_TTL_MS,
+  force = false,
+  fetcher,
+  concurrency = 6,
+  store = defaultStore6
+} = {}) {
+  return loadFeed({
+    key: "feed:values-history",
+    url: VALUES_HISTORY_URL,
+    label: "DynastyEdge value history",
+    valid: (d) => Array.isArray(d?.dates) && !!d?.players && typeof d.players === "object",
+    ttlMs,
+    force,
+    fetcher,
+    concurrency,
+    store
+  });
+}
+var DEFAULT_FEED_TTL_MS, DEFAULT_VALUE_HISTORY_TTL_MS, defaultStore6;
 var init_feeds = __esm({
   "mcp/feeds.js"() {
     init_constants();
@@ -1299,6 +1319,7 @@ var init_feeds = __esm({
     init_snapshot();
     init_store();
     DEFAULT_FEED_TTL_MS = 60 * 60 * 1e3;
+    DEFAULT_VALUE_HISTORY_TTL_MS = 6 * 60 * 60 * 1e3;
     defaultStore6 = memoryStore();
   }
 });
@@ -1329,6 +1350,9 @@ function loadConfig(env = process.env) {
     historyTtlMs: Number(env.DYNASTYEDGE_HISTORY_TTL_MS) || DEFAULT_HISTORY_TTL_MS,
     // rookie-intel and trade-values publish at most daily (mcp/feeds.js).
     feedTtlMs: Number(env.DYNASTYEDGE_FEED_TTL_MS) || DEFAULT_FEED_TTL_MS,
+    // values-history.json — one column per UTC day; see mcp/feeds.js for why
+    // this is six hours rather than the other feeds' one.
+    valueHistoryTtlMs: Number(env.DYNASTYEDGE_VALUE_HISTORY_TTL_MS) || DEFAULT_VALUE_HISTORY_TTL_MS,
     concurrency: Number(env.DYNASTYEDGE_CONCURRENCY) || 6,
     githubClientId: env.GITHUB_CLIENT_ID || DEFAULT_GITHUB_CLIENT_ID,
     // No default, deliberately. A server that starts without this would
@@ -32098,11 +32122,11 @@ var require_format = __commonJS({
           }
           function getFormat(fmtDef) {
             const code = fmtDef instanceof RegExp ? (0, codegen_1.regexpCode)(fmtDef) : opts.code.formats ? (0, codegen_1._)`${opts.code.formats}${(0, codegen_1.getProperty)(schema)}` : void 0;
-            const fmt = gen.scopeValue("formats", { key: schema, ref: fmtDef, code });
+            const fmt2 = gen.scopeValue("formats", { key: schema, ref: fmtDef, code });
             if (typeof fmtDef == "object" && !(fmtDef instanceof RegExp)) {
-              return [fmtDef.type || "string", fmtDef.validate, (0, codegen_1._)`${fmt}.validate`];
+              return [fmtDef.type || "string", fmtDef.validate, (0, codegen_1._)`${fmt2}.validate`];
             }
-            return ["string", fmtDef, fmt];
+            return ["string", fmtDef, fmt2];
           }
           function validCondition() {
             if (typeof formatDef == "object" && !(formatDef instanceof RegExp) && formatDef.async) {
@@ -37996,11 +38020,11 @@ var require_format3 = __commonJS({
           }
           function getFormat(fmtDef) {
             const code = fmtDef instanceof RegExp ? (0, codegen_1.regexpCode)(fmtDef) : opts.code.formats ? (0, codegen_1._)`${opts.code.formats}${(0, codegen_1.getProperty)(schema)}` : void 0;
-            const fmt = gen.scopeValue("formats", { key: schema, ref: fmtDef, code });
+            const fmt2 = gen.scopeValue("formats", { key: schema, ref: fmtDef, code });
             if (typeof fmtDef == "object" && !(fmtDef instanceof RegExp)) {
-              return [fmtDef.type || "string", fmtDef.validate, (0, codegen_1._)`${fmt}.validate`];
+              return [fmtDef.type || "string", fmtDef.validate, (0, codegen_1._)`${fmt2}.validate`];
             }
-            return ["string", fmtDef, fmt];
+            return ["string", fmtDef, fmt2];
           }
           function validCondition() {
             if (typeof formatDef == "object" && !(formatDef instanceof RegExp) && formatDef.async) {
@@ -38459,8 +38483,8 @@ var require_limit = __commonJS({
             ref: self.formats,
             code: opts.code.formats
           });
-          const fmt = gen.const("fmt", (0, codegen_1._)`${fmts}[${fCxt.schemaCode}]`);
-          cxt.fail$data((0, codegen_1.or)((0, codegen_1._)`typeof ${fmt} != "object"`, (0, codegen_1._)`${fmt} instanceof RegExp`, (0, codegen_1._)`typeof ${fmt}.compare != "function"`, compareCode(fmt)));
+          const fmt2 = gen.const("fmt", (0, codegen_1._)`${fmts}[${fCxt.schemaCode}]`);
+          cxt.fail$data((0, codegen_1.or)((0, codegen_1._)`typeof ${fmt2} != "object"`, (0, codegen_1._)`${fmt2} instanceof RegExp`, (0, codegen_1._)`typeof ${fmt2}.compare != "function"`, compareCode(fmt2)));
         }
         function validateFormat() {
           const format = fCxt.schema;
@@ -38470,15 +38494,15 @@ var require_limit = __commonJS({
           if (typeof fmtDef != "object" || fmtDef instanceof RegExp || typeof fmtDef.compare != "function") {
             throw new Error(`"${keyword}": format "${format}" does not define "compare" function`);
           }
-          const fmt = gen.scopeValue("formats", {
+          const fmt2 = gen.scopeValue("formats", {
             key: format,
             ref: fmtDef,
             code: opts.code.formats ? (0, codegen_1._)`${opts.code.formats}${(0, codegen_1.getProperty)(format)}` : void 0
           });
-          cxt.fail$data(compareCode(fmt));
+          cxt.fail$data(compareCode(fmt2));
         }
-        function compareCode(fmt) {
-          return (0, codegen_1._)`${fmt}.compare(${data}, ${schemaCode}) ${KWDs[keyword].fail} 0`;
+        function compareCode(fmt2) {
+          return (0, codegen_1._)`${fmt2}.compare(${data}, ${schemaCode}) ${KWDs[keyword].fail} 0`;
         }
       },
       dependencies: ["format"]
@@ -41639,9 +41663,9 @@ function buildRosterTrajectory(roster, currentSeasonYear, curves, genericCurve) 
 }
 function seriesDirection(series) {
   if (!series?.length || !series[0]) return "stable";
-  const pct3 = (series[series.length - 1] - series[0]) / series[0];
-  if (pct3 > 0.05) return "ascending";
-  if (pct3 < -0.05) return "declining";
+  const pct4 = (series[series.length - 1] - series[0]) / series[0];
+  if (pct4 > 0.05) return "ascending";
+  if (pct4 < -0.05) return "declining";
   return "stable";
 }
 function getTrajectoryRead(trajectory) {
@@ -41944,8 +41968,54 @@ var init_freeAgents = __esm({
 });
 
 // src/utils/valueHistory.js
+function getDatedValueSeries(history, sleeperId) {
+  const raw = history?.players?.[String(sleeperId)];
+  if (!raw || !Array.isArray(history?.dates)) return null;
+  const points = [];
+  raw.forEach((v, i) => {
+    if (v != null) points.push({ date: history.dates[i] ?? null, value: v });
+  });
+  return points.length >= MIN_SPARKLINE_POINTS ? points : null;
+}
+function valueHistoryCoverage(history, sleeperId) {
+  const raw = history?.players?.[String(sleeperId)];
+  if (!Array.isArray(raw)) return { tracked: false, points: 0 };
+  return { tracked: true, points: raw.filter((v) => v != null).length };
+}
+function sliceValueHistory(history, days) {
+  if (!history?.dates || !Number.isFinite(days) || days >= history.dates.length) return history;
+  const from = Math.max(0, history.dates.length - Math.max(1, Math.floor(days)));
+  const players = {};
+  Object.entries(history.players ?? {}).forEach(([id, row]) => {
+    if (Array.isArray(row)) players[id] = row.slice(from);
+  });
+  return { ...history, dates: history.dates.slice(from), players };
+}
+function summarizeValueSeries(points) {
+  if (!Array.isArray(points) || points.length < MIN_SPARKLINE_POINTS) return null;
+  const first = points[0];
+  const last = points[points.length - 1];
+  let high = first;
+  let low = first;
+  points.forEach((p) => {
+    if (p.value > high.value) high = p;
+    if (p.value < low.value) low = p;
+  });
+  const change = last.value - first.value;
+  return {
+    first,
+    last,
+    high,
+    low,
+    change,
+    changePct: first.value ? Math.round(change / first.value * 1e3) / 10 : null,
+    points: points.length
+  };
+}
+var MIN_SPARKLINE_POINTS;
 var init_valueHistory = __esm({
   "src/utils/valueHistory.js"() {
+    MIN_SPARKLINE_POINTS = 4;
   }
 });
 
@@ -42049,6 +42119,22 @@ function computeEdgeSignals({ league, values, watchlist, nflState, myRosterId })
     teamTrend,
     playerValue
   };
+}
+function buildTeamValueSeries(history, roster) {
+  if (!history?.dates || history.dates.length < MIN_SPARKLINE_POINTS || !roster) return null;
+  const rows = roster.players.map((p) => history.players?.[String(p.sleeperId)]).filter(Array.isArray);
+  if (rows.length === 0) return null;
+  const n = history.dates.length;
+  const sums = new Array(n).fill(0);
+  rows.forEach((row) => {
+    const firstKnown = row.find((v) => v != null) ?? 0;
+    let last = firstKnown;
+    for (let i = 0; i < n; i++) {
+      if (row[i] != null) last = row[i];
+      sums[i] += last;
+    }
+  });
+  return sums;
 }
 var TREND_THRESHOLD, MIN_TARGET_VALUE;
 var init_edgeBriefing = __esm({
@@ -43608,8 +43694,8 @@ var init_tradeAnalysis = __esm({
     });
     SEAT_VOICE = {
       them: {
-        valueAhead: (pct3) => `They come out ${pct3}% ahead on raw dynasty value.`,
-        valueBehind: (pct3) => `They'd be giving up ${pct3}% more value than they get back.`,
+        valueAhead: (pct4) => `They come out ${pct4}% ahead on raw dynasty value.`,
+        valueBehind: (pct4) => `They'd be giving up ${pct4}% more value than they get back.`,
         benchedStack: (names, positions) => `${names} wouldn't crack their lineup \u2014 they're already above league average at ${positions}.`,
         marginalStack: (positions) => `They're already above league average at ${positions} \u2014 this is a marginal upgrade for them, not a hole filled.`,
         lineupGain: (n) => `Their best starting lineup gains ${n} in value.`,
@@ -43626,8 +43712,8 @@ var init_tradeAnalysis = __esm({
         }
       },
       you: {
-        valueAhead: (pct3) => `You come out ${pct3}% ahead on raw dynasty value.`,
-        valueBehind: (pct3) => `You'd be giving up ${pct3}% more value than you get back.`,
+        valueAhead: (pct4) => `You come out ${pct4}% ahead on raw dynasty value.`,
+        valueBehind: (pct4) => `You'd be giving up ${pct4}% more value than you get back.`,
         benchedStack: (names, positions) => `${names} wouldn't crack your lineup \u2014 you're already above league average at ${positions}.`,
         marginalStack: (positions) => `You're already above league average at ${positions} \u2014 this is a marginal upgrade, not a hole filled.`,
         lineupGain: (n) => `Your best starting lineup gains ${n} in value.`,
@@ -44848,8 +44934,8 @@ function playerRow2(m, snapshot, myRosterId) {
 }
 function buildNotes8({ news, items, scope, name, truncated, silent }) {
   const notes = [];
-  const feedNotes = newsNotes(news);
-  feedNotes.forEach((n) => notes.push(n));
+  const feedNotes2 = newsNotes(news);
+  feedNotes2.forEach((n) => notes.push(n));
   if (news?.available && scope === "player" && !items?.length) {
     notes.push(
       `The feed carries nothing about ${name} in its retained window (about a week of player news). That means no covered source has written about him recently \u2014 it is not a statement that he is healthy or that nothing has happened. His injury status above, if any, comes from Sleeper and is independent of the feed.`
@@ -46388,6 +46474,262 @@ var init_scoutManagers = __esm({
   }
 });
 
+// mcp/tools/valueHistory.js
+function buildValueHistoryAnswer(snapshot, feed, {
+  player,
+  team,
+  days,
+  limit = DEFAULT_MOVERS,
+  defaultRosterId,
+  myRosterId
+} = {}) {
+  const { league } = snapshot;
+  if (!league) throw new Error("League state unavailable");
+  const cap = Math.min(Math.max(1, Number(limit) || DEFAULT_MOVERS), MAX_MOVERS);
+  const wantDays = days == null ? null : Math.min(Math.max(MIN_DAYS, Math.floor(Number(days)) || MAX_DAYS), MAX_DAYS);
+  const history = feed?.available ? sliceValueHistory(feed.data, wantDays ?? Infinity) : null;
+  const window = history ? {
+    requestedDays: wantDays,
+    from: history.dates[0] ?? null,
+    to: history.dates[history.dates.length - 1] ?? null,
+    snapshots: history.dates.length
+  } : null;
+  const base = {
+    ok: true,
+    asOf: snapshot.asOf,
+    available: !!feed?.available,
+    feed: feed?.available ? { updatedAt: feed.updatedAt ?? null, ageHours: feed.ageHours ?? null } : null,
+    window
+  };
+  if (player) {
+    const resolved = buildResolveAnswer(snapshot, { names: [player], includeFreeAgents: true });
+    const first = resolved.results?.[0];
+    if (!first?.match) {
+      return {
+        ...base,
+        ok: false,
+        error: first?.candidates?.length ? `"${player}" matches more than one player. Name which one you mean \u2014 this tool will not guess between two players and draw the wrong man's line.` : `No player matching "${player}" is in this league's universe.`,
+        playerCandidates: (first?.candidates ?? []).map((c) => ({
+          sleeperId: c.sleeperId ?? c.id ?? null,
+          name: c.name ?? null,
+          position: c.position ?? null,
+          nflTeam: c.nflTeam ?? null,
+          ownerTeam: c.ownerTeam ?? null
+        }))
+      };
+    }
+    const m = first.match;
+    if (m.kind === "pick") {
+      return {
+        ...base,
+        ok: false,
+        error: "The value-history feed tracks players, not draft picks. Name a player instead."
+      };
+    }
+    const id = String(m.sleeperId);
+    const series = history ? getDatedValueSeries(history, id) : null;
+    const coverage = history ? valueHistoryCoverage(history, id) : { tracked: false, points: 0 };
+    const status = !history ? "unavailable" : series ? "ok" : coverage.tracked ? "not-enough-history" : "untracked";
+    return {
+      ...base,
+      scope: "player",
+      player: {
+        sleeperId: id,
+        name: m.name,
+        position: m.position ?? null,
+        nflTeam: m.nflTeam ?? null,
+        // Rule 7: unpriced is null, never 0.
+        currentValue: m.unranked ? null : m.value ?? null,
+        unranked: !!m.unranked,
+        trend30Day: m.unranked ? null : m.trend30Day ?? null,
+        ownerTeam: m.ownerTeam ?? null,
+        isYours: m.ownerRosterId != null && myRosterId != null && m.ownerRosterId === myRosterId
+      },
+      history: {
+        status,
+        points: coverage.points,
+        series,
+        summary: summarizeValueSeries(series)
+      },
+      notes: playerNotes({ feed, status, coverage, name: m.name, unranked: !!m.unranked })
+    };
+  }
+  const resolvedTeam = resolveTeam(league, team, defaultRosterId);
+  if (resolvedTeam.error) {
+    return { ...base, ok: false, error: resolvedTeam.error, candidates: resolvedTeam.candidates ?? [] };
+  }
+  const roster = resolvedTeam.roster;
+  const teamInfo = {
+    rosterId: roster.rosterId,
+    teamName: getTeamName(roster.owner),
+    isYou: myRosterId != null && roster.rosterId === myRosterId
+  };
+  const players = roster.players ?? [];
+  let withSeries = 0;
+  let tooFew = 0;
+  let untracked = 0;
+  const moverRows = [];
+  if (history) {
+    players.forEach((p) => {
+      const s = getDatedValueSeries(history, p.sleeperId);
+      if (!s) {
+        if (valueHistoryCoverage(history, p.sleeperId).tracked) tooFew++;
+        else untracked++;
+        return;
+      }
+      withSeries++;
+      const summary = summarizeValueSeries(s);
+      moverRows.push({
+        sleeperId: String(p.sleeperId),
+        name: p.name ?? null,
+        position: p.position ?? null,
+        from: summary.first,
+        to: summary.last,
+        change: summary.change,
+        changePct: summary.changePct
+      });
+    });
+  }
+  const risersAll = moverRows.filter((r) => r.change > 0).sort((a, b) => b.change - a.change);
+  const fallersAll = moverRows.filter((r) => r.change < 0).sort((a, b) => a.change - b.change);
+  const sums = history ? buildTeamValueSeries(history, roster) : null;
+  const teamSeries = sums ? sums.map((value, i) => ({ date: history.dates[i] ?? null, value })) : null;
+  return {
+    ...base,
+    scope: "team",
+    team: teamInfo,
+    teamHistory: {
+      status: !history ? "unavailable" : teamSeries ? "ok" : "not-enough-history",
+      series: teamSeries,
+      summary: summarizeValueSeries(teamSeries)
+    },
+    risers: risersAll.slice(0, cap),
+    fallers: fallersAll.slice(0, cap),
+    counts: {
+      rostered: players.length,
+      withSeries,
+      tooFewPoints: tooFew,
+      untracked,
+      risers: risersAll.length,
+      fallers: fallersAll.length,
+      returnedPerDirection: cap
+    },
+    notes: teamNotes({
+      feed,
+      hasSeries: !!teamSeries,
+      tooFew,
+      untracked,
+      cap,
+      truncated: risersAll.length > cap || fallersAll.length > cap
+    })
+  };
+}
+function feedNotes(feed) {
+  if (feed?.available) return [];
+  return [
+    `The value-history feed could not be read (${feed?.error ?? "unknown error"}). This is a gap in OUR data, not a statement that nothing moved \u2014 the current FantasyCalc value above is live.`
+  ];
+}
+function playerNotes({ feed, status, coverage, name, unranked }) {
+  const notes = feedNotes(feed);
+  if (status === "not-enough-history") {
+    notes.push(
+      `${name} has ${coverage.points} daily snapshot(s) in this window \u2014 fewer than the ${MIN_SPARKLINE_POINTS} the app needs before it draws a line. Not enough history yet: this is NOT a flat line and NOT a zero.`
+    );
+  }
+  if (status === "untracked") {
+    notes.push(
+      `${name} has no row in the value-history feed. It tracks the top 500 players by current value (a player keeps his row until it is all-null), so an unranked or deep player is simply not recorded \u2014 no history is known, which is different from a value that did not move.`
+    );
+  }
+  if (unranked) notes.push(`${name} is unranked by FantasyCalc today, so there is no current value (null, never 0).`);
+  if (status === "ok") {
+    notes.push(
+      "One point per UTC day from the values-history pipeline; missing days are skipped, not filled. The current value comes from the live FantasyCalc snapshot and can differ from the last point by up to a day."
+    );
+  }
+  return notes;
+}
+function teamNotes({ feed, hasSeries, tooFew, untracked, cap, truncated }) {
+  const notes = feedNotes(feed);
+  if (feed?.available && !hasSeries) {
+    notes.push(
+      `Not enough history yet for a team line (the app needs ${MIN_SPARKLINE_POINTS} daily snapshots). Not a flat line and not a zero.`
+    );
+  }
+  if (hasSeries) {
+    notes.push(
+      "The team line is TODAY'S roster valued back through the window \u2014 exactly the line The Edge draws. A player acquired last week counts across the whole window, so this shows how the current roster's value moved, not what the team was worth on each date. Picks are not in the feed and are excluded. A missing day carries a player's last known value forward."
+    );
+  }
+  if (tooFew) notes.push(`${tooFew} rostered player(s) have too few snapshots in this window to count as a mover.`);
+  if (untracked) notes.push(`${untracked} rostered player(s) are outside the feed's top-500 window, so no history is known for them.`);
+  if (truncated) notes.push(`Showing the top ${cap} risers and fallers; counts carries the full totals.`);
+  return notes;
+}
+function renderValueHistoryText(a) {
+  if (!a.ok) {
+    const cands = a.playerCandidates ?? a.candidates ?? [];
+    const list = cands.length ? "\n" + cands.map((c) => `  ${c.name ?? c.teamName}${c.position ? ` (${c.position}${c.nflTeam ? ` \xB7 ${c.nflTeam}` : ""})` : ""}${c.ownerTeam ? ` \u2014 ${c.ownerTeam}` : ""}${c.sleeperId ? ` [${c.sleeperId}]` : ""}`).join("\n") : "";
+    return `${a.error}${list}`;
+  }
+  const L = [];
+  L.push(a.window ? `Value history ${a.window.from} \u2192 ${a.window.to} (${a.window.snapshots} daily snapshots${a.feed?.ageHours != null ? `, feed published ${a.feed.ageHours}h ago` : ""})` : "Value history unavailable");
+  L.push("");
+  if (a.scope === "player") {
+    const p = a.player;
+    L.push(`${p.name} (${p.position ?? "?"}${p.nflTeam ? ` \xB7 ${p.nflTeam}` : ""})${p.isYours ? " \u2014 YOURS" : p.ownerTeam ? ` \u2014 ${p.ownerTeam}` : " \u2014 free agent"}`);
+    L.push(`  Current value ${fmt(p.currentValue)}${p.trend30Day != null ? ` \xB7 30-day trend ${signed3(p.trend30Day)}` : ""}`);
+    const s = a.history.summary;
+    if (s) {
+      L.push(`  ${s.first.date} ${fmt(s.first.value)} \u2192 ${s.last.date} ${fmt(s.last.value)}: ${signed3(s.change)}${pct3(s.changePct)}`);
+      L.push(`  High ${fmt(s.high.value)} (${s.high.date}) \xB7 Low ${fmt(s.low.value)} (${s.low.date}) \xB7 ${s.points} points`);
+    } else {
+      L.push(`  No line: ${a.history.status === "untracked" ? "not tracked by the feed" : a.history.status === "unavailable" ? "feed unavailable" : `only ${a.history.points} snapshot(s) \u2014 not enough history yet`}`);
+    }
+  } else {
+    L.push(`${a.team.teamName}${a.team.isYou ? " (you)" : ""} \u2014 players only, today's roster`);
+    const s = a.teamHistory.summary;
+    if (s) {
+      L.push(`  ${s.first.date} ${fmt(s.first.value)} \u2192 ${s.last.date} ${fmt(s.last.value)}: ${signed3(s.change)}${pct3(s.changePct)}`);
+      L.push(`  High ${fmt(s.high.value)} (${s.high.date}) \xB7 Low ${fmt(s.low.value)} (${s.low.date})`);
+    } else {
+      L.push("  No team line yet.");
+    }
+    const row = (r) => `  ${r.name} (${r.position ?? "?"}) ${fmt(r.from.value)} \u2192 ${fmt(r.to.value)}: ${signed3(r.change)}${pct3(r.changePct)}`;
+    if (a.risers.length) {
+      L.push("");
+      L.push(`RISERS (${a.counts.risers})`);
+      a.risers.forEach((r) => L.push(row(r)));
+    }
+    if (a.fallers.length) {
+      L.push("");
+      L.push(`FALLERS (${a.counts.fallers})`);
+      a.fallers.forEach((r) => L.push(row(r)));
+    }
+  }
+  L.push("");
+  (a.notes ?? []).forEach((n) => L.push(`Note: ${n}`));
+  return L.join("\n").trimEnd();
+}
+var DEFAULT_MOVERS, MAX_MOVERS, MIN_DAYS, MAX_DAYS, fmt, signed3, pct3;
+var init_valueHistory2 = __esm({
+  "mcp/tools/valueHistory.js"() {
+    init_teamName();
+    init_edgeBriefing();
+    init_valueHistory();
+    init_teams();
+    init_resolveAssets();
+    DEFAULT_MOVERS = 5;
+    MAX_MOVERS = 15;
+    MIN_DAYS = MIN_SPARKLINE_POINTS;
+    MAX_DAYS = 90;
+    fmt = (n) => n == null ? "\u2014" : Math.round(n).toLocaleString("en-US");
+    signed3 = (n) => n == null ? "\u2014" : `${n > 0 ? "+" : n < 0 ? "\u2212" : ""}${fmt(Math.abs(n))}`;
+    pct3 = (p) => p == null ? "" : ` (${p > 0 ? "+" : ""}${p}%)`;
+  }
+});
+
 // mcp/server.js
 function createServer({ env = process.env, fetcher, store } = {}) {
   const config2 = loadConfig(env);
@@ -47663,6 +48005,124 @@ function createServer({ env = process.env, fetcher, store } = {}) {
       };
     }
   );
+  const datedPoint = external_exports.object({ date: external_exports.string().nullable(), value: external_exports.number() });
+  const seriesSummary = external_exports.object({
+    first: datedPoint,
+    last: datedPoint,
+    high: datedPoint,
+    low: datedPoint,
+    change: external_exports.number(),
+    changePct: external_exports.number().nullable(),
+    points: external_exports.number()
+  });
+  const moverRow = external_exports.object({
+    sleeperId: external_exports.string(),
+    name: external_exports.string().nullable(),
+    position: external_exports.string().nullable(),
+    from: datedPoint,
+    to: datedPoint,
+    change: external_exports.number(),
+    changePct: external_exports.number().nullable()
+  });
+  server.registerTool(
+    "get_value_history",
+    {
+      title: "How a dynasty value has moved",
+      description: `Answers "how has his value moved?" or "how has my team's value moved, and who drove it?" from the daily FantasyCalc snapshots behind the app's sparklines (a rolling 90-day window, one point per UTC day). Pass \`player\` for one player's dated series with first/last/high/low; omit it for a team's value line (today's roster valued back through the window, exactly the line the app draws) plus its biggest risers and fallers. Fewer than 4 snapshots is "not enough history yet" \u2014 never a flat line and never zero.`,
+      inputSchema: {
+        player: external_exports.string().optional().describe("One player by name or Sleeper id. An ambiguous name returns candidates and refuses."),
+        team: external_exports.string().optional().describe("Whose value line: team name, manager handle or roster id. Omit for your own. Ignored with `player`."),
+        days: external_exports.number().int().min(MIN_DAYS).max(MAX_DAYS).optional().describe(`Only the last N daily snapshots (${MIN_DAYS}-${MAX_DAYS}). Omit for the whole feed.`),
+        limit: external_exports.number().int().min(1).max(MAX_MOVERS).optional().describe(`Risers and fallers to return per direction in team mode (default ${DEFAULT_MOVERS}, max ${MAX_MOVERS}).`),
+        leagueId: external_exports.string().optional().describe("Sleeper league id. Omit for the configured league."),
+        refresh: external_exports.boolean().optional().describe("Bypass the caches (~15 min snapshot, ~6 h value history) and refetch.")
+      },
+      outputSchema: {
+        ok: external_exports.boolean(),
+        error: external_exports.string().optional(),
+        candidates: external_exports.array(teamCandidate).optional(),
+        playerCandidates: external_exports.array(external_exports.object({
+          sleeperId: external_exports.string().nullable(),
+          name: external_exports.string().nullable(),
+          position: external_exports.string().nullable(),
+          nflTeam: external_exports.string().nullable(),
+          ownerTeam: external_exports.string().nullable()
+        })).optional(),
+        asOf: asOfSchema.optional(),
+        // False means values-history.json could not be read. Never "nothing
+        // moved": the current value still comes from the live snapshot.
+        available: external_exports.boolean().optional(),
+        feed: external_exports.object({ updatedAt: external_exports.string().nullable(), ageHours: external_exports.number().nullable() }).nullable().optional(),
+        window: external_exports.object({
+          requestedDays: external_exports.number().nullable(),
+          from: external_exports.string().nullable(),
+          to: external_exports.string().nullable(),
+          snapshots: external_exports.number()
+        }).nullable().optional(),
+        scope: external_exports.enum(["player", "team"]).optional(),
+        player: external_exports.object({
+          sleeperId: external_exports.string(),
+          name: external_exports.string(),
+          position: external_exports.string().nullable(),
+          nflTeam: external_exports.string().nullable(),
+          currentValue: external_exports.number().nullable(),
+          unranked: external_exports.boolean(),
+          trend30Day: external_exports.number().nullable(),
+          ownerTeam: external_exports.string().nullable(),
+          isYours: external_exports.boolean()
+        }).optional(),
+        history: external_exports.object({
+          status: external_exports.enum(["ok", "not-enough-history", "untracked", "unavailable"]),
+          points: external_exports.number(),
+          series: external_exports.array(datedPoint).nullable(),
+          summary: seriesSummary.nullable()
+        }).optional(),
+        team: external_exports.object({ rosterId: external_exports.number(), teamName: external_exports.string(), isYou: external_exports.boolean() }).optional(),
+        teamHistory: external_exports.object({
+          status: external_exports.enum(["ok", "not-enough-history", "unavailable"]),
+          series: external_exports.array(datedPoint).nullable(),
+          summary: seriesSummary.nullable()
+        }).optional(),
+        risers: external_exports.array(moverRow).optional(),
+        fallers: external_exports.array(moverRow).optional(),
+        counts: external_exports.object({
+          rostered: external_exports.number(),
+          withSeries: external_exports.number(),
+          tooFewPoints: external_exports.number(),
+          untracked: external_exports.number(),
+          risers: external_exports.number(),
+          fallers: external_exports.number(),
+          returnedPerDirection: external_exports.number()
+        }).optional(),
+        notes: external_exports.array(external_exports.string()).optional()
+      }
+    },
+    async ({ player, team, days, limit, leagueId, refresh }) => {
+      const snapshot = await snapshotFor(leagueId, refresh);
+      const feed = await getValueHistoryFeed({
+        force: !!refresh,
+        fetcher: get,
+        ttlMs: config2.valueHistoryTtlMs,
+        ...store ? { store } : {}
+      });
+      const answer = buildValueHistoryAnswer(snapshot, feed, {
+        player,
+        team,
+        days,
+        limit,
+        defaultRosterId: config2.defaultRosterId,
+        myRosterId: config2.defaultRosterId
+      });
+      if (answer.asOf && feed.available) {
+        answer.asOf = mergeAsOf(answer.asOf, { valueHistory: feed.source });
+      }
+      return {
+        content: [{ type: "text", text: renderValueHistoryText(answer) }],
+        structuredContent: answer,
+        isError: !answer.ok
+      };
+    }
+  );
   return { server, config: config2 };
 }
 var SERVER_NAME, SERVER_VERSION, sourceStamp, asOfSchema, teamCandidate, playerRowSchema, playerCandidateSchema, pickCandidateSchema, lineupPlayerSchema, newsItemSchema, tradeAssetSchema, sideFitSchema, packageAssetSchema, seatAppealSchema;
@@ -47696,6 +48156,7 @@ var init_server3 = __esm({
     init_results();
     init_scoutManagers();
     init_news();
+    init_valueHistory2();
     SERVER_NAME = "dynastyedge";
     SERVER_VERSION = "0.1.0";
     sourceStamp = external_exports.object({
@@ -47753,7 +48214,11 @@ var init_server3 = __esm({
         tradeValues: sourceStamp.optional(),
         // Every season's playoff bracket, behind get_league_results. Stamps the
         // OLDEST bracket read, for the reason oldestSourceAt is the stalest source.
-        brackets: sourceStamp.optional()
+        brackets: sourceStamp.optional(),
+        // The rolling 90-day daily value snapshot behind get_value_history — the
+        // last of the four static feeds to be read. Class B; stamped only when
+        // it was read.
+        valueHistory: sourceStamp.optional()
       })
     });
     teamCandidate = external_exports.object({

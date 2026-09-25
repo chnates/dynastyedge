@@ -1141,11 +1141,16 @@ the chain no probe reaches.
 - **Nothing on `MCP_DISCOVERY.md` §5's list remains** (trade targets, rookie
   research and manager scouting shipped 2026-09-22, and so did the question §5
   called unanswerable).
-- **One of the four static feeds is still unread** — `values-history`.
-  `get_player_news` reads `news`, `research_rookies` reads `rookie-intel`,
-  `scout_managers` reads `trade-values`.
-  So a second league gets no sparklines, no at-trade-time values and no rookie
-  research, and the tools say so.
+- ~~**One of the four static feeds is still unread** — `values-history`.~~
+  **Closed 2026-09-25** by `get_value_history`, the thirteenth tool: all four
+  static feeds are now read (`news` by `get_player_news`, `rookie-intel` by
+  `research_rookies`, `trade-values` by `scout_managers`, `values-history` by
+  `get_value_history`). The sparkline rule was extracted from the hook into
+  `src/utils/valueHistory.js` first (`getValueSeries`, equivalence proved on
+  the live feed, 2,314 cases). Its own tool rather than a `get_roster` field —
+  an ~82KB wire fetch behind every roster question is the wrong cost. Measured
+  live over the real transport: **1,372ms cold / 26ms cached, 8,100B**, 9
+  upstream requests cold and 0 cached; a single player 5,084B.
 - ~~`/league/{id}/winners_bracket` has still never been called~~ — **closed
   2026-09-22** by `get_league_results` (above).
 

@@ -7,7 +7,10 @@ knowledge.
 Design spec: [`../MCP_DISCOVERY.md`](../MCP_DISCOVERY.md). Read it first — this
 file covers only what is built.
 
-**Twelve tools, over stdio AND streamable HTTP.** The twelfth,
+**Thirteen tools, over stdio AND streamable HTTP.** The thirteenth,
+`get_value_history` (2026-09-25), reads the last of the four static feeds
+(`values-history.json`) and answers *"how has his value moved?"* by the rule
+the app's sparklines draw by. The twelfth,
 `get_league_results` (2026-09-22), answers the one question §5 recorded as
 unanswerable — *"who won our league in 2023?"* — from
 `/league/{id}/winners_bracket`, an endpoint nothing here had called. The eleventh,
@@ -88,9 +91,10 @@ Every tool also takes `leagueId` per call; these are only the fallbacks.
 | `research_rookies` | "Which rookies become something, and which should I take?" | The ONE opportunity score the app ships, within-position market-vs-model divergence, and roster fit for any team. No feed entry is **null**, never 0; an unreadable feed returns the class in value order, never "no rookies" |
 | `scout_managers` | "How does this manager trade, and how have I done?" | Hindsight ledger, tendencies, FAAB in **budgets**, draft hit rate, your report card. Names any season it could not read — nobody is called a non-trader over an outage |
 | `get_league_results` | "Who won our league in 2023?" / "Who has the most titles?" | Read from the playoff bracket; titles counted by **manager**, so a renamed team keeps them. An in-progress season has no champion yet; an unreadable bracket is **unknown**, never "no winner" |
+| `get_value_history` | "How has his value moved?" / "How has my team's value moved, and who drove it?" | A dated series from the daily snapshots behind the app's sparklines, beside the **live** current value. Fewer than 4 points is "not enough history yet" — **never a flat line and never 0**; untracked is a different answer from too few points |
 | `find_trade_targets` | "Who should I call about, and what would it cost?" | Both seats' appeal per row, the package held inside the Analyzer's **fair band**, and the premium that would buy a yes. It does **not** grade — hand the ids to `analyze_trade` |
 
-All twelve are documented with their contracts and traps in CLAUDE.md's
+All thirteen are documented with their contracts and traps in CLAUDE.md's
 **The MCP Server** section. Read that before changing one.
 
 ### The one layer with NO TTL, and that is the argument
