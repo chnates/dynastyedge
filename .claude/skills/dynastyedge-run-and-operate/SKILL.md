@@ -159,7 +159,8 @@ GitHub Actions cron is **UTC**.
 - **Schedule — REQUESTED, and NOT what is delivered:** `17,47 * * * *` — nominally twice hourly at :17 and :47 UTC (offsets
   avoid top-of-hour congestion). Plus `workflow_dispatch`.
   **Measured 2026-09-21: GitHub delivers ~7.4 runs/day at a 3.26h mean gap
-  (1.8h–5.0h), and never at :17 or :47.** Runs 1205–1220 are consecutive, so
+  (1.8h–5.0h), and never at :17 or :47. Re-measured 2026-09-25: ~5.5 runs/day
+  at 4.39h (2.4h–6.0h)** over runs 1239–1253. It is a range, not a constant. Runs 1205–1220 are consecutive, so
   nothing is missing from the list — GitHub simply defers these schedules
   under load and does not make up skipped occurrences. **Read the cadence off
   run timestamps, never off the cron line**; several docs had sized freshness
@@ -270,8 +271,8 @@ GitHub Actions cron is **UTC**.
 
 - **Closing step — the source-health alarm** (`scripts/check-source-health.mjs
   --feed news.json`, after publish, not continue-on-error): fails the run when
-  a source has returned nothing for **12 consecutive runs** (~1.5 days at the
-  delivered ~7.4 runs/day). A per-source failure is caught inside
+  a source has returned nothing for **12 consecutive runs** (~1.6–2.2 days at the
+  delivered ~5.5–7.4 runs/day; deliberately not retuned when the rate fell). A per-source failure is caught inside
   `fetch-news.mjs` and recorded as a `0`, which is the right contract and was
   also completely invisible — **ESPN RSS sat at 0 items until it was found by
   hand on 2026-09-21.** Probe the URL yourself, then READ THE RUN LOG: it

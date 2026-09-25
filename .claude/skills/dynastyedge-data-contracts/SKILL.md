@@ -529,8 +529,8 @@ run's per-source item count — a `0` there means the source threw or returned
 nothing. `sourceMisses` counts **consecutive** runs of that, carried forward
 inside the feed because a force-pushed feed has no history of its own to count
 from. `scripts/check-source-health.mjs` reads it after publish and **fails the
-workflow** once a source passes `DARK_AFTER.feed` (12 runs, ~1.5 days at the
-measured ~7.4 runs/day).
+workflow** once a source passes `DARK_AFTER.feed` (12 runs, ~1.6–2.2 days at
+the measured ~5.5–7.4 runs/day).
 
 It exists because a `0` in `sources` was previously invisible: measured
 2026-09-21, **ESPN RSS had been contributing 0 items** to the live feed while
@@ -585,6 +585,12 @@ cannot be recovered, which is why it shipped before any UI.
   DynastyProcess ships `scrape_date` and **repeats** (live 2026-09-21 it read
   `2026-09-18`, three days stale), so five identical columns are one reading,
   not five — the stamp is what makes that visible.
+  **Its board DEPTH also moves every weekly (Friday) publish**, and that is
+  upstream, not a join failure: `values-players.csv` held 640 → 441 → 494 →
+  **346** player rows over four consecutive publishes (DP's git history,
+  2026-09-10…09-25). So `coverage` swinging by ±30% is normal, and a DP value
+  that becomes null has **left the list**; nothing says its value fell. Compare
+  sources only over players that all three priced that day (PIPE-3).
 - Size, by **wire** bytes: 6.7KB day one, **43KB at 90 days, 53KB at a year**
   (2.5MB raw — columnar integers gzip hard). That is what makes daily
   affordable.
@@ -651,6 +657,9 @@ picks, not players.
 | FantasyCalc | 419 (395 players + 24 picks) | 395 (100%) |
 | DynastyProcess | 494 players | 485 (98.2%) |
 | KeepTradeCut | 500 (464 players + 36 picks) | 460 (99.1%) |
+
+**2026-09-25:** DynastyProcess 346 → **344** (99.4%). The drop from 485 came
+from the source file shrinking, and our join lost nothing (PIPE-3).
 
 Union **540** against FantasyCalc's 395. The 9 + 4 unjoined are deep rookies
 genuinely absent from the crosswalk — **not** a matching failure to fix with

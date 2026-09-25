@@ -429,6 +429,12 @@ regression statement.
 3. **When two id paths disagree, the one with more coverage is usually also
    the one that is right** — but check the disagreement itself rather than
    assuming. One row out of 433 was wrong, and it was a father and son.
+4. **A coverage drop is not a join break until the source's own row count
+   says so** (PIPE-3, 2026-09-25). DynastyProcess fell 485 → 344 overnight.
+   Its file had shrunk to 346 rows and we joined 344. Its board depth moves
+   every weekly publish (640/441/494/346). Count the upstream rows before
+   touching the reader, and never add an alarm on coverage *size* for a source
+   whose size is supposed to move.
 
 ---
 

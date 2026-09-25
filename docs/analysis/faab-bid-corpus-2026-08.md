@@ -230,3 +230,34 @@ Both are measurable against live 2026 data with no hindsight.
   until the owner explicitly asks. The natural moment to revisit is after ~6
   weeks of live 2026 waiver data on the new $1000 scale, which is the first
   data that tests §6 without hindsight.
+
+## 9. Update 2026-09-25 — the first in-season look at the $1000 scale
+
+Re-run with `node scripts/dev/faab-corpus.mjs --json`, filtered to 2026 claims
+created on or after 2026-09-10 (the regular season). **This is a status
+reading, not a re-fit.** n is far too small to move any number in §6.
+
+| | count | bids |
+|---|---|---|
+| In-season bid-bearing claims | 20 (12 won) | — |
+| Clean contested auctions | **2** | $60 over $50 (6%) · $311 over $211 (31%) |
+| Uncontested wins | 10 | $0, 0, 0, 1, 2, 2, 5, 55, 64, **500** |
+
+What it says, as far as n allows:
+- **Both contested clearing prices fall inside §6's range** (value play 11%
+  at the low end, blank check 36% at the high end). They neither support nor
+  contradict the ladder.
+- **The uncontested floor may be too high.** Six of ten uncontested wins cost
+  0–0.2% of budget, against Part A's 1%. The build should consider bidding
+  the league's observed uncontested floor instead.
+- **Part A's case gets stronger:** one manager paid **$500 (50% of a budget)
+  for a player nobody else claimed.**
+- **Arrival rate:** ~1 clean contested auction per in-season week. Waiting
+  for "6 weeks of data" would yield roughly 6–9, which is not enough to re-fit
+  §6 either. That is why OPEN-3 recommends building now and grading against
+  §6's two acceptance bars as the season runs.
+
+Period caveat: Sleeper's week-1 transaction bucket also holds offseason
+claims (the budget reset happens at the regular-season start; see CLAUDE.md
+League Context). Filtering on `created` ≥ 2026-09-10 is how in-season is
+separated here, and the cutoff is approximate to the day.

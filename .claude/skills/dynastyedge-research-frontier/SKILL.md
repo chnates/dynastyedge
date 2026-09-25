@@ -155,13 +155,14 @@ campaign's findings first).
 
 ---
 
-## Item 2 — FAAB bid recommender: the research track (build is gated)
+## Item 2 — FAAB bid recommender: the research track (owner-asked 2026-09-25)
 
-**Status: MEASURED 2026-08-08 — corpus pulled, rule spec drafted, build still
-gated.** Full write-up: `docs/analysis/faab-bid-corpus-2026-08.md`; every
-number re-runnable via `node scripts/dev/faab-corpus.mjs`. CLAUDE.md still
-lists the FAAB bid recommender under Future Features — **do not build the
-feature without an explicit owner ask**.
+**Status: MEASURED 2026-08-08 — corpus pulled, rule spec drafted. OWNER-ASKED
+2026-09-25 as the next build** (shown in both the app and the MCP server; see
+`docs/open-items.md` OPEN-3 for the plan and the build-now-vs-wait reasoning).
+Full write-up: `docs/analysis/faab-bid-corpus-2026-08.md`, whose §9 is the
+first in-season $1000 reading (2 clean contested auctions). Every number is
+re-runnable via `node scripts/dev/faab-corpus.mjs`.
 
 **What the 2026-08-08 pass established (read this before re-doing the work):**
 - **The blocking question is answered: failed waiver claims ARE returned with

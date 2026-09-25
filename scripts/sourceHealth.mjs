@@ -31,8 +31,10 @@
 export const DARK_AFTER = {
   // values-history.yml runs daily, so 3 misses is 3 days.
   archive: 3,
-  // news.yml ASKS for 48 runs/day and GitHub delivers ~7.4 (CLAUDE.md), so 12
-  // misses is ~1.5 days. Sized off the measured rate, never off the cron line.
+  // news.yml ASKS for 48 runs/day and GitHub delivers ~5.5–7.4 (measured
+  // 2026-09-21 and 09-25, CLAUDE.md), so 12 misses is ~1.6–2.2 days. Sized off
+  // the measured rate, never off the cron line; NOT retuned when the rate fell,
+  // because it still means "a day or more" at both.
   feed: 12,
 }
 
