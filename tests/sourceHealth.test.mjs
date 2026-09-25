@@ -100,7 +100,7 @@ test('the feed counter increments on 0 and RESETS on any item', () => {
 })
 
 test('the feed alarms only past its own threshold, which is NOT the archive\'s', () => {
-  // news.yml is delivered ~7.4 runs/day and values-history.yml once, so one
+  // news.yml is delivered ~5.5–7.4 runs/day and values-history.yml once, so one
   // shared number would mean two very different amounts of silence.
   assert.ok(DARK_AFTER.feed > DARK_AFTER.archive)
   let m = {}

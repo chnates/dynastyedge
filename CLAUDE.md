@@ -325,6 +325,11 @@ architecture:
   assumptions. **Anything that matters to freshness must be measured from
   run timestamps, never read off the cron.** Tightening the cron is not a
   fix — the requested cadence is already 6× what is delivered.
+  **Re-measured 2026-09-25, and the cadence got worse: ~5.5 runs/day at a
+  4.39h mean gap** over runs 1239–1253 (gaps 2.4h to **6.0h**). The two
+  measurements differ by 35% four days apart, so treat delivered cadence as
+  a **range (~5.5–7.4/day)**, not a constant, and do not re-derive a number
+  from a single window.
 - **Sources, in priority order** (each probed and parsed server-side before
   adoption — see `docs/analysis/news-sources-2026-09.md` for the full probe,
   including the ten rejected candidates): ESPN news API (the only source that
@@ -562,8 +567,19 @@ instrument (see `docs/open-items.md` **NEWS-6**).
   does not.
 - **The thresholds are sized off MEASURED cadence, never off the cron line**
   (`DARK_AFTER`): the archive alarms after **3** consecutive daily runs, the
-  news feed after **12** — ~1.5 days at the delivered ~7.4 runs/day, not the 48
-  the cron asks for. Both mean "roughly a day or more of total silence".
+  news feed after **12** — **~1.6–2.2 days** across the delivered ~5.5–7.4
+  runs/day (measured 2026-09-21 and 2026-09-25), not the 48 the cron asks for.
+  Both mean "roughly a day or more of total silence". **12 was deliberately
+  NOT retuned when the cadence fell** (2026-09-25): the threshold still reads
+  "a day or more" at both measured rates, and resizing it on every window
+  would chase noise in GitHub's scheduler. Revisit only if delivered cadence
+  settles below ~4/day, where 12 runs would pass three days.
+  **Its first live week was quiet, correctly:** on 2026-09-25 all ten news
+  sources carried `sourceMisses: 0`, every news and values run since the alarm
+  shipped concluded `success`, and the consensus archive had no null column.
+  The one real change that week (DynastyProcess coverage dropping 485 → 344,
+  PIPE-3) was upstream board depth. The column was not empty, so the alarm
+  correctly stayed silent.
 - **The archive diagnoses itself.** `values-consensus.json` already carries
   `coverage[]` per source aligned to `dates[]`, so a null column *is* the
   record of a source not being read. No extra state file, and no way for a
@@ -1243,7 +1259,7 @@ serving a JSON file nobody requests — plus one each for `values-history` and
 `rookie-intel`. Measured 2026-09-21: three of the last four deployments were
 `news-data` "Update news feed" commits, each a ~2-second no-op build.
 **Volume is ~9 a day, not the ~48 the cron implies**, because GitHub delivers
-that schedule at ~7.4 runs/day (see the news pipeline section). Smaller than
+that schedule at ~5.5–7.4 runs/day (see the news pipeline section). Smaller than
 it first looked, and still pure waste.
 
 **The fix is a PROJECT-LEVEL Ignored Build Step, not `vercel.json`, and the
@@ -2030,8 +2046,8 @@ search** — which is why the answer is a handoff rather than a choice:
    carries its own age. A search result carries neither.
 4. **AND WHERE IT LOSES, by MORE than this used to say:** the feed *asks* to
    publish twice an hour through a CDN that caches ~5 minutes, but GitHub
-   delivers ~7.4 runs/day at a **3.26h mean gap and 5.0h worst observed**
-   (measured 2026-09-21). The real worst case is **hours, not the ~35 minutes
+   delivers ~5.5–7.4 runs/day at a **3.3–4.4h mean gap and 6.0h worst
+   observed** (measured 2026-09-21 and 2026-09-25). The real worst case is **hours, not the ~35 minutes
    recorded here before** — precisely when a late inactive lands. **`staleForKickoff` marks that condition and the
    tools print an explicit instruction to confirm against a live source.** A
    tool that knows its own blind spot is more useful than one silently behind.
@@ -7012,10 +7028,14 @@ Two things the roll must not break, both pinned by tests:
 These are noted so the codebase is structured to support them later.
 Do not implement them until explicitly asked.
 
-- FAAB bid recommender for waiver pickups — **research done, build still
-  gated.** The bid corpus, the "failed ≠ outbid" finding, and a proposed rule
+- FAAB bid recommender for waiver pickups — **research done; OWNER-ASKED
+  2026-09-25 as the next build** (shown both in League › Free Agents and in
+  the MCP server's `recommend_free_agents`, from one shared util). Not built
+  yet. The bid corpus, the "failed ≠ outbid" finding, and a proposed rule
   spec live in `docs/analysis/faab-bid-corpus-2026-08.md` (re-runnable via
-  `node scripts/dev/faab-corpus.mjs`). Do not build it without an explicit ask.
+  `node scripts/dev/faab-corpus.mjs`; §9 is the first in-season $1000 reading:
+  2 contested auctions, which is why `docs/open-items.md` OPEN-3 recommends
+  building now and grading live rather than waiting).
   Note for whoever does: the league's FAAB budget changed **$100 → $1000 for
   2026**, so all historical bids must be normalized to percent-of-budget — the
   app's own aggregation was fixed that way on 2026-09-20 (Feature 11). And the

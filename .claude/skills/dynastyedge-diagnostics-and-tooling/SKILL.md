@@ -279,7 +279,11 @@ verdict:      FRESH
 A source reading **`today NOT READ (all-null column)`** is the degradation
 contract working, not an incident — the other two published normally. Note
 DynastyProcess's `source asOf`: it scrapes roughly weekly, so several
-consecutive columns can legitimately carry the same reading.
+consecutive columns can legitimately carry the same reading. Its **player
+count** also swings by ±30% between weekly publishes (485 → 344 on
+2026-09-25). That is the board's depth changing, not a join break. **Before
+blaming our join, count the rows in the source file itself**: 346 rows with
+344 joined is healthy (PIPE-3).
 
 **Interpretation:**
 

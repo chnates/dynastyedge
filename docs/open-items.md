@@ -158,7 +158,7 @@ which beats any amount of feature value.
 | **1c** | ~~MCP-CARRY closeout~~ — **DONE 2026-09-25.** ROOKIE-1 closed (fallback dropped), `get_value_history` (tool 13, the last static feed), `Retry-After` in the limiter; `restKvStore` explicitly deferred to the owner (provisioning may cost money — path recorded in MCP-CARRY). **Owed: the phone re-check for five tools** | What was left after 1b was one correctness fix, one unread feed and two known limits; three are closed and the fourth is now a decision rather than an unknown |
 | **1b** | ~~MCP-CARRY's remaining capability~~ — **DONE 2026-09-22.** `research_rookies`, `scout_managers` and `get_league_results` shipped; the server now has twelve tools and §5's list is closed. **Owed: the connector re-check on the owner's phone** for the four tools added since 2026-09-20 (see MCP-CARRY), and **ROOKIE-1**, a small identity fix found on the way (0 of 444 live) | The server could grade and find trades but could not answer the rookie, manager or history questions the app already answers on the phone. What MCP-CARRY still holds is known limits, not capability |
 | **2** | ~~NEWS-4 + NEWS-7~~ — **DONE 2026-09-22.** ESPN RSS removed (it answers Actions with an empty HTTP 202, not a throw); player cap 400 → 1200; `coverage.depthHours` added because `spanHours` turned out to be set by stragglers. **One follow-up: re-read `depthHours` on 2026-09-29** to learn whether the 7-day window binds | Both small. NEWS-5 is effectively settled — the docs are corrected and its option 2 is cosmetic |
-| **2b** | ~~PIPE-3~~ — **CLOSED 2026-09-25**: DynastyProcess's 485 → 344 drop is upstream board depth, not our join (see PIPE-3). **Next: OPEN-3, the FAAB bid recommender**, which the owner approved as the next build on 2026-09-25 | In-season, you bid on every waiver run. The research is already done (`faab-bid-corpus-2026-08.md`) |
+| **2b** | ~~PIPE-3~~ — **CLOSED 2026-09-25**: DynastyProcess's 485 → 344 drop is upstream board depth, not our join (see PIPE-3). **Next: OPEN-3, the FAAB bid recommender**, owner-asked 2026-09-25, shown both in the app and in the chat. Recommended to build now rather than wait for Week 6 (see OPEN-3 for the measured reason) | In-season, you bid on every waiver run. The research is already done (`faab-bid-corpus-2026-08.md`) |
 | **3** | **Phase 4b/4c** — normalize the three valuation sources and surface the disagreement | The biggest unbuilt owner-approved item, but 4d wants archive history and `values-consensus.json` holds one day as of 2026-09-21. It gets better by waiting, which nothing else on this list does |
 
 **Deliberately NOT next**, so nobody picks one up by accident: OPEN-8 (trigger
@@ -655,6 +655,8 @@ pattern, so it gets an instrument instead of a third probe.
   and an alarm that cries at hiccups is one you learn to ignore — which lands
   you back here. Thresholds sized off **measured** cadence, not the cron line:
   3 days for the daily archive, 12 runs (~1.5 days) for the news feed.
+  *(2026-09-25: cadence re-measured at ~5.5/day, so 12 runs is now ~2.2
+  days. The number was deliberately left alone; see NEWS-5.)*
 - **The archive diagnoses itself** from the `coverage[]` it already carries, so
   no counter can drift from the data. The feed, having no history of its own,
   carries `coverage.sourceMisses`.
@@ -1073,7 +1075,8 @@ load-bearing. Nothing needs to change in the code — the warning already
 exists and already fires — but the *copy* around it was calibrated to a
 freshness the pipeline does not have.
 
-**Options, none of them obviously right:**
+**Options, none of them obviously right** *(still true after the
+2026-09-25 re-measure: option 1 stands)*:
 
 1. **Accept it and keep the docs honest** (what this PR does). Costs nothing.
    The feed is a best-effort surface and the tools already warn.
@@ -1088,6 +1091,29 @@ freshness the pipeline does not have.
 **What NOT to do: tighten the cron.** The requested cadence is already 6×
 what is delivered; asking for more of something being throttled is not a fix,
 and it is the obvious wrong move for the next person who reads this.
+
+**Re-measured 2026-09-25: worse, ~5.5 runs/day.** Runs 1239–1253 (15
+consecutive, 2026-09-23 05:14 → 09-25 18:40 UTC) came at a **4.39h mean
+gap**, range **2.4h–6.0h**. Two windows four days apart differ by 35%, so the
+docs now state the cadence as a **range, ~5.5–7.4/day**, and the staleness
+worst case as **6.0h observed**. The values-history daily cron (`41 9 * * *`)
+shows the same deferral: its last four runs started at 14:10–16:00 UTC,
+**4.5–6.3h late**. That is harmless there, because a column is keyed by UTC
+day.
+
+**What this means for the alarm (`DARK_AFTER.feed = 12`):** at 5.5/day, 12
+consecutive misses is ~2.2 days of silence rather than ~1.5. **Not retuned**,
+deliberately. The threshold's contract is "a day or more of total silence",
+and it still holds at both measured rates. Resizing it on every window would
+be tuning to noise in GitHub's scheduler. **Retune only if delivered cadence
+settles below ~4/day**, where 12 runs would pass three days, which is too slow
+for a feed people read on game day.
+
+**Status of the alarm itself, first live week (2026-09-21 → 09-25):** every
+`news.yml` and `values-history.yml` run concluded `success`; the live feed
+carries `sourceMisses: 0` for all ten sources, and no consensus column was
+null. It has not fired, and nothing happened that should have made it fire.
+PIPE-3's DynastyProcess drop was a smaller column, not an empty one.
 
 **How to re-measure:** list `news.yml`'s recent runs and diff the
 `run_started_at` timestamps. **Never read the cadence off the cron line** —
@@ -1253,8 +1279,8 @@ the chain no probe reaches.
   request; KV buys cold-start latency, not correctness.
 - **The news feed can trail a wire report by HOURS near kickoff — not the
   ~35 minutes previously recorded.** It *asks* to publish twice an hour
-  through a ~5-minute CDN cache, but GitHub delivers ~7.4 runs/day at a 3.26h
-  mean gap and 5.0h worst observed (NEWS-5). `staleForKickoff` marks the
+  through a ~5-minute CDN cache, but GitHub delivers ~5.5–7.4 runs/day at a
+  3.3–4.4h mean gap and 6.0h worst observed (NEWS-5, re-measured 2026-09-25). `staleForKickoff` marks the
   condition and the tools tell the reader to confirm against a live source,
   which matters a great deal more at this cadence than at the one the docs
   assumed. **Tightening `news.yml`'s cron is NOT the fix** — the requested
@@ -1924,19 +1950,50 @@ Tracker still renders the completed 2026 recap with VOE summing to zero.
 `npm run lint` clean, `npm test` 253/253, `npm run build` clean. Documented in
 CLAUDE.md's Constants File section and Features 1, 10 and 13.
 
-### OPEN-3 — FAAB bid recommender **[owner ask required]**
+### OPEN-3 — FAAB bid recommender **[owner-asked 2026-09-25 — next build]**
 
-**Status:** research complete. **The owner asked for it on 2026-09-25 as the next build.** That ask arrived in Week 3, before the ~6 weeks of $1000-scale data the trigger below prefers, so the build has to check how much 2026 in-season evidence exists before it trusts the rule spec.
-**Trigger:** an explicit owner ask, ideally after ~6 weeks of live 2026 waiver
-data on the $1000 scale (the first evidence that tests the rule spec without
-hindsight).
+**Status:** research complete. **The owner asked for it on 2026-09-25 as the
+next build**, surfaced in **both** places: beside each Recommended Pickup on
+League › Free Agents, and in the MCP server's `recommend_free_agents` answer.
+One shared util (`src/utils/faabBid.js`), per the MCP rule that the app and
+the server can never disagree.
+**Original trigger:** an explicit owner ask, ideally after ~6 weeks of live
+2026 waiver data on the $1000 scale.
 
-Research is done: corpus, the "failed ≠ outbid" finding, held-out backtest,
-and a proposed two-part rule spec live in
-`docs/analysis/faab-bid-corpus-2026-08.md` (re-runnable via
-`node scripts/dev/faab-corpus.mjs`). The recommender itself remains under
-CLAUDE.md's **Future Features (Do Not Build Yet)**. Note OPEN-1 is effectively
-a prerequisite — both need percent-of-budget normalization.
+**What 2026 evidence exists (measured 2026-09-25, `faab-corpus.mjs --json`):**
+39 bid-bearing claims this Sleeper season, of which **20 are in-season**
+(created on or after 2026-09-10), 12 of them won. Only **2 clean contested
+auctions**: $60 over $50 (6% of budget) and $311 over $211 (31%). **10
+uncontested wins**, at $0, 0, 0, 1, 2, 2, 5, 55, 64 and **500**.
+
+**Should we wait the ~3 weeks? Recommendation: no, build now and grade it
+live.** The reasons are measured:
+- **Waiting doesn't buy the validation it was meant to.** Contested auctions
+  arrive at ~1 per week in 2026 (the $100 era averaged ~27 per season). Six
+  weeks would hold roughly 6–9, and §7 of the memo already calls per-bin
+  samples of 19–70 thin. Three more weeks cannot confirm or refute an
+  11/16/23% ladder.
+- **The pre-registered bars are graded LIVE anyway** (win ≥75% of the
+  contested auctions it enters; cost per contested win ≤ the league median).
+  Grading was always going to happen as the season ran. Shipping early simply
+  starts that clock.
+- **The value is front-loaded in-season.** Injuries drive waiver demand from
+  here to the Week 13 deadline, and bids drop to 0.3× from Week 15.
+- **What the build must do because it's early:** label the ladder honestly
+  ("calibrated on 2023–25 at $100; n = 2 contested auctions on $1000"),
+  and make it read the current period's `waiver_budget` and remaining budget
+  from league settings, never 100 or 1000.
+
+**One thing 2026 already suggests, for the build to decide:** the spec's 1%
+uncontested floor ($10) is **above** what the league pays uncontested (six of
+ten in-season uncontested wins were $0–2). The same data holds a **$500 claim
+that met no competition**. Half a budget went to nobody, which is exactly the
+mistake Part A exists to catch.
+
+Research: corpus, the "failed ≠ outbid" finding, held-out backtest and the
+rule spec in `docs/analysis/faab-bid-corpus-2026-08.md` (§9 carries this
+update; re-runnable via `node scripts/dev/faab-corpus.mjs`). OPEN-1 (FAAB in
+budgets) was its prerequisite and closed 2026-09-20.
 
 ### OPEN-4 — Accepted-risk findings from the July 2026 review
 
