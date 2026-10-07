@@ -3,21 +3,7 @@ import { SLEEPER_BASE, SLEEPER_ROOT } from '../constants'
 import { fetchJSON } from '../utils/fetchJSON'
 import { loadPlayerDB } from './usePlayerDB'
 import { loadNflState, loadWeeklyProjections, clearProjectionCache } from './weeklyProjections'
-import { parseLockedTeams } from '../utils/projections'
-
-// Teams with a game this week — everyone else is on bye. Sleeper's schedule
-// payload uses `home`/`away` (NOT `home_team`/`away_team`).
-function parseByeTeams(schedule, currentWeek) {
-  const games = Array.isArray(schedule)
-    ? schedule.filter(g => g.week === currentWeek)
-    : []
-  const playing = new Set()
-  games.forEach(g => {
-    if (g.home) playing.add(g.home)
-    if (g.away) playing.add(g.away)
-  })
-  return { playing, schedule: Array.isArray(schedule) ? schedule : [] }
-}
+import { parseByeTeams, parseLockedTeams } from '../utils/projections'
 
 export function useLineupData() {
   const [nflState, setNflState] = useState(null)
@@ -77,7 +63,8 @@ export function useLineupData() {
       // consumers need it to pair those stats with the right week's opponents.
       setStatsWeek(prevWeek)
 
-      const { playing, schedule: parsed } = parseByeTeams(scheduleData, week)
+      const parsed = Array.isArray(scheduleData) ? scheduleData : []
+      const playing = parseByeTeams(parsed, week)
       setLockedTeams(parseLockedTeams(parsed, week))
       setSchedule(parsed)
       setPlayingTeams(playing)

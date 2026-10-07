@@ -26,6 +26,8 @@
 //    'Neutral' — the honest answer, never a guess off an empty sample.
 
 import { test } from 'node:test'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import assert from 'node:assert/strict'
 
 import {
@@ -37,6 +39,7 @@ import {
   getBestBench,
   parseLockedTeams,
   getAvailability,
+  parseByeTeams,
 } from '../src/utils/projections.js'
 
 // Six teams, three games — shaped exactly like the live payload.
@@ -265,4 +268,38 @@ test('locked is ORTHOGONAL to blocked', () => {
 
   const open = getAvailability(p, {}, playing, new Set())
   assert.equal(open.locked, false, 'and with no locks known, nobody is locked')
+})
+
+
+// ── The bye reader has ONE home (CODE-REVIEW-1 #8, 2026-10-07) ──────────────
+// It was a "verbatim copy" in useLineupData.js and mcp/weekly.js — the code
+// that owns the silent home/away trap.
+
+test('parseByeTeams: home/away for the requested week; empty set = byes unknown', () => {
+  const games = [{ week: 3, home: 'KC', away: 'BUF' }, { week: 4, home: 'ATL', away: 'NO' }]
+  assert.deepEqual([...parseByeTeams(games, 3)].sort(), ['BUF', 'KC'])
+  assert.equal(parseByeTeams([{ week: 3, home_team: 'KC', away_team: 'BUF' }], 3).size, 0)
+  assert.equal(parseByeTeams(null, 3).size, 0)
+})
+
+test('no second bye reader in src/ or mcp/', () => {
+  const root = new URL('..', import.meta.url).pathname
+  const files = []
+  const walk = dir => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name)
+      if (statSync(p).isDirectory()) walk(p)
+      else if (/\.(js|jsx|mjs)$/.test(name)) files.push(p)
+    }
+  }
+  walk(join(root, 'src'))
+  walk(join(root, 'mcp'))
+  const copies = []
+  for (const f of files) {
+    if (f.endsWith('utils/projections.js')) continue
+    readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+      if (/function\s+parseByeTeams\b|playing\.add\(g\.(home|away)\)/.test(line)) copies.push(`${f.slice(root.length)}:${i + 1}`)
+    })
+  }
+  assert.deepEqual(copies, [], 'import parseByeTeams from src/utils/projections.js')
 })
