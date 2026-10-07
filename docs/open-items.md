@@ -34,7 +34,7 @@ approved the order on 2026-10-06. It is ordered **deadline first, then
 value**: the trade deadline (Week 13) and the playoffs (Week 15) are this
 season's only clocks, so work that helps the owner act before them goes first.
 The 2026-09-21 week plan and its follow-ons are **all done**. Their records
-live in each item's own entry (PIPE-1, OPS-1, PIPE-2, OPEN-10, SMALL-1,
+live in `docs/archive/open-items-2026.md` under each item's own ID (PIPE-1, OPS-1, PIPE-2, OPEN-10, SMALL-1,
 MCP-CARRY, NEWS-4/7, PIPE-3).
 
 **Effort is in working sessions and is an estimate.** "Owner" items need a
@@ -48,7 +48,7 @@ login, a phone or a decision that no sandbox can supply.
 | 2 | **OPEN-3: FAAB bid recommender** — **DONE 2026-10-07.** `src/utils/faabBid.js` feeds League › Free Agents and `recommend_free_agents`; floor dropped to $2 on the owner's call; grading bars pre-registered in the memo's §10 | Me | 1–2 | Owner-asked 2026-09-25. Its live grading (#13) started the day it shipped |
 | 3 | **MCP connector re-check on the phone** — all 13 tools in the connector's list; one question each to the five added since 2026-09-20 (see MCP-CARRY) | Owner | 15 min | No sandbox can do it |
 | 4 | **The two DESIGN-4 device checks** — re-add the home-screen app (icon + both `theme-color` metas), and Bricolage Grotesque on glass | Owner | 15 min | Same reason; do it alongside #3 |
-| 5 | **CLEANUP-1: mechanical cleanup.** Stale branches, archive the superseded docs, dead exports, skill drift (§1 has the inventory) | Me | 1 | Right after the FAAB build: cleanup does not decay, FAAB does. It goes before the research queue, because every session after it reads less stale material. **Branch deletion needs the owner's yes first** |
+| 5 | **CLEANUP-1: mechanical cleanup** — **DONE 2026-10-07.** 113 branches deleted (9 unmerged tips tagged `archive/*` first), spent docs in `docs/archive/`, this file cut to the live items, five dead exports removed, skill drift fixed | Me | 1 | Right after the FAAB build: cleanup does not decay, FAAB does. It goes before the research queue, because every session after it reads less stale material. **Branch deletion needs the owner's yes first** |
 | 6 | **CLEANUP-2: slim CLAUDE.md** — 7,064 lines / 468KB, loaded by every session | Me | 1–2 | The largest cleanup lever, and the riskiest (it is the doc of record). After CLEANUP-1, so the archive layout it moves material into already exists |
 
 ### Before the trade deadline (by ~Week 12)
@@ -89,7 +89,7 @@ login, a phone or a decision that no sandbox can supply.
 | `restKvStore` against a live KV (MCP-CARRY) | Owner decision. It may cost money and buys cold-start latency, not correctness. **Recommended: skip** |
 | Retune `DARK_AFTER.feed` | Only if delivered news cadence settles below ~4 runs/day |
 | MCP connector re-check | After any new MCP tool deploys |
-| Replace `public/FantasyPros_2026_Rookies_OP_Rankings.csv` | When a 2027 rookie ranking exists (see CLEANUP-1) |
+| Replace `public/FantasyPros_2026_Rookies_OP_Rankings.csv` | When a 2027 rookie ranking exists (CLEANUP-1 §F, archived) |
 
 ### Deliberately NOT doing (settled — do not reopen)
 
@@ -138,104 +138,6 @@ the repo's gates):
 ---
 
 ## 1. Active
-
-### CLEANUP-1 — the repo-wide cleanup scan, and what to archive **[scanned 2026-10-06; executes as §0 #5]**
-
-**The inventory below is the scan's output.** Nothing has been moved or
-deleted yet. The scan covered every tracked file (12 root, 145 `src`, 53
-`tests`, 40 `.claude`, 36 `mcp`, 29 `docs`, 27 `scripts`, 10 `public`), every
-export in `src/` + `mcp/`, every dependency, and every remote branch.
-**Archive means `docs/archive/` with a one-line pointer left where the file
-was referenced. It never means delete,** except for branches and dead code,
-where git history is the archive.
-
-**The headline: the CODE is clean, and the clutter is branches and prose.**
-No source file in `src/` or `mcp/` is unreferenced, every dependency is in use
-and there are no TODO/FIXME markers. The weight is elsewhere.
-
-**A. Remote branches — 112 `claude/*` on origin. Owner's yes required.**
-- **44** are fully merged into `main` by ancestry.
-- **All 69 PRs (#1–#69) are closed and none is open.** GitHub keeps
-  `refs/pull/N/head` after a branch is deleted, so deleting a PR'd branch
-  loses nothing.
-- **~40 branches from 2026-05-29 → 07-07 never had a PR**, from before the
-  PR workflow. `git cherry` cannot confirm their content landed, because main's
-  history was rewritten since (commit-count drift grows with branch age), so
-  patch ids no longer match. They are 3–4 months behind two full redesigns.
-- **DECIDED 2026-10-07 (owner delegated the call): delete all 112, and tag
-  every branch `main` does not contain as `archive/<name>` first** — 68
-  of them, not just the PR-less 49. A closed PR keeps the commits it had *when
-  it closed*, so a branch that gained commits afterwards would otherwise lose
-  them. A tag costs nothing and is the only thing that keeps an unmerged tip
-  recoverable.
-- **How: `.github/workflows/archive-branches.yml`, manual dispatch, `dry_run`
-  on by default.** A session cannot do this itself — the session git proxy
-  only accepts pushes to the session's own branch (a tag push returned HTTP
-  403, and nothing landed). The workflow skips any branch heading an open PR,
-  and it refuses to delete a branch whose tag did not verifiably land at the
-  same commit. Local dry run against origin, 2026-10-07: **deleted=112
-  tagged_first=68 kept=1** (this PR's own branch). **To run:** after merge,
-  dispatch it once with the default (read the plan in the log), then once with
-  `dry_run` unticked. Afterwards the workflow file can itself be archived.
-- **Never touch** `news-data`, `values-history` or `rookie-intel`: they are
-  workflow-owned data branches.
-
-**B. Docs to move to `docs/archive/`:**
-
-| File | Why it is spent | Inbound references to repoint |
-|---|---|---|
-| `docs/project-status-2026-08.md` | Superseded dated snapshot | header of this file |
-| `docs/design/phase3-design-brief.md` + `phase3-b2-reference.png` (148KB) | The "Primetime Blackout" brief, superseded 2026-09-11 by Matchday | CLAUDE.md Navigation Refactor + Design System status blocks |
-| `docs/design/review-2026-09/next-session-prompt.md`, `build-kickoff.md`, `progress.md` | Session-handoff prompts for DESIGN-1, which closed 2026-09-12 | `progress.md` ↔ each other |
-| `docs/build-plan-2026-09.md` | All four phases resolved. **First lift its §0/§8 standing rules** into CLAUDE.md or this file, because they are still cited | CLAUDE.md (several), skills |
-| `docs/repo-review-2026-07.md` | Every item landed. **Only if** OPEN-4's three accepted risks are restated inline in OPEN-4 first | OPEN-4 |
-
-**Keep:** every `docs/analysis/*.md` (each is the evidence behind a shipped
-constant or a recorded null), `MCP_DISCOVERY.md` (the server's spec, cited
-throughout), and `docs/design/review-2026-09/{findings,directions,slop-checklist,inventory,unasked}.md`
-and `mocks/` (the live design authority).
-
-**C. This file itself — 2,959 lines.** §1 "Active" holds ~1,600 lines of
-items that shipped weeks ago (MCP-1 → MCP-2c, NEWS-6/7, PIPE-1/2/3, OPS-1, the
-ACTIVE-1/2/3 records, the trigger sweeps), and the "Last reviewed" header has
-become a 100-line changelog. **Move shipped items to §3** (or to
-`docs/archive/open-items-2026.md`) and cut the header to the latest review.
-§0 + §1 should fit on a screen.
-
-**D. Dead code:**
-- `mcp/{feeds,liveScores,news,results}.js` each export a `reset*Cache()` that
-  nothing calls, tests included. Either delete them or wire them into the test
-  suites that would want them.
-- `src/utils/recommendations.js` → `assetGivability` (line 193): exported,
-  called nowhere.
-- **Not dead:** `MY_USERNAME` / `MY_TEAM_NAME` in `constants.js`, which are
-  documented as the original-owner reference (Feature 18).
-
-**E. Skill drift (stale facts, not history):**
-- `dynastyedge-change-control` §3 still has a row reading *"No bottom nav;
-  navigation is the side drawer"*. Dead since DESIGN-3 (2026-09-11). It also
-  calls CLAUDE.md "~108KB" (it is 468KB).
-- `dynastyedge-docs-and-writing` repeats "~108 KB" and a section map from
-  2026-07-06.
-- `dynastyedge-build-and-env:146` lists `POS_BAR`, deleted with the
-  positional bars.
-- `dynastyedge-model-quality-campaign/scripts/{loader,reg}.mjs` are
-  **byte-identical** copies of the diagnostics skill's hook. Point the campaign
-  at the canonical one. `mcp/{loader,register}.mjs` is a **deliberate** copy
-  (a runnable server must not depend on `.claude/skills/`) — leave it.
-
-**F. Assets:** `public/FantasyPros_2026_Rookies_OP_Rankings.csv` (176KB) is
-still read by the Draft Board. It is the 2026 class's column and goes stale
-the moment a 2027 board matters. Leave it until it is replaced (§0's
-trigger list). Everything else in `public/` is live.
-
-**Keep, explicitly:** all 13 `scripts/dev/*.mjs`. They look unreferenced to
-an import scan, but each reproduces a measurement a memo or a shipped constant
-rests on.
-
-**Gates:** doc moves are `docs:` commits. The dead-code removal is behaviour
-class and needs lint + test + build. The test count must not move; it is
-808 / 765 today.
 
 ### CLEANUP-2 — slim CLAUDE.md **[executes as §0 #6]**
 
@@ -775,6 +677,7 @@ are as of 2026-07-17.
 
 | Item | Closed | How |
 |---|---|---|
+| CLEANUP-1 — the repo-wide cleanup | 2026-10-07 | `archive-branches.yml` (run 37556571494) deleted **113** `claude/*` branches and tagged the **9** whose tips `main` lacked as `archive/*`. The dry run's "68" was a shallow-clone artifact: `--is-ancestor` fails behind a graft. Spent docs moved to `docs/archive/` after their still-cited rules and specs were lifted (build plan §0/§8 → §0, §10 → PHASE-4BCD, OPEN-4 restated). This file cut 3,137 → ~800 lines, closed records archived verbatim. `assetGivability` + four `reset*Cache()` deleted (tests unchanged 828 / 785). Four skill drifts + OPEN-3's fixed. Detail in the archive |
 | OPEN-3 — the FAAB bid recommender | 2026-10-07 | Shipped as `src/utils/faabBid.js`, one util behind League › Free Agents and `recommend_free_agents` (zod schema extended, verified through a real MCP client). Floor $2 on $1000 (owner's call, dropping the spec's $10); ladder 11/16/23% of the full budget capped at the current period's remainder; no contest prediction, because value barely moves the contest rate. Budget read from settings, never assumed; null for a defense or an unpriced player. Grading bars and protocol pre-registered in the memo's §10 for §0 #13. Detail in the archive |
 | NEWS-7 — ESPN RSS gave Actions nothing | 2026-09-22 | The recorded diagnosis ("catch branch, so it throws — 403 or timeout") was wrong on every count: the log read `0 items` in ~95ms, not `FAILED`. The script was made to print what a zero-item 2xx returned, and the next run read **HTTP 202 · text/html · 0 bytes** — a bot-manager deferral, which `res.ok` accepts. Same URL + UA from outside Actions: 200, 29 items. **Removed** at 8 of 12 consecutive misses; the zero-item diagnostic stays. Detail in the archive |
 | OPS-2 — a branch dispatch could publish production data | 2026-09-22 | Found by the owner's review question. `news.yml` and `values-history.yml` had no default-branch guard on their publish steps (`rookie-intel.yml` did), so NEWS-4/NEWS-7's verification runs, and the 2026-09-12 retention verification before them, force-pushed feature-branch code to the live `news-data` feed. Both now carry `if: github.ref_name == github.event.repository.default_branch`; a branch dispatch is a dry run. **Post-merge check done 2026-09-22:** `news.yml` dispatched on `main` (run 1237) and the PUBLISHED `news.json` read via git off `news-data`: `playerCap` 1200, `depthHours` 53, ten sources, no `ESPN RSS` key, every `sourceMisses` 0. |

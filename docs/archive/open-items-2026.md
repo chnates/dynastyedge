@@ -125,6 +125,146 @@ deleted. The active work queue remains `docs/build-plan-2026-09.md`).
 
 ## Closed and shipped items formerly in §1 (Active)
 
+### CLEANUP-1 — the repo-wide cleanup scan, and what to archive **CLOSED 2026-10-07 — EXECUTED**
+
+**The inventory below is the scan's output.** Nothing has been moved or
+deleted yet. The scan covered every tracked file (12 root, 145 `src`, 53
+`tests`, 40 `.claude`, 36 `mcp`, 29 `docs`, 27 `scripts`, 10 `public`), every
+export in `src/` + `mcp/`, every dependency, and every remote branch.
+**Archive means `docs/archive/` with a one-line pointer left where the file
+was referenced. It never means delete,** except for branches and dead code,
+where git history is the archive.
+
+**The headline: the CODE is clean, and the clutter is branches and prose.**
+No source file in `src/` or `mcp/` is unreferenced, every dependency is in use
+and there are no TODO/FIXME markers. The weight is elsewhere.
+
+**A. Remote branches — 112 `claude/*` on origin. Owner's yes required.**
+- **44** are fully merged into `main` by ancestry.
+- **All 69 PRs (#1–#69) are closed and none is open.** GitHub keeps
+  `refs/pull/N/head` after a branch is deleted, so deleting a PR'd branch
+  loses nothing.
+- **~40 branches from 2026-05-29 → 07-07 never had a PR**, from before the
+  PR workflow. `git cherry` cannot confirm their content landed, because main's
+  history was rewritten since (commit-count drift grows with branch age), so
+  patch ids no longer match. They are 3–4 months behind two full redesigns.
+- **DECIDED 2026-10-07 (owner delegated the call): delete all 112, and tag
+  every branch `main` does not contain as `archive/<name>` first** — 68
+  of them, not just the PR-less 49. A closed PR keeps the commits it had *when
+  it closed*, so a branch that gained commits afterwards would otherwise lose
+  them. A tag costs nothing and is the only thing that keeps an unmerged tip
+  recoverable.
+- **How: `.github/workflows/archive-branches.yml`, manual dispatch, `dry_run`
+  on by default.** A session cannot do this itself — the session git proxy
+  only accepts pushes to the session's own branch (a tag push returned HTTP
+  403, and nothing landed). The workflow skips any branch heading an open PR,
+  and it refuses to delete a branch whose tag did not verifiably land at the
+  same commit. Local dry run against origin, 2026-10-07: **deleted=112
+  tagged_first=68 kept=1** (this PR's own branch). **To run:** after merge,
+  dispatch it once with the default (read the plan in the log), then once with
+  `dry_run` unticked. Afterwards the workflow file can itself be archived.
+- **Never touch** `news-data`, `values-history` or `rookie-intel`: they are
+  workflow-owned data branches.
+
+**B. Docs to move to `docs/archive/`:**
+
+| File | Why it is spent | Inbound references to repoint |
+|---|---|---|
+| `docs/project-status-2026-08.md` | Superseded dated snapshot | header of this file |
+| `docs/design/phase3-design-brief.md` + `phase3-b2-reference.png` (148KB) | The "Primetime Blackout" brief, superseded 2026-09-11 by Matchday | CLAUDE.md Navigation Refactor + Design System status blocks |
+| `docs/design/review-2026-09/next-session-prompt.md`, `build-kickoff.md`, `progress.md` | Session-handoff prompts for DESIGN-1, which closed 2026-09-12 | `progress.md` ↔ each other |
+| `docs/build-plan-2026-09.md` | All four phases resolved. **First lift its §0/§8 standing rules** into CLAUDE.md or this file, because they are still cited | CLAUDE.md (several), skills |
+| `docs/repo-review-2026-07.md` | Every item landed. **Only if** OPEN-4's three accepted risks are restated inline in OPEN-4 first | OPEN-4 |
+
+**Keep:** every `docs/analysis/*.md` (each is the evidence behind a shipped
+constant or a recorded null), `MCP_DISCOVERY.md` (the server's spec, cited
+throughout), and `docs/design/review-2026-09/{findings,directions,slop-checklist,inventory,unasked}.md`
+and `mocks/` (the live design authority).
+
+**C. This file itself — 2,959 lines.** §1 "Active" holds ~1,600 lines of
+items that shipped weeks ago (MCP-1 → MCP-2c, NEWS-6/7, PIPE-1/2/3, OPS-1, the
+ACTIVE-1/2/3 records, the trigger sweeps), and the "Last reviewed" header has
+become a 100-line changelog. **Move shipped items to §3** (or to
+`docs/archive/open-items-2026.md`) and cut the header to the latest review.
+§0 + §1 should fit on a screen.
+
+**D. Dead code:**
+- `mcp/{feeds,liveScores,news,results}.js` each export a `reset*Cache()` that
+  nothing calls, tests included. Either delete them or wire them into the test
+  suites that would want them.
+- `src/utils/recommendations.js` → `assetGivability` (line 193): exported,
+  called nowhere.
+- **Not dead:** `MY_USERNAME` / `MY_TEAM_NAME` in `constants.js`, which are
+  documented as the original-owner reference (Feature 18).
+
+**E. Skill drift (stale facts, not history):**
+- `dynastyedge-change-control` §3 still has a row reading *"No bottom nav;
+  navigation is the side drawer"*. Dead since DESIGN-3 (2026-09-11). It also
+  calls CLAUDE.md "~108KB" (it is 468KB).
+- `dynastyedge-docs-and-writing` repeats "~108 KB" and a section map from
+  2026-07-06.
+- `dynastyedge-build-and-env:146` lists `POS_BAR`, deleted with the
+  positional bars.
+- `dynastyedge-model-quality-campaign/scripts/{loader,reg}.mjs` are
+  **byte-identical** copies of the diagnostics skill's hook. Point the campaign
+  at the canonical one. `mcp/{loader,register}.mjs` is a **deliberate** copy
+  (a runnable server must not depend on `.claude/skills/`) — leave it.
+
+**F. Assets:** `public/FantasyPros_2026_Rookies_OP_Rankings.csv` (176KB) is
+still read by the Draft Board. It is the 2026 class's column and goes stale
+the moment a 2027 board matters. Leave it until it is replaced (§0's
+trigger list). Everything else in `public/` is live.
+
+**Keep, explicitly:** all 13 `scripts/dev/*.mjs`. They look unreferenced to
+an import scan, but each reproduces a measurement a memo or a shipped constant
+rests on.
+
+**Gates:** doc moves are `docs:` commits. The dead-code removal is behaviour
+class and needs lint + test + build. The test count must not move; it was
+808 / 765 at the scan and is **828 / 785** after OPEN-3, gap 43.
+
+**EXECUTED 2026-10-07 — what actually happened, against the plan above.**
+
+- **A. Branches — the real numbers are 113 deleted and 9 tagged, not 112 and
+  68, and nothing was lost.** `archive-branches.yml` ran twice on `main` at
+  `18bc8fc`: a dry run (37556517643), then the real one (**run 37556571494**,
+  log: `SUMMARY dry_run=false deleted=113 tagged_first=9 kept=0`). The 113 is
+  the scan's 112 plus PR #70's own branch, which had merged by run time.
+  **Only 9 tips were outside `main`.** The run's own `merge-base
+  --is-ancestor`, on a `fetch-depth: 0` checkout, found the other 104 inside
+  it, and every one of the 9 took the TAG path with no `::error` line. The 9
+  tags on origin match the logged SHAs: `archive/` + `2026-rookie-draft-phrase-3bqlec`,
+  `draft-board-my-board-notes-WOBKn`, `refresh-data-button-z3mwfj`,
+  `session-14bofd`, `session-miznfv`, `skill-library-handoff-i4yv4v`,
+  `trade-analyzer-roster-context-brlx89`, `trade-analyzer-sleeper-news-OTPCv`,
+  `trade-logic-evaluation-g04a1f`.
+  **Why the dry run said 68:** it was run locally in a session clone, which is
+  **shallow** (8 graft points). There `--is-ancestor` returns false for any tip
+  behind a graft, so 59 merged branches read as unmerged. The same artifact is
+  what this entry's "main's history was rewritten" theory above was
+  explaining. **Lesson: an ancestry check in a session clone is not
+  evidence.** Run it with full history (`git fetch --unshallow`, or in Actions
+  with `fetch-depth: 0`).
+  Origin now holds `main`, the three data branches and
+  `claude/faab-bid-recommender` (merged in PR #71, left for the owner to
+  delete). The workflow was moved to `docs/archive/workflows/` once its job
+  was done: it cannot run from there, and git history keeps it runnable.
+- **B.** All five rows moved to `docs/archive/` (indexed by its README). The
+  build plan's §0/§8 rules went to §0 of this file and its unbuilt §10 spec to
+  §2 PHASE-4BCD. OPEN-4 restates F12/F15/F16b in full. Every inbound path was
+  repointed.
+- **C.** This file went from 3,137 lines to ~800. 41 closed records and the
+  old review changelog moved verbatim to `docs/archive/open-items-2026.md`
+  under their original IDs.
+- **D.** `assetGivability` and the four uncalled `reset*Cache()` exports were
+  deleted. Those suites inject a fresh `memoryStore()`, so they had nothing to
+  isolate. Tests unchanged at 828 / 785; `api/mcp.js` rebuilt byte-identical.
+- **E.** All four listed drifts were fixed. So was the drift OPEN-3 left: the
+  frontier skill still called the FAAB recommender do-not-build-yet.
+- **F.** Untouched, as planned.
+
+---
+
 ### MCP-1 — MCP server phase 1 **SHIPPED 2026-09-19**
 
 `mcp/`, a Model Context Protocol server, so the owner can ask DynastyEdge

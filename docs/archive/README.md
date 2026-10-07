@@ -13,3 +13,5 @@ that has since moved here.
 | `repo-review-2026-07.md` | The July 2026 read-only audit; backlog B1–B11, all landed | open-items OPEN-4 restates its three accepted risks |
 | `design/phase3-design-brief.md` + `phase3-b2-reference.png` | The "Primetime Blackout" visual brief | Matchday, `docs/design/review-2026-09/directions.md` |
 | `design/review-2026-09/{next-session-prompt,build-kickoff,progress}.md` | Session-handoff prompts for DESIGN-1 (closed 2026-09-12) | CLAUDE.md's Design System section |
+| `open-items-2026.md` | Every closed record from `docs/open-items.md`, verbatim under its original ID, plus the old review changelog | `docs/open-items.md` (live items + §3's one-row index) |
+| `workflows/archive-branches.yml` | The one-off workflow that tagged and deleted 113 stale `claude/*` branches (CLEANUP-1 §A, run 37556571494). Not runnable from here. Restore it to `.github/workflows/` to run it again | — |

@@ -165,7 +165,7 @@ re-measured from the CDN.
 
 > **Note (2026-09-22):** that dispatch published *unreviewed branch code* to the
 > live feed, because `news.yml`'s publish step had no default-branch guard. It
-> now has one (OPS-2 in `docs/archive/open-items-2026.md`): a branch dispatch is a dry run,
+> now has one (OPS-2 in `docs/open-items.md` §3): a branch dispatch is a dry run,
 > and a published measurement like this one is taken after merge, on `main`.
 
 | | before | after 1 run | target |
