@@ -4,7 +4,7 @@
 dated snapshot: unlike the old dated status snapshots (now in `docs/archive/`), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-10-07 (**CLEANUP-2 done** — CLAUDE.md slimmed 7,123 → 3,586 lines, 482KB → 229KB, every rule kept and the dated evidence moved verbatim to `docs/history/`; on the owner's review before merge. It missed its ~2,000-line target — see §3. Previously the same day: CLEANUP-1 executed and OPEN-3 shipped. Tests 828 / 785 with no `node_modules`, gap 43.)
+**Last reviewed:** 2026-10-07 (**CLEANUP-3 added** — owner-approved dedupe of CLAUDE.md, triggered after §0 #12; spec + kickoff prompt in §2. **CLEANUP-2 done** — CLAUDE.md slimmed 7,123 → 3,586 lines, 482KB → 229KB, every rule kept and the dated evidence moved verbatim to `docs/history/`; on the owner's review before merge. It missed its ~2,000-line target — see §3. Previously the same day: CLEANUP-1 executed and OPEN-3 shipped. Tests 828 / 785 with no `node_modules`, gap 43.)
 
 **How to use it:**
 - Each item states its **trigger** — the condition that makes it ready. An item
@@ -90,6 +90,7 @@ login, a phone or a decision that no sandbox can supply.
 | Retune `DARK_AFTER.feed` | Only if delivered news cadence settles below ~4 runs/day |
 | MCP connector re-check | After any new MCP tool deploys |
 | Replace `public/FantasyPros_2026_Rookies_OP_Rankings.csv` | When a 2027 rookie ranking exists (CLEANUP-1 §F, archived) |
+| **CLEANUP-3** — dedupe CLAUDE.md (one home per rule; target ~185KB) | After §0 #12, in a quiet week. Spec + kickoff prompt: §2 CLEANUP-3 |
 
 ### Deliberately NOT doing (settled — do not reopen)
 
@@ -144,6 +145,60 @@ Nothing is active. §0 is the queue; the next item in order is #7.
 ---
 
 ## 2. Deferred — waiting on a trigger
+
+### CLEANUP-3 — dedupe CLAUDE.md (one home per rule) **[owner-approved 2026-10-07; trigger: after §0 #12]**
+
+**Why.** CLEANUP-2 cut CLAUDE.md to 3,586 lines / 229KB and missed its line
+target: what remains is mostly contract. But some contracts live in **two to
+five places**, and this repo's most repeated lesson is that two copies of a
+rule drift (the pick classifier, the FAAB scale, "protects your starters").
+One home per rule is a correctness gain as well as a size gain.
+
+**Scope (and only this):**
+1. **MCP tool sections** — keep what is server-specific (ids only, as-of stamp,
+   bounded output, closed zod schema, Class B degradation, TTLs); replace each
+   restated domain rule (one defense, the three odds states, FAAB in budgets,
+   the fair band…) with a pointer to its Feature. ~150–250 lines.
+2. **File Structure annotations** — the file's role plus a pointer; drop
+   restated contracts. The tree stays one line per file. ~15–20KB.
+3. **The FAAB budget rules** (League Context, Feature 11, the recommendation
+   engine, two MCP tools) and **the pick window** (Feature 1, Feature 2,
+   Constants) — one home each, pointers elsewhere. ~50 lines.
+
+**Out of scope:** Features and the Design System — what is left there is
+contract, not repetition, and it is where a session lands.
+
+**Measure in bytes, not lines** — bytes are what every session pays. Target
+**~185KB** (from 229KB). Report the real number even if it misses.
+
+**Done when:** each deduped rule exists in exactly one section, every pointer
+resolves, and the CLEANUP-2 rule audit (every never/always/must/do-not/trap
+sentence of the pre-change file still present in CLAUDE.md) passes.
+
+**Kickoff prompt** (dated 2026-10-07 — re-measure its numbers):
+
+```
+Do CLEANUP-3 in docs/open-items.md §2: dedupe CLAUDE.md so each rule has one
+home. Read CLAUDE.md, the CLEANUP-3 entry, and load dynastyedge-change-control
+and dynastyedge-docs-and-writing first.
+
+Scope is exactly the entry's three items: MCP tool sections point to Features
+for domain rules; File Structure annotations become role + pointer; the FAAB
+budget rules and the pick window get one home each. Do not touch the Features
+or the Design System beyond adding pointers.
+
+Step 0: list every rule you plan to collapse, its current homes, the home it
+keeps, and the expected byte saving. Show me and wait for my OK.
+
+Rules: a pointer replaces a restatement only when the target section states the
+rule fully. Move nothing to docs/history unless it is dated evidence. Re-run the
+CLEANUP-2 rule audit (every never/always/must/do-not/trap sentence) against the
+result. One docs: commit per area. Gates: npm ci, lint + test + build, test
+count unchanged. Report bytes before/after. Open a PR, watch it, do not merge.
+Close CLEANUP-3 in open-items as part of the PR.
+```
+
+---
 
 ### PHASE-4BCD — the valuation consensus, still to build (spec lifted from `build-plan-2026-09.md` §10)
 
