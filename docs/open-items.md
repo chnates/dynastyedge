@@ -5,7 +5,7 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-09-25 (**MCP-CARRY closed out** — four commits.
+**Last reviewed:** 2026-10-06 (**the whole backlog re-planned, and the repo scanned for cleanup.** §0 is a single ordered list of everything still open through 2028, approved by the owner. Two new items: **CLEANUP-1**, the scan inventory — the code is clean; the clutter is 112 stale branches and superseded docs; and **CLEANUP-2**, slimming a 7,064-line CLAUDE.md. Live readings the same day: news `depthHours` **140** (595 / 1200 player items, all ten sources at 0 misses); DynastyProcess back to **654** players (PIPE-3 confirmed upstream); consensus archive 15 unbroken daily columns since 09-22; `values-history.json` at its full 90 columns. **OPEN-3 has not been started.** Previously 2026-09-25 (**MCP-CARRY closed out** — four commits.
 **ROOKIE-1 closed** by dropping the rookie name fallback rather than guarding
 it (0 of 444 name joins live; all 395 FantasyCalc ids resolve to the same name
 in the player DB; 7 same-name-same-position rookies a guard would have
@@ -136,53 +136,198 @@ deleted. The active work queue remains `docs/build-plan-2026-09.md`).
 
 ---
 
-## 0. The plan (set 2026-09-21 — read this first)
+## 0. The plan (set 2026-10-06, owner-approved — read this first)
 
-**A one-week plan, ordered by irreversibility × cheapness rather than by
-size.** The reasoning is worth more than the order: two of these items cost
-something *every day they are not done* and cannot be recovered afterwards,
-which beats any amount of feature value.
+**One ordered list for everything still open, through 2028.** The owner
+approved the order on 2026-10-06. It is ordered **deadline first, then
+value**: the trade deadline (Week 13) and the playoffs (Week 15) are this
+season's only clocks, so work that helps the owner act before them goes first.
+The 2026-09-21 week plan and its follow-ons are **all done**. Their records
+live in each item's own entry (PIPE-1, OPS-1, PIPE-2, OPEN-10, SMALL-1,
+MCP-CARRY, NEWS-4/7, PIPE-3).
 
-| Day | Work | Why it sits here |
-|---|---|---|
-| **1** | **PIPE-1 + OPS-1 + this catch-up** — **DONE 2026-09-21** | Both were actively bleeding. The archive wrote unrecoverable wrong data on every run; the Vercel builds were pure waste |
-| **2** | **Phase 4a — archive all three valuation sources daily** — **DONE 2026-09-21** (see PIPE-2) | **The only item on this list where waiting has a permanent cost.** 4a's own instruction is "do this first and immediately", and it had been sitting since 2026-09-04. It starts the clock on 4d ("when sources disagree, which one moves?"), which is unanswerable forever without an archive. Pipeline-only, no UI |
-| **3–4** | **OPEN-10 — DONE 2026-09-21.** (**MCP-CARRY**, the alternative, is untouched) | The owner picked the fix over the new capability. The board read wrong on 17 of 20 cards; it now reads 18 Fair / 2 Weak from my seat and every suggestion agrees with the Analyzer |
-| **5** | **NEWS-4** (the cap decision) + **NEWS-5** (cron cadence — pick option 1 or 2) + the **MCP connector re-check** on the phone | All small; the last needs the owner's GitHub login and no sandbox can do it |
+**Effort is in working sessions and is an estimate.** "Owner" items need a
+login, a phone or a decision that no sandbox can supply.
 
-### The week plan is complete (2026-09-22). What follows it:
+### Now (week of 2026-10-06)
 
-| Next | Work | Why here |
-|---|---|---|
-| **1** | ~~SMALL-1 → then MCP-CARRY's trade-targets tool~~ — **DONE 2026-09-22.** Both shipped: the rationale now checks the lineup before claiming to have protected it, and `find_trade_targets` is the ninth tool. Two of §5's phase-two tools remain (manager scouting, rookie research) — neither is scheduled | The largest capability gap the server had: it could *grade* a trade you already thought of but not answer "who do I call about, and what would it cost?". SMALL-1 went first because `packageRationale` is the string that tool returns, and a false claim through an LLM is worse than one on a screen |
-| **1c** | ~~MCP-CARRY closeout~~ — **DONE 2026-09-25.** ROOKIE-1 closed (fallback dropped), `get_value_history` (tool 13, the last static feed), `Retry-After` in the limiter; `restKvStore` explicitly deferred to the owner (provisioning may cost money — path recorded in MCP-CARRY). **Owed: the phone re-check for five tools** | What was left after 1b was one correctness fix, one unread feed and two known limits; three are closed and the fourth is now a decision rather than an unknown |
-| **1b** | ~~MCP-CARRY's remaining capability~~ — **DONE 2026-09-22.** `research_rookies`, `scout_managers` and `get_league_results` shipped; the server now has twelve tools and §5's list is closed. **Owed: the connector re-check on the owner's phone** for the four tools added since 2026-09-20 (see MCP-CARRY), and **ROOKIE-1**, a small identity fix found on the way (0 of 444 live) | The server could grade and find trades but could not answer the rookie, manager or history questions the app already answers on the phone. What MCP-CARRY still holds is known limits, not capability |
-| **2** | ~~NEWS-4 + NEWS-7~~ — **DONE 2026-09-22.** ESPN RSS removed (it answers Actions with an empty HTTP 202, not a throw); player cap 400 → 1200; `coverage.depthHours` added because `spanHours` turned out to be set by stragglers. **One follow-up: re-read `depthHours` on 2026-09-29** to learn whether the 7-day window binds | Both small. NEWS-5 is effectively settled — the docs are corrected and its option 2 is cosmetic |
-| **2b** | ~~PIPE-3~~ — **CLOSED 2026-09-25**: DynastyProcess's 485 → 344 drop is upstream board depth, not our join (see PIPE-3). **Next: OPEN-3, the FAAB bid recommender**, owner-asked 2026-09-25, shown both in the app and in the chat. Recommended to build now rather than wait for Week 6 (see OPEN-3 for the measured reason) | In-season, you bid on every waiver run. The research is already done (`faab-bid-corpus-2026-08.md`) |
-| **3** | **Phase 4b/4c** — normalize the three valuation sources and surface the disagreement | The biggest unbuilt owner-approved item, but 4d wants archive history and `values-consensus.json` holds one day as of 2026-09-21. It gets better by waiting, which nothing else on this list does |
+| # | Item | Who | Effort | Why here |
+|---|---|---|---|---|
+| 1 | **This roadmap + the repo-cleanup scan** (CLEANUP-1's inventory) — **DONE by the PR that wrote this table** | Me | <1 | Every later session starts from this file, and it was 11 days stale |
+| 2 | **OPEN-3: FAAB bid recommender.** One shared util (`src/utils/faabBid.js`) feeding League › Free Agents and `recommend_free_agents` | Me | 1–2 | Owner-asked 2026-09-25. Its value decays every week until the Week 13 deadline, and its live grading only starts once it ships. **First decision:** keep the spec's 1% (= $10) uncontested floor, or drop it to the $0–2 the league actually pays uncontested |
+| 3 | **MCP connector re-check on the phone** — all 13 tools in the connector's list; one question each to the five added since 2026-09-20 (see MCP-CARRY) | Owner | 15 min | No sandbox can do it |
+| 4 | **The two DESIGN-4 device checks** — re-add the home-screen app (icon + both `theme-color` metas), and Bricolage Grotesque on glass | Owner | 15 min | Same reason; do it alongside #3 |
+| 5 | **CLEANUP-1: mechanical cleanup.** Stale branches, archive the superseded docs, dead exports, skill drift (§1 has the inventory) | Me | 1 | Right after the FAAB build: cleanup does not decay, FAAB does. It goes before the research queue, because every session after it reads less stale material. **Branch deletion needs the owner's yes first** |
+| 6 | **CLEANUP-2: slim CLAUDE.md** — 7,064 lines / 468KB, loaded by every session | Me | 1–2 | The largest cleanup lever, and the riskiest (it is the doc of record). After CLEANUP-1, so the archive layout it moves material into already exists |
 
-**Deliberately NOT next**, so nobody picks one up by accident: OPEN-8 (trigger
-autumn 2028), OPEN-9 (~2027-07, needs 12 monthly archive columns), OPEN-3
-(owner ask required), VALUE-1 (a note, triggered only by touching
-`Magnitude`), and the two device checks in DESIGN-4 plus the MCP connector
-re-check — all three owner-only, uncheckable in any sandbox.
+### Before the trade deadline (by ~Week 12)
 
-**What is deliberately NOT in the week**, so nobody picks it up by accident:
-OPEN-8 (trigger: autumn 2028), OPEN-9 (trigger: ~2027-07, needs 12 monthly
-archive columns and currently holds 3), OPEN-3 (owner ask required), and the
-two device checks in DESIGN-4 (owner-only, uncheckable in any sandbox).
+| # | Item | Who | Effort | Why here |
+|---|---|---|---|---|
+| 7 | **Buy-low timing research** (`dynastyedge-research-frontier` Item 4): do `trend30Day < −50` dips mean-revert or keep falling? Analysis only | Me | 1 | Now testable: `values-history.json` holds the full 90 daily columns (2026-07-09 → 10-06). It decides whether the buy-low/sell-high advice should be trusted for deadline trading |
+| 8 | **Proactive delivery feasibility note** (frontier Item 5): a scheduled Claude routine calling the MCP server, giving a weekly waiver brief plus a deadline-week brief | Me | <1 | The frontier memo is dated 2026-07-05 and **predates the MCP server**, which changes its answer: delivery no longer needs a backend in the app |
+| 9 | **Build the scheduled brief**, if #8 says yes | Me | 1 | Every waiver run before it exists is missed |
+| 10 | **Briefing decision-quality** (frontier Item 1): start recording what The Edge surfaced each day, so it can be scored against the moves that paid | Me | 1 | A week not recorded can never be scored |
+| 11 | **OPEN-5: calibration** — replay 2023–25 through the playoff-odds model (Brier / reliability); check the lineup confidence curve against 2026 weeks | Me | 1–2 | Before a deadline buy/sell call rests on "58% odds" |
+| 12 | **Close NEWS-4**: re-read `depthHours` around 2026-10-10 | Me | 15 min | Live 2026-10-06: 140h of the 168h target, 595 / 1200 player items — the cap no longer binds |
 
-**Phase 4's archive (4a) shipped 2026-09-21 — see PIPE-2 — and 4b/4c remain
-the biggest unbuilt approved item.** Worth naming plainly: FantasyCalc is
-still the app's only valuation source *in the product*, so every trade
-verdict, roster total, trajectory curve and pick price traces to one
-provider's opinion. What changed is that a second and third reading are now
-being **recorded** daily, so 4d becomes answerable around **2026-12** and
-4b/4c can be built on evidence rather than on one day's probe.
+### Season end (Weeks 13–17)
+
+| # | Item | Who | Effort | Why here |
+|---|---|---|---|---|
+| 13 | **Grade the FAAB recommender** against its pre-registered bars (wins ≥ 75% of contested auctions it enters; cost per contested win ≤ league median) | Me | <1 | Bids drop to ~0.3× from Week 15, so the in-season sample is essentially complete |
+| 14 | **Grade the playoff odds on 2026 itself**, once the regular season ends | Me | <1 | The first real out-of-sample test |
+| 15 | **Phase 4d: "when the sources disagree, which one moves?"** | Me | 1 | `values-consensus.json` holds 15 unbroken daily columns since 09-22; ~3 months makes it answerable (~2026-12) |
+| 16 | **Phase 4b/4c: normalize the three sources and surface the disagreement** | Me | 2 | The largest unbuilt approved item. It gets better by waiting, so it waits for #15 |
+
+### 2027 offseason and later
+
+| # | Item | Who | Effort | Trigger |
+|---|---|---|---|---|
+| 17 | **2027 rookie-draft rehearsal** (`scripts/dev/replay-live.mjs --scenario draft`) and the 2027 class landing in `rookie-intel.json` | Me | <1 | A few weeks before the 2027 rookie draft |
+| 18 | **OPEN-9: rebuild the trajectory age curves longitudinally** | Me | 1–2 | ~2027-07, when `values-archive.json` holds ~12 monthly columns |
+| 19 | **OPEN-5, second half: the multi-season trajectory back-test** | Me | 1 | After #18 |
+| 20 | **OPEN-8: re-derive `PICK_ROUND_KEEP`** | Me | 1 | Autumn 2028 (the 2027 class has played a season) |
+
+### Only when something triggers it
+
+| Item | Trigger |
+|---|---|
+| NEWS-5 option 2 (make the news cron hourly so the line stops implying 48 runs/day) | Any time. Cosmetic only; GitHub delivers ~5.5–7.4 runs/day whatever we ask |
+| VALUE-1 (FantasyCalc top value 10,758 > the documented 10,000) | Next time `Magnitude` or the FantasyCalc contract is touched |
+| `restKvStore` against a live KV (MCP-CARRY) | Owner decision. It may cost money and buys cold-start latency, not correctness. **Recommended: skip** |
+| Retune `DARK_AFTER.feed` | Only if delivered news cadence settles below ~4 runs/day |
+| MCP connector re-check | After any new MCP tool deploys |
+| Replace `public/FantasyPros_2026_Rookies_OP_Rankings.csv` | When a 2027 rookie ranking exists (see CLEANUP-1) |
+
+### Deliberately NOT doing (settled — do not reopen)
+
+Push notifications (Sleeper is read-only, no backend) · per-manager trade-acceptance modelling (tested on the full 95-trade corpus, disconfirmed) · multi-league (frontier Item 6, a non-goal) · a two-axis rookie score (rejected twice: 3c and the college-production back-test) · the breakout alert (tested null) · averaging the valuation sources or replacing FantasyCalc (destroys the disagreement, which is the product) · tightening the news cron (GitHub already throttles it 6×) · OPEN-4's three accepted-risk findings.
 
 ---
 
 ## 1. Active
+
+### CLEANUP-1 — the repo-wide cleanup scan, and what to archive **[scanned 2026-10-06; executes as §0 #5]**
+
+**The inventory below is the scan's output.** Nothing has been moved or
+deleted yet. The scan covered every tracked file (12 root, 145 `src`, 53
+`tests`, 40 `.claude`, 36 `mcp`, 29 `docs`, 27 `scripts`, 10 `public`), every
+export in `src/` + `mcp/`, every dependency, and every remote branch.
+**Archive means `docs/archive/` with a one-line pointer left where the file
+was referenced. It never means delete,** except for branches and dead code,
+where git history is the archive.
+
+**The headline: the CODE is clean, and the clutter is branches and prose.**
+No source file in `src/` or `mcp/` is unreferenced, every dependency is in use
+and there are no TODO/FIXME markers. The weight is elsewhere.
+
+**A. Remote branches — 112 `claude/*` on origin. Owner's yes required.**
+- **44** are fully merged into `main` by ancestry.
+- **All 69 PRs (#1–#69) are closed and none is open.** GitHub keeps
+  `refs/pull/N/head` after a branch is deleted, so deleting a PR'd branch
+  loses nothing.
+- **~40 branches from 2026-05-29 → 07-07 never had a PR**, from before the
+  PR workflow. `git cherry` cannot confirm their content landed, because main's
+  history was rewritten since (commit-count drift grows with branch age), so
+  patch ids no longer match. They are 3–4 months behind two full redesigns.
+- **DECIDED 2026-10-07 (owner delegated the call): delete all 112, and tag
+  every branch `main` does not contain as `archive/<name>` first** — 68
+  of them, not just the PR-less 49. A closed PR keeps the commits it had *when
+  it closed*, so a branch that gained commits afterwards would otherwise lose
+  them. A tag costs nothing and is the only thing that keeps an unmerged tip
+  recoverable.
+- **How: `.github/workflows/archive-branches.yml`, manual dispatch, `dry_run`
+  on by default.** A session cannot do this itself — the session git proxy
+  only accepts pushes to the session's own branch (a tag push returned HTTP
+  403, and nothing landed). The workflow skips any branch heading an open PR,
+  and it refuses to delete a branch whose tag did not verifiably land at the
+  same commit. Local dry run against origin, 2026-10-07: **deleted=112
+  tagged_first=68 kept=1** (this PR's own branch). **To run:** after merge,
+  dispatch it once with the default (read the plan in the log), then once with
+  `dry_run` unticked. Afterwards the workflow file can itself be archived.
+- **Never touch** `news-data`, `values-history` or `rookie-intel`: they are
+  workflow-owned data branches.
+
+**B. Docs to move to `docs/archive/`:**
+
+| File | Why it is spent | Inbound references to repoint |
+|---|---|---|
+| `docs/project-status-2026-08.md` | Superseded dated snapshot | header of this file |
+| `docs/design/phase3-design-brief.md` + `phase3-b2-reference.png` (148KB) | The "Primetime Blackout" brief, superseded 2026-09-11 by Matchday | CLAUDE.md Navigation Refactor + Design System status blocks |
+| `docs/design/review-2026-09/next-session-prompt.md`, `build-kickoff.md`, `progress.md` | Session-handoff prompts for DESIGN-1, which closed 2026-09-12 | `progress.md` ↔ each other |
+| `docs/build-plan-2026-09.md` | All four phases resolved. **First lift its §0/§8 standing rules** into CLAUDE.md or this file, because they are still cited | CLAUDE.md (several), skills |
+| `docs/repo-review-2026-07.md` | Every item landed. **Only if** OPEN-4's three accepted risks are restated inline in OPEN-4 first | OPEN-4 |
+
+**Keep:** every `docs/analysis/*.md` (each is the evidence behind a shipped
+constant or a recorded null), `MCP_DISCOVERY.md` (the server's spec, cited
+throughout), and `docs/design/review-2026-09/{findings,directions,slop-checklist,inventory,unasked}.md`
+and `mocks/` (the live design authority).
+
+**C. This file itself — 2,959 lines.** §1 "Active" holds ~1,600 lines of
+items that shipped weeks ago (MCP-1 → MCP-2c, NEWS-6/7, PIPE-1/2/3, OPS-1, the
+ACTIVE-1/2/3 records, the trigger sweeps), and the "Last reviewed" header has
+become a 100-line changelog. **Move shipped items to §3** (or to
+`docs/archive/open-items-2026.md`) and cut the header to the latest review.
+§0 + §1 should fit on a screen.
+
+**D. Dead code:**
+- `mcp/{feeds,liveScores,news,results}.js` each export a `reset*Cache()` that
+  nothing calls, tests included. Either delete them or wire them into the test
+  suites that would want them.
+- `src/utils/recommendations.js` → `assetGivability` (line 193): exported,
+  called nowhere.
+- **Not dead:** `MY_USERNAME` / `MY_TEAM_NAME` in `constants.js`, which are
+  documented as the original-owner reference (Feature 18).
+
+**E. Skill drift (stale facts, not history):**
+- `dynastyedge-change-control` §3 still has a row reading *"No bottom nav;
+  navigation is the side drawer"*. Dead since DESIGN-3 (2026-09-11). It also
+  calls CLAUDE.md "~108KB" (it is 468KB).
+- `dynastyedge-docs-and-writing` repeats "~108 KB" and a section map from
+  2026-07-06.
+- `dynastyedge-build-and-env:146` lists `POS_BAR`, deleted with the
+  positional bars.
+- `dynastyedge-model-quality-campaign/scripts/{loader,reg}.mjs` are
+  **byte-identical** copies of the diagnostics skill's hook. Point the campaign
+  at the canonical one. `mcp/{loader,register}.mjs` is a **deliberate** copy
+  (a runnable server must not depend on `.claude/skills/`) — leave it.
+
+**F. Assets:** `public/FantasyPros_2026_Rookies_OP_Rankings.csv` (176KB) is
+still read by the Draft Board. It is the 2026 class's column and goes stale
+the moment a 2027 board matters. Leave it until it is replaced (§0's
+trigger list). Everything else in `public/` is live.
+
+**Keep, explicitly:** all 13 `scripts/dev/*.mjs`. They look unreferenced to
+an import scan, but each reproduces a measurement a memo or a shipped constant
+rests on.
+
+**Gates:** doc moves are `docs:` commits. The dead-code removal is behaviour
+class and needs lint + test + build. The test count must not move; it is
+808 / 765 today.
+
+### CLEANUP-2 — slim CLAUDE.md **[executes as §0 #6]**
+
+**7,064 lines, 468KB, read in full at the start of every session.** By
+section: Features 2,396 · The MCP Server 1,438 · Design System 880 · Data
+Sources 761 · File Structure 578 · Navigation 207 · Rules 177 · Navigation
+Refactor 144 (a completed plan kept as history).
+
+**The bulk is measurement narrative, not rules.** Examples: the `npm ci`
+block's re-measure log of every test-count pair since July (~150 lines), each
+MCP tool's "measured live" paragraph, the trade engine's dated rulings, and the
+Navigation Refactor plan.
+
+**Proposal:** CLAUDE.md keeps every rule, contract, invariant and the one-line
+WHY for each. The dated evidence moves to `docs/history/` (per section), with
+a pointer at each cut. **Target ≤ ~2,000 lines.**
+
+**Risk:** this is the doc of record. A rule cut by accident is a rule the next
+session breaks. So the PR must list every rule-bearing sentence it removed and
+where that sentence now lives, and the owner reviews it before merge.
+**Done when:** a fresh session following only the slimmed CLAUDE.md passes the
+same gates and finds every contract it needs.
+
 
 ### MCP-1 — MCP server phase 1 **SHIPPED 2026-09-19**
 
@@ -811,6 +956,10 @@ look — see VALUE-1.
 
 ### PIPE-3 — DynastyProcess coverage fell 485 → 344 **CLOSED 2026-09-25 — upstream, no code change**
 
+**Confirmed 2026-10-06:** DynastyProcess reads **654** on every column from
+10-02 to 10-06, above the 485 it started from, with FantasyCalc (~395) and KTC
+(460) flat. Board depth moves both ways, exactly as diagnosed.
+
 **Symptom.** `values-consensus.json`'s DynastyProcess column read 485 players
 on 09-22/23/24, then 344 on 09-25. FantasyCalc (395) and KTC (460) were flat.
 The source-health alarm stayed quiet, as designed, because the column was not
@@ -1043,6 +1192,12 @@ to re-measure: 2026-09-29.** Read `depthHours` (not `spanHours`, not
 `playerItems`). If it is near 168h, the claim is met. If the cap has pinned
 again below 168h, correct CLAUDE.md's 7-day line to the measured depth rather
 than raising the cap a third time on the same argument.
+
+**Read 2026-10-06 (a week past the trigger, live feed):** `depthHours` **140**,
+`spanHours` 167, `playerItems` **595 / 1200**, 269 distinct players, all ten
+sources at `sourceMisses: 0`. The cap has **not** pinned again; depth is still
+climbing toward 168h. Close this item with one more read around 2026-10-10
+(§0 #12).
 
 ### NEWS-5 — the news cron is delivered at ~7.4 runs/day, not 48
 
