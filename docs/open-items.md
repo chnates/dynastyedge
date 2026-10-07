@@ -4,7 +4,7 @@
 dated snapshot: unlike the old dated status snapshots (now in `docs/archive/`), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-10-07 (**§0 #10 recording shipped** — the briefing ledger records The Edge's five checkable claims daily; scoring pre-registered, first pass #10b on or after 2026-12-15; tests 947 / 904, gap 43. Before that, **§0 #9 done** — the weekly brief is live; close-out added one-pickup-per-position and IR capacity. Before that, **§0 #8 done** — proactive delivery note; owner chose option E (a scheduled Claude routine, phone push, Tuesday evening ET); #9 approved and next. Earlier: **CODE-REVIEW-1 DONE** — 16 fixes, PRs #79–#94, tests 902 / 859, gap 43; **§0 #7 first pass done** — buy-low timing measured, no app change, re-run #7b from 2026-11-06; the ±50 trend rule given one home in `src/utils/marketTrend.js` (#75); `values-consensus.json` made the one permanent home of daily values, unbroken from 2026-07-09 (#77); **CODE-REVIEW-1 added as #7c, next in line**. Tests 841 / 798, gap 43. Earlier: **CLEANUP-3 added** — owner-approved dedupe of CLAUDE.md, triggered after §0 #12; spec + kickoff prompt in §2. **CLEANUP-2 done** — CLAUDE.md slimmed 7,123 → 3,586 lines, 482KB → 229KB, every rule kept and the dated evidence moved verbatim to `docs/history/`; on the owner's review before merge. It missed its ~2,000-line target — see §3. Previously the same day: CLEANUP-1 executed and OPEN-3 shipped. Tests 828 / 785 with no `node_modules`, gap 43.)
+**Last reviewed:** 2026-10-07 (**AGENT-1 added** — owner asked for a feasibility study of an AI agent for league tasks and research; recorded in §0's trigger table and §2, nothing built. Before that, **§0 #10 recording shipped** — the briefing ledger records The Edge's five checkable claims daily; scoring pre-registered, first pass #10b on or after 2026-12-15; tests 947 / 904, gap 43. Before that, **§0 #9 done** — the weekly brief is live; close-out added one-pickup-per-position and IR capacity. Before that, **§0 #8 done** — proactive delivery note; owner chose option E (a scheduled Claude routine, phone push, Tuesday evening ET); #9 approved and next. Earlier: **CODE-REVIEW-1 DONE** — 16 fixes, PRs #79–#94, tests 902 / 859, gap 43; **§0 #7 first pass done** — buy-low timing measured, no app change, re-run #7b from 2026-11-06; the ±50 trend rule given one home in `src/utils/marketTrend.js` (#75); `values-consensus.json` made the one permanent home of daily values, unbroken from 2026-07-09 (#77); **CODE-REVIEW-1 added as #7c, next in line**. Tests 841 / 798, gap 43. Earlier: **CLEANUP-3 added** — owner-approved dedupe of CLAUDE.md, triggered after §0 #12; spec + kickoff prompt in §2. **CLEANUP-2 done** — CLAUDE.md slimmed 7,123 → 3,586 lines, 482KB → 229KB, every rule kept and the dated evidence moved verbatim to `docs/history/`; on the owner's review before merge. It missed its ~2,000-line target — see §3. Previously the same day: CLEANUP-1 executed and OPEN-3 shipped. Tests 828 / 785 with no `node_modules`, gap 43.)
 
 **How to use it:**
 - Each item states its **trigger** — the condition that makes it ready. An item
@@ -94,6 +94,7 @@ login, a phone or a decision that no sandbox can supply.
 | MCP connector re-check | After any new MCP tool deploys |
 | Replace `public/FantasyPros_2026_Rookies_OP_Rankings.csv` | When a 2027 rookie ranking exists (CLEANUP-1 §F, archived) |
 | **CLEANUP-3** — dedupe CLAUDE.md (one home per rule; target ~185KB) | After §0 #12, in a quiet week. Spec + kickoff prompt: §2 CLEANUP-3 |
+| **AGENT-1** — feasibility study: an AI agent that automates DynastyEdge tasks and research **[owner ask required]** | The owner says go. Study only — no build. Scope + questions: §2 AGENT-1 |
 
 ### Deliberately NOT doing (settled — do not reopen)
 
@@ -202,6 +203,50 @@ Close CLEANUP-3 in open-items as part of the PR.
 ```
 
 ---
+
+### AGENT-1 — feasibility study: an AI agent for league tasks and research **[owner ask required; added 2026-10-07]**
+
+**Status:** recorded, not started. **Trigger:** the owner says go. The
+deliverable is a **feasibility note** in `docs/analysis/`, not a build —
+anything it recommends building comes back as its own item, with its own
+sign-off.
+
+**The question.** Could an AI agent take recurring DynastyEdge work off the
+owner's plate — watching the league, doing research, preparing decisions — and
+which jobs are worth it? "Agent" here means something that runs a multi-step
+job on its own (reads data, reasons, reports back), not a chat answer.
+
+**What already exists, so the study starts from it rather than from zero:**
+- **The MCP server** (13 tools) is already the agent's hands — live league
+  data and the app's own analysis, behind OAuth, read-only.
+- **The scheduled brief (§0 #9)** is already a small agent: a Claude routine on
+  a timer that calls the connector and pushes a summary to the phone. The study
+  asks what lies beyond it, not how to rebuild it.
+- **The proactive-delivery note** (`docs/analysis/proactive-delivery-2026-10.md`)
+  already compared the delivery channels; reuse it.
+
+**What the study should answer:**
+1. **Which jobs.** A shortlist of candidate tasks (e.g. weekly waiver/FAAB
+   prep, pre-deadline trade scouting, injury/news watch before kickoff,
+   offseason rookie research, monitoring the data pipelines), each scored on
+   value to the owner, how often it recurs, and whether a wrong answer is
+   cheap or costly.
+2. **What it can and can't do.** Sleeper is read-only — an agent can recommend,
+   never set a lineup, place a claim or send a trade. Say plainly which tasks
+   survive that limit.
+3. **Where it runs, and what it costs.** Scheduled Claude routines vs GitHub
+   Actions vs something else — weighed against the standing constraints (one
+   user, $0, zero ops; the app itself never grows a backend).
+4. **How it stays honest.** Every answer carries its data's age; a stale or
+   failed source is said out loud, never papered over. How would an agent's
+   advice be scored, the way the briefing ledger (§0 #10) scores The Edge?
+5. **Security.** It works through the existing OAuth connector; nothing gets a
+   new credential, and nothing widens the MCP server's single-account lock.
+6. **A recommendation** — build one job first, several, or none — with the
+   reasons in plain English.
+
+**Not in scope:** anything that writes to Sleeper; multi-league (a settled
+non-goal); push notifications for trade offers (settled — no backend, no data).
 
 ### PHASE-4BCD — the valuation consensus, still to build (spec lifted from `build-plan-2026-09.md` §10)
 
