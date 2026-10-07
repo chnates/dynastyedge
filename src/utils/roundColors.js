@@ -38,4 +38,4 @@ export const ROUND_TEXT = {
   4: 'text-text-tertiary',
 }
 
-export const ROUND_LABELS = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th' }
+// Round LABELS live in pickCapital.js (roundSuffix) — one home for the text.

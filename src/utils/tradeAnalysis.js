@@ -5,6 +5,7 @@ import { buildRosterSpace } from './rosterSpace'
 import { sideVorp } from './positionalValue'
 import { projectPlayerSeries, seriesDirection } from './dynastyTrajectory'
 import { buildFairBand } from './fairBand'
+import { pickRoundLabel } from './pickCapital'
 import { buildGivabilityContext, assetKeepScore, getDeficitPositions, joinAnd, PROTECT_THRESHOLD } from './recommendations'
 // Re-exported so existing importers of the Analyzer's fair band keep working.
 export { buildFairBand, FAIR_BAND_PCT } from './fairBand'
@@ -25,7 +26,6 @@ const SCARCITY_GAP = 10
 // package builder to prefer the candidate their roster likes most.
 const APPEAL_RANK = { Weak: 0, Fair: 1, Strong: 2 }
 
-const PICK_SUFFIXES = ['', '1st', '2nd', '3rd', '4th']
 
 // Normalize a trade asset into the player shape the lineup sim expects. An
 // arriving player can never land on taxi or IR, so both are false by definition.
@@ -34,10 +34,7 @@ const addAsPlayer = a => ({
   value: a.value || 0, age: a.age, unranked: a.unranked, isIR: false, isTaxi: false,
 })
 
-function pickLabel(pick) {
-  const suffix = PICK_SUFFIXES[pick.round] ?? `R${pick.round}`
-  return `${pick.season} ${suffix}`
-}
+const pickLabel = pickRoundLabel
 
 // The positional pecking order on a roster by dynasty value, grouped by the
 // positions in play, marking the piece(s) this trade moves. Shared by BOTH

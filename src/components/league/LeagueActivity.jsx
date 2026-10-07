@@ -3,7 +3,7 @@ import { useLeagueContext } from '../../context/LeagueContext'
 import { useTransactions } from '../../hooks/useTransactions'
 import { usePlayerDB } from '../../hooks/usePlayerDB'
 import { getTeamName } from '../../hooks/useLeague'
-import { findPickValue, buildDraftPickIndex, buildGenericRoundValues } from '../../utils/pickCapital'
+import { findPickValue, buildDraftPickIndex, buildGenericRoundValues, roundSuffix } from '../../utils/pickCapital'
 import { hindsightGapIsMeaningful } from '../../utils/fairBand'
 import { useSleeperDraft } from '../../hooks/useSleeperDraft'
 import ErrorState from '../shared/ErrorState'
@@ -11,7 +11,6 @@ import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { Chip, Badge, Button, Card, cn, Loading } from '../ui'
 
 const PAGE_SIZE = 25
-const ROUND_SUFFIXES = ['', '1st', '2nd', '3rd', '4th', '5th']
 
 // Each move type carried a lucide glyph AND its label. The label already said
 // it, so only the label and its colour survive.
@@ -196,7 +195,7 @@ export default function LeagueActivity() {
   // FantasyCalc lists no picks whatsoever.
   const resolvePick = (pk, rosterId) => {
     const via = pk.roster_id !== rosterId ? ` (via ${teamName(pk.roster_id)})` : ''
-    const round = ROUND_SUFFIXES[pk.round] ?? `R${pk.round}`
+    const round = roundSuffix(pk.round) ?? `R${pk.round}`
     const base = `${pk.season} ${round}`
 
     const became = pickIndex[`${pk.season}-${pk.round}-${pk.roster_id}`]

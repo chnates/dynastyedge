@@ -1,4 +1,4 @@
-import { findPickValue, buildDraftPickIndex, buildGenericRoundValues } from './pickCapital'
+import { findPickValue, buildDraftPickIndex, buildGenericRoundValues, roundSuffix } from './pickCapital'
 import { noTradesLabel } from './leagueHistory'
 // Win / loss / even at ±5% of the larger side — the hindsight rule, shared with
 // League › Activity (deliberately NOT the Analyzer's fair band; see fairBand.js).
@@ -16,7 +16,6 @@ import { hindsightResult } from './fairBand'
 // the pick. FAAB dollars are tracked but count 0 toward trade value, same
 // convention as League › Activity.
 
-const ROUND_LABELS = ['', '1st', '2nd', '3rd', '4th', '5th']
 const STARTUP_ROUNDS = 6       // drafts longer than this are startup drafts
 // A drafted player worth this today is a "hit" — starter-caliber dynasty
 // value. Exported because the Draft Tracker's recap grades the same picks
@@ -180,7 +179,7 @@ function makeResolvers(playerMap, playerDB, pickEntries, pickIndex) {
 
   function pickAsset(pk) {
     const season = String(pk.season)
-    const roundLabel = ROUND_LABELS[pk.round] ?? `R${pk.round}`
+    const roundLabel = roundSuffix(pk.round) ?? `R${pk.round}`
     const pickKey = `${season}-${pk.round}-${pk.roster_id}`
     const resolved = pickIndex[pickKey]
     if (resolved) {

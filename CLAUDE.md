@@ -2701,8 +2701,11 @@ Roster Analysis lanes (`POS_SVG`), and `POS_TAG` tags.
 
 ### Pick round colors (consistent across entire app)
 
-`src/utils/roundColors.js` (`ROUND_CLASSES`, `ROUND_TEXT`, `ROUND_LABELS`),
-shared by PickBadge and TeamCard — never redefined locally. **A round is
+`src/utils/roundColors.js` (`ROUND_CLASSES`, `ROUND_TEXT`), shared by PickBadge
+and TeamCard — never redefined locally. **The round's TEXT ("1st"…) is
+`roundSuffix` / `pickRoundLabel` in `utils/pickCapital.js`** — one home for every
+screen and for the FantasyCalc lookup that matches on it (it was eight copies,
+half ending at "4th"; `tests/pickCapital.test.mjs` scans for a ninth). **A round is
 ORDINAL, so the encoding is an INK-DENSITY RAMP, built only from existing
 tokens** (it inverts by construction and spends no hue — the position colours
 stay the only colour world on a roster screen).
@@ -3165,7 +3168,7 @@ dynastyedge/
 │   │   ├── fairBand.js          ← THE definition of "fair" (±5%), shared by the Analyzer's verdict and every surface that PREDICTS it; PLUS the separate, symmetric hindsight rule (ledger W-L-E + Activity's bigger haul)
 │   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation; teamDirection = THE team cut-offs (−1% / +5%)
 │   │   ├── seasonWindow.js      ← THE "has the rookie draft happened yet?" resolver — the live pick window + which draft the Tracker shows (replaced the hand-rolled PICK_YEARS)
-│   │   ├── pickCapital.js       ← pick ownership (year weights relative to the window, never literal years) + THE spent-pick ladder shared by Activity and the ledger (buildDraftPickIndex, buildGenericRoundValues)
+│   │   ├── pickCapital.js       ← pick ownership (year weights relative to the window, never literal years) + THE spent-pick ladder shared by Activity and the ledger (buildDraftPickIndex, buildGenericRoundValues) + THE round label (roundSuffix, pickRoundLabel)
 │   │   ├── leagueHistory.js     ← THE history walk (chain, drafts list, season ledger) + ledgerCoverage — shared with mcp/history.js; a failure is named, never read as "never traded"
 │   │   ├── leagueResults.js     ← THE bracket reader: champion = w of the p:1 game, placements carry owner_id; pure, used by get_league_results
 │   │   ├── rookieAdp.js         ← derived rookie-class ADP for the Draft section + buildRookieMap, THE rookie-class rule (moved out of useSleeperRookies)
@@ -3203,7 +3206,7 @@ dynastyedge/
 │   ├── deadlineThresholds.test.mjs  ← BUYER_PCT / SELLER_PCT are the shipped 70% / 35%, read at both edges, AND a source scan that fails on a second copy
 │   ├── playoffOdds.test.mjs         ← fixed-seed determinism, Σ odds = playoff teams, thresholds; buildPlayoffOutlook's three states (posted-but-unplayed is ACTIVE)
 │   ├── seasonWindow.test.mjs        ← the draft-completion boundary (only `complete` rolls a season; auctions never count); Tracker selection; no NFL state → seed
-│   ├── pickCapital.test.mjs         ← ownership, round medians, year weights BY DISTANCE (a rolled year never scores 0), the spent-pick ladder
+│   ├── pickCapital.test.mjs         ← ownership, round medians, year weights BY DISTANCE (a rolled year never scores 0), the spent-pick ladder, the round label AND a scan for a copy
 │   ├── pickTrades.test.mjs          ← slot tiers (as coded), slot pricing fallback, package constraints
 │   ├── fairBand.test.mjs            ← the two "even" rules: hindsight ±5% of the larger side, symmetric from both seats (and the fair band shown NOT to be), Activity = ledger, AND a scan for a copy
 │   ├── faabBid.test.mjs             ← the FAAB bid: budget read (none → no bid), current remainder, same % at $100/$1000, every tier, $2/$1 floor + waiver_bid_min, week scaling, the cap, null for DEF/unpriced, shared pickup context
@@ -3269,8 +3272,8 @@ because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
 **Current counts (verified 2026-10-07 by moving `node_modules` aside):** with
-dependencies **`# tests 878 / # pass 878`**; without them **`# tests 835 / #
-pass 830 / # fail 5`**. **If the test count isn't 878, run `npm ci` before
+dependencies **`# tests 881 / # pass 881`**; without them **`# tests 838 / #
+pass 833 / # fail 5`**. **If the test count isn't 881, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React
