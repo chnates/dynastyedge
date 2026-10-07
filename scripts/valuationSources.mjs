@@ -250,3 +250,92 @@ export function mergeConsensusColumn({
 
   return { updatedAt: new Date().toISOString(), dates, sources }
 }
+
+// --- carrying the rolling FantasyCalc file into the permanent archive -------
+//
+// values-history.json (the phone's sparkline file) keeps a rolling 90 days and
+// deletes its oldest day every morning. This archive started 2026-09-22, so
+// until 2026-10-07 the 2026-07-09 … 09-21 daily FantasyCalc values lived ONLY
+// in the rolling file and were being lost one per day. Both files hold the
+// same FantasyCalc read (identical on all 5,924 overlapping cells, measured
+// 2026-10-07), so the archive is their one permanent home:
+//
+//   - a day the rolling file has and the archive lacks is ADDED as a
+//     FantasyCalc-only column — the other sources were not observed that day,
+//     so they are null with asOf/coverage null, never 0;
+//   - a day the archive has but whose FantasyCalc read FAILED (coverage null)
+//     is HEALED from the rolling file;
+//   - a day the archive already observed is never touched — on a
+//     disagreement the archive wins, and the count is reported.
+//
+// Run every night, so it is the one-time backfill AND a standing guard: no day
+// the rolling file ever held can be lost by the rolling window again. Players
+// only — the rolling file still carries draft-pick rows (non-numeric ids)
+// from before the 2026-09-21 classifier fix, and those never enter.
+export function backfillFantasyCalc(archive, history) {
+  const prevDates = Array.isArray(archive?.dates) ? archive.dates : []
+  const prevSources = archive?.sources ?? {}
+  const hDates = Array.isArray(history?.dates) ? history.dates : []
+  const hPlayers = Object.fromEntries(
+    Object.entries(history?.players ?? {}).filter(([sid]) => /^\d+$/.test(sid))
+  )
+  const result = { added: [], healed: [], conflicts: 0 }
+  if (!hDates.length) return { archive, ...result }
+
+  const prevIdx = new Map(prevDates.map((d, i) => [d, i]))
+  const hIdx = new Map(hDates.map((d, i) => [d, i]))
+  const dates = [...new Set([...prevDates, ...hDates])].sort()
+  const fcHealthy = d => prevIdx.has(d) && prevSources.fantasycalc?.coverage?.[prevIdx.get(d)] != null
+
+  const tracked = new Set(Object.keys(hPlayers))
+  for (const key of SOURCE_KEYS) {
+    for (const sid of Object.keys(prevSources[key]?.players ?? {})) tracked.add(sid)
+  }
+
+  const sources = {}
+  for (const key of SOURCE_KEYS) {
+    const prev = prevSources[key] ?? {}
+    const players = {}
+    for (const sid of tracked) {
+      const prevSeries = prev.players?.[sid]
+      players[sid] = dates.map(d => {
+        const archived = prevIdx.has(d) ? (prevSeries?.[prevIdx.get(d)] ?? null) : null
+        if (key !== 'fantasycalc' || fcHealthy(d) || !hIdx.has(d)) {
+          if (key === 'fantasycalc' && fcHealthy(d) && hIdx.has(d)) {
+            const rolling = hPlayers[sid]?.[hIdx.get(d)] ?? null
+            if (archived != null && rolling != null && archived !== rolling) result.conflicts++
+          }
+          return archived
+        }
+        return hPlayers[sid]?.[hIdx.get(d)] ?? null
+      })
+    }
+    sources[key] = {
+      asOf: dates.map(d => (prevIdx.has(d) ? (prev.asOf?.[prevIdx.get(d)] ?? null) : null)),
+      coverage: dates.map(d => {
+        if (key === 'fantasycalc' && !fcHealthy(d) && hIdx.has(d)) {
+          return Object.values(hPlayers).filter(s => s[hIdx.get(d)] != null).length
+        }
+        return prevIdx.has(d) ? (prev.coverage?.[prevIdx.get(d)] ?? null) : null
+      }),
+      players,
+    }
+  }
+
+  // A row no source ever observed (a rolling-file player whose only values
+  // fall on days the archive already holds) is not worth carrying.
+  for (const sid of tracked) {
+    if (SOURCE_KEYS.every(key => sources[key].players[sid].every(v => v == null))) {
+      for (const key of SOURCE_KEYS) delete sources[key].players[sid]
+    }
+  }
+
+  for (const d of hDates) {
+    if (!prevIdx.has(d)) result.added.push(d)
+    else if (!fcHealthy(d)) result.healed.push(d)
+  }
+  return {
+    archive: { updatedAt: archive?.updatedAt ?? null, dates, sources },
+    ...result,
+  }
+}

@@ -26,7 +26,7 @@ import { gzipSync } from 'node:zlib'
 import {
   splitFantasyCalcEntries, parseCSV, buildCrosswalk,
   readDynastyProcess, extractKtcPlayers, readKeepTradeCut,
-  mergeConsensusColumn, SOURCE_KEYS,
+  mergeConsensusColumn, backfillFantasyCalc, SOURCE_KEYS,
 } from './valuationSources.mjs'
 
 const FANTASYCALC_URL =
@@ -38,6 +38,10 @@ const DYNASTYPROCESS_URL =
 const KEEPTRADECUT_URL = 'https://keeptradecut.com/dynasty-rankings'
 const ARCHIVE_URL =
   'https://raw.githubusercontent.com/chnates/dynastyedge/values-history/values-consensus.json'
+// The PUBLISHED rolling file — still yesterday's at this point in the run, so
+// it still holds the day that today's snapshot-values.mjs trims off.
+const ROLLING_URL =
+  'https://raw.githubusercontent.com/chnates/dynastyedge/values-history/values-history.json'
 
 const MAX_PLAYERS = 500        // per source, by its own value — a safety bound,
                                // not a policy (largest source lists ~485 today)
@@ -146,6 +150,22 @@ try {
     console.error(`Could not load existing archive (${err.message}) — aborting to avoid data loss`)
     process.exit(1)
   }
+}
+
+// --- carry the rolling file's days into the archive -------------------------
+// Best-effort: an unreadable rolling file skips the backfill and costs nothing
+// (tomorrow's run tries again, and the rolling file holds a day for 90 days).
+const rolling = await attempt('rolling values-history', () => get(ROLLING_URL, 'application/json'))
+if (rolling && Array.isArray(rolling.dates) && rolling.players) {
+  const filled = backfillFantasyCalc(archive, rolling)
+  archive = filled.archive
+  console.log(
+    `  backfill from the rolling file: ${filled.added.length} day(s) added` +
+    (filled.added.length ? ` (${filled.added[0]} … ${filled.added.at(-1)})` : '') +
+    `, ${filled.healed.length} healed, ${filled.conflicts} disagreeing cell(s) left as archived`
+  )
+} else if (rolling) {
+  console.error('  rolling values-history has an unexpected shape — backfill skipped')
 }
 
 const date = new Date().toISOString().slice(0, 10)   // 'YYYY-MM-DD' (UTC)
