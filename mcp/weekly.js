@@ -38,11 +38,11 @@
 // `home_team`/`away_team`. BOTH mistakes fail SILENTLY — the wrong base 404s
 // and the wrong field names simply yield "no games", which reads as "every
 // team is on bye" and kills bye detection outright. That is why this file
-// imports SLEEPER_ROOT explicitly and why parseByeTeams below is a verbatim
-// copy of the app's, right down to the field names.
+// imports SLEEPER_ROOT explicitly, and why it reads byes with the app's own
+// parseByeTeams (src/utils/projections.js) rather than a copy.
 
 import { SLEEPER_BASE, SLEEPER_ROOT } from '../src/constants.js'
-import { parseLockedTeams } from '../src/utils/projections.js'
+import { parseByeTeams, parseLockedTeams } from '../src/utils/projections.js'
 import { createFetcher } from './limit.js'
 import { stampSource } from './snapshot.js'
 import { memoryStore, loadSource } from './store.js'
@@ -62,13 +62,10 @@ export function resetWeeklyCache() {
   return defaultStore.clear()
 }
 
-// Teams with a game this week — everyone else is on bye. Mirrors
-// useLineupData's parseByeTeams exactly, including the `home`/`away` fields.
-//
-// An EMPTY set is meaningful and must be preserved: getAvailability only
-// treats a player as on bye when `playingTeams.size > 0`, so a failed schedule
-// fetch degrades to "we cannot know who is on bye" rather than inventing a
-// league-wide bye week.
+// The bye reader lives in src/utils/projections.js beside parseLockedTeams,
+// shared with the app; re-exported for existing importers.
+export { parseByeTeams }
+
 // team → this week's game status, straight off the schedule payload. The same
 // fetch that yields byes yields locks; `status` was simply being thrown away.
 export function parseGameStatus(schedule, week) {
@@ -80,16 +77,6 @@ export function parseGameStatus(schedule, week) {
     if (g.away) byTeam[g.away] = status
   })
   return byTeam
-}
-
-export function parseByeTeams(schedule, week) {
-  const games = Array.isArray(schedule) ? schedule.filter(g => g.week === week) : []
-  const playing = new Set()
-  games.forEach(g => {
-    if (g.home) playing.add(g.home)
-    if (g.away) playing.add(g.away)
-  })
-  return playing
 }
 
 // The freshness policy — including the stale-on-failure fallback that used to

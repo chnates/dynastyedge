@@ -872,7 +872,7 @@ Analyzer: `analyzeTrade` → `getTradeVerdict` → `adjustVerdictForInjuries` �
 - **IN-SEASON ONLY:** the offseason returns `ok: false`, `unavailable: true`,
   `reason: 'offseason'` — **no summary, no moves, no zeros.** A failed fetch is
   `reason: 'projections-unavailable'`.
-- **The schedule traps** (off `/v1`, `home`/`away`) live in `weekly.js`, pinned
+- **The schedule traps** (off `/v1`, `home`/`away`) live in `weekly.js` (the base URL) and **`parseByeTeams` in `src/utils/projections.js`** — one bye reader shared with the app's Optimizer, never a copy; pinned
   by `tests/mcpWeekly.test.mjs`. **An empty `playingTeams` means "byes
   unknown", never "everyone on bye".**
 - **A must-fix carries NO confidence** (`null`, passed through).
@@ -3185,7 +3185,7 @@ dynastyedge/
 │   │   ├── freeAgents.js        ← THE waiver-options list (never gated on FantasyCalc; TEAM_* guard) AND the dynasty FA pool, which can never return a defense
 │   │   ├── lineupHistory.js     ← optimal-lineup POINTS math for efficiency review (delegates to lineupBuild)
 │   │   ├── playoffOdds.js       ← scoring model + Monte Carlo + deadline verdict (THE buyer/seller cut-offs: BUYER_PCT / SELLER_PCT); buildPlayoffOutlook is THE composition (the hook keeps only the memo)
-│   │   └── projections.js       ← lineup optimization, matchup quality
+│   │   └── projections.js       ← lineup optimization, matchup quality; THE schedule readers (parseByeTeams, parseLockedTeams) shared with mcp/weekly.js
 │   ├── context/
 │   │   └── LeagueContext.jsx
 │   ├── navigation.js            ← THE navigation map — one tree read by TabBar, SectionContents, IndexView and global search
@@ -3202,7 +3202,7 @@ dynastyedge/
 │   │   └── draft-2025.json          ← this league's REAL 2025 rookie draft (board, 40 picks, 24 traded picks) — replayed by truncation to synthesize every mid-draft state
 │   ├── draftLive.test.mjs           ← draft live path on the real 2025 draft: order (both tiers), clock/countdown at every pick, Best Available, capital; recap VOE sums to zero, volume never earns a grade, unpriced class = no grade
 │   ├── sleeperDraft.test.mjs        ← mocked-fetch: single-draft endpoint merged over the list (slot_to_roster_id), session cache, best-effort sub-fetch degradation
-│   ├── projections.test.mjs         ← lineup engine inputs: defense rankings via player DB + schedule, home/away, Week-1 empty stats, flags
+│   ├── projections.test.mjs         ← lineup engine inputs: defense rankings via player DB + schedule, home/away, Week-1 empty stats, flags; parseByeTeams AND a scan for a second bye reader
 │   ├── deadlineThresholds.test.mjs  ← BUYER_PCT / SELLER_PCT are the shipped 70% / 35%, read at both edges, AND a source scan that fails on a second copy
 │   ├── playoffOdds.test.mjs         ← fixed-seed determinism, Σ odds = playoff teams, thresholds; buildPlayoffOutlook's three states (posted-but-unplayed is ACTIVE)
 │   ├── seasonWindow.test.mjs        ← the draft-completion boundary (only `complete` rolls a season; auctions never count); Tracker selection; no NFL state → seed
@@ -3272,8 +3272,8 @@ because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
 **Current counts (verified 2026-10-07 by moving `node_modules` aside):** with
-dependencies **`# tests 881 / # pass 881`**; without them **`# tests 838 / #
-pass 833 / # fail 5`**. **If the test count isn't 881, run `npm ci` before
+dependencies **`# tests 883 / # pass 883`**; without them **`# tests 840 / #
+pass 835 / # fail 5`**. **If the test count isn't 883, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React

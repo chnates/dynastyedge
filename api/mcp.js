@@ -136,6 +136,15 @@ function getProjPts(sleeperId, projMap) {
   if (!projMap || !sleeperId) return 0;
   return projMap[sleeperId]?.pts_half_ppr ?? 0;
 }
+function parseByeTeams(schedule, week) {
+  const playing = /* @__PURE__ */ new Set();
+  (Array.isArray(schedule) ? schedule : []).forEach((g) => {
+    if (g.week !== week) return;
+    if (g.home) playing.add(g.home);
+    if (g.away) playing.add(g.away);
+  });
+  return playing;
+}
 function parseLockedTeams(schedule, week) {
   const locked = /* @__PURE__ */ new Set();
   (Array.isArray(schedule) ? schedule : []).forEach((g) => {
@@ -832,15 +841,6 @@ function parseGameStatus(schedule, week) {
     if (g.away) byTeam[g.away] = status;
   });
   return byTeam;
-}
-function parseByeTeams(schedule, week) {
-  const games = Array.isArray(schedule) ? schedule.filter((g) => g.week === week) : [];
-  const playing = /* @__PURE__ */ new Set();
-  games.forEach((g) => {
-    if (g.home) playing.add(g.home);
-    if (g.away) playing.add(g.away);
-  });
-  return playing;
 }
 async function getWeekly({
   nflState,

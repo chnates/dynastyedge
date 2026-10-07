@@ -19,6 +19,25 @@ export function buildOpponentMap(schedule, week) {
   return opp
 }
 
+// Teams with a game this week — everyone else is on bye. THE one bye reader,
+// shared by the Optimizer (useLineupData) and the MCP server (mcp/weekly.js);
+// until 2026-10-07 it was a "verbatim copy" in each (CODE-REVIEW-1 #8).
+// Sleeper's schedule fields are `home` / `away`, NOT `home_team` / `away_team`
+// — the wrong names yield no games at all, silently.
+//
+// An EMPTY set is meaningful and must be preserved: getAvailability treats a
+// player as on bye only when `playingTeams.size > 0`, so a failed schedule
+// fetch reads as "byes unknown", never "every team is on bye".
+export function parseByeTeams(schedule, week) {
+  const playing = new Set()
+  ;(Array.isArray(schedule) ? schedule : []).forEach(g => {
+    if (g.week !== week) return
+    if (g.home) playing.add(g.home)
+    if (g.away) playing.add(g.away)
+  })
+  return playing
+}
+
 // Teams whose game this week has already kicked off — Sleeper LOCKS a player
 // the moment his game starts, so nobody on these teams can be moved into or
 // out of a lineup any more, whatever his projection or injury status now says.

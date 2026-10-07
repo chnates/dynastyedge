@@ -348,6 +348,10 @@ OPEN-3, the FAAB bid recommender (2026-10-07), moved both by the same 20
 imports only `src/utils` and the shared fixture, and the three new
 `mcpRecommendFreeAgents` tests reach neither React nor `zod`.
 
+The bye-reader one-home fix (2026-10-07, CODE-REVIEW-1 #8) moved both by the
+same 2 (881/838 → **883/840**), the gap holding at 43: both cases sit in
+`projections.test.mjs`.
+
 The round-label one-home fix (2026-10-07, CODE-REVIEW-1 #7) moved both by the
 same 3 (878/835 → **881/838**), the gap holding at 43: the new cases sit in
 `pickCapital.test.mjs`, which imports only pure utils and `node:fs`.
