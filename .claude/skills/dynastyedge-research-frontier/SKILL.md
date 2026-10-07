@@ -348,7 +348,29 @@ the item with evidence.
 
 ## Item 4 — Timing intelligence: do buy-low windows actually pay?
 
-**Status: open.**
+**Status: MEASURED ONCE 2026-10-07 — no detectable signal for the players the
+app surfaces; re-run on or after 2026-11-06.** Full write-up:
+`docs/analysis/buylow-timing-2026-10.md`; re-run with
+`node scripts/dev/buylow-timing-backtest.mjs` (`--frozen` reproduces it). One
+30-day window (events 08-08 → 09-06), matched same-position, same-tier,
+same-date null:
+- **Value ≥ 1000 (what Buy-Low / Sell-High show):** dips **+2.4%** vs matched
+  non-movers (CI −0.1 … +4.9, n 144); rises **−2.3%** (CI −4.8 … +0.3, n 161).
+  Not falling knives; no reliable bounce either. The one clean cell: dips worth
+  1000–2999 **+4.2%** (CI +1.1 … +7.4, n 106).
+- **Age makes no difference** in that population (pre-peak +1.6% vs post-peak
+  +2.1%). The pre-registered age contrast fired the "wrong" way, but it is an
+  artefact of % returns on players worth < 100 points — **register a median or
+  points statistic beside the mean** whenever near-zero values are in scope.
+- **All values:** risers give back (−15.6%, CI −23.1 … −8.5, survives date
+  resampling), mostly cheap players and rookies.
+- **+60 days was infeasible** (90-day file). Solved without a workflow change:
+  `values-consensus.json` already holds a permanent daily FantasyCalc column
+  (identical on all 5,924 overlap cells) and the 07-09 … 09-21 gap is frozen in
+  `docs/analysis/data/`. The merged series grows one day per day.
+- **No app change** — one window, and standing rule 1 forbids re-ranking on one.
+
+The original framing follows.
 
 **Problem.** The entire buy-low/sell-high apparatus (Market Movers, The
 Edge's briefing items, `computeEdgeSignals`) rests on one untested premise:
