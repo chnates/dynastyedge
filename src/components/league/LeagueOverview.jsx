@@ -13,6 +13,7 @@ import { TIER_BADGE, TIER_TEXT } from '../../utils/tierColors'
 import { rankClass } from '../../utils/rankColors'
 import TeamAvatar from '../shared/TeamAvatar'
 import { Chip, Badge, Magnitude, MAGNITUDE_REFERENCE, PositionBand, Row, RuledList, cn, Loading } from '../ui'
+import { STORAGE_KEYS } from '../../storageKeys'
 
 const SORT_OPTIONS = [
   { id: 'value',  label: 'Overall Value' },
@@ -24,9 +25,9 @@ const SORT_OPTIONS = [
 const TIERS = ['Contending', 'Middle', 'Rebuilding']
 
 // Filters survive drill-down + back navigation via sessionStorage.
-const SORT_KEY = 'dynastyedge_league_sort'
-const POS_KEY = 'dynastyedge_league_pos'
-const TIER_KEY = 'dynastyedge_league_tier'
+const SORT_KEY = STORAGE_KEYS.leagueSort
+const POS_KEY = STORAGE_KEYS.leaguePos
+const TIER_KEY = STORAGE_KEYS.leagueTier
 
 function readSession(key, fallback) {
   try {

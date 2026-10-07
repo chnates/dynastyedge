@@ -3,7 +3,8 @@
 // between tabs and back doesn't reset the diff mid-coffee. The stored value
 // is bumped to "now" on that first read, so tomorrow's open diffs against
 // today's session.
-const KEY = 'dynastyedge_edge_last_visit'
+import { STORAGE_KEYS } from '../storageKeys'
+const KEY = STORAGE_KEYS.edgeLastVisit
 
 let sessionPrev // undefined until first read; null = first visit ever
 

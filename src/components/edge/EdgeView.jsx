@@ -28,6 +28,7 @@ import NewsArticleSheet from '../shared/NewsArticleSheet'
 import Sparkline from '../shared/Sparkline'
 import RosterActionItems from '../roster/RosterActionItems'
 import RosterAnalysisSheet from '../roster/RosterAnalysisSheet'
+import { STORAGE_KEYS } from '../../storageKeys'
 
 // The eyebrow that replaced the icon medallion. A briefing item was a tinted
 // lucide glyph in a rounded square beside a title and a one-line description —
@@ -516,7 +517,7 @@ export default function EdgeView() {
           <button
             key={tier}
             onClick={() => {
-              try { sessionStorage.setItem('dynastyedge_league_tier', tier) } catch { /* private mode */ }
+              try { sessionStorage.setItem(STORAGE_KEYS.leagueTier, tier) } catch { /* private mode */ }
               navigate('/league')
             }}
             className={`focus-ring px-2.5 py-1 font-body text-xs font-medium border press ${TIER_BADGE[tier]}`}

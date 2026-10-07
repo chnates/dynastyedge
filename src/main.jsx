@@ -2,9 +2,10 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import './index.css'
 import App from './App'
+import { STORAGE_KEYS } from './storageKeys'
 
 let storedTheme = null
-try { storedTheme = localStorage.getItem('dynastyedge_theme') }
+try { storedTheme = localStorage.getItem(STORAGE_KEYS.theme) }
 catch { /* storage blocked (private mode / DevTools) — fall back to dark */ }
 const html = document.documentElement
 if (storedTheme === 'light') {

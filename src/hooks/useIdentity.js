@@ -1,14 +1,14 @@
 import { useSyncExternalStore, useCallback } from 'react'
+import { STORAGE_KEYS, ROSTER_SCOPED_LOCAL, ROSTER_SCOPED_SESSION } from '../storageKeys'
 
-const KEY = 'dynastyedge_identity_v1'
+const KEY = STORAGE_KEYS.identity
 
 // Roster-specific on-device state. These are tied to *which* team you are, so
 // they must be wiped whenever the logged-in identity changes — otherwise a
 // teammate logging in on the same device would inherit your dismissed action
 // items or your half-built trade. League-wide caches (transactions, history,
 // draft) are not roster-specific and are left alone.
-const ROSTER_SCOPED_LOCAL = ['dynastyedge_action_dismissals']
-const ROSTER_SCOPED_SESSION = ['dynastyedge_trade_draft', 'dynastyedge_targets_team']
+// Which keys are roster-scoped is declared beside the keys (src/storageKeys.js).
 
 function clearRosterScoped() {
   try {

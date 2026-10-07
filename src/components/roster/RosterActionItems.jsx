@@ -5,8 +5,9 @@ import { suggestSellMove } from '../../utils/recommendations'
 import { isIrEligible } from '../../utils/injuryStatus'
 import { Button, Lede, Mark, PositionBand, RuledList } from '../ui'
 import { PICK_YEARS } from '../../constants'
+import { STORAGE_KEYS } from '../../storageKeys'
 
-const DISMISSAL_KEY = 'dynastyedge_action_dismissals'
+const DISMISSAL_KEY = STORAGE_KEYS.actionDismissals
 
 // "A", "A and B", "A, B and C" — the prose voice. An aggregated item names
 // every player it is about, so the sentence has to read like one.

@@ -21,8 +21,9 @@ import PartnerContextStrip from './PartnerContextStrip'
 import PartnerSelect, { buildPartnerOptions } from './PartnerSelect'
 import ErrorState from '../shared/ErrorState'
 import { Loading } from '../ui'
+import { STORAGE_KEYS } from '../../storageKeys'
 
-const DRAFT_KEY = 'dynastyedge_trade_draft'
+const DRAFT_KEY = STORAGE_KEYS.tradeDraft
 
 function loadDraft() {
   try { return JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? 'null') }
