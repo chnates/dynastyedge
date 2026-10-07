@@ -473,7 +473,8 @@ function buildLeagueState({
     userMap[r.roster_id] = userById[r.owner_id] ?? null;
   });
   const picksByRoster = resolvePickOwnership(tradedPicks, rosters, years);
-  const waiverBudget = leagueInfo?.settings?.waiver_budget ?? 100;
+  const rawBudget = Number(leagueInfo?.settings?.waiver_budget);
+  const waiverBudget = Number.isFinite(rawBudget) && rawBudget > 0 ? rawBudget : null;
   function resolveRoster(roster) {
     const starterSet = toIdSet(roster.starters);
     const reserveSet = toIdSet(roster.reserve);
@@ -540,7 +541,7 @@ function buildLeagueState({
       picks: ownedPicks,
       totalValue: playerValue + pickValue,
       faabBudget: waiverBudget,
-      faabRemaining: waiverBudget - (settings.waiver_budget_used ?? 0),
+      faabRemaining: waiverBudget == null ? null : waiverBudget - (settings.waiver_budget_used ?? 0),
       faabSpent: settings.waiver_budget_used ?? 0,
       record: { wins, losses, ties },
       hasRecord: wins + losses + ties > 0,
@@ -561,6 +562,9 @@ function buildLeagueState({
     pickYears: years,
     leagueId: leagueId ?? leagueInfo?.league_id ?? null
   };
+}
+function faabDisplay(amount) {
+  return amount == null || !Number.isFinite(Number(amount)) ? "\u2014" : `$${amount}`;
 }
 var EMPTY_SLOT;
 var init_leagueState = __esm({
@@ -41628,7 +41632,7 @@ function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId, news }
       budget: roster.faabBudget,
       remaining: roster.faabRemaining,
       spent: roster.faabSpent,
-      display: `$${roster.faabRemaining}`
+      display: faabDisplay(roster.faabRemaining)
     },
     winWindow: getWinWindowTier(roster.rosterId, allRosters),
     totals: {
@@ -41705,7 +41709,7 @@ function renderRosterText(a) {
   L.push("");
   L.push(`Total value ${a.totals.totalValue.toLocaleString("en-US")} (#${a.totals.valueRank} of ${a.league.teams}) \xB7 players ${a.totals.playerValue.toLocaleString("en-US")} \xB7 picks ${a.totals.pickValue.toLocaleString("en-US")}`);
   L.push(`Win window: ${a.winWindow}${a.record ? ` \xB7 ${a.record.wins}-${a.record.losses}${a.record.ties ? "-" + a.record.ties : ""} \xB7 ${a.record.pointsFor} PF` : " \xB7 no games played yet"}`);
-  L.push(`FAAB ${a.faab.display} of $${a.faab.budget}${a.totals.avgStarterAge ? ` \xB7 avg starter age ${a.totals.avgStarterAge}` : ""}`);
+  L.push(`FAAB ${a.faab.display} of ${faabDisplay(a.faab.budget)}${a.totals.avgStarterAge ? ` \xB7 avg starter age ${a.totals.avgStarterAge}` : ""}`);
   L.push("");
   for (const group of ["STARTER", "BENCH", "TAXI", "IR"]) {
     const rows = a.players.filter((p) => p.slot === group);
@@ -41734,6 +41738,7 @@ var init_getRoster = __esm({
   "mcp/tools/getRoster.js"() {
     init_rosterAnalysis();
     init_teamName();
+    init_leagueState();
     init_marketTrend();
     init_teams();
     init_news();
@@ -42755,7 +42760,7 @@ function buildFreeAgentAnswer(snapshot, weekly, { position, limit, myRosterId } 
       teamName: getTeamName(league.myRoster.owner),
       faabRemaining: league.myRoster.faabRemaining,
       faabBudget: league.myRoster.faabBudget,
-      faabDisplay: `$${league.myRoster.faabRemaining}`
+      faabDisplay: faabDisplay(league.myRoster.faabRemaining)
     },
     filter: { position: wanted, limit: cap },
     faab: {
@@ -42833,7 +42838,7 @@ function buildNotes3({ snapshot, weekly, projMap, recommendations, wanted, filte
   );
   notes.push(FAAB_BATCH_WARNING);
   notes.push(
-    `Sleeper's API is read-only: place the claim yourself in the Sleeper app. You have $${league.myRoster.faabRemaining} of $${league.myRoster.faabBudget} FAAB left this period \u2014 the budget resets twice a league year.`
+    `Sleeper's API is read-only: place the claim yourself in the Sleeper app. ` + (league.myRoster.faabBudget == null ? "The league's FAAB budget could not be read, so no remainder is quoted." : `You have ${faabDisplay(league.myRoster.faabRemaining)} of ${faabDisplay(league.myRoster.faabBudget)} FAAB left this period \u2014 the budget resets twice a league year.`)
   );
   return notes;
 }
@@ -42853,7 +42858,7 @@ function renderFreeAgentText(a) {
   }
   const L = [];
   L.push(`${a.team.teamName} \u2014 free agent recommendations${a.filter.position ? ` \xB7 ${a.filter.position}` : ""}`);
-  L.push(`${a.league.name ?? "League"}${a.league.week ? ` \xB7 week ${a.league.week}` : a.league.isOffseason ? " \xB7 offseason" : ""} \xB7 FAAB ${a.team.faabDisplay} of $${a.team.faabBudget}`);
+  L.push(`${a.league.name ?? "League"}${a.league.week ? ` \xB7 week ${a.league.week}` : a.league.isOffseason ? " \xB7 offseason" : ""} \xB7 FAAB ${a.team.faabDisplay} of ${faabDisplay(a.team.faabBudget)}`);
   L.push(`Bids: ${a.faab.calibration}`);
   L.push(`As of ${a.asOf.oldestSourceAt ?? "unknown"}${a.asOf.stale ? " \u2014 STALE, a source failed to refresh" : ""}`);
   L.push("");
@@ -42886,6 +42891,7 @@ var init_recommendFreeAgents = __esm({
     init_faabBid();
     init_projections();
     init_teamName();
+    init_leagueState();
     init_marketTrend();
     init_constants();
     DEFAULT_LIMIT = 8;
@@ -47156,8 +47162,8 @@ function createServer({ env = process.env, fetcher, store } = {}) {
           pointsAgainst: external_exports.number()
         }).nullable().optional(),
         faab: external_exports.object({
-          budget: external_exports.number(),
-          remaining: external_exports.number(),
+          budget: external_exports.number().nullable(),
+          remaining: external_exports.number().nullable(),
           spent: external_exports.number(),
           display: external_exports.string()
         }).optional(),
@@ -47401,8 +47407,8 @@ function createServer({ env = process.env, fetcher, store } = {}) {
         team: external_exports.object({
           rosterId: external_exports.number(),
           teamName: external_exports.string(),
-          faabRemaining: external_exports.number(),
-          faabBudget: external_exports.number(),
+          faabRemaining: external_exports.number().nullable(),
+          faabBudget: external_exports.number().nullable(),
           faabDisplay: external_exports.string()
         }).optional(),
         filter: external_exports.object({

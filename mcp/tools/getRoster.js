@@ -8,6 +8,7 @@
 
 import { getWinWindowTier } from '../../src/utils/rosterAnalysis.js'
 import { getTeamName } from '../../src/utils/teamName.js'
+import { faabDisplay } from '../../src/utils/leagueState.js'
 import { trendTag } from '../../src/utils/marketTrend.js'
 // Team resolution moved to mcp/teams.js in phase 1b so analyze_trade's
 // `partner` argument resolves through the SAME code. Re-exported here because
@@ -137,7 +138,7 @@ export function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId,
       budget: roster.faabBudget,
       remaining: roster.faabRemaining,
       spent: roster.faabSpent,
-      display: `$${roster.faabRemaining}`,
+      display: faabDisplay(roster.faabRemaining),
     },
     winWindow: getWinWindowTier(roster.rosterId, allRosters),
     totals: {
@@ -227,7 +228,7 @@ export function renderRosterText(a) {
   L.push('')
   L.push(`Total value ${a.totals.totalValue.toLocaleString('en-US')} (#${a.totals.valueRank} of ${a.league.teams}) · players ${a.totals.playerValue.toLocaleString('en-US')} · picks ${a.totals.pickValue.toLocaleString('en-US')}`)
   L.push(`Win window: ${a.winWindow}${a.record ? ` · ${a.record.wins}-${a.record.losses}${a.record.ties ? '-' + a.record.ties : ''} · ${a.record.pointsFor} PF` : ' · no games played yet'}`)
-  L.push(`FAAB ${a.faab.display} of $${a.faab.budget}${a.totals.avgStarterAge ? ` · avg starter age ${a.totals.avgStarterAge}` : ''}`)
+  L.push(`FAAB ${a.faab.display} of ${faabDisplay(a.faab.budget)}${a.totals.avgStarterAge ? ` · avg starter age ${a.totals.avgStarterAge}` : ''}`)
   L.push('')
   for (const group of ['STARTER', 'BENCH', 'TAXI', 'IR']) {
     const rows = a.players.filter(p => p.slot === group)

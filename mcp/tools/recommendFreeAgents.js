@@ -41,6 +41,7 @@ import {
 } from '../../src/utils/faabBid.js'
 import { getProjPts } from '../../src/utils/projections.js'
 import { getTeamName } from '../../src/utils/teamName.js'
+import { faabDisplay } from '../../src/utils/leagueState.js'
 import { trendTag } from '../../src/utils/marketTrend.js'
 import { POSITIONS } from '../../src/constants.js'
 
@@ -168,7 +169,7 @@ export function buildFreeAgentAnswer(snapshot, weekly, { position, limit, myRost
       teamName: getTeamName(league.myRoster.owner),
       faabRemaining: league.myRoster.faabRemaining,
       faabBudget: league.myRoster.faabBudget,
-      faabDisplay: `$${league.myRoster.faabRemaining}`,
+      faabDisplay: faabDisplay(league.myRoster.faabRemaining),
     },
     filter: { position: wanted, limit: cap },
     faab: {
@@ -270,8 +271,10 @@ function buildNotes({ snapshot, weekly, projMap, recommendations, wanted, filter
   )
   notes.push(FAAB_BATCH_WARNING)
   notes.push(
-    `Sleeper's API is read-only: place the claim yourself in the Sleeper app. You have $${league.myRoster.faabRemaining} of ` +
-    `$${league.myRoster.faabBudget} FAAB left this period — the budget resets twice a league year.`
+    `Sleeper's API is read-only: place the claim yourself in the Sleeper app. ` +
+    (league.myRoster.faabBudget == null
+      ? 'The league\'s FAAB budget could not be read, so no remainder is quoted.'
+      : `You have ${faabDisplay(league.myRoster.faabRemaining)} of ${faabDisplay(league.myRoster.faabBudget)} FAAB left this period — the budget resets twice a league year.`)
   )
   return notes
 }
@@ -296,7 +299,7 @@ export function renderFreeAgentText(a) {
   }
   const L = []
   L.push(`${a.team.teamName} — free agent recommendations${a.filter.position ? ` · ${a.filter.position}` : ''}`)
-  L.push(`${a.league.name ?? 'League'}${a.league.week ? ` · week ${a.league.week}` : a.league.isOffseason ? ' · offseason' : ''} · FAAB ${a.team.faabDisplay} of $${a.team.faabBudget}`)
+  L.push(`${a.league.name ?? 'League'}${a.league.week ? ` · week ${a.league.week}` : a.league.isOffseason ? ' · offseason' : ''} · FAAB ${a.team.faabDisplay} of ${faabDisplay(a.team.faabBudget)}`)
   L.push(`Bids: ${a.faab.calibration}`)
   L.push(`As of ${a.asOf.oldestSourceAt ?? 'unknown'}${a.asOf.stale ? ' — STALE, a source failed to refresh' : ''}`)
   L.push('')

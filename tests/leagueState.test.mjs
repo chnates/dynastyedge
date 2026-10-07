@@ -21,7 +21,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { buildLeagueState } from '../src/utils/leagueState.js'
+import { buildLeagueState, faabDisplay } from '../src/utils/leagueState.js'
 
 // ── fixture ────────────────────────────────────────────────────────────────
 // Deliberately mixes string and numeric player ids, includes the '0'
@@ -199,13 +199,29 @@ test('FAAB is read from league settings, never assumed 100 (League Context)', ()
   assert.equal(r1.faabRemaining, 750)
 })
 
-test('FAAB falls back to 100 only when the league omits waiver_budget', () => {
+// Owner decision 2026-10-07 (CODE-REVIEW-1 #11): this test used to pin a
+// fallback to $100. The budget is $1000 since 2026, so an assumed $100 printed
+// a confident wrong remainder. A missing budget is now UNKNOWN, rendered `—`.
+test('no waiver_budget ⇒ the budget and remainder are unknown, never an assumed 100', () => {
   const f = fixture()
-  const st = buildLeagueState({
-    ...f,
-    sleeperData: { ...f.sleeperData, leagueInfo: { league_id: 'L1', settings: {} } },
-  })
-  assert.equal(st.allRosters[0].faabBudget, 100)
+  for (const settings of [{}, { waiver_budget: 0 }, { waiver_budget: 'x' }]) {
+    const st = buildLeagueState({
+      ...f,
+      sleeperData: { ...f.sleeperData, leagueInfo: { league_id: 'L1', settings } },
+    })
+    const r = st.allRosters[0]
+    assert.equal(r.faabBudget, null, JSON.stringify(settings))
+    assert.equal(r.faabRemaining, null)
+    assert.equal(r.faabSpent, 250, 'what was spent is still a fact')
+    assert.equal(faabDisplay(r.faabRemaining), '—')
+  }
+})
+
+test('faabDisplay: $XXX for a number (rule 9), — for unknown', () => {
+  assert.equal(faabDisplay(142), '$142')
+  assert.equal(faabDisplay(0), '$0')
+  assert.equal(faabDisplay(null), '—')
+  assert.equal(faabDisplay(undefined), '—')
 })
 
 test('record, hasRecord and points carry their decimal halves', () => {

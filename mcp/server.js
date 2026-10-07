@@ -333,7 +333,7 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
           pointsFor: z.number(), pointsAgainst: z.number(),
         }).nullable().optional(),
         faab: z.object({
-          budget: z.number(), remaining: z.number(), spent: z.number(), display: z.string(),
+          budget: z.number().nullable(), remaining: z.number().nullable(), spent: z.number(), display: z.string(),
         }).optional(),
         winWindow: z.string().optional(),
         totals: z.object({
@@ -609,7 +609,7 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
         }).optional(),
         team: z.object({
           rosterId: z.number(), teamName: z.string(),
-          faabRemaining: z.number(), faabBudget: z.number(), faabDisplay: z.string(),
+          faabRemaining: z.number().nullable(), faabBudget: z.number().nullable(), faabDisplay: z.string(),
         }).optional(),
         filter: z.object({
           position: z.string().nullable(), limit: z.number(),
