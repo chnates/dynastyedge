@@ -573,7 +573,10 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
         'plain-English reasons. Carries BOTH dynasty value and this week\'s Sleeper projection, ' +
         'which are different axes (they correlate at only r = 0.427). IN-SEASON ONLY for the ' +
         'projection column: in the offseason `projectedPoints` is null and the response says why, ' +
-        'never zero. Defenses are excluded by design — you roster exactly one, ever.',
+        'never zero. Each pick carries a suggested FAAB bid (`faabBid`) read off the CURRENT period\'s ' +
+        'budget, sized by how much the player matters to your roster on a ladder calibrated on 2023-25 ' +
+        '(n = 3 contested auctions on the $1000 scale) — the same bid the app shows. ' +
+        'Defenses are excluded by design — you roster exactly one, ever.',
       inputSchema: {
         position: z.string().optional()
           .describe('Limit to QB, RB, WR or TE. Omit for all. DEF is not a general pickup and is rejected with an explanation.'),
@@ -628,7 +631,19 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
           fillsNeed: z.boolean(), isUpgrade: z.boolean(),
           upgradeMargin: z.number().nullable(),
           reasons: z.array(z.string()),
+          // utils/faabBid.js — null bid for an unpriced player or an unknown
+          // budget, never a fabricated number (rule 7).
+          faabBid: z.object({
+            bid: z.number().nullable(), tier: z.string().nullable(), label: z.string().nullable(),
+            pctOfBudget: z.number().nullable(), capped: z.boolean(),
+            expectedWin: z.string().nullable(), unavailable: z.string().nullable(),
+            reasons: z.array(z.string()),
+          }),
         })).optional(),
+        faab: z.object({
+          budget: z.number().nullable(), remaining: z.number().nullable(),
+          week: z.number().nullable(), multiplier: z.number(), calibration: z.string(),
+        }).optional(),
         notes: z.array(z.string()).optional(),
       },
     },

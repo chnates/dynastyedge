@@ -5,7 +5,7 @@ dated snapshot: unlike `docs/project-status-2026-*.md` (which gets superseded
 by a newer dated file), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-10-06 (**the whole backlog re-planned, and the repo scanned for cleanup.** §0 is a single ordered list of everything still open through 2028, approved by the owner. Two new items: **CLEANUP-1**, the scan inventory — the code is clean; the clutter is 112 stale branches and superseded docs; and **CLEANUP-2**, slimming a 7,064-line CLAUDE.md. Live readings the same day: news `depthHours` **140** (595 / 1200 player items, all ten sources at 0 misses); DynastyProcess back to **654** players (PIPE-3 confirmed upstream); consensus archive 15 unbroken daily columns since 09-22; `values-history.json` at its full 90 columns. **OPEN-3 has not been started.** Previously 2026-09-25 (**MCP-CARRY closed out** — four commits.
+**Last reviewed:** 2026-10-07 (**OPEN-3 shipped** — the FAAB bid recommender, one util behind League › Free Agents and `recommend_free_agents`; §0 #2 done, grading bars pre-registered for #13. The live re-run found a **third** contested 2026 auction. Detail in §2's OPEN-3 and §3.) Previously 2026-10-06 (**the whole backlog re-planned, and the repo scanned for cleanup.** §0 is a single ordered list of everything still open through 2028, approved by the owner. Two new items: **CLEANUP-1**, the scan inventory — the code is clean; the clutter is 112 stale branches and superseded docs; and **CLEANUP-2**, slimming a 7,064-line CLAUDE.md. Live readings the same day: news `depthHours` **140** (595 / 1200 player items, all ten sources at 0 misses); DynastyProcess back to **654** players (PIPE-3 confirmed upstream); consensus archive 15 unbroken daily columns since 09-22; `values-history.json` at its full 90 columns. **OPEN-3 has not been started.** Previously 2026-09-25 (**MCP-CARRY closed out** — four commits.
 **ROOKIE-1 closed** by dropping the rookie name fallback rather than guarding
 it (0 of 444 name joins live; all 395 FantasyCalc ids resolve to the same name
 in the player DB; 7 same-name-same-position rookies a guard would have
@@ -154,7 +154,7 @@ login, a phone or a decision that no sandbox can supply.
 | # | Item | Who | Effort | Why here |
 |---|---|---|---|---|
 | 1 | **This roadmap + the repo-cleanup scan** (CLEANUP-1's inventory) — **DONE by the PR that wrote this table** | Me | <1 | Every later session starts from this file, and it was 11 days stale |
-| 2 | **OPEN-3: FAAB bid recommender.** One shared util (`src/utils/faabBid.js`) feeding League › Free Agents and `recommend_free_agents` | Me | 1–2 | Owner-asked 2026-09-25. Its value decays every week until the Week 13 deadline, and its live grading only starts once it ships. **First decision:** keep the spec's 1% (= $10) uncontested floor, or drop it to the $0–2 the league actually pays uncontested |
+| 2 | **OPEN-3: FAAB bid recommender** — **DONE 2026-10-07.** `src/utils/faabBid.js` feeds League › Free Agents and `recommend_free_agents`; floor dropped to $2 on the owner's call; grading bars pre-registered in the memo's §10 | Me | 1–2 | Owner-asked 2026-09-25. Its live grading (#13) started the day it shipped |
 | 3 | **MCP connector re-check on the phone** — all 13 tools in the connector's list; one question each to the five added since 2026-09-20 (see MCP-CARRY) | Owner | 15 min | No sandbox can do it |
 | 4 | **The two DESIGN-4 device checks** — re-add the home-screen app (icon + both `theme-color` metas), and Bricolage Grotesque on glass | Owner | 15 min | Same reason; do it alongside #3 |
 | 5 | **CLEANUP-1: mechanical cleanup.** Stale branches, archive the superseded docs, dead exports, skill drift (§1 has the inventory) | Me | 1 | Right after the FAAB build: cleanup does not decay, FAAB does. It goes before the research queue, because every session after it reads less stale material. **Branch deletion needs the owner's yes first** |
@@ -175,7 +175,7 @@ login, a phone or a decision that no sandbox can supply.
 
 | # | Item | Who | Effort | Why here |
 |---|---|---|---|---|
-| 13 | **Grade the FAAB recommender** against its pre-registered bars (wins ≥ 75% of contested auctions it enters; cost per contested win ≤ league median) | Me | <1 | Bids drop to ~0.3× from Week 15, so the in-season sample is essentially complete |
+| 13 | **Grade the FAAB recommender** against its pre-registered bars (wins ≥ 75% of contested auctions it enters; cost per contested win ≤ league median). **The protocol is fixed in `docs/analysis/faab-bid-corpus-2026-08.md` §10** — population, seat, "enters", tie rule, n < 8 = indicative. Follow it as written | Me | <1 | Bids drop to ~0.3× from Week 15, so the in-season sample is essentially complete |
 | 14 | **Grade the playoff odds on 2026 itself**, once the regular season ends | Me | <1 | The first real out-of-sample test |
 | 15 | **Phase 4d: "when the sources disagree, which one moves?"** | Me | 1 | `values-consensus.json` holds 15 unbroken daily columns since 09-22; ~3 months makes it answerable (~2026-12) |
 | 16 | **Phase 4b/4c: normalize the three sources and surface the disagreement** | Me | 2 | The largest unbuilt approved item. It gets better by waiting, so it waits for #15 |
@@ -2105,7 +2105,29 @@ Tracker still renders the completed 2026 recap with VOE summing to zero.
 `npm run lint` clean, `npm test` 253/253, `npm run build` clean. Documented in
 CLAUDE.md's Constants File section and Features 1, 10 and 13.
 
-### OPEN-3 — FAAB bid recommender **[owner-asked 2026-09-25 — next build]**
+### OPEN-3 — ~~FAAB bid recommender~~ **CLOSED 2026-10-07 — SHIPPED**
+
+**Shipped 2026-10-07.** `src/utils/faabBid.js` (`recommendFaabBid`,
+`readFaabPeriod`), one pure function behind the bid beside each Recommended
+Pickup on League › Free Agents and the `faabBid` field on every
+`recommend_free_agents` row. The rule as built, where it departs from the §6
+spec, the live readings and the **pre-registered grading protocol** are in
+`docs/analysis/faab-bid-corpus-2026-08.md` §10. In short:
+- **Floor dropped** to 0.2% of budget, min $1 (= **$2** on $1000), on the
+  owner's call. That is the 2026 in-season uncontested median; the same rule
+  gives $1 on $100, the 2023–25 median.
+- **No contest prediction.** Value barely moves the contest rate (27% → ~40%),
+  so the tier is sized by roster facts: 23 / 16 / 11% of the **full**
+  budget, capped at the current period's remainder, scaled by week.
+- **A third contested 2026 auction** turned up in the re-run ($161 over $8,
+  09-30); the label says n = 3.
+- Live on Week 5: 81 recommended rows across ten seats split 51 value play /
+  30 floor / 0 default / 0 must-win.
+- Graded at §0 #13. **The bars do not move.**
+
+The original entry follows.
+
+**[owner-asked 2026-09-25 — next build]**
 
 **Status:** research complete. **The owner asked for it on 2026-09-25 as the
 next build**, surfaced in **both** places: beside each Recommended Pickup on
@@ -2572,6 +2594,7 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 
 | Item | Closed | How |
 |---|---|---|
+| OPEN-3 — the FAAB bid recommender | 2026-10-07 | Shipped as `src/utils/faabBid.js`, one util behind League › Free Agents and `recommend_free_agents` (zod schema extended, verified through a real MCP client). Floor $2 on $1000 (owner's call, dropping the spec's $10); ladder 11/16/23% of the full budget capped at the current period's remainder; no contest prediction, because value barely moves the contest rate. Budget read from settings, never assumed; null for a defense or an unpriced player. Grading bars and protocol pre-registered in the memo's §10 for §0 #13. Detail in §2 |
 | NEWS-7 — ESPN RSS gave Actions nothing | 2026-09-22 | The recorded diagnosis ("catch branch, so it throws — 403 or timeout") was wrong on every count: the log read `0 items` in ~95ms, not `FAILED`. The script was made to print what a zero-item 2xx returned, and the next run read **HTTP 202 · text/html · 0 bytes** — a bot-manager deferral, which `res.ok` accepts. Same URL + UA from outside Actions: 200, 29 items. **Removed** at 8 of 12 consecutive misses; the zero-item diagnostic stays. Detail in §1 |
 | OPS-2 — a branch dispatch could publish production data | 2026-09-22 | Found by the owner's review question. `news.yml` and `values-history.yml` had no default-branch guard on their publish steps (`rookie-intel.yml` did), so NEWS-4/NEWS-7's verification runs, and the 2026-09-12 retention verification before them, force-pushed feature-branch code to the live `news-data` feed. Both now carry `if: github.ref_name == github.event.repository.default_branch`; a branch dispatch is a dry run. **Post-merge check done 2026-09-22:** `news.yml` dispatched on `main` (run 1237) and the PUBLISHED `news.json` read via git off `news-data`: `playerCap` 1200, `depthHours` 53, ten sources, no `ESPN RSS` key, every `sourceMisses` 0. |
 | NEWS-4 — the news cap was binding at 400 | 2026-09-22 | Cap-bound at 56h with breadth healthy (207 players), so raised to **1200** (~7.1 retained/h × 168h; ~144KB wire projected vs 54KB). News page now paged at 50. The raise exposed that **`spanHours` is set by stragglers** (54 → 147h on three items while p90 depth went 51 → 52h), so `coverage.depthHours` was added and the drawer reads it. The 7-day claim is **pending**: re-read `depthHours` 2026-09-29. Detail in §1 |

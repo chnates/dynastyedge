@@ -35,7 +35,10 @@ import {
   buildRosteredIdSet,
   buildAvailableDefenses,
 } from '../../src/utils/freeAgents.js'
-import { recommendFreeAgents } from '../../src/utils/recommendations.js'
+import { recommendFreeAgents, buildPickupContext } from '../../src/utils/recommendations.js'
+import {
+  recommendFaabBid, readFaabPeriod, faabSeasonMultiplier, FAAB_CALIBRATION, FAAB_BATCH_WARNING,
+} from '../../src/utils/faabBid.js'
 import { getProjPts } from '../../src/utils/projections.js'
 import { getTeamName } from '../../src/utils/teamName.js'
 import { POSITIONS } from '../../src/constants.js'
@@ -110,6 +113,24 @@ export function buildFreeAgentAnswer(snapshot, weekly, { position, limit, myRost
   const inSeason = weekly?.available && !weekly.isOffseason
   const projMap = inSeason ? weekly.projMap : null
 
+  // The bid is utils/faabBid.js's, the same function League › Free Agents
+  // calls — no money math lives here. The period is the CURRENT one, read
+  // from settings; never assumed to be 100 or 1000.
+  const period = readFaabPeriod(league.leagueInfo, league.myRoster)
+  const isRegularSeason = snapshot.nflState?.season_type === 'regular'
+  const faabWeek = isRegularSeason ? (snapshot.nflState?.week ?? null) : null
+  const pickupCtx = buildPickupContext(league.myRoster, league.allRosters)
+  const bidFor = player => {
+    const b = recommendFaabBid(player, league.myRoster, league.allRosters, {
+      period, week: faabWeek, isRegularSeason, ctx: pickupCtx,
+    })
+    return {
+      bid: b.bid, tier: b.tier, label: b.label, pctOfBudget: b.pctOfBudget,
+      capped: b.capped ?? false, expectedWin: b.expectedWin ?? null,
+      unavailable: b.unavailable, reasons: b.reasons,
+    }
+  }
+
   const recommendations = ranked.map(r => ({
     sleeperId: String(r.player.sleeperId),
     name: r.player.name,
@@ -127,6 +148,7 @@ export function buildFreeAgentAnswer(snapshot, weekly, { position, limit, myRost
     isUpgrade: r.isUpgrade,
     upgradeMargin: r.isUpgrade ? Math.round(r.upgradeMargin) : null,
     reasons: r.reasons,
+    faabBid: bidFor(r.player),
   }))
 
   return {
@@ -148,6 +170,13 @@ export function buildFreeAgentAnswer(snapshot, weekly, { position, limit, myRost
       faabDisplay: `$${league.myRoster.faabRemaining}`,
     },
     filter: { position: wanted, limit: cap },
+    faab: {
+      budget: period?.budget ?? null,
+      remaining: period?.remaining ?? null,
+      week: faabWeek,
+      multiplier: faabSeasonMultiplier(faabWeek, isRegularSeason),
+      calibration: FAAB_CALIBRATION,
+    },
     projections: {
       // Explicit, so "why is projectedPoints null?" is answerable from the
       // response itself rather than by guessing.
@@ -234,8 +263,14 @@ function buildNotes({ snapshot, weekly, projMap, recommendations, wanted, filter
     notes.push(`Showing the top ${cap}; raise \`limit\` (max ${MAX_LIMIT}) for more.`)
   }
   notes.push(
+    `Suggested FAAB bids (faabBid): ${FAAB_CALIBRATION}. Treat the tiers as a measured ladder, not a forecast — ` +
+    'whether anyone else bids is NOT predicted (dynasty value barely moves the contest rate), so the bid is sized by ' +
+    'how much winning the player matters to this roster.'
+  )
+  notes.push(FAAB_BATCH_WARNING)
+  notes.push(
     `Sleeper's API is read-only: place the claim yourself in the Sleeper app. You have $${league.myRoster.faabRemaining} of ` +
-    `$${league.myRoster.faabBudget} FAAB left.`
+    `$${league.myRoster.faabBudget} FAAB left this period — the budget resets twice a league year.`
   )
   return notes
 }
@@ -261,6 +296,7 @@ export function renderFreeAgentText(a) {
   const L = []
   L.push(`${a.team.teamName} — free agent recommendations${a.filter.position ? ` · ${a.filter.position}` : ''}`)
   L.push(`${a.league.name ?? 'League'}${a.league.week ? ` · week ${a.league.week}` : a.league.isOffseason ? ' · offseason' : ''} · FAAB ${a.team.faabDisplay} of $${a.team.faabBudget}`)
+  L.push(`Bids: ${a.faab.calibration}`)
   L.push(`As of ${a.asOf.oldestSourceAt ?? 'unknown'}${a.asOf.stale ? ' — STALE, a source failed to refresh' : ''}`)
   L.push('')
   if (!a.recommendations.length) {
@@ -273,6 +309,10 @@ export function renderFreeAgentText(a) {
       const tr = p.trend30Day > 50 ? ` ↑${p.trend30Day}` : p.trend30Day < -50 ? ` ↓${p.trend30Day}` : ''
       L.push(`${String(i + 1).padStart(2)}. ${p.position.padEnd(3)} ${p.name}${p.nflTeam ? ` (${p.nflTeam})` : ''} — ${num(p.value)}${proj}${tr}`)
       p.reasons.forEach(r => L.push(`      ${r}`))
+      const b = p.faabBid
+      L.push(b.bid != null
+        ? `      Bid $${b.bid} (${b.pctOfBudget}% of budget, ${b.label}) — ${b.expectedWin}${b.capped ? ' · capped at what you have left' : ''}`
+        : `      No bid: ${b.reasons[0]}`)
     })
   }
   L.push('')

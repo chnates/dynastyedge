@@ -185,3 +185,43 @@ test('the DEF refusal renders as prose, not an empty list', () => {
   assert.match(txt, /never a general pickup/i)
   assert.match(txt, /Kansas City Chiefs/)
 })
+
+// ── The FAAB bid (OPEN-3) — the app's util, never math in mcp/ ────────────
+
+test('every recommendation carries the SAME bid utils/faabBid.js gives the app', async () => {
+  const { recommendFaabBid, readFaabPeriod } = await import('../src/utils/faabBid.js')
+  const a = build()
+  assert.ok(a.recommendations.length)
+  const period = readFaabPeriod(LEAGUE.leagueInfo, LEAGUE.myRoster)
+  a.recommendations.forEach(r => {
+    const p = makeSnapshot().values.playerMap[r.sleeperId]
+    const direct = recommendFaabBid(p, LEAGUE.myRoster, LEAGUE.allRosters, {
+      period, week: 3, isRegularSeason: true,
+    })
+    assert.equal(r.faabBid.bid, direct.bid)
+    assert.equal(r.faabBid.tier, direct.tier)
+  })
+})
+
+test('the faab block reports the CURRENT period read from settings, the week scaling, and the honest label', () => {
+  const a = build()
+  assert.equal(a.faab.budget, 1000)
+  assert.equal(a.faab.remaining, 750)
+  assert.equal(a.faab.week, 3)
+  assert.equal(a.faab.multiplier, 0.8)
+  assert.match(a.faab.calibration, /2023–25 at \$100; n = \d+ contested auctions on \$1000/)
+  assert.match(renderFreeAgentText(a), /Bid \$\d+/)
+  assert.ok(a.notes.some(n => /Order your claims/.test(n)))
+})
+
+test('a league that does not report its budget gets null bids, not an assumed scale', () => {
+  const snap = makeSnapshot()
+  snap.league = { ...snap.league, leagueInfo: { ...snap.league.leagueInfo, settings: {} } }
+  const a = buildFreeAgentAnswer(snap, makeWeekly(), { myRosterId: 6 })
+  assert.ok(a.recommendations.length)
+  a.recommendations.forEach(r => {
+    assert.equal(r.faabBid.bid, null)
+    assert.equal(r.faabBid.unavailable, 'budget-unknown')
+  })
+  assert.equal(a.faab.budget, null)
+})
