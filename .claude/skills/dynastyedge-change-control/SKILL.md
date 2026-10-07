@@ -17,7 +17,7 @@ calibration). Everything else in this skill exists to compensate for that
 gap.
 
 Terms used below (defined once):
-- **CLAUDE.md** — the ~480KB doc of record (verify: `wc -c CLAUDE.md`; CLEANUP-2 plans to slim it) at the repo root. Authoritative
+- **CLAUDE.md** — the ~230KB doc of record (verify: `wc -c CLAUDE.md`; CLEANUP-2 slimmed it from ~480KB on 2026-10-07 — measurements and narratives now live in `docs/history/`, see `dynastyedge-docs-and-writing` §1) at the repo root. Authoritative
   except where code demonstrably diverges (see Divergence protocol).
 - **PWA meta** — the `<meta>`/manifest tags in `index.html` +
   `public/manifest.webmanifest` that control how iOS renders the app when

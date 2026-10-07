@@ -199,8 +199,7 @@ exports `isTeamTotalsKey`). The one legitimate read of a `TEAM_*` row is as a
 **Standings note:** records and points for/against come from `roster.settings`
 (`wins`, `losses`, `ties`, `fpts`, `fpts_against`) — no extra call.
 
-**Transactions note:** all 18 weekly buckets fetched in parallel and cached per
-session. A failed bucket contributes nothing (per-week catch), but when **all
+**Transactions note:** all 18 weekly buckets in parallel, cached per session. A failed bucket contributes nothing (per-week catch), but when **all
 18** fail the load rejects, so League › Activity shows `ErrorState` + retry
 rather than an empty feed masquerading as "no moves". Waiver claims carry the
 winning bid in `settings.waiver_bid`.
@@ -1306,8 +1305,8 @@ that lives in Sleeper.
 
 #### Analysis — three layers, always shown together
 
-**Layer 1 — Raw value.** FantasyCalc totals and the % difference ("You're
-getting 12% more value" / "You're overpaying by 8%").
+**Layer 1 — Raw value.** FantasyCalc totals. Show the % difference clearly
+("You're getting 12% more value" / "You're overpaying by 8%").
 
 **Layer 2 — Roster fit (post-trade lineup simulation).** `analyzeTrade`
 re-simulates my optimal lineup by dynasty value (`buildValueLineup`, the shared
@@ -1816,7 +1815,7 @@ totals rank *volume*). Three numbers per team, strongest first:
   The card closes noting it grades at today's prices (Trade › Managers regrades
   in hindsight).
 
-**Refresh:** Board and Tracker share one session-cached fetch; a Refresh button;
+**Refresh model:** Board and Tracker share one session-cached fetch; a Refresh button;
 refetch on focus (aggressive while live); **30s polling while `drafting` and
 visible.**
 
