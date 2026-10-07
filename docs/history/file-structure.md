@@ -348,6 +348,10 @@ OPEN-3, the FAAB bid recommender (2026-10-07), moved both by the same 20
 imports only `src/utils` and the shared fixture, and the three new
 `mcpRecommendFreeAgents` tests reach neither React nor `zod`.
 
+The hindsight-even one-home fix (2026-10-07, CODE-REVIEW-1 #5) moved both by
+the same 5 (872/829 → **877/834**), the gap holding at 43: `fairBand.test.mjs`
+imports only the pure `fairBand.js`.
+
 The history-walk one-home fix (2026-10-07, CODE-REVIEW-1 #3) moved both by the
 same 10 (862/819 → **872/829**), the gap holding at 43: `leagueHistory.test.mjs`
 (8) and two `mcpHistory` cases import only pure utils and `mcp/history.js`.

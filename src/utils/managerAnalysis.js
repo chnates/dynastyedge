@@ -1,5 +1,8 @@
 import { findPickValue, buildDraftPickIndex, buildGenericRoundValues } from './pickCapital'
 import { noTradesLabel } from './leagueHistory'
+// Win / loss / even at ±5% of the larger side — the hindsight rule, shared with
+// League › Activity (deliberately NOT the Analyzer's fair band; see fairBand.js).
+import { hindsightResult } from './fairBand'
 
 // Manager scouting analysis: turns multi-season league history (trades,
 // waivers, drafts) into per-manager behavioral profiles — trade scorecards,
@@ -14,7 +17,6 @@ import { noTradesLabel } from './leagueHistory'
 // convention as League › Activity.
 
 const ROUND_LABELS = ['', '1st', '2nd', '3rd', '4th', '5th']
-const TRADE_EDGE = 0.05        // net beyond ±5% of trade size = win / loss
 const STARTUP_ROUNDS = 6       // drafts longer than this are startup drafts
 // A drafted player worth this today is a "hit" — starter-caliber dynasty
 // value. Exported because the Draft Tracker's recap grades the same picks
@@ -272,10 +274,7 @@ function buildTradeLedgers(seasons, resolvers) {
           const gotValue = got.reduce((sum, a) => sum + a.value, 0)
           const gaveValue = gave.reduce((sum, a) => sum + a.value, 0)
           const net = gotValue - gaveValue
-          const size = Math.max(gotValue, gaveValue)
-          const result = size > 0 && Math.abs(net) / size > TRADE_EDGE
-            ? (net > 0 ? 'win' : 'loss')
-            : 'even'
+          const result = hindsightResult(gotValue, gaveValue)
 
           if (!byOwner[ownerId]) byOwner[ownerId] = []
           byOwner[ownerId].push({

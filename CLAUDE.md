@@ -1741,7 +1741,8 @@ newest first, 25 per page with "Show more". Filter chips **All / Trades /
 Waivers / FA / My Moves** (resetting pagination). Trades show each side's
 players, picks (with original owner) and FAAB.
 - **Every asset shows its current FantasyCalc value** with a per-side total;
-  when totals differ by > 5% the larger haul renders green. **FAAB displays but
+  when totals differ by > 5% the larger haul renders green (`hindsightGapIsMeaningful`
+  — the scouting ledger's own win/loss rule, so the two screens agree). **FAAB displays but
   never counts.** A note says values are today's prices. Unranked show `—`.
 - **A pick spent in the same season it was traded is priced in three tiers,
   best first** — the same ladder as the manager ledger, from the same two
@@ -1903,7 +1904,12 @@ was ever recreated instead of renewed, the chain ends there.
   resolve only within their own season. Departed owners appear as named
   counterparties.
 - **Trade ledger** per participant — got / gave / net / W-L-E at **±5% of trade
-  size**.
+  size** (the larger side). **This is NOT the Analyzer's fair band, on purpose**
+  (owner, 2026-10-07): the band is one-sided, so applied to both seats it can call
+  one side a loss and the other even. The hindsight rule (`hindsightResult`,
+  `utils/fairBand.js`) is symmetric by construction and is shared with League ›
+  Activity's bigger-haul flag; `tests/fairBand.test.mjs` pins both and fails on a
+  copy.
 - **Hindsight valuation at today's prices.** Traded picks whose draft happened
   resolve to the player drafted (`slot_to_roster_id` + pick list, falling back
   to `draft_order` + that season's user → roster map). Future picks use
@@ -3153,7 +3159,7 @@ dynastyedge/
 │   │   ├── faabBid.js           ← THE FAAB bid (OPEN-3), shared with recommend_free_agents: CURRENT period's budget from settings (never assumed), 11/16/23% of the FULL budget capped at what is left, $2 floor on $1000, null for DEF/unpriced
 │   │   ├── injuryStatus.js      ← THE injury-status rule (OUT / QUESTIONABLE, IR eligibility from league settings) — one home, read by the Optimizer, player card, trade verdict, IR item and MCP
 │   │   ├── marketTrend.js       ← THE market-trend rules (±50, buy-low/sell-high eligibility, % move) — one home, read by every arrow, list and MCP tool
-│   │   ├── fairBand.js          ← THE definition of "fair" (±5%), shared by the Analyzer's verdict and every surface that PREDICTS it
+│   │   ├── fairBand.js          ← THE definition of "fair" (±5%), shared by the Analyzer's verdict and every surface that PREDICTS it; PLUS the separate, symmetric hindsight rule (ledger W-L-E + Activity's bigger haul)
 │   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation; teamDirection = THE team cut-offs (−1% / +5%)
 │   │   ├── seasonWindow.js      ← THE "has the rookie draft happened yet?" resolver — the live pick window + which draft the Tracker shows (replaced the hand-rolled PICK_YEARS)
 │   │   ├── pickCapital.js       ← pick ownership (year weights relative to the window, never literal years) + THE spent-pick ladder shared by Activity and the ledger (buildDraftPickIndex, buildGenericRoundValues)
@@ -3196,6 +3202,7 @@ dynastyedge/
 │   ├── seasonWindow.test.mjs        ← the draft-completion boundary (only `complete` rolls a season; auctions never count); Tracker selection; no NFL state → seed
 │   ├── pickCapital.test.mjs         ← ownership, round medians, year weights BY DISTANCE (a rolled year never scores 0), the spent-pick ladder
 │   ├── pickTrades.test.mjs          ← slot tiers (as coded), slot pricing fallback, package constraints
+│   ├── fairBand.test.mjs            ← the two "even" rules: hindsight ±5% of the larger side, symmetric from both seats (and the fair band shown NOT to be), Activity = ledger, AND a scan for a copy
 │   ├── faabBid.test.mjs             ← the FAAB bid: budget read (none → no bid), current remainder, same % at $100/$1000, every tier, $2/$1 floor + waiver_bid_min, week scaling, the cap, null for DEF/unpriced, shared pickup context
 │   ├── leagueHistory.test.mjs       ← broken hop named, drafts LIST error propagates, all-buckets-failed throws, coverage complete only when all read, "haven't completed a trade" only over a full read, AND a scan for a second walk
 │   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
@@ -3259,8 +3266,8 @@ because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
 **Current counts (verified 2026-10-07 by moving `node_modules` aside):** with
-dependencies **`# tests 872 / # pass 872`**; without them **`# tests 829 / #
-pass 824 / # fail 5`**. **If the test count isn't 872, run `npm ci` before
+dependencies **`# tests 877 / # pass 877`**; without them **`# tests 834 / #
+pass 829 / # fail 5`**. **If the test count isn't 877, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React
