@@ -835,6 +835,13 @@ tier, record, FAAB. Caps 60 players / 40 picks.
   clock time, so none is invented. Measured instead: claims process **noon ET
   daily, Wednesday the big run** (`docs/analysis/proactive-delivery-2026-10.md`
   §2). Declared in the zod schema; verified over the real transport.
+- **`roomToMove`** (2026-10-07, owner): `ir` from **`buildIrCapacity`** (the IR
+  action item's rule) — slots, used, open, `full`, `eligibleWaiting` (IR-eligible
+  players on the active roster) and `canMove`; `activeRoster` from the league's
+  `roster_positions` (`getRosterLimits`). **When IR is full a note says the
+  waiting players must stay on the active roster and must not be suggested for
+  IR**; a full active roster gets "every claim needs a drop". Live: IR 2 of 2
+  with Legette and Dart waiting, 24 of 24 active.
 
 ### Caching the weekly data — a DIFFERENT TTL, deliberately
 
@@ -868,6 +875,9 @@ modelled**.
   only, `recommendFaabBid` with `readFaabPeriod`, so it quotes exactly the app's
   bid. No budget ⇒ `bid: null`, never an assumed scale. **Both fields are
   declared in the zod output schema** (the closed-object trap).
+- **One row per position** (the engine's rule); each row's `alternatives` are
+  the same-position runners-up **with no `faabBid`**, and a note says to claim
+  the row, not the alternatives. Declared in the zod schema.
 
 ### Tool 4 — `resolve_assets`
 
@@ -1250,7 +1260,11 @@ from live data:
    only where Sleeper's `reserve_allow_*` setting is 1 — this league allows Out
    and COV), **and only when an IR slot is open** (`reserve_slots` minus players
    on IR). Advice that cannot be followed is not shown; the open-slot count is
-   part of the dismissal snapshot.
+   part of the dismissal snapshot. **IR capacity has ONE home,
+   `buildIrCapacity` (`utils/injuryStatus.js`)** — slots, used, open, the
+   eligible players stuck on the active roster — read here and by
+   `get_roster`'s `roomToMove` (owner, 2026-10-07: "once those are full, people
+   have to stay on the bench injured").
 4. **Missing future 1st** — no 1st in a `pickYears` season after the current
    one; deep-links to Trade Partners.
 
@@ -1273,8 +1287,9 @@ and a "How to read this" explainer. LeagueContext only — no extra fetch.
 **League › Overview** (Feature 5). **Free Agents** lives under **League**:
 search, position filter, **Upgrades Only** and **Hide Rookies** toggles
 (default off; rookie = `years_exp === 0` with the age ≤ 25 fallback). Above the
-list, **Recommended Pickups** (top 4 from `recommendFreeAgents`) with
-plain-English reasons; respects the position filter, hidden while searching.
+list, **Recommended Pickups** (top 4 from `recommendFreeAgents` — **one per
+position**, see the recommendation engine) with plain-English reasons; respects
+the position filter, hidden while searching.
 - **Each Recommended Pickup carries a FAAB bid** (OPEN-3) — *"BID $110 · Value
   play · 11% of budget"* — from `utils/faabBid.js`, the same function
   `recommend_free_agents` quotes, read against the **current period's** budget.
@@ -2348,6 +2363,16 @@ player's depth rank):
   trend, fits my window — **only players that move the needle**, with reasons.
   Its roster facts are **`buildPickupContext`**, exported so the FAAB bid reads
   the same "fills your need".
+  - **ONE PICKUP PER POSITION (owner, 2026-10-07: "in what scenario would I
+    ever need to pick up 3 QBs? I would only go for one").** Each player is
+    still scored on his own, but only the best at each position is a
+    recommendation; the next `MAX_PICKUP_ALTERNATIVES` (3) ride as
+    `alternatives` and **never carry a bid on any surface** — a bid invites a
+    claim, and claiming two is the mistake. `limit` counts positions. Live: four
+    rows (QB, WR, TE, RB) where it had listed three QBs at $110 each. The FAAB
+    grading (§0 #13) is unaffected — it evaluates `recommendFaabBid` on real
+    contested auctions, not on this list. `tests/recommendations.test.mjs`
+    fails on the old per-player list.
 - **The FAAB bid (`utils/faabBid.js` → `recommendFaabBid`, OPEN-3)** — spec,
   live run and grading bars: `docs/analysis/faab-bid-corpus-2026-08.md` §10.
   - **It does NOT predict whether anyone else will bid** (the contest rate
@@ -3205,7 +3230,7 @@ dynastyedge/
 │   │   ├── rosterAnalysis.js    ← positional strength, win window tiers, Targets ranking (need × value × movability)
 │   │   ├── recommendations.js   ← THE assistant-GM brain: keep/givability scores (round-priced picks, past-peak age tilt), FA pickups, two-sided sell moves, the cash-out board
 │   │   ├── faabBid.js           ← THE FAAB bid (OPEN-3), shared with recommend_free_agents: CURRENT period's budget from settings (never assumed), 11/16/23% of the FULL budget capped at what is left, $2 floor on $1000, null for DEF/unpriced
-│   │   ├── injuryStatus.js      ← THE injury-status rule (OUT / QUESTIONABLE, IR eligibility from league settings) — one home, read by the Optimizer, player card, trade verdict, IR item and MCP
+│   │   ├── injuryStatus.js      ← THE injury-status rule (OUT / QUESTIONABLE, IR eligibility from league settings, IR CAPACITY via buildIrCapacity) — one home, read by the Optimizer, player card, trade verdict, IR item and MCP
 │   │   ├── tradeDeadline.js     ← THE trade-deadline arithmetic (weeks left, the 2-week "soon" window) — one home, read by the Trade banner, The Edge and the MCP league calendar
 │   │   ├── marketTrend.js       ← THE market-trend rules (±50, buy-low/sell-high eligibility, % move) — one home, read by every arrow, list and MCP tool
 │   │   ├── fantasyCalcPayload.js ← THE FantasyCalc reader (URL, id-SHAPE classifier, shape guards) — app, MCP server and pipelines all call it
@@ -3321,9 +3346,9 @@ report that honestly**: it prints failing tests that read like a code regression
 because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
-**Current counts (verified 2026-10-07 by moving `node_modules` aside, after §0 #9):** with
-dependencies **`# tests 923 / # pass 923`**; without them **`# tests 880 / #
-pass 875 / # fail 5`**. **If the test count isn't 923, run `npm ci` before
+**Current counts (verified 2026-10-07 by moving `node_modules` aside, after the §0 #9 close-out):** with
+dependencies **`# tests 931 / # pass 931`**; without them **`# tests 888 / #
+pass 883 / # fail 5`**. **If the test count isn't 931, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React

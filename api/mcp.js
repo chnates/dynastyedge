@@ -116,6 +116,28 @@ function injuryFlag(status) {
 function injuryShortLabel(status) {
   return status ? SHORT_LABEL[status] ?? status : null;
 }
+function isIrEligible(status, leagueSettings) {
+  if (status == null) return false;
+  const s = String(status).trim().toLowerCase();
+  if (s === "ir" || s === "pup") return true;
+  const key = RESERVE_SETTING[s];
+  return !!(key && Number(leagueSettings?.[key]) === 1);
+}
+function buildIrCapacity(players, leagueSettings, statusOf) {
+  const slots = Math.max(0, Number(leagueSettings?.reserve_slots) || 0);
+  const list = players ?? [];
+  const used = list.filter((p) => p.isIR).length;
+  const open = Math.max(0, slots - used);
+  const eligibleWaiting = list.filter((p) => !p.isIR && !p.isTaxi && isIrEligible(statusOf(p), leagueSettings));
+  return {
+    slots,
+    used,
+    open,
+    full: slots > 0 && open === 0,
+    eligibleWaiting,
+    canMove: Math.min(open, eligibleWaiting.length)
+  };
+}
 function injuryFromMeta(meta3) {
   const status = meta3?.injury_status || null;
   return {
@@ -127,7 +149,7 @@ function injuryFromMeta(meta3) {
     unavailable: false
   };
 }
-var OUT, QUESTIONABLE, OUT_LC, QUESTIONABLE_LC, INJURY_FLAG, SHORT_LABEL, INJURY_UNAVAILABLE;
+var OUT, QUESTIONABLE, OUT_LC, QUESTIONABLE_LC, INJURY_FLAG, SHORT_LABEL, RESERVE_SETTING, INJURY_UNAVAILABLE;
 var init_injuryStatus = __esm({
   "src/utils/injuryStatus.js"() {
     OUT = /* @__PURE__ */ new Set([
@@ -152,6 +174,16 @@ var init_injuryStatus = __esm({
       Doubtful: "D",
       Suspended: "SUSP",
       "NFI-R": "NFI"
+    };
+    RESERVE_SETTING = {
+      out: "reserve_allow_out",
+      doubtful: "reserve_allow_doubtful",
+      sus: "reserve_allow_sus",
+      suspended: "reserve_allow_sus",
+      susp: "reserve_allow_sus",
+      na: "reserve_allow_na",
+      dnr: "reserve_allow_dnr",
+      cov: "reserve_allow_cov"
     };
     INJURY_UNAVAILABLE = Object.freeze({
       injuryFlag: null,
@@ -41450,6 +41482,43 @@ var init_tradeDeadline = __esm({
   }
 });
 
+// src/utils/rosterSpace.js
+function getRosterLimits(leagueInfo) {
+  const positions = leagueInfo?.roster_positions ?? [];
+  const activeSlots = positions.filter((p) => p !== "TAXI" && p !== "IR").length;
+  if (!activeSlots) return null;
+  return {
+    activeSlots,
+    taxiSlots: leagueInfo?.settings?.taxi_slots ?? 0,
+    irSlots: leagueInfo?.settings?.reserve_slots ?? 0
+  };
+}
+function buildRosterSpace(roster, { arrivals = [], departures = [], limits } = {}) {
+  if (!roster?.players || !limits?.activeSlots) return null;
+  const active = roster.players.filter((p) => !p.isTaxi && !p.isIR);
+  const before = active.length;
+  const activeIds = new Set(active.map((p) => String(p.sleeperId)));
+  const leavingActive = departures.filter((d) => activeIds.has(String(d.sleeperId))).length;
+  const after = before - leavingActive + arrivals.length;
+  const cap = limits.activeSlots;
+  return {
+    cap,
+    before,
+    after,
+    net: after - before,
+    headroomAfter: cap - after,
+    overBefore: Math.max(0, before - cap),
+    overAfter: Math.max(0, after - cap),
+    // Owed drops shrink — the trade helps them get compliant. This is the
+    // pitch lever, and it points the opposite way from "you're giving up value".
+    relievesCrunch: before > cap && after < before
+  };
+}
+var init_rosterSpace = __esm({
+  "src/utils/rosterSpace.js"() {
+  }
+});
+
 // mcp/teams.js
 function describeTeams(rosters) {
   return (rosters ?? []).map((r) => ({
@@ -41667,6 +41736,7 @@ function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId, news }
   const playerValue = roster.players.reduce((s, p) => s + (p.value ?? 0), 0);
   const pickValue = roster.picks.reduce((s, p) => s + (p.value ?? 0), 0);
   const valueRank = [...allRosters].sort((a, b) => b.totalValue - a.totalValue).findIndex((r) => r.rosterId === roster.rosterId) + 1;
+  const room = buildRoom(snapshot, league.leagueInfo, roster);
   const counts = players.reduce((acc, p) => {
     acc[p.slot] = (acc[p.slot] ?? 0) + 1;
     return acc;
@@ -41696,6 +41766,10 @@ function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId, news }
       spent: roster.faabSpent,
       display: faabDisplay(roster.faabRemaining)
     },
+    // Room, read from league settings (owner, 2026-10-07): IR is two slots
+    // here, and once they are full an injured player stays on the bench. A
+    // reader must never be told to "move him to IR" when there is no room.
+    roomToMove: room,
     winWindow: getWinWindowTier(roster.rosterId, allRosters),
     totals: {
       totalValue: roster.totalValue,
@@ -41713,7 +41787,7 @@ function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId, news }
     picks,
     // Caveats the reader needs in order to read the numbers correctly. These
     // are conditions, not decoration — each one changes what a number means.
-    notes: buildNotes(snapshot, roster, players, picks)
+    notes: buildNotes(snapshot, roster, players, picks, room)
   };
 }
 function buildCalendar(snapshot, leagueInfo) {
@@ -41738,6 +41812,33 @@ function buildCalendar(snapshot, leagueInfo) {
     }
   };
 }
+function buildRoom(snapshot, leagueInfo, roster) {
+  const settings = leagueInfo?.settings ?? {};
+  const statusOf = (p) => snapshot.playerDB?.[String(p.sleeperId)]?.injury_status ?? null;
+  const ir = buildIrCapacity(roster.players, settings, statusOf);
+  const limits = getRosterLimits(leagueInfo);
+  const activeUsed = roster.players.filter((p) => !p.isTaxi && !p.isIR).length;
+  return {
+    ir: {
+      slots: ir.slots,
+      used: ir.used,
+      open: ir.open,
+      full: ir.full,
+      // Players the league WOULD let onto IR who are taking an active spot.
+      // With IR full they stay where they are; canMove says how many fit now.
+      eligibleWaiting: ir.eligibleWaiting.map((p) => ({
+        sleeperId: String(p.sleeperId),
+        name: p.name,
+        status: statusOf(p)
+      })),
+      canMove: ir.canMove,
+      // Without the player DB no status is readable, so "nobody is waiting"
+      // would be a guess — say it could not be checked instead.
+      statusesKnown: !!snapshot.counts?.playerDBEntries
+    },
+    activeRoster: limits ? { slots: limits.activeSlots, used: activeUsed, open: Math.max(0, limits.activeSlots - activeUsed) } : null
+  };
+}
 function injuryFields(snapshot, news, sleeperId) {
   const meta3 = snapshot.playerDB?.[String(sleeperId)] ?? null;
   const status = meta3?.injury_status ?? null;
@@ -41753,8 +41854,19 @@ function injuryFields(snapshot, news, sleeperId) {
     latestNews: latest ? { headline: latest.headline, source: latest.source, published: latest.published, multiPlayer: latest.multiPlayer } : null
   };
 }
-function buildNotes(snapshot, roster, players, picks) {
+function buildNotes(snapshot, roster, players, picks, room) {
   const notes = [];
+  if (room?.ir?.full && room.ir.eligibleWaiting.length) {
+    const names = room.ir.eligibleWaiting.map((p) => p.name).join(", ");
+    notes.push(
+      `IR is full (${room.ir.used} of ${room.ir.slots}). ${names} could go on IR under league rules but must stay on the active roster until a slot opens \u2014 do not suggest moving them to IR.`
+    );
+  }
+  if (room?.activeRoster && room.activeRoster.open === 0) {
+    notes.push(
+      `All ${room.activeRoster.slots} active roster spots are filled, so any waiver claim or uneven trade needs a drop.`
+    );
+  }
   if (snapshot.asOf.stale) {
     notes.push(
       "At least one source failed to refresh, so this is cached data \u2014 see asOf.sources for which and how old."
@@ -41794,6 +41906,12 @@ function renderRosterText(a) {
   L.push(`Total value ${a.totals.totalValue.toLocaleString("en-US")} (#${a.totals.valueRank} of ${a.league.teams}) \xB7 players ${a.totals.playerValue.toLocaleString("en-US")} \xB7 picks ${a.totals.pickValue.toLocaleString("en-US")}`);
   L.push(`Win window: ${a.winWindow}${a.record ? ` \xB7 ${a.record.wins}-${a.record.losses}${a.record.ties ? "-" + a.record.ties : ""} \xB7 ${a.record.pointsFor} PF` : " \xB7 no games played yet"}`);
   L.push(`FAAB ${a.faab.display} of ${faabDisplay(a.faab.budget)}${a.totals.avgStarterAge ? ` \xB7 avg starter age ${a.totals.avgStarterAge}` : ""}`);
+  const ir = a.roomToMove?.ir;
+  if (ir && ir.slots) {
+    L.push(`IR ${ir.used} of ${ir.slots}${ir.full ? " (full)" : ""}${ir.eligibleWaiting.length ? ` \xB7 IR-eligible but on the active roster: ${ir.eligibleWaiting.map((p) => p.name).join(", ")}` : ""}`);
+  }
+  const act = a.roomToMove?.activeRoster;
+  if (act) L.push(`Active roster ${act.used} of ${act.slots}${act.open === 0 ? " \u2014 full, a claim needs a drop" : ` \xB7 ${act.open} open`}`);
   const dl = a.calendar?.tradeDeadline;
   if (dl) {
     L.push(dl.status === "passed" ? `Trade deadline passed (Week ${dl.week})` : dl.status === "this-week" ? `Trade deadline is THIS WEEK (Week ${dl.week})` : `Trade deadline: Week ${dl.week} \xB7 ${dl.weeksLeft} week${dl.weeksLeft === 1 ? "" : "s"} away`);
@@ -41829,6 +41947,8 @@ var init_getRoster = __esm({
     init_leagueState();
     init_marketTrend();
     init_tradeDeadline();
+    init_injuryStatus();
+    init_rosterSpace();
     init_teams();
     init_news();
     MAX_PLAYERS = 60;
@@ -42152,10 +42272,20 @@ function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 5, minV
     }
     return { player: p, score, reasons, isNeed, isUpgrade, upgradeMargin, trend };
   }).filter((r) => r.isNeed || r.isUpgrade || isRising(r.trend)).sort((a, b) => b.score - a.score);
-  return scored.slice(0, limit).map((r) => ({
-    ...r,
-    primaryReason: r.reasons[0] ?? "Available value"
-  }));
+  const leaders = [];
+  const byPosition = /* @__PURE__ */ new Map();
+  for (const r of scored) {
+    const pos = r.player.position;
+    const leader = byPosition.get(pos);
+    if (!leader) {
+      const entry = { ...r, primaryReason: r.reasons[0] ?? "Available value", alternatives: [] };
+      byPosition.set(pos, entry);
+      leaders.push(entry);
+    } else if (leader.alternatives.length < MAX_PICKUP_ALTERNATIVES) {
+      leader.alternatives.push({ ...r, primaryReason: r.reasons[0] ?? "Available value" });
+    }
+  }
+  return leaders.slice(0, limit);
 }
 function suggestSellMove(player, myRoster, allRosters) {
   if (!player || !myRoster || !allRosters?.length) return null;
@@ -42222,7 +42352,7 @@ function suggestSellMove(player, myRoster, allRosters) {
     summary: pick2.starts ? `Shop ${player.name} to ${partnerName} \u2014 he'd start for them.` : `Shop ${player.name} to ${partnerName} \u2014 they're thin at ${pos}.`
   };
 }
-var CORE_DEPTH, PICK_ROUND_KEEP, PICK_KEEP_DEFAULT, PICK_KEEP_CAP, AGE_TILT_BY_POSITION, AGE_TILT_BY_TIER, AGE_TILT_SPAN, clamp2, PROTECT_THRESHOLD, CASH_OUT_BAND;
+var CORE_DEPTH, PICK_ROUND_KEEP, PICK_KEEP_DEFAULT, PICK_KEEP_CAP, AGE_TILT_BY_POSITION, AGE_TILT_BY_TIER, AGE_TILT_SPAN, clamp2, PROTECT_THRESHOLD, MAX_PICKUP_ALTERNATIVES, CASH_OUT_BAND;
 var init_recommendations = __esm({
   "src/utils/recommendations.js"() {
     init_constants();
@@ -42241,6 +42371,7 @@ var init_recommendations = __esm({
     AGE_TILT_SPAN = 3;
     clamp2 = (v, lo = 0.05, hi = 1) => Math.max(lo, Math.min(hi, v));
     PROTECT_THRESHOLD = 0.9;
+    MAX_PICKUP_ALTERNATIVES = 3;
     CASH_OUT_BAND = [1 / (1 + FAIR_BAND_PCT), 1 / (1 - FAIR_BAND_PCT)];
   }
 });
@@ -42832,7 +42963,18 @@ function buildFreeAgentAnswer(snapshot, weekly, { position, limit, myRosterId } 
     isUpgrade: r.isUpgrade,
     upgradeMargin: r.isUpgrade ? Math.round(r.upgradeMargin) : null,
     reasons: r.reasons,
-    faabBid: bidFor(r.player)
+    faabBid: bidFor(r.player),
+    // The next players at this position (owner, 2026-10-07: one pickup per
+    // position — "I would only go for one of those"). Deliberately NO bid:
+    // a bid is an invitation to claim, and claiming two is the mistake.
+    alternatives: (r.alternatives ?? []).map((a) => ({
+      sleeperId: String(a.player.sleeperId),
+      name: a.player.name,
+      nflTeam: a.player.team || null,
+      value: a.player.value ?? null,
+      projectedPoints: projMap ? round2(getProjPts(a.player.sleeperId, projMap)) : null,
+      reason: a.primaryReason
+    }))
   }));
   return {
     ok: true,
@@ -42926,6 +43068,9 @@ function buildNotes3({ snapshot, weekly, projMap, recommendations, wanted, filte
   notes.push(
     `Suggested FAAB bids (faabBid): ${FAAB_CALIBRATION}. Treat the tiers as a measured ladder, not a forecast \u2014 whether anyone else bids is NOT predicted (dynasty value barely moves the contest rate), so the bid is sized by how much winning the player matters to this roster.`
   );
+  notes.push(
+    "ONE pickup per position: each row is the best available at its position, and the others at that position are listed under `alternatives` with no bid. Claim the row, not the alternatives \u2014 they are who is next if he goes elsewhere."
+  );
   notes.push(FAAB_BATCH_WARNING);
   notes.push(
     `Sleeper's API is read-only: place the claim yourself in the Sleeper app. ` + (league.myRoster.faabBudget == null ? "The league's FAAB budget could not be read, so no remainder is quoted." : `You have ${faabDisplay(league.myRoster.faabRemaining)} of ${faabDisplay(league.myRoster.faabBudget)} FAAB left this period \u2014 the budget resets twice a league year.`)
@@ -42964,6 +43109,9 @@ function renderFreeAgentText(a) {
       p.reasons.forEach((r) => L.push(`      ${r}`));
       const b = p.faabBid;
       L.push(b.bid != null ? `      Bid $${b.bid} (${b.pctOfBudget}% of budget, ${b.label}) \u2014 ${b.expectedWin}${b.capped ? " \xB7 capped at what you have left" : ""}` : `      No bid: ${b.reasons[0]}`);
+      if (p.alternatives?.length) {
+        L.push(`      Next at ${p.position} (no bid \u2014 claim one per position): ${p.alternatives.map((x) => x.name).join(", ")}`);
+      }
     });
   }
   L.push("");
@@ -43209,43 +43357,6 @@ var init_resolveAssets = __esm({
     WORD_ROUND = { first: 1, second: 2, third: 3, fourth: 4 };
     escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     num3 = (n) => n == null ? "\u2014" : n.toLocaleString("en-US");
-  }
-});
-
-// src/utils/rosterSpace.js
-function getRosterLimits(leagueInfo) {
-  const positions = leagueInfo?.roster_positions ?? [];
-  const activeSlots = positions.filter((p) => p !== "TAXI" && p !== "IR").length;
-  if (!activeSlots) return null;
-  return {
-    activeSlots,
-    taxiSlots: leagueInfo?.settings?.taxi_slots ?? 0,
-    irSlots: leagueInfo?.settings?.reserve_slots ?? 0
-  };
-}
-function buildRosterSpace(roster, { arrivals = [], departures = [], limits } = {}) {
-  if (!roster?.players || !limits?.activeSlots) return null;
-  const active = roster.players.filter((p) => !p.isTaxi && !p.isIR);
-  const before = active.length;
-  const activeIds = new Set(active.map((p) => String(p.sleeperId)));
-  const leavingActive = departures.filter((d) => activeIds.has(String(d.sleeperId))).length;
-  const after = before - leavingActive + arrivals.length;
-  const cap = limits.activeSlots;
-  return {
-    cap,
-    before,
-    after,
-    net: after - before,
-    headroomAfter: cap - after,
-    overBefore: Math.max(0, before - cap),
-    overAfter: Math.max(0, after - cap),
-    // Owed drops shrink — the trade helps them get compliant. This is the
-    // pitch lever, and it points the opposite way from "you're giving up value".
-    relievesCrunch: before > cap && after < before
-  };
-}
-var init_rosterSpace = __esm({
-  "src/utils/rosterSpace.js"() {
   }
 });
 
@@ -47218,7 +47329,7 @@ function createServer({ env = process.env, fetcher, store } = {}) {
     "get_roster",
     {
       title: "Get a team roster",
-      description: "Full dynasty roster for one team in the league: every player with value, overall and positional rank, 30-day trend and starter/bench/taxi/IR slot; every draft pick owned, with its exact slot label where the draft order is known; plus total value and league value rank, win-window tier, record and FAAB, and the league calendar (trade deadline week, weeks left and whether it is deadline time, read from league settings; Sleeper's waiver settings passed through undecoded). Defaults to the configured team when `team` is omitted. Accepts a team name, a manager username, or a roster id \u2014 an ambiguous name returns the candidates rather than guessing.",
+      description: "Full dynasty roster for one team in the league: every player with value, overall and positional rank, 30-day trend and starter/bench/taxi/IR slot; every draft pick owned, with its exact slot label where the draft order is known; plus total value and league value rank, win-window tier, record and FAAB; room to move (IR slots used and open \u2014 when IR is full an injured player must stay on the active roster \u2014 and open active roster spots, so whether a claim needs a drop); and the league calendar (trade deadline week, weeks left and whether it is deadline time, read from league settings; Sleeper's waiver settings passed through undecoded). Defaults to the configured team when `team` is omitted. Accepts a team name, a manager username, or a roster id \u2014 an ambiguous name returns the candidates rather than guessing.",
       inputSchema: {
         team: external_exports.string().optional().describe("Team name, manager username, or roster id. Omit for your own team."),
         leagueId: external_exports.string().optional().describe("Sleeper league id. Omit for the configured league."),
@@ -47274,6 +47385,24 @@ function createServer({ env = process.env, fetcher, store } = {}) {
           remaining: external_exports.number().nullable(),
           spent: external_exports.number(),
           display: external_exports.string()
+        }).optional(),
+        // IR room and active-roster headroom from league settings (owner,
+        // 2026-10-07): with IR full, an injured player stays on the bench.
+        roomToMove: external_exports.object({
+          ir: external_exports.object({
+            slots: external_exports.number(),
+            used: external_exports.number(),
+            open: external_exports.number(),
+            full: external_exports.boolean(),
+            eligibleWaiting: external_exports.array(external_exports.object({
+              sleeperId: external_exports.string(),
+              name: external_exports.string(),
+              status: external_exports.string().nullable()
+            })),
+            canMove: external_exports.number(),
+            statusesKnown: external_exports.boolean()
+          }),
+          activeRoster: external_exports.object({ slots: external_exports.number(), used: external_exports.number(), open: external_exports.number() }).nullable()
         }).optional(),
         winWindow: external_exports.string().optional(),
         totals: external_exports.object({
@@ -47560,7 +47689,16 @@ function createServer({ env = process.env, fetcher, store } = {}) {
             expectedWin: external_exports.string().nullable(),
             unavailable: external_exports.string().nullable(),
             reasons: external_exports.array(external_exports.string())
-          })
+          }),
+          // Same-position runners-up — no bid: one pickup per position.
+          alternatives: external_exports.array(external_exports.object({
+            sleeperId: external_exports.string(),
+            name: external_exports.string(),
+            nflTeam: external_exports.string().nullable(),
+            value: external_exports.number().nullable(),
+            projectedPoints: external_exports.number().nullable(),
+            reason: external_exports.string()
+          }))
         })).optional(),
         faab: external_exports.object({
           budget: external_exports.number().nullable(),

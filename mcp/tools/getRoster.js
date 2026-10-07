@@ -11,6 +11,8 @@ import { getTeamName } from '../../src/utils/teamName.js'
 import { faabDisplay } from '../../src/utils/leagueState.js'
 import { trendTag } from '../../src/utils/marketTrend.js'
 import { readTradeDeadline, isDeadlineWindow } from '../../src/utils/tradeDeadline.js'
+import { buildIrCapacity } from '../../src/utils/injuryStatus.js'
+import { getRosterLimits } from '../../src/utils/rosterSpace.js'
 // Team resolution moved to mcp/teams.js in phase 1b so analyze_trade's
 // `partner` argument resolves through the SAME code. Re-exported here because
 // this module's existing tests (and its contract) name it.
@@ -109,6 +111,8 @@ export function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId,
     .sort((a, b) => b.totalValue - a.totalValue)
     .findIndex(r => r.rosterId === roster.rosterId) + 1
 
+  const room = buildRoom(snapshot, league.leagueInfo, roster)
+
   const counts = players.reduce((acc, p) => {
     acc[p.slot] = (acc[p.slot] ?? 0) + 1
     return acc
@@ -142,6 +146,10 @@ export function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId,
       spent: roster.faabSpent,
       display: faabDisplay(roster.faabRemaining),
     },
+    // Room, read from league settings (owner, 2026-10-07): IR is two slots
+    // here, and once they are full an injured player stays on the bench. A
+    // reader must never be told to "move him to IR" when there is no room.
+    roomToMove: room,
     winWindow: getWinWindowTier(roster.rosterId, allRosters),
     totals: {
       totalValue: roster.totalValue,
@@ -159,7 +167,7 @@ export function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId,
     picks,
     // Caveats the reader needs in order to read the numbers correctly. These
     // are conditions, not decoration — each one changes what a number means.
-    notes: buildNotes(snapshot, roster, players, picks),
+    notes: buildNotes(snapshot, roster, players, picks, room),
   }
 }
 
@@ -195,6 +203,37 @@ function buildCalendar(snapshot, leagueInfo) {
   }
 }
 
+// IR capacity through THE rule (src/utils/injuryStatus.js, shared with the
+// app's IR action item) and active-roster headroom through the league's own
+// roster_positions (src/utils/rosterSpace.js). Orchestration only.
+function buildRoom(snapshot, leagueInfo, roster) {
+  const settings = leagueInfo?.settings ?? {}
+  const statusOf = p => snapshot.playerDB?.[String(p.sleeperId)]?.injury_status ?? null
+  const ir = buildIrCapacity(roster.players, settings, statusOf)
+  const limits = getRosterLimits(leagueInfo)
+  const activeUsed = roster.players.filter(p => !p.isTaxi && !p.isIR).length
+  return {
+    ir: {
+      slots: ir.slots,
+      used: ir.used,
+      open: ir.open,
+      full: ir.full,
+      // Players the league WOULD let onto IR who are taking an active spot.
+      // With IR full they stay where they are; canMove says how many fit now.
+      eligibleWaiting: ir.eligibleWaiting.map(p => ({
+        sleeperId: String(p.sleeperId), name: p.name, status: statusOf(p),
+      })),
+      canMove: ir.canMove,
+      // Without the player DB no status is readable, so "nobody is waiting"
+      // would be a guess — say it could not be checked instead.
+      statusesKnown: !!snapshot.counts?.playerDBEntries,
+    },
+    activeRoster: limits
+      ? { slots: limits.activeSlots, used: activeUsed, open: Math.max(0, limits.activeSlots - activeUsed) }
+      : null,
+  }
+}
+
 // Only a flagged player carries this. Attaching a headline to 26 healthy
 // players would blow the bounded-output rule to say nothing.
 function injuryFields(snapshot, news, sleeperId) {
@@ -215,8 +254,19 @@ function injuryFields(snapshot, news, sleeperId) {
   }
 }
 
-function buildNotes(snapshot, roster, players, picks) {
+function buildNotes(snapshot, roster, players, picks, room) {
   const notes = []
+  if (room?.ir?.full && room.ir.eligibleWaiting.length) {
+    const names = room.ir.eligibleWaiting.map(p => p.name).join(', ')
+    notes.push(
+      `IR is full (${room.ir.used} of ${room.ir.slots}). ${names} could go on IR under league rules but must stay on the active roster until a slot opens — do not suggest moving them to IR.`
+    )
+  }
+  if (room?.activeRoster && room.activeRoster.open === 0) {
+    notes.push(
+      `All ${room.activeRoster.slots} active roster spots are filled, so any waiver claim or uneven trade needs a drop.`
+    )
+  }
   if (snapshot.asOf.stale) {
     notes.push(
       'At least one source failed to refresh, so this is cached data — see asOf.sources for which and how old.'
@@ -263,6 +313,12 @@ export function renderRosterText(a) {
   L.push(`Total value ${a.totals.totalValue.toLocaleString('en-US')} (#${a.totals.valueRank} of ${a.league.teams}) · players ${a.totals.playerValue.toLocaleString('en-US')} · picks ${a.totals.pickValue.toLocaleString('en-US')}`)
   L.push(`Win window: ${a.winWindow}${a.record ? ` · ${a.record.wins}-${a.record.losses}${a.record.ties ? '-' + a.record.ties : ''} · ${a.record.pointsFor} PF` : ' · no games played yet'}`)
   L.push(`FAAB ${a.faab.display} of ${faabDisplay(a.faab.budget)}${a.totals.avgStarterAge ? ` · avg starter age ${a.totals.avgStarterAge}` : ''}`)
+  const ir = a.roomToMove?.ir
+  if (ir && ir.slots) {
+    L.push(`IR ${ir.used} of ${ir.slots}${ir.full ? ' (full)' : ''}${ir.eligibleWaiting.length ? ` · IR-eligible but on the active roster: ${ir.eligibleWaiting.map(p => p.name).join(', ')}` : ''}`)
+  }
+  const act = a.roomToMove?.activeRoster
+  if (act) L.push(`Active roster ${act.used} of ${act.slots}${act.open === 0 ? ' — full, a claim needs a drop' : ` · ${act.open} open`}`)
   const dl = a.calendar?.tradeDeadline
   if (dl) {
     L.push(dl.status === 'passed'

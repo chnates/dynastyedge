@@ -88,6 +88,36 @@ export function isIrEligible(status, leagueSettings) {
   return !!(key && Number(leagueSettings?.[key]) === 1)
 }
 
+// IR CAPACITY — one home (owner, 2026-10-07: "I only have 2 IR spots. Once
+// those are full, people have to stay on the bench injured."). Eligibility
+// alone is not advice: with every slot taken, "move him to IR" cannot be
+// followed, and an injured player the league WOULD let onto IR occupies a
+// bench spot instead. Read by The Edge / My Roster's IR action item and the
+// MCP server's get_roster, so the two can never disagree about room.
+//   slots           settings.reserve_slots (0 when the league has none)
+//   used            players currently in an IR slot
+//   open            slots − used, never below 0
+//   full            every slot taken (and the league has at least one)
+//   eligibleWaiting active (not IR, not taxi) players the league would allow
+//                   onto IR — on the bench or starting, taking an active spot
+//   canMove         how many of them actually fit right now
+// `statusOf(player)` returns the Sleeper injury_status; taxi players are left
+// out because taxi sits outside the active roster, so moving one frees nothing.
+export function buildIrCapacity(players, leagueSettings, statusOf) {
+  const slots = Math.max(0, Number(leagueSettings?.reserve_slots) || 0)
+  const list = players ?? []
+  const used = list.filter(p => p.isIR).length
+  const open = Math.max(0, slots - used)
+  const eligibleWaiting = list.filter(p =>
+    !p.isIR && !p.isTaxi && isIrEligible(statusOf(p), leagueSettings))
+  return {
+    slots, used, open,
+    full: slots > 0 && open === 0,
+    eligibleWaiting,
+    canMove: Math.min(open, eligibleWaiting.length),
+  }
+}
+
 // One player's status as the player card and the trade cards consume it,
 // read off a trimmed player-DB row. Pure, so the hook and the MCP server build
 // the same row. `meta` undefined (the player is not in the DB) reads as no

@@ -274,11 +274,32 @@ export function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 
     .filter(r => r.isNeed || r.isUpgrade || isRising(r.trend))
     .sort((a, b) => b.score - a.score)
 
-  return scored.slice(0, limit).map(r => ({
-    ...r,
-    primaryReason: r.reasons[0] ?? 'Available value',
-  }))
+  // ONE PICKUP PER POSITION (owner, 2026-10-07): "I would never pick up all
+  // three QBs — I would only go for one." Every player is scored on his own
+  // merits, so three QBs could each "fill your QB need" and all three be
+  // recommended with a bid — advice nobody would follow, and claims that
+  // would all go through if Sleeper processed them. The best at each position
+  // is the recommendation; the rest at that position ride along as
+  // `alternatives` (no bid of their own on any surface) so a reader can see
+  // who is next if the leader goes elsewhere.
+  const leaders = []
+  const byPosition = new Map()
+  for (const r of scored) {
+    const pos = r.player.position
+    const leader = byPosition.get(pos)
+    if (!leader) {
+      const entry = { ...r, primaryReason: r.reasons[0] ?? 'Available value', alternatives: [] }
+      byPosition.set(pos, entry)
+      leaders.push(entry)
+    } else if (leader.alternatives.length < MAX_PICKUP_ALTERNATIVES) {
+      leader.alternatives.push({ ...r, primaryReason: r.reasons[0] ?? 'Available value' })
+    }
+  }
+  return leaders.slice(0, limit)
 }
+
+// How many same-position runners-up a recommended pickup carries.
+export const MAX_PICKUP_ALTERNATIVES = 3
 
 // Turn "you have a surplus you could convert" into the actual move: who to call
 // and what to ask for.

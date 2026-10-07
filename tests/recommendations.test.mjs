@@ -396,3 +396,47 @@ test('movability tilts the order but hides nobody', () => {
     assert.ok(Array.isArray(t.reasons) && t.reasons.length > 0, 'every row states why')
   }
 })
+
+// ── ONE PICKUP PER POSITION (owner, 2026-10-07) ────────────────────────────
+// "In what scenario would I ever need to pick up 3 QBs? I would only go for
+// one." Each free agent used to be scored on his own merits, so three QBs
+// could each "fill your QB need" and all be recommended with a bid. The best
+// at each position is the recommendation; the rest ride as `alternatives`.
+import { recommendFreeAgents, MAX_PICKUP_ALTERNATIVES } from '../src/utils/recommendations.js'
+
+const pl = (id, position, value, extra = {}) => ({
+  sleeperId: id, name: `P${id}`, position, value, age: 26, trend30Day: 0, ...extra,
+})
+const team = (rosterId, scale) => ({
+  rosterId,
+  players: ['QB', 'QB', 'RB', 'RB', 'RB', 'WR', 'WR', 'WR', 'TE'].map((pos, i) =>
+    pl(`${rosterId}-${i}`, pos, scale * (i % 3 === 0 ? 3000 : 2000))),
+  picks: [],
+})
+const ME = team(6, 0.2)                       // weak everywhere → every position a need
+const LEAGUE_ROSTERS = [ME, team(1, 1), team(2, 1), team(3, 1.2)]
+const FAS = [
+  pl('q1', 'QB', 3000), pl('q2', 'QB', 2600), pl('q3', 'QB', 2400), pl('q4', 'QB', 2200), pl('q5', 'QB', 2100),
+  pl('w1', 'WR', 2500), pl('w2', 'WR', 2300),
+  pl('t1', 'TE', 1500),
+]
+
+test('one pickup per position: the best at each, the rest as alternatives', () => {
+  const recs = recommendFreeAgents(FAS, ME, LEAGUE_ROSTERS, { limit: 10 })
+  const positions = recs.map(r => r.player.position)
+  assert.equal(new Set(positions).size, positions.length, `a position repeats: ${positions}`)
+  const qb = recs.find(r => r.player.position === 'QB')
+  assert.equal(qb.player.sleeperId, 'q1', 'the leader is the best-scored QB')
+  assert.deepEqual(qb.alternatives.map(a => a.player.sleeperId), ['q2', 'q3', 'q4'],
+    'next three QBs, best first')
+  assert.equal(qb.alternatives.length, MAX_PICKUP_ALTERNATIVES, 'bounded — q5 is not carried')
+  assert.deepEqual(recs.find(r => r.player.position === 'WR').alternatives.map(a => a.player.sleeperId), ['w2'])
+  assert.deepEqual(recs.find(r => r.player.position === 'TE').alternatives, [])
+})
+
+test('the limit counts positions, not players — and a single-position pool yields one', () => {
+  assert.equal(recommendFreeAgents(FAS, ME, LEAGUE_ROSTERS, { limit: 2 }).length, 2)
+  const qbOnly = recommendFreeAgents(FAS.filter(p => p.position === 'QB'), ME, LEAGUE_ROSTERS, { limit: 8 })
+  assert.equal(qbOnly.length, 1, 'filtered to QB, there is still exactly one QB to claim')
+  assert.equal(qbOnly[0].alternatives.length, MAX_PICKUP_ALTERNATIVES)
+})

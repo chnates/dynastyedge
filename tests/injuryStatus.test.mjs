@@ -166,3 +166,38 @@ test('no second injury-status list anywhere in src/ or mcp/', () => {
   }
   assert.deepEqual(copies, [], 'import from src/utils/injuryStatus.js instead')
 })
+
+// ── IR CAPACITY (owner, 2026-10-07): "I only have 2 IR spots. Once those are
+// full, people have to stay on the bench injured." One home, read by the IR
+// action item and get_roster, so "move him to IR" is never advised without room.
+import { buildIrCapacity } from '../src/utils/injuryStatus.js'
+
+const LEAGUE_IR = { reserve_slots: 2, reserve_allow_out: 1, reserve_allow_cov: 1 }
+const statuses = { a: 'IR', b: 'Out', c: 'Questionable', d: 'IR', e: 'IR', t: 'IR' }
+const statusOf = p => statuses[p.sleeperId] ?? null
+
+test('IR full: eligible players are reported as waiting, and none can move', () => {
+  const players = [
+    { sleeperId: 'd', isIR: true }, { sleeperId: 'e', isIR: true },   // both slots taken
+    { sleeperId: 'a' }, { sleeperId: 'b' }, { sleeperId: 'c' },         // a, b eligible; c not
+    { sleeperId: 't', isTaxi: true },                                    // taxi frees nothing
+  ]
+  const ir = buildIrCapacity(players, LEAGUE_IR, statusOf)
+  assert.equal(ir.slots, 2); assert.equal(ir.used, 2); assert.equal(ir.open, 0)
+  assert.equal(ir.full, true)
+  assert.deepEqual(ir.eligibleWaiting.map(p => p.sleeperId), ['a', 'b'])
+  assert.equal(ir.canMove, 0, 'no room — the advice must not be given')
+})
+
+test('IR with room: canMove is the smaller of open slots and eligible players', () => {
+  const players = [{ sleeperId: 'd', isIR: true }, { sleeperId: 'a' }, { sleeperId: 'b' }]
+  const ir = buildIrCapacity(players, LEAGUE_IR, statusOf)
+  assert.equal(ir.open, 1); assert.equal(ir.full, false); assert.equal(ir.canMove, 1)
+})
+
+test('a league with no IR slots is never "full", and over-full never goes negative', () => {
+  const none = buildIrCapacity([{ sleeperId: 'a' }], {}, statusOf)
+  assert.equal(none.slots, 0); assert.equal(none.full, false); assert.equal(none.canMove, 0)
+  const over = buildIrCapacity([{ isIR: true }, { isIR: true }, { isIR: true }], LEAGUE_IR, statusOf)
+  assert.equal(over.open, 0)
+})

@@ -225,3 +225,15 @@ test('a league that does not report its budget gets null bids, not an assumed sc
   })
   assert.equal(a.faab.budget, null)
 })
+
+// ── one pickup per position (owner, 2026-10-07) ────────────────────────────
+test('no position repeats; same-position runners-up are alternatives with NO bid', () => {
+  const a = build({ limit: MAX_LIMIT })
+  const positions = a.recommendations.map(r => r.position)
+  assert.equal(new Set(positions).size, positions.length, `a position repeats: ${positions}`)
+  for (const r of a.recommendations) {
+    assert.ok(Array.isArray(r.alternatives))
+    for (const alt of r.alternatives) assert.equal('faabBid' in alt, false, 'an alternative never carries a bid')
+  }
+  assert.ok(a.notes.some(n => /ONE pickup per position/.test(n)))
+})
