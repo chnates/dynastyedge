@@ -1,3 +1,5 @@
+import { seedPickYears } from './utils/seasonWindow'
+
 export const LEAGUE_ID = '1313933520715907072'
 
 // Identity is now runtime state, not a constant: the signed-in roster comes
@@ -53,7 +55,7 @@ export const FANTASYCALC_PARAMS = {
 // reports `status: "complete"`, which is also the moment FantasyCalc retires
 // that season's pick entries. This array is only what renders before NFL state
 // resolves, so it never needs to be exactly right — just close.
-export const PICK_YEARS = ['2026', '2027', '2028']
+export const PICK_YEARS = seedPickYears()
 export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 
 // Ordered roster slots — indices match Sleeper's starters array positions

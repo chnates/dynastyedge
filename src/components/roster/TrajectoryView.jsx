@@ -402,7 +402,7 @@ export default function TrajectoryView() {
             <p className="font-body text-xs text-text-secondary leading-relaxed">
               <span className="font-semibold text-text-primary">Picks</span> hold at today's value
               until their draft year, then convert into a young rookie-aged asset that ages on a
-              blended curve — so a 2027 first starts paying off in your {trajectory.seasons[1]}+ outlook.
+              blended curve — so a {trajectory.seasons[1]} first starts paying off in your {trajectory.seasons[1]}+ outlook.
             </p>
             <p className="font-body text-xs text-text-secondary leading-relaxed">
               <span className="font-semibold text-text-primary">It's an estimate, not a forecast</span> —
