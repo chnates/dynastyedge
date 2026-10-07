@@ -84,7 +84,18 @@ thesis.
 
 ## Item 1 — Briefing decision-quality measurement: did The Edge call it?
 
-**Status: open.** The single highest-leverage item — it converts the north
+**Status: RECORDING since 2026-10-07 (open-items §0 #10); scoring NOT built.**
+`scripts/record-briefing.mjs` writes the five checkable claims (buy-low,
+sell-high, pickup, closing-window, underperformer) daily, with comparison
+groups, to the permanent `briefing-ledger.json`. The metric, comparison groups,
+windows and sample-size bars were pre-registered before any data:
+`docs/analysis/briefing-decision-quality-2026-10.md` (first pass on or after
+2026-12-15; ~75 episodes per item for a verdict, so expect years for
+buy-low). The "practical hurdle" in step 3 below is gone: `getTeamName` moved
+to `src/utils/teamName.js`, and the recorder already runs the briefing under
+Node. The original framing follows.
+
+**Original status: open.** The single highest-leverage item — it converts the north
 star from a vibe into a number, and it is the acceptance test for every other
 item on this list.
 

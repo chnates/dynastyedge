@@ -41,8 +41,11 @@ export function computeEdgeSignals({ league, values, watchlist, nflState, myRost
   })
 
   // Best buy-low window: falling player at one of my deficit positions,
-  // not mine. A rebuilding owner makes it prime.
-  const buyLow = Object.values(values.playerMap)
+  // not mine. A rebuilding owner makes it prime. The whole eligible pool is
+  // kept (steepest fall first) because the briefing ledger records it as the
+  // comparison group the pick is scored against — the pick is its head, so
+  // the two can never be selected by different rules.
+  const buyLowCandidates = Object.values(values.playerMap)
     .filter(p => isBuyLowCandidate(p, {
       deficits: myDeficits,
       ownerRosterId: ownerByPlayer[p.sleeperId]?.rosterId,
@@ -53,12 +56,15 @@ export function computeEdgeSignals({ league, values, watchlist, nflState, myRost
       ownerRoster: ownerByPlayer[p.sleeperId] ?? null,
       ownerTier: ownerByPlayer[p.sleeperId] ? tiers[ownerByPlayer[p.sleeperId].rosterId] : null,
     }))
-    .sort((a, b) => a.trend30Day - b.trend30Day)[0] ?? null
+    .sort((a, b) => a.trend30Day - b.trend30Day)
+  const buyLow = buyLowCandidates[0] ?? null
 
-  // Best sell-high: my biggest riser at a surplus position.
-  const sellHigh = myRoster.players
+  // Best sell-high: my biggest riser at a surplus position (the pool kept for
+  // the same reason as buy-low's).
+  const sellHighCandidates = myRoster.players
     .filter(p => isSellHighCandidate(p, { surpluses: mySurpluses }))
-    .sort((a, b) => b.trend30Day - a.trend30Day)[0] ?? null
+    .sort((a, b) => b.trend30Day - a.trend30Day)
+  const sellHigh = sellHighCandidates[0] ?? null
 
   // Market radar rows: watchlist movers first, then my roster's movers.
   const watchSet = new Set(watchlist.map(String))
@@ -89,7 +95,10 @@ export function computeEdgeSignals({ league, values, watchlist, nflState, myRost
   const anyRecords = allRosters.some(
     r => (r.record?.wins ?? 0) + (r.record?.losses ?? 0) + (r.record?.ties ?? 0) > 0
   )
+  // `rankGaps` (every team, 1-based ranks) is what the briefing ledger records
+  // as the comparison group for the underperformer claim.
   let underperformer = null
+  const rankGaps = []
   if (anyRecords) {
     const byRecord = [...allRosters].sort((a, b) => {
       const winDiff = (b.record?.wins ?? 0) - (a.record?.wins ?? 0)
@@ -100,6 +109,7 @@ export function computeEdgeSignals({ league, values, watchlist, nflState, myRost
     let biggestGap = 3
     byValue.forEach((r, valueIdx) => {
       const gap = recordRank[r.rosterId] - valueIdx
+      rankGaps.push({ roster: r, valueRank: valueIdx + 1, recordRank: recordRank[r.rosterId] + 1, gap })
       if (r.rosterId !== myRosterId && gap > biggestGap) {
         biggestGap = gap
         underperformer = r
@@ -111,13 +121,17 @@ export function computeEdgeSignals({ league, values, watchlist, nflState, myRost
   // (Dynasty Trajectory model) — motivated to move win-now talent before it
   // depreciates. Pick the most valuable such team, since they have the most to
   // pry loose. Zero extra fetch — reuses the cached FantasyCalc pool.
+  // Every opponent's read is kept (`opponentTrajectories`) as the closing-window
+  // claim's comparison group in the briefing ledger.
   let closingWindow = null
+  let opponentTrajectories = []
   if (values?.playerMap) {
     const { curves, generic } = buildAgeCurves(values.playerMap)
     const season = Number(nflState?.season) || new Date().getFullYear()
-    const declining = allRosters
+    opponentTrajectories = allRosters
       .filter(r => r.rosterId !== myRosterId)
       .map(r => ({ roster: r, read: getTrajectoryRead(buildRosterTrajectory(r, season, curves, generic)) }))
+    const declining = opponentTrajectories
       .filter(x => x.read?.direction === 'declining')
       .sort((a, b) => b.roster.totalValue - a.roster.totalValue)
     closingWindow = declining[0] ?? null
@@ -146,11 +160,15 @@ export function computeEdgeSignals({ league, values, watchlist, nflState, myRost
     myDeficits,
     mySurpluses,
     buyLow,
+    buyLowCandidates,
     sellHigh,
+    sellHighCandidates,
     topPickup,
     radar,
     underperformer,
+    rankGaps,
     closingWindow,
+    opponentTrajectories,
     anyRecords,
     teamTrend,
     playerValue,

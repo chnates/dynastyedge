@@ -144,6 +144,9 @@ export async function getSnapshot({
     values: values.data,
     playerDB: playerDB.data,
     nflState: core.data.nflState ?? null,
+    // The league's drafts list, so a caller can pick the draft The Edge would
+    // show (selectTrackedDraft) without a second request.
+    drafts: Array.isArray(core.data.drafts) ? core.data.drafts : [],
     isOffseason: core.data.nflState?.season_type !== 'regular',
     asOf: {
       // The OLDEST contributing source — an answer is only as fresh as its

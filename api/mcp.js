@@ -832,6 +832,9 @@ async function getSnapshot({
     values: values.data,
     playerDB: playerDB.data,
     nflState: core.data.nflState ?? null,
+    // The league's drafts list, so a caller can pick the draft The Edge would
+    // show (selectTrackedDraft) without a second request.
+    drafts: Array.isArray(core.data.drafts) ? core.data.drafts : [],
     isOffseason: core.data.nflState?.season_type !== "regular",
     asOf: {
       // The OLDEST contributing source — an answer is only as fresh as its
@@ -42481,7 +42484,7 @@ function computeEdgeSignals({ league, values, watchlist, nflState, myRosterId })
       ownerByPlayer[p.sleeperId] = r;
     });
   });
-  const buyLow = Object.values(values.playerMap).filter((p) => isBuyLowCandidate(p, {
+  const buyLowCandidates = Object.values(values.playerMap).filter((p) => isBuyLowCandidate(p, {
     deficits: myDeficits,
     ownerRosterId: ownerByPlayer[p.sleeperId]?.rosterId,
     myRosterId
@@ -42489,8 +42492,10 @@ function computeEdgeSignals({ league, values, watchlist, nflState, myRosterId })
     ...p,
     ownerRoster: ownerByPlayer[p.sleeperId] ?? null,
     ownerTier: ownerByPlayer[p.sleeperId] ? tiers[ownerByPlayer[p.sleeperId].rosterId] : null
-  })).sort((a, b) => a.trend30Day - b.trend30Day)[0] ?? null;
-  const sellHigh = myRoster.players.filter((p) => isSellHighCandidate(p, { surpluses: mySurpluses })).sort((a, b) => b.trend30Day - a.trend30Day)[0] ?? null;
+  })).sort((a, b) => a.trend30Day - b.trend30Day);
+  const buyLow = buyLowCandidates[0] ?? null;
+  const sellHighCandidates = myRoster.players.filter((p) => isSellHighCandidate(p, { surpluses: mySurpluses })).sort((a, b) => b.trend30Day - a.trend30Day);
+  const sellHigh = sellHighCandidates[0] ?? null;
   const watchSet = new Set(watchlist.map(String));
   const myIds = new Set(myRoster.players.map((p) => p.sleeperId));
   const watchMovers = Object.values(values.playerMap).filter((p) => watchSet.has(String(p.sleeperId)) && p.trend30Day !== 0).sort((a, b) => Math.abs(b.trend30Day) - Math.abs(a.trend30Day));
@@ -42512,6 +42517,7 @@ function computeEdgeSignals({ league, values, watchlist, nflState, myRosterId })
     (r) => (r.record?.wins ?? 0) + (r.record?.losses ?? 0) + (r.record?.ties ?? 0) > 0
   );
   let underperformer = null;
+  const rankGaps = [];
   if (anyRecords) {
     const byRecord = [...allRosters].sort((a, b) => {
       const winDiff = (b.record?.wins ?? 0) - (a.record?.wins ?? 0);
@@ -42524,6 +42530,7 @@ function computeEdgeSignals({ league, values, watchlist, nflState, myRosterId })
     let biggestGap = 3;
     byValue.forEach((r, valueIdx) => {
       const gap = recordRank[r.rosterId] - valueIdx;
+      rankGaps.push({ roster: r, valueRank: valueIdx + 1, recordRank: recordRank[r.rosterId] + 1, gap });
       if (r.rosterId !== myRosterId && gap > biggestGap) {
         biggestGap = gap;
         underperformer = r;
@@ -42531,10 +42538,12 @@ function computeEdgeSignals({ league, values, watchlist, nflState, myRosterId })
     });
   }
   let closingWindow = null;
+  let opponentTrajectories = [];
   if (values?.playerMap) {
     const { curves, generic } = buildAgeCurves(values.playerMap);
     const season = Number(nflState?.season) || (/* @__PURE__ */ new Date()).getFullYear();
-    const declining = allRosters.filter((r) => r.rosterId !== myRosterId).map((r) => ({ roster: r, read: getTrajectoryRead(buildRosterTrajectory(r, season, curves, generic)) })).filter((x) => x.read?.direction === "declining").sort((a, b) => b.roster.totalValue - a.roster.totalValue);
+    opponentTrajectories = allRosters.filter((r) => r.rosterId !== myRosterId).map((r) => ({ roster: r, read: getTrajectoryRead(buildRosterTrajectory(r, season, curves, generic)) }));
+    const declining = opponentTrajectories.filter((x) => x.read?.direction === "declining").sort((a, b) => b.roster.totalValue - a.roster.totalValue);
     closingWindow = declining[0] ?? null;
   }
   const freeAgents = buildFreeAgentPool({ fcPlayerMap: values.playerMap, allRosters });
@@ -42555,11 +42564,15 @@ function computeEdgeSignals({ league, values, watchlist, nflState, myRosterId })
     myDeficits,
     mySurpluses,
     buyLow,
+    buyLowCandidates,
     sellHigh,
+    sellHighCandidates,
     topPickup,
     radar,
     underperformer,
+    rankGaps,
     closingWindow,
+    opponentTrajectories,
     anyRecords,
     teamTrend,
     playerValue
