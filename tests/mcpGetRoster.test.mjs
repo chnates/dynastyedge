@@ -294,3 +294,38 @@ test('calendar: offseason or no deadline is null, never a made-up week', () => {
   assert.equal(none.calendar.waiverSettings.dailyWaivers, null)
   assert.doesNotMatch(renderRosterText(none), /Trade deadline/)
 })
+
+// ── room to move (owner, 2026-10-07): "I only have 2 IR spots … once those
+// are full, people have to stay on the bench injured." ─────────────────────
+
+const roomSnap = (settings, rosterPositions) => ({
+  ...SNAP,
+  league: {
+    ...LEAGUE,
+    leagueInfo: { ...LEAGUE.leagueInfo, settings, roster_positions: rosterPositions },
+  },
+  // 'Bench RB' (id 2) is Out — eligible for IR under this league's rules.
+  playerDB: { 2: { injury_status: 'Out' }, 4: { injury_status: 'IR' } },
+})
+
+test('IR full: the eligible bench player is reported waiting, and the notes forbid an IR suggestion', () => {
+  // One IR slot, already holding Hurt WR (id 4).
+  const a = buildRosterAnswer(roomSnap({ waiver_budget: 1000, reserve_slots: 1, reserve_allow_out: 1 }, ['QB', 'RB', 'BN', 'BN']),
+    { defaultRosterId: 6, myRosterId: 6 })
+  const { ir, activeRoster } = a.roomToMove
+  assert.deepEqual({ slots: ir.slots, used: ir.used, open: ir.open, full: ir.full, canMove: ir.canMove },
+    { slots: 1, used: 1, open: 0, full: true, canMove: 0 })
+  assert.deepEqual(ir.eligibleWaiting, [{ sleeperId: '2', name: 'Bench RB', status: 'Out' }])
+  assert.ok(a.notes.some(n => /IR is full \(1 of 1\)\. Bench RB .*do not suggest moving them to IR/.test(n)))
+  // 4 active slots; Star QB, Bench RB, Kansas City Chiefs are active (taxi and IR sit outside).
+  assert.deepEqual(activeRoster, { slots: 4, used: 3, open: 1 })
+  assert.match(renderRosterText(a), /IR 1 of 1 \(full\) · IR-eligible but on the active roster: Bench RB/)
+})
+
+test('a full active roster says every claim needs a drop', () => {
+  const a = buildRosterAnswer(roomSnap({ waiver_budget: 1000, reserve_slots: 2 }, ['QB', 'RB', 'BN']),
+    { defaultRosterId: 6, myRosterId: 6 })
+  assert.deepEqual(a.roomToMove.activeRoster, { slots: 3, used: 3, open: 0 })
+  assert.ok(a.notes.some(n => /All 3 active roster spots are filled/.test(n)))
+  assert.equal(a.roomToMove.ir.full, false, 'one of two IR slots is open')
+})

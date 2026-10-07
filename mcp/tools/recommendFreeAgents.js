@@ -151,6 +151,17 @@ export function buildFreeAgentAnswer(snapshot, weekly, { position, limit, myRost
     upgradeMargin: r.isUpgrade ? Math.round(r.upgradeMargin) : null,
     reasons: r.reasons,
     faabBid: bidFor(r.player),
+    // The next players at this position (owner, 2026-10-07: one pickup per
+    // position — "I would only go for one of those"). Deliberately NO bid:
+    // a bid is an invitation to claim, and claiming two is the mistake.
+    alternatives: (r.alternatives ?? []).map(a => ({
+      sleeperId: String(a.player.sleeperId),
+      name: a.player.name,
+      nflTeam: a.player.team || null,
+      value: a.player.value ?? null,
+      projectedPoints: projMap ? round2(getProjPts(a.player.sleeperId, projMap)) : null,
+      reason: a.primaryReason,
+    })),
   }))
 
   return {
@@ -269,6 +280,10 @@ function buildNotes({ snapshot, weekly, projMap, recommendations, wanted, filter
     'whether anyone else bids is NOT predicted (dynasty value barely moves the contest rate), so the bid is sized by ' +
     'how much winning the player matters to this roster.'
   )
+  notes.push(
+    'ONE pickup per position: each row is the best available at its position, and the others at that position are ' +
+    'listed under `alternatives` with no bid. Claim the row, not the alternatives — they are who is next if he goes elsewhere.'
+  )
   notes.push(FAAB_BATCH_WARNING)
   notes.push(
     `Sleeper's API is read-only: place the claim yourself in the Sleeper app. ` +
@@ -317,6 +332,9 @@ export function renderFreeAgentText(a) {
       L.push(b.bid != null
         ? `      Bid $${b.bid} (${b.pctOfBudget}% of budget, ${b.label}) — ${b.expectedWin}${b.capped ? ' · capped at what you have left' : ''}`
         : `      No bid: ${b.reasons[0]}`)
+      if (p.alternatives?.length) {
+        L.push(`      Next at ${p.position} (no bid — claim one per position): ${p.alternatives.map(x => x.name).join(', ')}`)
+      }
     })
   }
   L.push('')

@@ -299,7 +299,9 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
         'Full dynasty roster for one team in the league: every player with value, overall ' +
         'and positional rank, 30-day trend and starter/bench/taxi/IR slot; every draft pick ' +
         'owned, with its exact slot label where the draft order is known; plus total value ' +
-        'and league value rank, win-window tier, record and FAAB, and the league calendar ' +
+        'and league value rank, win-window tier, record and FAAB; room to move (IR slots used ' +
+        'and open — when IR is full an injured player must stay on the active roster — and open ' +
+        'active roster spots, so whether a claim needs a drop); and the league calendar ' +
         '(trade deadline week, weeks left and whether it is deadline time, read from league ' +
         'settings; Sleeper\'s waiver settings passed through undecoded). Defaults to the ' +
         'configured team when `team` is omitted. Accepts a team name, a manager username, ' +
@@ -355,6 +357,19 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
         }).nullable().optional(),
         faab: z.object({
           budget: z.number().nullable(), remaining: z.number().nullable(), spent: z.number(), display: z.string(),
+        }).optional(),
+        // IR room and active-roster headroom from league settings (owner,
+        // 2026-10-07): with IR full, an injured player stays on the bench.
+        roomToMove: z.object({
+          ir: z.object({
+            slots: z.number(), used: z.number(), open: z.number(), full: z.boolean(),
+            eligibleWaiting: z.array(z.object({
+              sleeperId: z.string(), name: z.string(), status: z.string().nullable(),
+            })),
+            canMove: z.number(),
+            statusesKnown: z.boolean(),
+          }),
+          activeRoster: z.object({ slots: z.number(), used: z.number(), open: z.number() }).nullable(),
         }).optional(),
         winWindow: z.string().optional(),
         totals: z.object({
@@ -660,6 +675,11 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
             expectedWin: z.string().nullable(), unavailable: z.string().nullable(),
             reasons: z.array(z.string()),
           }),
+          // Same-position runners-up — no bid: one pickup per position.
+          alternatives: z.array(z.object({
+            sleeperId: z.string(), name: z.string(), nflTeam: z.string().nullable(),
+            value: z.number().nullable(), projectedPoints: z.number().nullable(), reason: z.string(),
+          })),
         })).optional(),
         faab: z.object({
           budget: z.number().nullable(), remaining: z.number().nullable(),

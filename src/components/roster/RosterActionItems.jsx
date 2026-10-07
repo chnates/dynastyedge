@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSleeperRookies, getPlayerMetaMap } from '../../hooks/useSleeperRookies'
 import { suggestSellMove } from '../../utils/recommendations'
-import { isIrEligible } from '../../utils/injuryStatus'
+import { buildIrCapacity } from '../../utils/injuryStatus'
 import { Button, Lede, Mark, PositionBand, RuledList } from '../ui'
 import { PICK_YEARS } from '../../constants'
 import { STORAGE_KEYS } from '../../storageKeys'
@@ -135,17 +135,16 @@ export default function RosterActionItems({ myRoster, nflState, allRosters, pick
     //    "X can go on IR" with identical prose is the icon+title+one-liner
     //    pattern wearing editorial clothes, and a <Lede> is for ONE decision.
     if (Object.keys(playerMeta).length > 0) {
-      const stashable = myRoster.players.filter(p => {
-        if (p.isIR || p.isTaxi) return false
-        // Eligibility is the LEAGUE's rule (Sleeper's reserve_allow_* settings),
-        // read through utils/injuryStatus.js — not a hand-kept list.
-        return isIrEligible(playerMeta[p.sleeperId]?.injury_status, leagueInfo?.settings)
-      })
-      // Only worth saying when there is ROOM. With every IR slot taken the
+      // Eligibility is the LEAGUE's rule (Sleeper's reserve_allow_* settings)
+      // and room is the league's slot count, both read through ONE function in
+      // utils/injuryStatus.js — the MCP server's get_roster reports the same.
+      // Only worth saying when there is ROOM: with every IR slot taken the
       // advice "move him to IR" cannot be followed (live 2026-10-07: two of the
       // owner's players carry Sleeper's IR tag while both IR slots are full).
-      const irSlots = Number(leagueInfo?.settings?.reserve_slots) || 0
-      const irOpen = Math.max(0, irSlots - myRoster.players.filter(p => p.isIR).length)
+      const ir = buildIrCapacity(
+        myRoster.players, leagueInfo?.settings, p => playerMeta[p.sleeperId]?.injury_status)
+      const stashable = ir.eligibleWaiting
+      const irOpen = ir.open
       if (stashable.length && irOpen > 0) {
         const names = stashable.map(p => p.name)
         const fit = Math.min(irOpen, stashable.length)
