@@ -843,7 +843,7 @@ implementations (`useLineupData.js` and `mcp/weekly.js`) read only
 
 Evidence: `src/utils/projections.js` (`parseLockedTeams`, `getAvailability`'s
 fourth arg), `src/utils/lineupBuild.js` (`pinned`), `src/utils/lineupMoves.js`,
-`mcp/liveScores.js`, CLAUDE.md Feature 4 **Game locks**, `docs/open-items.md`
+`mcp/liveScores.js`, CLAUDE.md Feature 4 **Game locks**, `docs/archive/open-items-2026.md`
 MCP-2c, `tests/lineupMoves.test.mjs` + `tests/projections.test.mjs`.
 
 ---

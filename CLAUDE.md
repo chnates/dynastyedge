@@ -548,7 +548,7 @@ so nothing threw. The source was removed; see the news pipeline section.) That i
 this exact shape — FantasyPros, "the most player-focused source in the old
 list", was dead across all three endpoints and "had been contributing nothing"
 until a hand probe found it months later. Twice is a pattern, so it gets an
-instrument (see `docs/open-items.md` **NEWS-6**).
+instrument (see `docs/archive/open-items-2026.md` **NEWS-6**).
 
 - **`scripts/sourceHealth.mjs`** is the policy — pure, shared by both
   pipelines, pinned by `tests/sourceHealth.test.mjs`. Same precedent as
@@ -1212,7 +1212,7 @@ exactly like auto-deploy. The three tells, if it is ever disconnected again:
 deployment environment, and a **feature-branch** commit shows
 `target: production` (integration sends non-default branches to *preview*).
 The manual path — a `gitSource` deployment against the public repo, which
-needs no integration — remains the fallback. See `docs/open-items.md` MCP-2b.
+needs no integration — remains the fallback. See `docs/archive/open-items-2026.md` MCP-2b.
 
 **Three findings cost a deploy cycle each, and none was guessable from the
 docs. They are recorded because the next person will hit the same three.**

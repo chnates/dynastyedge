@@ -3,7 +3,7 @@
 // replay-live.mjs — dress-rehearse the app's LIVE surfaces before they happen
 //
 // Why this exists: DynastyEdge's entire live/in-season half had only ever been
-// code-read, never executed (docs/open-items.md ACTIVE-1). Two one-shot
+// code-read, never executed (docs/archive/open-items-2026.md ACTIVE-1). Two one-shot
 // deadlines — the rookie draft (one live moment per year) and Week 1 (when
 // every `season_type === 'regular'` gate opens) — offer no second chance and
 // no way to test in advance, because the app reads live Sleeper state.

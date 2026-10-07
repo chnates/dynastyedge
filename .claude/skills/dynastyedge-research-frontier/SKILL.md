@@ -162,7 +162,7 @@ League › Free Agents and `recommend_free_agents`; the rule as built and its
 PRE-REGISTERED grading protocol are in the memo's §10 (graded Weeks 13–15 —
 do not move the bars). Before that: **MEASURED 2026-08-08 — corpus pulled, rule spec drafted. OWNER-ASKED
 2026-09-25 as the next build** (shown in both the app and the MCP server; see
-`docs/open-items.md` OPEN-3 for the plan and the build-now-vs-wait reasoning).
+`docs/archive/open-items-2026.md` OPEN-3 for the plan and the build-now-vs-wait reasoning).
 Full write-up: `docs/analysis/faab-bid-corpus-2026-08.md`, whose §9 is the
 first in-season $1000 reading (2 clean contested auctions). Every number is
 re-runnable via `node scripts/dev/faab-corpus.mjs`.
