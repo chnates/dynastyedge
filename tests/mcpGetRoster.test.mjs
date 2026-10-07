@@ -250,3 +250,47 @@ test('an unresolved team answers ok:false with candidates, and renders them', ()
   assert.equal(a.candidates.length, 3)
   assert.match(renderRosterText(a), /Mahomes Depot/)
 })
+
+// ── the league calendar (open-items §0 #9) ─────────────────────────────────
+// The scheduled brief reads the trade deadline from here, so it must come from
+// league settings through the ONE deadline rule — never a typed-in date.
+
+const withSettings = (settings, nfl = { season: '2026', season_type: 'regular', week: 5 }, isOffseason = false) => ({
+  ...SNAP,
+  nflState: nfl,
+  isOffseason,
+  league: { ...LEAGUE, leagueInfo: { ...LEAGUE.leagueInfo, settings } },
+})
+
+const LIVE_SETTINGS = {
+  waiver_budget: 1000, trade_deadline: 13, playoff_week_start: 15,
+  daily_waivers: 1, waiver_type: 2, waiver_day_of_week: 2, daily_waivers_hour: 9, waiver_clear_days: 1,
+}
+
+test('calendar: the deadline is read from settings and run through readTradeDeadline', () => {
+  const a = buildRosterAnswer(withSettings(LIVE_SETTINGS), { defaultRosterId: 6, myRosterId: 6 })
+  assert.deepEqual(a.calendar.tradeDeadline, { week: 13, weeksLeft: 8, status: 'upcoming', inWindow: false })
+  assert.equal(a.calendar.tradeDeadlineWeek, 13)
+  assert.equal(a.calendar.playoffWeekStart, 15)
+  const w12 = buildRosterAnswer(withSettings(LIVE_SETTINGS, { season: '2026', season_type: 'regular', week: 12 }), { defaultRosterId: 6, myRosterId: 6 })
+  assert.deepEqual(w12.calendar.tradeDeadline, { week: 13, weeksLeft: 1, status: 'soon', inWindow: true })
+  assert.match(renderRosterText(w12), /Trade deadline: Week 13 · 1 week away/)
+})
+
+test('calendar: waiver settings pass through UNDECODED, and say so', () => {
+  const { waiverSettings } = buildRosterAnswer(withSettings(LIVE_SETTINGS), { defaultRosterId: 6, myRosterId: 6 }).calendar
+  assert.deepEqual(waiverSettings, {
+    dailyWaivers: true, waiverType: 2, waiverDayOfWeek: 2, dailyWaiversHour: 9, waiverClearDays: 1, decoded: false,
+  })
+})
+
+test('calendar: offseason or no deadline is null, never a made-up week', () => {
+  const off = buildRosterAnswer(withSettings(LIVE_SETTINGS, { season: '2026', season_type: 'off', week: 0 }, true), { defaultRosterId: 6, myRosterId: 6 })
+  assert.equal(off.calendar.tradeDeadline, null)
+  assert.equal(off.calendar.tradeDeadlineWeek, 13, 'the setting itself is still reported')
+  const none = buildRosterAnswer(withSettings({ waiver_budget: 1000 }), { defaultRosterId: 6, myRosterId: 6 })
+  assert.equal(none.calendar.tradeDeadline, null)
+  assert.equal(none.calendar.tradeDeadlineWeek, null)
+  assert.equal(none.calendar.waiverSettings.dailyWaivers, null)
+  assert.doesNotMatch(renderRosterText(none), /Trade deadline/)
+})

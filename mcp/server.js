@@ -299,7 +299,9 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
         'Full dynasty roster for one team in the league: every player with value, overall ' +
         'and positional rank, 30-day trend and starter/bench/taxi/IR slot; every draft pick ' +
         'owned, with its exact slot label where the draft order is known; plus total value ' +
-        'and league value rank, win-window tier, record and FAAB. Defaults to the ' +
+        'and league value rank, win-window tier, record and FAAB, and the league calendar ' +
+        '(trade deadline week, weeks left and whether it is deadline time, read from league ' +
+        'settings; Sleeper\'s waiver settings passed through undecoded). Defaults to the ' +
         'configured team when `team` is omitted. Accepts a team name, a manager username, ' +
         'or a roster id — an ambiguous name returns the candidates rather than guessing.',
       inputSchema: {
@@ -322,6 +324,24 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
           week: z.number().nullable(),
           isOffseason: z.boolean(),
           teams: z.number(),
+        }).optional(),
+        // Read from league settings, never assumed (the scheduled brief, §0 #9).
+        calendar: z.object({
+          tradeDeadline: z.object({
+            week: z.number(), weeksLeft: z.number(),
+            status: z.enum(['upcoming', 'soon', 'this-week', 'passed']),
+            inWindow: z.boolean(),
+          }).nullable(),
+          tradeDeadlineWeek: z.number().nullable(),
+          playoffWeekStart: z.number().nullable(),
+          waiverSettings: z.object({
+            dailyWaivers: z.boolean().nullable(),
+            waiverType: z.number().nullable(),
+            waiverDayOfWeek: z.number().nullable(),
+            dailyWaiversHour: z.number().nullable(),
+            waiverClearDays: z.number().nullable(),
+            decoded: z.boolean(),
+          }),
         }).optional(),
         team: z.object({
           rosterId: z.number(),

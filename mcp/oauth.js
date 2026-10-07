@@ -8,15 +8,13 @@
 //
 // Two facts remove the need:
 //
-//   1. NO DYNAMIC CLIENT REGISTRATION. The spec says clients and servers
-//      SHOULD support RFC 7591, and offers the documented alternative for
-//      servers that do not: the client is pre-registered out of band. Claude's
-//      connector UI has exactly that — "Advanced settings" for an OAuth Client
-//      ID and Secret. So there is one client, it lives in config, and there is
-//      no registry to persist.
+//   1. NO CLIENT REGISTRY. Clients still register themselves (RFC 7591 —
+//      Claude's connector cannot start sign-in without it), but the
+//      client_id that comes back IS the registration, signed — see
+//      mintClientId below. There is nothing to persist.
 //
-//   2. EVERYTHING ELSE IS SIGNED, NOT STORED. An authorization code and an
-//      access token are each a payload plus an HMAC over it. Verification is
+//   2. EVERYTHING ELSE IS SIGNED, NOT STORED. An authorization code, an
+//      access token and a refresh token are each a payload plus an HMAC over it. Verification is
 //      recomputing the MAC, so any instance can verify what any other minted,
 //      with nothing shared but the key.
 //
@@ -39,7 +37,19 @@
 //   protects it: a replayed code without the original `code_verifier` is
 //   useless, which is why S256 is REQUIRED here and `plain` is rejected.
 //
-// Both are real trade-offs and both are acceptable for a single-user server.
+// - A REFRESH token cannot be revoked either (added 2026-10-07, owner's call —
+//   open-items §0 #9). Without one, Claude's connector held a one-hour pass
+//   and nothing to renew it with, so it fell to "needs reconnect" an hour
+//   after every sign-in and a scheduled routine could never reach the server.
+//   The bounds that replace revocation: each refresh token lives 30 days and
+//   is re-issued on every use; renewals stop REFRESH_SESSION_MAX_S after the
+//   human's GitHub login however often they are used (so a stolen one cannot
+//   be renewed forever); the GitHub allowlist is re-checked at every renewal;
+//   and rotating the GitHub secret still kills everything at once. Rotation
+//   here is NOT the OAuth 2.1 kind — the old token stays valid until it
+//   expires, because nothing is stored to mark it spent.
+//
+// All of these are real trade-offs and acceptable for a single-user server.
 // Neither would be acceptable for a multi-tenant one — that wants the KV the
 // caching layer deliberately does not need.
 
@@ -48,6 +58,8 @@ import crypto from 'node:crypto'
 export const ACCESS_TOKEN_TTL_S = 60 * 60      // 1 hour — short, because unrevocable
 export const AUTH_CODE_TTL_S = 60              // 60 seconds — long enough to redeem, no more
 export const GITHUB_STATE_TTL_S = 10 * 60      // the human is in the loop here
+export const REFRESH_TOKEN_TTL_S = 30 * 24 * 60 * 60   // 30 days, re-issued on every use
+export const REFRESH_SESSION_MAX_S = 180 * 24 * 60 * 60 // a fresh GitHub login at least every ~6 months
 
 const b64u = buf => Buffer.from(buf).toString('base64url')
 const unb64u = str => Buffer.from(str, 'base64url')
@@ -188,6 +200,32 @@ export function mintAccessToken({ login, audience, clientId }, key) {
   }, key)
 }
 
+// ── refresh tokens ─────────────────────────────────────────────────────────
+//
+// `authAt` is when the human last logged in through GitHub. It is carried,
+// unchanged, through every renewal — that is what lets REFRESH_SESSION_MAX_S
+// bound a chain of renewals without storing anything.
+export function mintRefreshToken({ login, clientId, resource, authAt }, key, { now = Date.now() } = {}) {
+  const nowSec = Math.floor(now / 1000)
+  const exp = Math.min(nowSec + REFRESH_TOKEN_TTL_S, authAt + REFRESH_SESSION_MAX_S)
+  return sign({ kind: 'refresh', login, clientId, resource, authAt, iat: nowSec, exp }, key)
+}
+
+// Bound to the client it was issued to (a public client presents its
+// client_id) and re-checked against the allowlist, exactly as an access token
+// is on every request. A refusal is `invalid_grant`, which tells the client to
+// send the human back through sign-in.
+export function redeemRefreshToken(token, { clientId, allowedLogin }, key, { now = Date.now() } = {}) {
+  const p = verify(token, key, { now })
+  if (p?.kind !== 'refresh') return { ok: false, error: 'invalid_grant', reason: 'Refresh token invalid or expired' }
+  if (p.clientId !== clientId) return { ok: false, error: 'invalid_grant', reason: 'Refresh token was issued to a different client' }
+  if (allowedLogin && p.login !== allowedLogin) return { ok: false, error: 'invalid_grant', reason: 'This GitHub account is no longer allowed' }
+  if (typeof p.authAt !== 'number' || p.authAt + REFRESH_SESSION_MAX_S <= Math.floor(now / 1000)) {
+    return { ok: false, error: 'invalid_grant', reason: 'Sign-in is too old to renew — sign in again' }
+  }
+  return { ok: true, login: p.login, resource: p.resource, authAt: p.authAt }
+}
+
 export function verifyAccessToken(token, { audience, audiences, allowedLogin }, key) {
   const p = verify(token, key)
   if (p?.kind !== 'access') return null
@@ -227,7 +265,7 @@ export function authorizationServerMetadata(origin) {
     authorization_endpoint: `${origin}/api/oauth/authorize`,
     token_endpoint: `${origin}/api/oauth/token`,
     response_types_supported: ['code'],
-    grant_types_supported: ['authorization_code'],
+    grant_types_supported: ['authorization_code', 'refresh_token'],
     // Clients register themselves — see mintClientId. Without this, a client
     // that expects RFC 7591 cannot begin sign-in at all.
     registration_endpoint: `${origin}/api/oauth/register`,

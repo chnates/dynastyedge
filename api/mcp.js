@@ -41430,6 +41430,26 @@ var init_marketTrend = __esm({
   }
 });
 
+// src/utils/tradeDeadline.js
+function readTradeDeadline({ tradeDeadline, nflState, isOffseason }) {
+  const week = Number(tradeDeadline);
+  const current = Number(nflState?.week);
+  if (isOffseason || !Number.isFinite(week) || week <= 0) return null;
+  if (!Number.isFinite(current) || current <= 0) return null;
+  const weeksLeft = week - current;
+  const status = weeksLeft < 0 ? "passed" : weeksLeft === 0 ? "this-week" : weeksLeft <= DEADLINE_SOON_WEEKS ? "soon" : "upcoming";
+  return { week, weeksLeft, status };
+}
+function isDeadlineWindow(deadline) {
+  return deadline?.status === "this-week" || deadline?.status === "soon";
+}
+var DEADLINE_SOON_WEEKS;
+var init_tradeDeadline = __esm({
+  "src/utils/tradeDeadline.js"() {
+    DEADLINE_SOON_WEEKS = 2;
+  }
+});
+
 // mcp/teams.js
 function describeTeams(rosters) {
   return (rosters ?? []).map((r) => ({
@@ -41662,6 +41682,7 @@ function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId, news }
       isOffseason: snapshot.isOffseason,
       teams: allRosters.length
     },
+    calendar: buildCalendar(snapshot, league.leagueInfo),
     team: {
       rosterId: roster.rosterId,
       teamName: getTeamName(roster.owner),
@@ -41693,6 +41714,28 @@ function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId, news }
     // Caveats the reader needs in order to read the numbers correctly. These
     // are conditions, not decoration — each one changes what a number means.
     notes: buildNotes(snapshot, roster, players, picks)
+  };
+}
+function buildCalendar(snapshot, leagueInfo) {
+  const settings = leagueInfo?.settings ?? {};
+  const deadline = readTradeDeadline({
+    tradeDeadline: settings.trade_deadline,
+    nflState: snapshot.nflState,
+    isOffseason: snapshot.isOffseason
+  });
+  const num6 = (v) => Number.isFinite(Number(v)) ? Number(v) : null;
+  return {
+    tradeDeadline: deadline ? { ...deadline, inWindow: isDeadlineWindow(deadline) } : null,
+    tradeDeadlineWeek: num6(settings.trade_deadline),
+    playoffWeekStart: num6(settings.playoff_week_start),
+    waiverSettings: {
+      dailyWaivers: settings.daily_waivers == null ? null : settings.daily_waivers === 1,
+      waiverType: num6(settings.waiver_type),
+      waiverDayOfWeek: num6(settings.waiver_day_of_week),
+      dailyWaiversHour: num6(settings.daily_waivers_hour),
+      waiverClearDays: num6(settings.waiver_clear_days),
+      decoded: false
+    }
   };
 }
 function injuryFields(snapshot, news, sleeperId) {
@@ -41751,6 +41794,10 @@ function renderRosterText(a) {
   L.push(`Total value ${a.totals.totalValue.toLocaleString("en-US")} (#${a.totals.valueRank} of ${a.league.teams}) \xB7 players ${a.totals.playerValue.toLocaleString("en-US")} \xB7 picks ${a.totals.pickValue.toLocaleString("en-US")}`);
   L.push(`Win window: ${a.winWindow}${a.record ? ` \xB7 ${a.record.wins}-${a.record.losses}${a.record.ties ? "-" + a.record.ties : ""} \xB7 ${a.record.pointsFor} PF` : " \xB7 no games played yet"}`);
   L.push(`FAAB ${a.faab.display} of ${faabDisplay(a.faab.budget)}${a.totals.avgStarterAge ? ` \xB7 avg starter age ${a.totals.avgStarterAge}` : ""}`);
+  const dl = a.calendar?.tradeDeadline;
+  if (dl) {
+    L.push(dl.status === "passed" ? `Trade deadline passed (Week ${dl.week})` : dl.status === "this-week" ? `Trade deadline is THIS WEEK (Week ${dl.week})` : `Trade deadline: Week ${dl.week} \xB7 ${dl.weeksLeft} week${dl.weeksLeft === 1 ? "" : "s"} away`);
+  }
   L.push("");
   for (const group of ["STARTER", "BENCH", "TAXI", "IR"]) {
     const rows = a.players.filter((p) => p.slot === group);
@@ -41781,6 +41828,7 @@ var init_getRoster = __esm({
     init_teamName();
     init_leagueState();
     init_marketTrend();
+    init_tradeDeadline();
     init_teams();
     init_news();
     MAX_PLAYERS = 60;
@@ -42413,6 +42461,7 @@ var init_edgeBriefing = __esm({
     init_valueHistory();
     init_constants();
     init_marketTrend();
+    init_tradeDeadline();
   }
 });
 
@@ -47169,7 +47218,7 @@ function createServer({ env = process.env, fetcher, store } = {}) {
     "get_roster",
     {
       title: "Get a team roster",
-      description: "Full dynasty roster for one team in the league: every player with value, overall and positional rank, 30-day trend and starter/bench/taxi/IR slot; every draft pick owned, with its exact slot label where the draft order is known; plus total value and league value rank, win-window tier, record and FAAB. Defaults to the configured team when `team` is omitted. Accepts a team name, a manager username, or a roster id \u2014 an ambiguous name returns the candidates rather than guessing.",
+      description: "Full dynasty roster for one team in the league: every player with value, overall and positional rank, 30-day trend and starter/bench/taxi/IR slot; every draft pick owned, with its exact slot label where the draft order is known; plus total value and league value rank, win-window tier, record and FAAB, and the league calendar (trade deadline week, weeks left and whether it is deadline time, read from league settings; Sleeper's waiver settings passed through undecoded). Defaults to the configured team when `team` is omitted. Accepts a team name, a manager username, or a roster id \u2014 an ambiguous name returns the candidates rather than guessing.",
       inputSchema: {
         team: external_exports.string().optional().describe("Team name, manager username, or roster id. Omit for your own team."),
         leagueId: external_exports.string().optional().describe("Sleeper league id. Omit for the configured league."),
@@ -47187,6 +47236,25 @@ function createServer({ env = process.env, fetcher, store } = {}) {
           week: external_exports.number().nullable(),
           isOffseason: external_exports.boolean(),
           teams: external_exports.number()
+        }).optional(),
+        // Read from league settings, never assumed (the scheduled brief, §0 #9).
+        calendar: external_exports.object({
+          tradeDeadline: external_exports.object({
+            week: external_exports.number(),
+            weeksLeft: external_exports.number(),
+            status: external_exports.enum(["upcoming", "soon", "this-week", "passed"]),
+            inWindow: external_exports.boolean()
+          }).nullable(),
+          tradeDeadlineWeek: external_exports.number().nullable(),
+          playoffWeekStart: external_exports.number().nullable(),
+          waiverSettings: external_exports.object({
+            dailyWaivers: external_exports.boolean().nullable(),
+            waiverType: external_exports.number().nullable(),
+            waiverDayOfWeek: external_exports.number().nullable(),
+            dailyWaiversHour: external_exports.number().nullable(),
+            waiverClearDays: external_exports.number().nullable(),
+            decoded: external_exports.boolean()
+          })
         }).optional(),
         team: external_exports.object({
           rosterId: external_exports.number(),
@@ -48950,6 +49018,21 @@ function mintAccessToken({ login, audience, clientId }, key) {
     exp: nowS() + ACCESS_TOKEN_TTL_S
   }, key);
 }
+function mintRefreshToken({ login, clientId, resource, authAt }, key, { now = Date.now() } = {}) {
+  const nowSec = Math.floor(now / 1e3);
+  const exp = Math.min(nowSec + REFRESH_TOKEN_TTL_S, authAt + REFRESH_SESSION_MAX_S);
+  return sign({ kind: "refresh", login, clientId, resource, authAt, iat: nowSec, exp }, key);
+}
+function redeemRefreshToken(token, { clientId, allowedLogin }, key, { now = Date.now() } = {}) {
+  const p = verify(token, key, { now });
+  if (p?.kind !== "refresh") return { ok: false, error: "invalid_grant", reason: "Refresh token invalid or expired" };
+  if (p.clientId !== clientId) return { ok: false, error: "invalid_grant", reason: "Refresh token was issued to a different client" };
+  if (allowedLogin && p.login !== allowedLogin) return { ok: false, error: "invalid_grant", reason: "This GitHub account is no longer allowed" };
+  if (typeof p.authAt !== "number" || p.authAt + REFRESH_SESSION_MAX_S <= Math.floor(now / 1e3)) {
+    return { ok: false, error: "invalid_grant", reason: "Sign-in is too old to renew \u2014 sign in again" };
+  }
+  return { ok: true, login: p.login, resource: p.resource, authAt: p.authAt };
+}
 function verifyAccessToken(token, { audience, audiences, allowedLogin }, key) {
   const p = verify(token, key);
   if (p?.kind !== "access") return null;
@@ -48972,7 +49055,7 @@ function authorizationServerMetadata(origin) {
     authorization_endpoint: `${origin}/api/oauth/authorize`,
     token_endpoint: `${origin}/api/oauth/token`,
     response_types_supported: ["code"],
-    grant_types_supported: ["authorization_code"],
+    grant_types_supported: ["authorization_code", "refresh_token"],
     // Clients register themselves — see mintClientId. Without this, a client
     // that expects RFC 7591 cannot begin sign-in at all.
     registration_endpoint: `${origin}/api/oauth/register`,
@@ -48987,12 +49070,14 @@ function authorizationServerMetadata(origin) {
     scopes_supported: ["mcp"]
   };
 }
-var ACCESS_TOKEN_TTL_S, AUTH_CODE_TTL_S, GITHUB_STATE_TTL_S, b64u, unb64u, nowS, CLIENT_ID_TTL_S;
+var ACCESS_TOKEN_TTL_S, AUTH_CODE_TTL_S, GITHUB_STATE_TTL_S, REFRESH_TOKEN_TTL_S, REFRESH_SESSION_MAX_S, b64u, unb64u, nowS, CLIENT_ID_TTL_S;
 var init_oauth = __esm({
   "mcp/oauth.js"() {
     ACCESS_TOKEN_TTL_S = 60 * 60;
     AUTH_CODE_TTL_S = 60;
     GITHUB_STATE_TTL_S = 10 * 60;
+    REFRESH_TOKEN_TTL_S = 30 * 24 * 60 * 60;
+    REFRESH_SESSION_MAX_S = 180 * 24 * 60 * 60;
     b64u = (buf) => Buffer.from(buf).toString("base64url");
     unb64u = (str) => Buffer.from(str, "base64url");
     nowS = () => Math.floor(Date.now() / 1e3);
@@ -49156,27 +49241,46 @@ Only Claude and localhost may receive an authorization code from this server.`,
     } catch {
       return json2({ error: "invalid_request" }, 400);
     }
-    if (form.get("grant_type") !== "authorization_code") {
-      return json2({ error: "unsupported_grant_type" }, 400);
-    }
-    const result = redeemAuthCode(form.get("code"), {
-      clientId: form.get("client_id"),
-      redirectUri: form.get("redirect_uri"),
-      codeVerifier: form.get("code_verifier")
-    }, signingKey);
-    if (!result.ok) {
-      return json2({ error: result.error, error_description: result.reason }, 400);
-    }
-    return json2({
+    const grantType = form.get("grant_type");
+    const clientIdParam = form.get("client_id");
+    const issue2 = ({ login, resource: res, authAt }) => json2({
       access_token: mintAccessToken({
-        login: result.login,
-        audience: result.resource || resource,
-        clientId: form.get("client_id")
+        login,
+        audience: res || resource,
+        clientId: clientIdParam
       }, signingKey),
       token_type: "Bearer",
       expires_in: ACCESS_TOKEN_TTL_S,
+      refresh_token: mintRefreshToken({
+        login,
+        clientId: clientIdParam,
+        resource: res || resource,
+        authAt
+      }, signingKey),
       scope: "mcp"
     });
+    if (grantType === "authorization_code") {
+      const result = redeemAuthCode(form.get("code"), {
+        clientId: clientIdParam,
+        redirectUri: form.get("redirect_uri"),
+        codeVerifier: form.get("code_verifier")
+      }, signingKey);
+      if (!result.ok) {
+        return json2({ error: result.error, error_description: result.reason }, 400);
+      }
+      return issue2({ ...result, authAt: Math.floor(Date.now() / 1e3) });
+    }
+    if (grantType === "refresh_token") {
+      const result = redeemRefreshToken(form.get("refresh_token"), {
+        clientId: clientIdParam,
+        allowedLogin
+      }, signingKey);
+      if (!result.ok) {
+        return json2({ error: result.error, error_description: result.reason }, 400);
+      }
+      return issue2(result);
+    }
+    return json2({ error: "unsupported_grant_type" }, 400);
   }
   async function register(request) {
     let body;
@@ -49205,7 +49309,7 @@ Only Claude and localhost may receive an authorization code from this server.`,
       // A PUBLIC client: no secret is issued, and PKCE is what protects the
       // exchange. Saying so explicitly stops a client waiting for one.
       token_endpoint_auth_method: "none",
-      grant_types: ["authorization_code"],
+      grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
       client_id_issued_at: Math.floor(Date.now() / 1e3),
       client_name: body?.client_name ?? null

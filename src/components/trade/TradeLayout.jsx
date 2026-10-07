@@ -1,15 +1,15 @@
 import { Outlet } from 'react-router-dom'
 import { useLeagueContext } from '../../context/LeagueContext'
 import SectionContents from '../shared/SectionContents'
+import { readTradeDeadline, isDeadlineWindow } from '../../utils/tradeDeadline'
 
 function DeadlineBanner() {
   const { nflState, isOffseason, tradeDeadline } = useLeagueContext()
-  if (isOffseason || !tradeDeadline || !nflState?.week) return null
+  const deadline = readTradeDeadline({ tradeDeadline, nflState, isOffseason })
+  if (!deadline) return null
+  const { weeksLeft } = deadline
 
-  const week = nflState.week
-  const weeksLeft = tradeDeadline - week
-
-  if (weeksLeft < 0) {
+  if (deadline.status === 'passed') {
     return (
       <div className="flex items-center gap-2 px-4 py-2 bg-bg-secondary dark:bg-bg-secondary border-b border-border-default dark:border-border-default">
         <span className="font-body text-xs text-text-tertiary dark:text-text-tertiary">
@@ -19,7 +19,7 @@ function DeadlineBanner() {
     )
   }
 
-  const urgent = weeksLeft <= 2
+  const urgent = isDeadlineWindow(deadline)
   const label = weeksLeft === 0
     ? `Trade deadline is THIS WEEK (Week ${tradeDeadline})`
     : `Trade deadline: Week ${tradeDeadline} · ${weeksLeft} week${weeksLeft === 1 ? '' : 's'} away`

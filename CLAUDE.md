@@ -689,6 +689,18 @@ custom-connector UI is OAuth-only — there is no static-token path.
   a code **cannot be marked used** (replay bounded by its **60-second** life).
   **PKCE therefore IS the defence**: `S256` required, **`plain` refused**.
   Acceptable for one user, not for a multi-tenant server.
+- **REFRESH TOKENS (owner-approved 2026-10-07, open-items §0 #9)** — without
+  them the connector fell to "needs reconnect" an hour after every sign-in and
+  a scheduled routine could never get in. Signed-not-stored like the rest, so
+  **a refresh token cannot be revoked either**; the bounds that stand in for
+  revocation, all test-pinned as attacks: **30-day** life, **re-issued on every
+  use**; renewals stop **180 days after the GitHub login** (`authAt` rides
+  through every renewal, so a stolen token cannot be renewed forever); **the
+  allowlist is re-checked at every renewal**; bound to its `client_id`; **the
+  audience is carried by the token, never taken from the refresh request**; the
+  `kind` discriminator keeps refresh ≠ access ≠ code. **The "rotation" is not
+  OAuth 2.1's** — an old refresh token stays valid until it expires. Rotating
+  the GitHub secret still kills every token at once.
 - **Two discovery details fail silently:** the protected-resource `resource`
   MUST be the **canonical URI including `/mcp`**, and the document must be
   served at **`/.well-known/oauth-protected-resource/mcp`** as well as the bare
@@ -814,6 +826,15 @@ tier, record, FAAB. Caps 60 players / 40 picks.
   games played is `record: null`.
 - **Taxi and IR are their own slots** (outside the 24). Picks report `pricing:
   'exact-slot' | 'round-median'`.
+- **`calendar`** (2026-10-07, for the scheduled brief): the trade deadline read
+  from `settings.trade_deadline` through **`src/utils/tradeDeadline.js`** (the
+  Trade banner's rule — `week`, `weeksLeft`, `status`, `inWindow`; `null`
+  offseason or unset, never a guessed week), `playoffWeekStart`, and Sleeper's
+  waiver settings **passed through undecoded** (`decoded: false`) — Sleeper
+  documents no mapping from `waiver_day_of_week` / `daily_waivers_hour` to a
+  clock time, so none is invented. Measured instead: claims process **noon ET
+  daily, Wednesday the big run** (`docs/analysis/proactive-delivery-2026-10.md`
+  §2). Declared in the zod schema; verified over the real transport.
 
 ### Caching the weekly data — a DIFFERENT TTL, deliberately
 
@@ -2368,7 +2389,10 @@ player's depth rank):
 Under the Trade rail during the regular season (deadline week from league
 settings): > 2 weeks out neutral "Trade deadline: Week 13 · N weeks away";
 ≤ 2 weeks amber, deadline week "THIS WEEK"; after, muted "Trade deadline
-passed". **Hidden in the offseason.**
+passed". **Hidden in the offseason.** The arithmetic (weeks left, "soon" =
+`DEADLINE_SOON_WEEKS` 2) has **one home, `src/utils/tradeDeadline.js`**, read
+by this banner, The Edge's deadline item and the MCP league calendar;
+`tests/tradeDeadline.test.mjs` fails on a second copy.
 
 -----
 
@@ -3016,7 +3040,7 @@ dynastyedge/
 │   ├── snapshot.js             ← league fetch + ~15-min cache + THE as-of stamp (provenance makes a wrong answer LOOK wrong); mergeAsOf RECOMPUTES age over the union
 │   ├── vercelEntry.js          ← the bundle's entry: accepts BOTH calling conventions, imports lazily, reports failures with a message — never a stack
 │   ├── app.js                  ← THE hosted server: OAuth in front of MCP. Refuses to start without GITHUB_CLIENT_SECRET
-│   ├── oauth.js                ← THE auth crypto + policy: HMAC tokens (no JWT lib), HKDF-derived key, PKCE S256-only, audience binding; no revocation (1h tokens), codes 60s
+│   ├── oauth.js                ← THE auth crypto + policy: HMAC tokens (no JWT lib), HKDF-derived key, PKCE S256-only, audience binding; no revocation (1h access tokens, 30-day refresh tokens capped 180 days after login), codes 60s
 │   ├── oauthRoutes.js          ← the OAuth endpoints. Owns THE load-bearing check: redirect-URI exact-hostname allowlist BEFORE minting, failing to an error page
 │   ├── http.js                 ← THE streamable-HTTP transport: Web-standard (Request) => Response, STATELESS by necessity; owns the auth gate, which fails CLOSED
 │   ├── store.js                ← THE cache backend boundary + the ONE freshness policy (loadSource). memoryStore for stdio AND deployed HTTP (no KV wired). Traps: no store-level TTL; gzip the player DB into KV
@@ -3182,6 +3206,7 @@ dynastyedge/
 │   │   ├── recommendations.js   ← THE assistant-GM brain: keep/givability scores (round-priced picks, past-peak age tilt), FA pickups, two-sided sell moves, the cash-out board
 │   │   ├── faabBid.js           ← THE FAAB bid (OPEN-3), shared with recommend_free_agents: CURRENT period's budget from settings (never assumed), 11/16/23% of the FULL budget capped at what is left, $2 floor on $1000, null for DEF/unpriced
 │   │   ├── injuryStatus.js      ← THE injury-status rule (OUT / QUESTIONABLE, IR eligibility from league settings) — one home, read by the Optimizer, player card, trade verdict, IR item and MCP
+│   │   ├── tradeDeadline.js     ← THE trade-deadline arithmetic (weeks left, the 2-week "soon" window) — one home, read by the Trade banner, The Edge and the MCP league calendar
 │   │   ├── marketTrend.js       ← THE market-trend rules (±50, buy-low/sell-high eligibility, % move) — one home, read by every arrow, list and MCP tool
 │   │   ├── fantasyCalcPayload.js ← THE FantasyCalc reader (URL, id-SHAPE classifier, shape guards) — app, MCP server and pipelines all call it
 │   │   ├── fairBand.js          ← THE definition of "fair" (±5%), shared by the Analyzer's verdict and every surface that PREDICTS it; PLUS the separate, symmetric hindsight rule (ledger W-L-E + Activity's bigger haul)
@@ -3249,6 +3274,7 @@ dynastyedge/
 │   ├── valueHistory.test.mjs        ← the sparkline rule: 4-point threshold, dated series = getValueSeries, tracked-short vs untracked, slicing never widens
 │   ├── rookieResearch.test.mjs      ← opportunity blend, one points scale, within-position divergence, fit re-ranking (score untouched), measurables can never move a score
 │   ├── injuryStatus.test.mjs        ← the owner's OUT / QUESTIONABLE grouping for every live Sleeper status, unknown = flagged never healthy, IR eligibility from league settings, trade verdict (Doubtful a note, unreadable said out loud), AND a source scan that fails on a second list
+│   ├── tradeDeadline.test.mjs       ← the deadline window (urgent from 2 weeks out), equivalence with the two expressions it replaced, The Edge's item, AND a scan for a second copy
 │   ├── marketTrend.test.mjs         ← the ±50 boundary (exactly 50 is flat), predicates = the literals they replaced, AND a source scan that fails on a second copy
 │   ├── recommendations.test.mjs     ← suggestSellMove two-sided; pick keep by round; past-peak tilt (decline-only, never protects); cash-out gap = buildFairBand's
 │   ├── fantasyCalcValues.test.mjs   ← the FantasyCalc reader: non-numeric id is a PICK, NULL not 0, old presence classifier as a regression statement; URL = the old literal, app price = pipeline price, AND a scan for a second reader/URL
@@ -3259,7 +3285,7 @@ dynastyedge/
 │   ├── newsRetention.test.mjs       ← retention: newest-N-per-player, breadth preserved, roundups charge every player, id-less items never dropped by quota
 │   ├── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
 │   ├── leagueState.test.mjs         ← buildLeagueState: string ids + '0' sentinel (rule 8), unranked kept (rule 7), ORIGINAL owner's slot, FAAB from settings, immutability
-│   ├── mcpOauth.test.mjs            ← auth as ATTACKS: foreign/lookalike redirect refused without redirect, PKCE plain refused, wrong audience refused, allowlist per request, token kinds distinct
+│   ├── mcpOauth.test.mjs            ← auth as ATTACKS: foreign/lookalike redirect refused without redirect, PKCE plain refused, wrong audience refused, allowlist per request AND per renewal, token kinds distinct, refresh chain capped at 180 days, audience never widened on refresh
 │   ├── mcpHttp.test.mjs             ← HTTP gate: throwing authenticator never authorized, EVERY post authenticated, RFC 9728 401, no session id, GET leaks nothing, same tools as stdio BY NAME
 │   ├── mcpStore.test.mjs            ← store: fetchedAt round-trips, gzip, stale fallback vs cold throw, THE evicting-store trap, broken store = slower never broken
 │   ├── mcpLimit.test.mjs            ← limiter: concurrency cap, bounded backoff on 429/503, a 404 never retried
@@ -3295,9 +3321,9 @@ report that honestly**: it prints failing tests that read like a code regression
 because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
-**Current counts (verified 2026-10-07 by moving `node_modules` aside):** with
-dependencies **`# tests 902 / # pass 902`**; without them **`# tests 859 / #
-pass 854 / # fail 5`**. **If the test count isn't 902, run `npm ci` before
+**Current counts (verified 2026-10-07 by moving `node_modules` aside, after §0 #9):** with
+dependencies **`# tests 923 / # pass 923`**; without them **`# tests 880 / #
+pass 875 / # fail 5`**. **If the test count isn't 923, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React
