@@ -9,7 +9,7 @@ import WinWindowBadge from '../shared/WinWindowBadge'
 import TeamCard from './TeamCard'
 import MatchupCard from './MatchupCard'
 import { POS_CHIP_ACTIVE, POS_TEXT, POS_BG } from '../../utils/positionColors'
-import { TIER_BADGE, TIER_TEXT } from '../../utils/tierColors'
+import { TIER_BADGE, TIER_TEXT, WIN_WINDOW_TIERS } from '../../utils/tierColors'
 import { rankClass } from '../../utils/rankColors'
 import TeamAvatar from '../shared/TeamAvatar'
 import { Chip, Badge, Magnitude, MAGNITUDE_REFERENCE, PositionBand, Row, RuledList, cn, Loading } from '../ui'
@@ -22,7 +22,7 @@ const SORT_OPTIONS = [
   { id: 'faab',   label: 'FAAB' },
 ]
 
-const TIERS = ['Contending', 'Middle', 'Rebuilding']
+const TIERS = WIN_WINDOW_TIERS
 
 // Filters survive drill-down + back navigation via sessionStorage.
 const SORT_KEY = STORAGE_KEYS.leagueSort

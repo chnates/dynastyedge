@@ -39,11 +39,12 @@ import {
 } from '../../src/utils/valueHistory.js'
 import { resolveTeam } from '../teams.js'
 import { buildResolveAnswer } from './resolveAssets.js'
+import { VALUE_HISTORY_DAYS } from '../../src/constants.js'
 
 export const DEFAULT_MOVERS = 5
 export const MAX_MOVERS = 15
 export const MIN_DAYS = MIN_SPARKLINE_POINTS
-export const MAX_DAYS = 90
+export const MAX_DAYS = VALUE_HISTORY_DAYS   // the feed's own window (src/constants.js)
 
 export function buildValueHistoryAnswer(snapshot, feed, {
   player, team, days, limit = DEFAULT_MOVERS, defaultRosterId, myRosterId,

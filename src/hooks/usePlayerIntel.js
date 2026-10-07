@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { SLEEPER_BASE, ESPN_BASE, NEWS_FEED_URL } from '../constants'
+import { SLEEPER_BASE, ESPN_BASE, NEWS_FEED_URL, POSITIONS } from '../constants'
 import { fetchJSON } from '../utils/fetchJSON'
 import { normalizeName, buildNewsIndex, resolveItemPlayer, feedItemView } from '../utils/newsMatch'
 import { loadPlayerDB } from './usePlayerDB'
@@ -48,7 +48,7 @@ function loadPosRanks(year) {
         const byPos = {}
         Object.entries(stats ?? {}).forEach(([pid, s]) => {
           const pos = db?.[pid]?.position
-          if (!pos || !['QB', 'RB', 'WR', 'TE'].includes(pos)) return
+          if (!pos || !POSITIONS.includes(pos)) return
           const pts = s?.pts_half_ppr ?? 0
           if (pts <= 0) return
           if (!byPos[pos]) byPos[pos] = []
@@ -210,7 +210,7 @@ function buildDepthRoom(db, sleeperId, meta) {
   const { team, position } = meta
   const order = meta.depth_chart_order
   if (!db || !team || !position || order == null) return null
-  if (!['QB', 'RB', 'WR', 'TE'].includes(position)) return null
+  if (!POSITIONS.includes(position)) return null
 
   const id = String(sleeperId)
   const room = Object.entries(db)

@@ -58,6 +58,10 @@ export const FANTASYCALC_PARAMS = {
 export const PICK_YEARS = seedPickYears()
 export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 
+// The rolling window of values-history.json, in daily snapshots — written by
+// scripts/snapshot-values.mjs and the ceiling of get_value_history's `days`.
+export const VALUE_HISTORY_DAYS = 90
+
 // Ordered roster slots — indices match Sleeper's starters array positions
 export const ROSTER_SLOTS = [
   { label: 'QB',   eligible: ['QB'] },

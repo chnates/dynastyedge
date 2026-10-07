@@ -63,7 +63,7 @@ var init_seasonWindow = __esm({
 });
 
 // src/constants.js
-var LEAGUE_ID, MY_ROSTER_ID, SLEEPER_BASE, SLEEPER_ROOT, FANTASYCALC_BASE, NEWS_FEED_URL, VALUES_HISTORY_URL, TRADE_VALUES_URL, ROOKIE_INTEL_URL, FANTASYCALC_PARAMS, PICK_YEARS, POSITIONS, ROSTER_SLOTS;
+var LEAGUE_ID, MY_ROSTER_ID, SLEEPER_BASE, SLEEPER_ROOT, FANTASYCALC_BASE, NEWS_FEED_URL, VALUES_HISTORY_URL, TRADE_VALUES_URL, ROOKIE_INTEL_URL, FANTASYCALC_PARAMS, PICK_YEARS, POSITIONS, VALUE_HISTORY_DAYS, ROSTER_SLOTS;
 var init_constants = __esm({
   "src/constants.js"() {
     init_seasonWindow();
@@ -84,6 +84,7 @@ var init_constants = __esm({
     };
     PICK_YEARS = seedPickYears();
     POSITIONS = ["QB", "RB", "WR", "TE"];
+    VALUE_HISTORY_DAYS = 90;
     ROSTER_SLOTS = [
       { label: "QB", eligible: ["QB"] },
       { label: "RB", eligible: ["RB"] },
@@ -206,6 +207,7 @@ var LOCKED_GAME_STATUSES;
 var init_projections = __esm({
   "src/utils/projections.js"() {
     init_injuryStatus();
+    init_constants();
     LOCKED_GAME_STATUSES = /* @__PURE__ */ new Set(["in_game", "complete", "post_game", "final"]);
   }
 });
@@ -41859,7 +41861,7 @@ function buildGenericCurve(curves) {
   for (let age = AGE_MIN; age <= AGE_MAX; age++) {
     let sum = 0;
     let n = 0;
-    POSITIONS2.forEach((p) => {
+    POSITIONS.forEach((p) => {
       if (curves[p]) {
         sum += curves[p][age];
         n++;
@@ -41881,13 +41883,13 @@ function curveAt(curve, age) {
 function buildAgeCurves(playerMap) {
   const samplesByPos = { QB: [], RB: [], WR: [], TE: [] };
   Object.values(playerMap || {}).forEach((p) => {
-    if (!POSITIONS2.includes(p.position)) return;
+    if (!POSITIONS.includes(p.position)) return;
     if (p.age == null || p.age <= 0) return;
     if (!p.value || p.value <= 0) return;
     samplesByPos[p.position].push({ age: p.age, value: p.value });
   });
   const curves = {};
-  POSITIONS2.forEach((pos) => {
+  POSITIONS.forEach((pos) => {
     curves[pos] = buildPositionCurve(samplesByPos[pos], pos);
   });
   return { curves, generic: buildGenericCurve(curves) };
@@ -41934,7 +41936,7 @@ function buildRosterTrajectory(roster, currentSeasonYear, curves, genericCurve) 
   const totalByYear = ns.map((n) => playerByYear[n] + pickByYear[n]);
   const seasons = ns.map((n) => currentSeasonYear + n);
   const byPosition = {};
-  POSITIONS2.forEach((pos) => {
+  POSITIONS.forEach((pos) => {
     const group = roster.players.filter((p) => p.position === pos);
     byPosition[pos] = ns.map((n) => group.reduce((s, p) => s + projectPlayer(p, n, curves), 0));
   });
@@ -41972,11 +41974,11 @@ function getTrajectoryRead(trajectory) {
   }
   return { direction: "stable", pct: endPct, peakSeason, lastSeason, label: `Value holds near ${peakSeason} \u2014 balanced window` };
 }
-var POSITIONS2, TRAJECTORY_HORIZON, AGE_MIN, AGE_MAX, KERNEL_BW, PRIOR_WEIGHT, ROOKIE_ENTRY_AGE, YEAR_RATIO_FLOOR, YEAR_RATIO_CEIL, TEAM_DECLINE_CUT, TEAM_ASCEND_CUT, clamp;
+var TRAJECTORY_HORIZON, AGE_MIN, AGE_MAX, KERNEL_BW, PRIOR_WEIGHT, ROOKIE_ENTRY_AGE, YEAR_RATIO_FLOOR, YEAR_RATIO_CEIL, TEAM_DECLINE_CUT, TEAM_ASCEND_CUT, clamp;
 var init_dynastyTrajectory = __esm({
   "src/utils/dynastyTrajectory.js"() {
     init_peakWindows();
-    POSITIONS2 = ["QB", "RB", "WR", "TE"];
+    init_constants();
     TRAJECTORY_HORIZON = 3;
     AGE_MIN = 21;
     AGE_MAX = 39;
@@ -45482,10 +45484,10 @@ function buildTradeTargetsAnswer(snapshot, { team, position, limit, myRosterId }
     };
   }
   const wantPos = position ? String(position).toUpperCase() : null;
-  if (wantPos && !POSITIONS3.includes(wantPos)) {
+  if (wantPos && !POSITIONS.includes(wantPos)) {
     return {
       ok: false,
-      error: `"${position}" is not a tradable position in this league. Use one of ${POSITIONS3.join(", ")} \u2014 there is no kicker, and a defense carries no dynasty value (FantasyCalc ranks zero of them), so no defense is ever a trade target here.`
+      error: `"${position}" is not a tradable position in this league. Use one of ${POSITIONS.join(", ")} \u2014 there is no kicker, and a defense carries no dynasty value (FantasyCalc ranks zero of them), so no defense is ever a trade target here.`
     };
   }
   let scopedRoster = null;
@@ -45670,7 +45672,7 @@ function renderTradeTargetsText(a) {
   a.notes.forEach((n) => L.push(`Note: ${n}`));
   return L.join("\n").trimEnd();
 }
-var DEFAULT_LIMIT3, MAX_LIMIT2, BOARD_DEPTH, POSITIONS3, num5, signed;
+var DEFAULT_LIMIT3, MAX_LIMIT2, BOARD_DEPTH, num5, signed;
 var init_findTradeTargets = __esm({
   "mcp/tools/findTradeTargets.js"() {
     init_rosterAnalysis();
@@ -45678,10 +45680,10 @@ var init_findTradeTargets = __esm({
     init_recommendations();
     init_teamName();
     init_teams();
+    init_constants();
     DEFAULT_LIMIT3 = 8;
     MAX_LIMIT2 = 20;
     BOARD_DEPTH = 20;
-    POSITIONS3 = ["QB", "RB", "WR", "TE"];
     num5 = (n) => n == null ? "\u2014" : n.toLocaleString("en-US");
     signed = (n) => n == null ? "\u2014" : `${n >= 0 ? "+" : ""}${Math.round(n).toLocaleString("en-US")}`;
   }
@@ -45723,7 +45725,8 @@ function buildRookieProspects(rookieMap, playerMap) {
 var ROOKIE_POSITIONS;
 var init_rookieAdp = __esm({
   "src/utils/rookieAdp.js"() {
-    ROOKIE_POSITIONS = /* @__PURE__ */ new Set(["QB", "RB", "WR", "TE"]);
+    init_constants();
+    ROOKIE_POSITIONS = new Set(POSITIONS);
   }
 });
 
@@ -46063,10 +46066,10 @@ function buildRookieResearchAnswer(snapshot, intelFeed, {
 } = {}) {
   const { league } = snapshot;
   if (!league) throw new Error("League state unavailable");
-  if (position != null && !POSITIONS4.includes(String(position).toUpperCase())) {
+  if (position != null && !POSITIONS.includes(String(position).toUpperCase())) {
     return {
       ok: false,
-      error: `Rookie research covers ${POSITIONS4.join(" / ")}. A defense is never a rookie and this league rosters no kicker.`
+      error: `Rookie research covers ${POSITIONS.join(" / ")}. A defense is never a rookie and this league rosters no kicker.`
     };
   }
   const pos = position ? String(position).toUpperCase() : null;
@@ -46221,7 +46224,7 @@ Teams: ${a.candidates.map((x) => x.teamName).join("; ")}` : "";
   a.notes.forEach((n) => out.push(`Note: ${n}`));
   return out.join("\n");
 }
-var DEFAULT_LIMIT4, MAX_LIMIT3, TARGETS, DIVERGENCE_LIMIT, DIVERGENCE_MIN_GAP, POSITIONS4, SORTS, pct2, round3;
+var DEFAULT_LIMIT4, MAX_LIMIT3, TARGETS, DIVERGENCE_LIMIT, DIVERGENCE_MIN_GAP, SORTS, pct2, round3;
 var init_researchRookies = __esm({
   "mcp/tools/researchRookies.js"() {
     init_rookieResearch();
@@ -46229,12 +46232,12 @@ var init_researchRookies = __esm({
     init_teamName();
     init_teams();
     init_resolveAssets();
+    init_constants();
     DEFAULT_LIMIT4 = 12;
     MAX_LIMIT3 = 40;
     TARGETS = 4;
     DIVERGENCE_LIMIT = 6;
     DIVERGENCE_MIN_GAP = 5;
-    POSITIONS4 = ["QB", "RB", "WR", "TE"];
     SORTS = ["fit", "score", "value"];
     pct2 = (x) => x == null ? null : Math.round(x * 100);
     round3 = (x) => x == null ? null : Math.round(x * 1e3) / 1e3;
@@ -47140,10 +47143,11 @@ var init_valueHistory2 = __esm({
     init_valueHistory();
     init_teams();
     init_resolveAssets();
+    init_constants();
     DEFAULT_MOVERS = 5;
     MAX_MOVERS = 15;
     MIN_DAYS = MIN_SPARKLINE_POINTS;
-    MAX_DAYS = 90;
+    MAX_DAYS = VALUE_HISTORY_DAYS;
     fmt = (n) => n == null ? "\u2014" : Math.round(n).toLocaleString("en-US");
     signed3 = (n) => n == null ? "\u2014" : `${n > 0 ? "+" : n < 0 ? "\u2212" : ""}${fmt(Math.abs(n))}`;
     pct3 = (p) => p == null ? "" : ` (${p > 0 ? "+" : ""}${p}%)`;
@@ -48009,7 +48013,7 @@ function createServer({ env = process.env, fetcher, store } = {}) {
       title: "Find trade targets and what they would cost",
       description: "Answers \"who should I call about, and what would it cost me?\" \u2014 the question that comes BEFORE grading a trade. Ranks opponents' players by your positional need x their value x how movable they are (three roster facts about the team that holds them), then prices each one with a concrete package from your own roster, held inside the Analyzer's fair band. Every row carries BOTH seats' appeal and, where one exists, the pricier package the search declined to pay for with the premium it would cost \u2014 on a fairly-priced offer that premium is usually the thing that buys a yes. Pass `team` to scout one opponent instead of the league. Works in season and offseason alike. It does NOT grade: hand the ids to analyze_trade for a verdict.",
       inputSchema: {
-        position: external_exports.enum(["QB", "RB", "WR", "TE"]).optional().describe("Only target this position. Applied inside the ranking, not to the returned rows, so an empty answer means the league has nobody rather than your top few being someone else."),
+        position: external_exports.enum(POSITIONS).optional().describe("Only target this position. Applied inside the ranking, not to the returned rows, so an empty answer means the league has nobody rather than your top few being someone else."),
         team: external_exports.string().optional().describe("Scout ONE opponent: team name, manager handle, or roster id. Scoped mode also keeps their best movable pieces at positions you are not short of, flagged fillsNeed: false. Omit for the league-wide board. An ambiguous name returns candidates and refuses."),
         limit: external_exports.number().int().min(1).max(MAX_LIMIT2).optional().describe(`How many targets to price (default ${DEFAULT_LIMIT3}, max ${MAX_LIMIT2}). The board is always ranked 20 deep, so counts.board is the true total either way.`),
         leagueId: external_exports.string().optional().describe("Sleeper league id. Omit for the configured league."),
@@ -48142,7 +48146,7 @@ function createServer({ env = process.env, fetcher, store } = {}) {
       description: 'Answers "which rookies become something, and which should I take?" \u2014 the question a dynasty value cannot, because value prices consensus rather than opportunity. Returns the ONE opportunity score the app ships (0-100: NFL depth-chart standing x NFL draft capital, back-tested, with a small youth tilt), the within-position disagreement between that model and the market, and a roster-fit ranking for one team. Age and combine numbers are returned as context only and never score. Pass `player` for one rookie. A rookie the feed has no entry for is unscored (null), never zero.',
       inputSchema: {
         player: external_exports.string().optional().describe("One rookie by name or Sleeper id. An ambiguous name returns candidates and refuses."),
-        position: external_exports.enum(["QB", "RB", "WR", "TE"]).optional().describe("Only this position (applies to the board, the shortlist and the divergence lists)."),
+        position: external_exports.enum(POSITIONS).optional().describe("Only this position (applies to the board, the shortlist and the divergence lists)."),
         sort: external_exports.enum(["fit", "score", "value"]).optional().describe("fit (default, for the team) \xB7 score (opportunity alone) \xB7 value (dynasty market)."),
         team: external_exports.string().optional().describe("Whose roster fit to read: team name, manager handle or roster id. Omit for your own."),
         limit: external_exports.number().int().min(1).max(MAX_LIMIT3).optional().describe(`Board rows to return (default ${DEFAULT_LIMIT4}, max ${MAX_LIMIT3}). counts carries the true size.`),
@@ -48596,6 +48600,7 @@ var init_server3 = __esm({
     init_scoutManagers();
     init_news();
     init_valueHistory2();
+    init_constants();
     SERVER_NAME = "dynastyedge";
     SERVER_VERSION = "0.1.0";
     sourceStamp = external_exports.object({

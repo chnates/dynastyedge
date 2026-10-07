@@ -3228,6 +3228,7 @@ dynastyedge/
 │   ├── deadlineThresholds.test.mjs  ← BUYER_PCT / SELLER_PCT are the shipped 70% / 35%, read at both edges, AND a source scan that fails on a second copy
 │   ├── playoffOdds.test.mjs         ← fixed-seed determinism, Σ odds = playoff teams, thresholds; buildPlayoffOutlook's three states (posted-but-unplayed is ACTIVE)
 │   ├── seasonWindow.test.mjs        ← the draft-completion boundary (only `complete` rolls a season; auctions never count); Tracker selection; no NFL state → seed; seedPickYears' September boundary AND a scan for hard-coded seasons
+│   ├── sharedConstants.test.mjs     ← POSITIONS, WIN_WINDOW_TIERS, VALUE_HISTORY_DAYS hold their values AND a scan across src/ mcp/ scripts/ for a retyped copy (freeAgents' VALUED_POSITIONS is deliberately separate)
 │   ├── pickCapital.test.mjs         ← ownership, round medians, year weights BY DISTANCE (a rolled year never scores 0), the spent-pick ladder, the round label AND a scan for a copy
 │   ├── pickTrades.test.mjs          ← slot tiers (as coded), slot pricing fallback, package constraints
 │   ├── fairBand.test.mjs            ← the two "even" rules: hindsight ±5% of the larger side, symmetric from both seats (and the fair band shown NOT to be), Activity = ledger, AND a scan for a copy
@@ -3295,8 +3296,8 @@ because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
 **Current counts (verified 2026-10-07 by moving `node_modules` aside):** with
-dependencies **`# tests 900 / # pass 900`**; without them **`# tests 857 / #
-pass 852 / # fail 5`**. **If the test count isn't 900, run `npm ci` before
+dependencies **`# tests 902 / # pass 902`**; without them **`# tests 859 / #
+pass 854 / # fail 5`**. **If the test count isn't 902, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React
@@ -3478,7 +3479,8 @@ export const FANTASYCALC_PARAMS = {
 // SEED ONLY — the live window is derived per load (see the note below).
 // The seed itself is derived from the date (seasonWindow.js's seedPickYears).
 export const PICK_YEARS = seedPickYears()
-export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
+export const POSITIONS = ['QB', 'RB', 'WR', 'TE']          // THE dynasty positions — imported everywhere, never retyped
+export const VALUE_HISTORY_DAYS = 90                       // values-history.json's rolling window (pipeline + get_value_history)
 
 // Ordered roster slots — indices match Sleeper's `starters` array positions.
 // The shared slot-fill engine (utils/lineupBuild.js) reads this.

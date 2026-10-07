@@ -1,6 +1,6 @@
 import { classifyInjuryStatus, injuryShortLabel } from './injuryStatus'
+import { POSITIONS } from '../constants'
 
-const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 
 export function getProjPts(sleeperId, projMap) {
   if (!projMap || !sleeperId) return 0

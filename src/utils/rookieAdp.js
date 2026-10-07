@@ -1,3 +1,4 @@
+import { POSITIONS } from '../constants'
 // Rookie ADP derivation.
 //
 // Also THE rookie-class definition (`buildRookieMap`), which used to live
@@ -5,7 +6,7 @@
 // research tool builds the class from the same rule the phone does; the hook
 // keeps only its memo.
 
-const ROOKIE_POSITIONS = new Set(['QB', 'RB', 'WR', 'TE'])
+const ROOKIE_POSITIONS = new Set(POSITIONS)
 
 // The rookie class, from the trimmed player DB (usePlayerDB's trim, mirrored by
 // mcp/snapshot.js). years_exp===0 is definitive; years_exp==null with age<=25

@@ -13,6 +13,7 @@ import SectionHeader from '../shared/SectionHeader'
 import TrendArrow from '../shared/TrendArrow'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
+import { POSITIONS as DYNASTY_POSITIONS } from '../../constants'
 
 // DEF belongs here: the league starts one, and FantasyCalc ranks zero
 // defenses — so filtering the pool to FantasyCalc's positions (the old
@@ -201,7 +202,7 @@ export default function FreeAgentsView() {
     if (!league?.myRoster) return {}
     const worst = {}
     league.myRoster.players.forEach(p => {
-      if (!['QB', 'RB', 'WR', 'TE'].includes(p.position)) return
+      if (!DYNASTY_POSITIONS.includes(p.position)) return
       if (worst[p.position] == null || (p.value ?? 0) < worst[p.position]) {
         worst[p.position] = p.value ?? 0
       }
@@ -214,7 +215,7 @@ export default function FreeAgentsView() {
     if (!league?.myRoster) return {}
     const byPos = {}
     league.myRoster.players.forEach(p => {
-      if (!['QB', 'RB', 'WR', 'TE'].includes(p.position)) return
+      if (!DYNASTY_POSITIONS.includes(p.position)) return
       if (!byPos[p.position]) byPos[p.position] = []
       byPos[p.position].push(p)
     })

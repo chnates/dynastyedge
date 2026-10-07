@@ -20,8 +20,8 @@
 // estimate everywhere it surfaces; it is a model, not a prophecy.
 
 import { PEAK_WINDOWS, getPeakStatus } from './peakWindows'
+import { POSITIONS } from '../constants'
 
-const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 export const TRAJECTORY_HORIZON = 3 // seasons projected beyond the current one
 
 const AGE_MIN = 21

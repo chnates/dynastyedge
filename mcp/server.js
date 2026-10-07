@@ -36,6 +36,7 @@ import { getLeagueResults } from './results.js'
 import { buildScoutAnswer, renderScoutText, DEFAULT_TRADE_LIMIT, MAX_TRADE_LIMIT } from './tools/scoutManagers.js'
 import { getNews } from './news.js'
 import { buildValueHistoryAnswer, renderValueHistoryText, DEFAULT_MOVERS, MAX_MOVERS, MIN_DAYS, MAX_DAYS } from './tools/valueHistory.js'
+import { POSITIONS } from '../src/constants.js'
 
 export const SERVER_NAME = 'dynastyedge'
 export const SERVER_VERSION = '0.1.0'
@@ -1258,7 +1259,7 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
         'buys a yes. Pass `team` to scout one opponent instead of the league. Works in season and ' +
         'offseason alike. It does NOT grade: hand the ids to analyze_trade for a verdict.',
       inputSchema: {
-        position: z.enum(['QB', 'RB', 'WR', 'TE']).optional()
+        position: z.enum(POSITIONS).optional()
           .describe('Only target this position. Applied inside the ranking, not to the returned rows, ' +
                     'so an empty answer means the league has nobody rather than your top few being someone else.'),
         team: z.string().optional()
@@ -1398,7 +1399,7 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
       inputSchema: {
         player: z.string().optional()
           .describe('One rookie by name or Sleeper id. An ambiguous name returns candidates and refuses.'),
-        position: z.enum(['QB', 'RB', 'WR', 'TE']).optional()
+        position: z.enum(POSITIONS).optional()
           .describe('Only this position (applies to the board, the shortlist and the divergence lists).'),
         sort: z.enum(['fit', 'score', 'value']).optional()
           .describe('fit (default, for the team) · score (opportunity alone) · value (dynasty market).'),
