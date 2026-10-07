@@ -316,9 +316,12 @@ GitHub Actions** and served as a static file — keeping the app backend-free.
   CORS `*`) once per session in `usePlayerIntel`.
 - **Player matching — `playerIds` is the join, not `athleteIds`.** The feed
   resolves every item server-side (ESPN athlete id first, then normalized full
-  name across headline **and** story) and stamps Sleeper ids. All three client
-  matchers (`matchFeedItems`, `useLeagueNews`, `useNewsFeed`) read `playerIds`,
-  then `athleteIds`, then the headline name. **Why:** `espn_id` is null for
+  name across headline **and** story) and stamps Sleeper ids. **The client
+  matcher is ONE function set, `src/utils/newsMatch.js`** (`buildNewsIndex` +
+  `resolveItemPlayer`), used by the drawer, The Edge's Headlines and the News
+  section, and it shares `normalizeName` with the feed script
+  (CODE-REVIEW-1 #10): `playerIds`, then `athleteIds`, then the longest full
+  name in the headline. **Why:** `espn_id` is null for
   most of a dynasty roster. Multi-player articles surface on every player they
   name, by design; the article sheet flags it (reading whichever of the two id
   arrays is longer).
@@ -3185,6 +3188,7 @@ dynastyedge/
 │   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation; teamDirection = THE team cut-offs (−1% / +5%)
 │   │   ├── seasonWindow.js      ← THE "has the rookie draft happened yet?" resolver — the live pick window + which draft the Tracker shows (replaced the hand-rolled PICK_YEARS)
 │   │   ├── playerDB.js          ← THE /players/nfl trim (the kept fields) — shared by usePlayerDB and mcp/snapshot.js
+│   │   ├── newsMatch.js         ← THE news-feed matcher (playerIds › athleteIds › headline name) + normalizeName, shared by the drawer, Headlines, News and fetch-news.mjs
 │   │   ├── pickCapital.js       ← pick ownership (year weights relative to the window, never literal years) + THE spent-pick ladder shared by Activity and the ledger (buildDraftPickIndex, buildGenericRoundValues) + THE round label (roundSuffix, pickRoundLabel)
 │   │   ├── leagueHistory.js     ← THE history walk (chain, drafts list, season ledger) + ledgerCoverage — shared with mcp/history.js; a failure is named, never read as "never traded"
 │   │   ├── leagueResults.js     ← THE bracket reader: champion = w of the p:1 game, placements carry owner_id; pure, used by get_league_results
@@ -3249,6 +3253,7 @@ dynastyedge/
 │   ├── fantasyCalcValues.test.mjs   ← the FantasyCalc reader: non-numeric id is a PICK, NULL not 0, old presence classifier as a regression statement; URL = the old literal, app price = pipeline price, AND a scan for a second reader/URL
 │   ├── sourceHealth.test.mjs        ← the alarm AND its restraint: 3-day gap fires, 1-day blip doesn't, fresh archive never alarms, one dark source implicates no other
 │   ├── valuationSources.test.mjs    ← three-source readers: "NA" null, KTC on mfl_id (Gore Jr./Sr.), superflexValues only; a failed source all-null, never 0, never prunes
+│   ├── newsMatch.test.mjs           ← the matcher order (playerIds › athleteIds › longest full name), short names never match, AND a scan for a second matcher/normaliser
 │   ├── newsCoverage.test.mjs        ← the depth metric: stragglers cannot set it; general items excluded
 │   ├── newsRetention.test.mjs       ← retention: newest-N-per-player, breadth preserved, roundups charge every player, id-less items never dropped by quota
 │   ├── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
@@ -3290,8 +3295,8 @@ because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
 **Current counts (verified 2026-10-07 by moving `node_modules` aside):** with
-dependencies **`# tests 895 / # pass 895`**; without them **`# tests 852 / #
-pass 847 / # fail 5`**. **If the test count isn't 895, run `npm ci` before
+dependencies **`# tests 900 / # pass 900`**; without them **`# tests 857 / #
+pass 852 / # fail 5`**. **If the test count isn't 900, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React

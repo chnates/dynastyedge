@@ -34,6 +34,7 @@ import { windowDepthHours } from './newsCoverage.mjs'
 import { retainDiverse } from './newsRetention.mjs'
 import { trackSourceMisses } from './sourceHealth.mjs'
 import { SLEEPER_BASE } from '../src/constants.js'
+import { normalizeName } from '../src/utils/newsMatch.js'
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15'
 const MAX_STORY = 600
@@ -157,9 +158,9 @@ function keyOf(item) {
   return (item.headline ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
 }
 
-export function normalizeName(s) {
-  return (s ?? '').toLowerCase().replace(/[.'’-]/g, '').replace(/\s+/g, ' ').trim()
-}
+// THE name normaliser, shared with the app's matcher so the client folds a
+// name exactly as this script did when it stamped playerIds.
+export { normalizeName }
 
 function parseRss(xml, source) {
   const blocks = xml.match(/<item[\s>][\s\S]*?<\/item>/gi) ?? []
