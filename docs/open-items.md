@@ -177,8 +177,8 @@ login, a phone or a decision that no sandbox can supply.
 |---|---|---|---|---|
 | 13 | **Grade the FAAB recommender** against its pre-registered bars (wins ≥ 75% of contested auctions it enters; cost per contested win ≤ league median). **The protocol is fixed in `docs/analysis/faab-bid-corpus-2026-08.md` §10** — population, seat, "enters", tie rule, n < 8 = indicative. Follow it as written | Me | <1 | Bids drop to ~0.3× from Week 15, so the in-season sample is essentially complete |
 | 14 | **Grade the playoff odds on 2026 itself**, once the regular season ends | Me | <1 | The first real out-of-sample test |
-| 15 | **Phase 4d: "when the sources disagree, which one moves?"** | Me | 1 | `values-consensus.json` holds 15 unbroken daily columns since 09-22; ~3 months makes it answerable (~2026-12) |
-| 16 | **Phase 4b/4c: normalize the three sources and surface the disagreement** | Me | 2 | The largest unbuilt approved item. It gets better by waiting, so it waits for #15 |
+| 15 | **Phase 4d: "when the sources disagree, which one moves?"** (spec: §2 PHASE-4BCD) | Me | 1 | `values-consensus.json` holds 15 unbroken daily columns since 09-22; ~3 months makes it answerable (~2026-12) |
+| 16 | **Phase 4b/4c: normalize the three sources and surface the disagreement** (spec: §2 PHASE-4BCD) | Me | 2 | The largest unbuilt approved item. It gets better by waiting, so it waits for #15 |
 
 ### 2027 offseason and later
 
@@ -203,6 +203,46 @@ login, a phone or a decision that no sandbox can supply.
 ### Deliberately NOT doing (settled — do not reopen)
 
 Push notifications (Sleeper is read-only, no backend) · per-manager trade-acceptance modelling (tested on the full 95-trade corpus, disconfirmed) · multi-league (frontier Item 6, a non-goal) · a two-axis rookie score (rejected twice: 3c and the college-production back-test) · the breakout alert (tested null) · averaging the valuation sources or replacing FantasyCalc (destroys the disagreement, which is the product) · tightening the news cron (GitHub already throttles it 6×) · OPEN-4's three accepted-risk findings.
+
+### Settled measurements and standing rules (lifted from `build-plan-2026-09.md` §0 and §8)
+
+That plan is archived (`docs/archive/build-plan-2026-09.md`); these two
+sections of it are still cited, so they live here now.
+
+**Settled — do not re-measure.** The scripts are committed; re-running them is
+waste. "Study" is `docs/analysis/optimizer-data-sources-2026-09.md`.
+
+| Question | Answer | Evidence |
+|---|---|---|
+| Pull projections from more sites? | **No.** ESPN and Sleeper agree at r=0.966; blending gains 0.013 pts | study §3 |
+| Boom/bust score to pick starters? | **No.** Costs ~0.07 wins/season, negative at every margin | study §4 |
+| Usage as a *predictive* model? | **No.** 0.026 MAE gain, unstable coefficients | study §5 |
+| Stream defenses weekly? | **No.** Pooled −0.00 pts/wk over 408 team-weeks | study R1 |
+| Is the projection gap→hit-rate curve real? | **Yes.** N>500k pairs, monotone 52%→87% | study §4 |
+| Do breakouts arrive unflagged? | **Yes.** 79% of waiver breakouts had no projection bump | study R2 |
+
+**Usage data is DISPLAY ONLY** (owner call, 2026-09-04): research context on
+rookies, player profiles and free agents. It never feeds a projection, a score
+or a recommendation ranking.
+
+**Standing rules for any research or build** (from the study's §R6 lessons and
+the repo's gates):
+
+1. **Never rank a recommendation on one season.** The DEF result had n=136 and
+   t=2.22 and did not replicate. Multi-season replication is a gate before
+   ranking, not a caveat after it.
+2. **A filter chosen for one population invalidates claims about another.**
+   `proj ≥ 5` was right for start/sit and silently wrong for waivers.
+3. **State what a back-test's "cheater" knows**, and check it can represent the
+   phenomenon in question.
+4. **Test an endpoint's mutability before back-testing it.**
+5. `npm run lint` + `npm test` + `npm run build` all pass before any commit.
+   **If the test count does not match CLAUDE.md's `npm ci` block, run `npm ci`
+   before debugging anything.**
+6. CLAUDE.md updated in the **same commit** as the change it describes.
+7. All UI from `src/components/ui`; `/design-review` before committing UI work.
+8. Every new number in the app must be traceable to a committed, re-runnable
+   script — never hand-copied.
 
 ---
 
@@ -2175,16 +2215,25 @@ budgets) was its prerequisite and closed 2026-09-20.
 ### OPEN-4 — Accepted-risk findings from the July 2026 review
 
 **Status:** recorded as accepted, not oversights. Re-flagging them as new
-findings wastes a session. Full detail in `docs/repo-review-2026-07.md`.
+findings wastes a session. Restated here in full so the source review
+(`docs/archive/repo-review-2026-07.md`) is history only. File:line references
+are as of 2026-07-17.
 
-- **F12** — client-side news-link scheme validation (defense-in-depth only;
-  pipeline-side validation is correct and exploiting it needs repo write
-  access).
-- **F15** — exact standings ties resolve by roster-array order (vanishingly
-  rare with fractional scoring; the code comments the behavior).
-- **F16b** — the "↪ flipped" ledger marker needs strictly-greater timestamps,
-  so date-less trade pairs miss it (the net-value wash is arithmetic-invariant
-  and unaffected).
+- **F12 — the client never validates a news link's URL scheme.** The pipeline
+  does (`scripts/fetch-news.mjs` keeps `^https?://` or null), but the client
+  passes `item.link` straight to `<a href>` (`usePlayerIntel`, `useNewsFeed`,
+  `useLeagueNews` → `NewsArticleSheet`), and the client-side ESPN fallback
+  parser accepts any string. Exploiting it needs repo write access or ESPN
+  itself serving a `javascript:` URL, so it is a hardening gap, not a live
+  vulnerability. `rel="noopener noreferrer"` is present.
+- **F15 — exact standings ties resolve 100/0 by roster-array order**
+  (`src/utils/playoffOdds.js`, the seeding sort). Two teams with identical wins
+  *and* points-for are seeded by list position, not split 50/50. Fractional
+  scoring makes an exact tie vanishingly rare, and the code comments the
+  behaviour.
+- **F16b — the "↪ flipped" ledger marker needs strictly-greater timestamps**
+  (`managerAnalysis.js`), so date-less trade pairs never get it. The net-value
+  wash itself is arithmetic-invariant and unaffected.
 
 ### 2026-09-07 — the trade engine's two sides rebalanced, and Layer 3 rebased
 
@@ -2575,6 +2624,46 @@ nothing on a healthy roster — that is by design (ff116ba's ruling is about the
 "deficit or cliff", not "starter". The fix above is precisely what stops the UI
 from conflating the two.
 
+### PHASE-4BCD — the valuation consensus, still to build (spec lifted from `build-plan-2026-09.md` §10)
+
+**Status:** deferred. 4a, the daily three-source archive, shipped as PIPE-2.
+**Triggers:** §0 #15 (4d, ~2026-12, once ~3 months of `values-consensus.json`
+exist), then §0 #16 (4b + 4c). The owner approved the phase on 2026-09-04.
+Source table, crosswalk traps and the agreement measurement:
+`docs/archive/build-plan-2026-09.md` §10 and CLAUDE.md's consensus-archive
+bullet.
+
+**The structure that shapes it.** Rank agreement on the 376 players all three
+price: FantasyCalc vs KeepTradeCut **0.975** in the top 25, FantasyCalc vs
+DynastyProcess **0.513**, DynastyProcess vs KeepTradeCut **0.472**. So it is
+**market consensus (two sources) vs expert view (one)**, not three opinions.
+All three agree at ~0.95+ overall and diverge only at the top, where trades
+happen, so **evaluate on the top 100–150, never pooled**.
+
+- **4b. Normalize properly.** The sources differ in scale *and* distribution
+  shape. Naive max-scaling made KeepTradeCut look systematically higher at
+  every position, a scale artifact. **Do not ship max-scaling.** Use rank-based
+  or quantile matching, and check that a source with no real bias shows none
+  after the transform.
+- **4c. Surface the disagreement; do not blend it away.** Do not replace
+  FantasyCalc, because every model is calibrated on its scale. Do not average
+  the sources: at ~0.96 the average *is* FantasyCalc with the disagreement
+  destroyed. Do show the spread where it is wide, in the Trade Analyzer and the
+  profile drawer (*"trade market 6,907 · expert consensus 4,444"*). Use the
+  broader coverage to fill players that show `—`, labelled by source, and
+  rule 7 still applies.
+- **4d. The forward test.** When sources disagree by more than X%, does the gap
+  close, and which source moves? If the expert view leads, its divergences are
+  buy signals; if the market leads, they are noise. **Pre-register the
+  threshold and the window before looking.** Compare only players every source
+  priced that day (PIPE-3: a DynastyProcess null means off the board, not a
+  value collapse).
+
+**Honest limits.** Nobody knows which source is right, and this does not claim
+to: it ships *"these disagree"*, and 4d is what could change that.
+KeepTradeCut is a page, not an API, so it is strictly best-effort. Check each
+source's terms before publishing its values to a public branch.
+
 ### OPEN-5 — Model calibration (open research)
 
 **Status:** open. **Trigger: FIRED** — the regular season is under way
@@ -2618,7 +2707,7 @@ decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 | OPEN-2 — roll `PICK_YEARS` after the rookie draft | 2026-09-07 | Removed the annual chore instead: the pick window is derived from `/state/nfl` + the drafts list (`utils/seasonWindow.js`, zero extra fetches). Killed 40 ghost 0-value picks and surfaced 2029 league-wide. Detail retained in §2 |
 | OPEN-7 — the keep-score had no opinion about age or about which pick is which | 2026-09-06 | Measured both (n=762 player-seasons; all 120 of this league's rookie picks), then shipped `PICK_ROUND_KEEP`, `pastPeakTilt`, the cash-out board, the cheaper-`alternative` line, and the untruncated package search. Detail retained in §1 |
 | OPEN-6 — push Layer 4 into Targets and the fair-package builder | 2026-09-06 | Layer 4 extracted as `buildPartnerFit` and shared; `suggestFairPackage` made two-phase; Targets ranked by `need × value × movability`; `suggestSellMove` partner pick made two-sided. Detail retained in §1 |
-| July 2026 repo-review backlog B1–B11 | 2026-07/08 | All eleven landed — mapping in `docs/repo-review-2026-07.md`'s status banner |
+| July 2026 repo-review backlog B1–B11 | 2026-07/08 | All eleven landed — mapping in `docs/archive/repo-review-2026-07.md`'s status banner |
 | Navigation Refactor Phases 1–3 | 2026-07-20 | Consolidation → `/my-team` + `/league` rename → "Primetime Blackout" visual pass |
 | OPEN-1 — FAAB stats mixed two budget scales | 2026-09-20 | The $100 → $1000 change went live, so the trigger fired. Bids are now normalized to percent-of-budget per season; `valuePerBudget` replaces "value per $100" and is continuous with it, so no pre-2026 history is restated. Measured on the live league: four of ten tendency chips corrected, two inverted. Detail retained in §2 |
 | Frontier Item 2 blocking question (are losing FAAB bids visible?) | 2026-08-08 | Verified yes; see `docs/analysis/faab-bid-corpus-2026-08.md`. Superseded by OPEN-3 |

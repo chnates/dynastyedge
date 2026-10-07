@@ -12,7 +12,7 @@ the same discipline as `scripts/dev/rookie-signal-backtest.mjs`, so the analysis
 and the app cannot drift apart. It also re-derives `COMBINE_BASELINE` and
 `AGE_BASELINE` from raw nflverse data and diffs them against what ships.
 
-**The question Phase 3 asked** (`docs/build-plan-2026-09.md` §4): the shipped
+**The question Phase 3 asked** (`docs/archive/build-plan-2026-09.md` §4): the shipped
 opportunity score answers "will this rookie play *this season*". A dynasty
 manager also needs "is he worth a taxi spot for three years". The plan proposed
 a second score built from **age at draft, combine athleticism, and college
