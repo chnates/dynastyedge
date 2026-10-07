@@ -307,7 +307,7 @@ forever, or retry-loop. On any failure the UI surface simply hides.**
 | Value history / sparklines | `useValueHistory.js` | `historyFailed` latch → `getSeries` returns `null`; < 4 points also `null` (a 2-point "line" reads as broken) |
 | Trade-time value archive | `useTradeTimeValues.js` | `archiveFailed` latch; missing entry ⇒ "at trade time" line hides |
 | Rookie intel | `useRookieIntel.js` | `intelFailed` latch; a missing branch renders Draft › Research's "hasn't published yet" explainer, and the board falls back to dynasty-value order — never an `ErrorState`. The branch first published 2026-08-14, so a miss now means the pipeline stopped rather than never started |
-| Per-week transaction/matchup buckets | `useTransactions.js`, `useLeagueHistory.js`, `matchupWeeks.js` | each week `.catch(() => [])` so one bad bucket can't sink the set — EXCEPT `useTransactions.js` and `matchupWeeks.js` reject when *every* requested bucket failed (a total outage is Class A: ErrorState, not an empty feed / fake preseason) |
+| Per-week transaction/matchup buckets | `useTransactions.js`, `useLeagueHistory.js` (via `utils/leagueHistory.js`), `matchupWeeks.js` | each week `.catch(() => [])` so one bad bucket can't sink the set — EXCEPT `useTransactions.js` and `matchupWeeks.js` reject when *every* requested bucket failed (a total outage is Class A: ErrorState, not an empty feed / fake preseason), and a past season whose buckets ALL fail is NAMED in `readState.failedSeasons` (since 2026-10-07; Trade › Managers prints it — never "never traded") |
 
 **Rule for new work:** anything fed by an Actions-published branch or an
 unofficial endpoint is Class B by construction (section 1, link 6). Anything

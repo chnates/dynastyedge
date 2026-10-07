@@ -187,3 +187,26 @@ test('a league that has genuinely never drafted is AVAILABLE with an empty recor
   assert.equal(res.available, true, 'nothing failed — there is simply nothing to report')
   assert.deepEqual(res.history.currentDrafts, [])
 })
+
+// ── A broken chain is NAMED (CODE-REVIEW-1 #3, 2026-10-07) ──────────────────
+// The walk used to end silently at a failed hop, so older seasons vanished as
+// if the league were younger. The shared walk (src/utils/leagueHistory.js)
+// names the break, the result carries it, and a note says the older seasons
+// are unknown — not absent.
+
+test('a failed hop is reported, and the seasons reached are still returned', async () => {
+  resetHistoryCache()
+  const h = await getLeagueHistory({ leagueId: 'L2026', leagueInfo: CURRENT, fetcher: fakeFetcher({ failLeagues: ['L2024'] }) })
+  assert.equal(h.available, true)
+  assert.deepEqual(h.history.pastSeasons.map(s => s.season), ['2025'])
+  assert.equal(h.chainBroken.afterSeason, '2025')
+  assert.ok(h.notes.some(n => /could not be followed past 2025/.test(n) && /UNKNOWN, not absent/.test(n)))
+})
+
+test('a cached broken walk is retried on the next call, not served for the TTL', async () => {
+  resetHistoryCache()
+  await getLeagueHistory({ leagueId: 'L2026', leagueInfo: CURRENT, fetcher: fakeFetcher({ failLeagues: ['L2024'] }) })
+  const healed = await getLeagueHistory({ leagueId: 'L2026', leagueInfo: CURRENT, fetcher: fakeFetcher() })
+  assert.equal(healed.chainBroken, null)
+  assert.deepEqual(healed.history.pastSeasons.map(s => s.season), ['2025', '2024'])
+})

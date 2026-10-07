@@ -88,13 +88,13 @@ League ID: `1313933520715907072` (constant `LEAGUE_ID`).
 | Endpoint (URL template) | Owning hook(s) / caller | Cache discipline |
 |---|---|---|
 | `/league/{LEAGUE_ID}` | `useSleeper` · `useLeagueHistory` | Once per app load; App.jsx refetches on tab focus when data > 30 min old (`STALE_AFTER_MS = 30*60*1000`, stale-while-revalidate) |
-| `/league/{prevId}` (chain) | `useLeagueHistory` | Lazy, once/session; walks `previous_league_id` until `null`/`'0'`, capped at `MAX_SEASONS_BACK = 8` hops |
+| `/league/{prevId}` (chain) | `useLeagueHistory` · `mcp/history.js` (both via `src/utils/leagueHistory.js`) | Lazy, once/session; walks `previous_league_id` until `null`/`'0'`, capped at `MAX_SEASONS_BACK = 8` hops; a failed hop is `chainBroken`, never a silent end |
 | `/league/{id}/rosters` | `useSleeper` (current) · `useLeagueHistory` (past) | Same as owner |
 | `/league/{id}/users` | `useSleeper` · `useLeagueHistory` | Same as owner |
 | `/league/{LEAGUE_ID}/traded_picks` | `useSleeper` | Once/load + 30-min SWR |
 | `/state/nfl` | `useSleeper` · `useLineupData` | Once/load (useSleeper); per-mount (useLineupData) |
 | `/league/{LEAGUE_ID}/matchups/{week}` | `useSleeper` (current week, in-season only) · `useLineupHistory` (weeks 1..lastWeek) · `usePlayoffOdds` (weeks 1..`playoff_week_start`−1) | useSleeper: once/load. useLineupHistory: session cache keyed `${rosterId}:${lastWeek}`. usePlayoffOdds: session cache keyed by season; each week `.catch(() => [])` |
-| `/league/{id}/transactions/{week}` | `useTransactions` (current league) · `useLeagueHistory` (past seasons) | All 18 buckets in parallel, each `.catch(() => [])`; session module cache |
+| `/league/{id}/transactions/{week}` | `useTransactions` (current league) · `useLeagueHistory` (past seasons) | Current: all 18 buckets in parallel, each `.catch(() => [])`, all-failed rejects. Past: weeks 1..`last_scored_leg`; all-failed names the season (`fetchSeasonLedger`); session module cache |
 | `/league/{id}/drafts` | `useSleeperDraft` · `useLeagueHistory` | useSleeperDraft: session cache + manual refresh + focus refetch (stale > 10 s while `drafting`/`paused`, > 5 min otherwise) + 30 s poll while `drafting` and tab visible. **Omits `slot_to_roster_id` — see below** |
 | `/draft/{draft_id}` | `useSleeperDraft` | Best-effort `.catch(() => null)`, merged OVER the listed object. **The only source of `slot_to_roster_id`** |
 | `/draft/{draft_id}/picks` | `useSleeperDraft` · `useLeagueHistory` | Best-effort `.catch(() => [])` |

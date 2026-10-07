@@ -40,10 +40,15 @@ function PositionChip({ position, variant }) {
 function ScoutingLine({ profile }) {
   if (!profile) return null
   if (profile.tradeCount === 0) {
+    // "Hasn't completed a trade" only when every season was read; otherwise
+    // the shared label says how many seasons the claim covers.
+    const label = profile.activity === 'No trades yet'
+      ? "Hasn't completed a trade — cold call"
+      : profile.activity
     return (
       <div className="flex items-center gap-1.5">
         <span className="font-body text-[11px] text-text-tertiary dark:text-text-tertiary">
-          Hasn't completed a trade — cold call
+          {label}
         </span>
       </div>
     )

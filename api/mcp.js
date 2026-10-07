@@ -1119,16 +1119,115 @@ var init_transactions = __esm({
   }
 });
 
-// mcp/history.js
-async function fetchDrafts(get, leagueId) {
-  const drafts = await get(`${SLEEPER_BASE}/league/${leagueId}/drafts`, { label: "Sleeper drafts" });
+// src/utils/leagueHistory.js
+function playedWeeks(leagueInfo) {
+  const last = Number(leagueInfo?.settings?.last_scored_leg);
+  return Number.isFinite(last) && last >= 1 ? Math.min(LEDGER_MAX_WEEK, last) : LEDGER_MAX_WEEK;
+}
+async function walkLeagueChain(get, leagueInfo, { maxBack = MAX_SEASONS_BACK, base = SLEEPER_BASE } = {}) {
+  const pastLeagues = [];
+  let prevId = leagueInfo?.previous_league_id;
+  let chainBroken = null;
+  while (prevId && prevId !== "0" && pastLeagues.length < maxBack) {
+    let info = null;
+    try {
+      info = await get(`${base}/league/${prevId}`, { label: "Sleeper league" });
+    } catch (err) {
+      chainBroken = {
+        leagueId: String(prevId),
+        afterSeason: String((pastLeagues[pastLeagues.length - 1] ?? leagueInfo)?.season ?? ""),
+        error: err?.message ?? "request failed"
+      };
+      break;
+    }
+    if (!info) {
+      chainBroken = {
+        leagueId: String(prevId),
+        afterSeason: String((pastLeagues[pastLeagues.length - 1] ?? leagueInfo)?.season ?? ""),
+        error: "empty response"
+      };
+      break;
+    }
+    pastLeagues.push(info);
+    prevId = info.previous_league_id;
+  }
+  return { pastLeagues, chainBroken };
+}
+async function fetchDraftsWithPicks(get, leagueId, { base = SLEEPER_BASE } = {}) {
+  const drafts = await get(`${base}/league/${leagueId}/drafts`, { label: "Sleeper drafts" });
   return Promise.all(
     (drafts ?? []).map(async (draft) => ({
       draft,
-      picks: await get(`${SLEEPER_BASE}/draft/${draft.draft_id}/picks`, { label: "Draft picks" }).catch(() => []) ?? []
+      picks: await get(`${base}/draft/${draft.draft_id}/picks`, { label: "Draft picks" }).catch(() => []) ?? []
     }))
   );
 }
+async function fetchSeasonLedger(get, leagueInfo, { base = SLEEPER_BASE } = {}) {
+  const id = leagueInfo.league_id;
+  const weeks = Array.from({ length: playedWeeks(leagueInfo) }, (_, i) => i + 1);
+  const [users, ...buckets] = await Promise.all([
+    get(`${base}/league/${id}/users`, { label: "Sleeper users" }).catch(() => null),
+    ...weeks.map((w) => get(`${base}/league/${id}/transactions/${w}`, { label: `Sleeper transactions w${w}` }).catch(() => null))
+  ]);
+  const failedWeeks = weeks.filter((_, i) => !Array.isArray(buckets[i]));
+  if (failedWeeks.length === weeks.length) {
+    throw new Error(`no transaction week of the ${leagueInfo.season} season could be loaded`);
+  }
+  const transactions = [];
+  buckets.forEach((txs, i) => {
+    ;
+    (Array.isArray(txs) ? txs : []).forEach((tx) => {
+      if (tx?.status === "complete") transactions.push({ ...tx, week: weeks[i] });
+    });
+  });
+  transactions.sort((a, b) => (b.status_updated ?? 0) - (a.status_updated ?? 0));
+  return {
+    users: Array.isArray(users) ? users : [],
+    usersFailed: !Array.isArray(users),
+    transactions,
+    failedWeeks,
+    weeks: weeks.length
+  };
+}
+function ledgerCoverage({
+  currentSeason,
+  currentRead = true,
+  historyRead = true,
+  ledgerSeasons = [],
+  failedSeasons = [],
+  chainBroken = null
+} = {}) {
+  const seasonsRead = [
+    ...currentRead && currentSeason ? [String(currentSeason)] : [],
+    ...historyRead ? ledgerSeasons.map(String) : []
+  ];
+  const seasonsMissing = [
+    ...currentRead ? [] : [String(currentSeason)],
+    ...historyRead ? failedSeasons.map(String) : ["every past season"],
+    ...historyRead && chainBroken ? [`any season before ${chainBroken.afterSeason}`] : []
+  ];
+  return {
+    seasonsRead,
+    seasonsMissing,
+    available: seasonsRead.length > 0,
+    complete: seasonsRead.length > 0 && seasonsMissing.length === 0
+  };
+}
+function noTradesLabel(coverage) {
+  if (!coverage || coverage.complete) return "No trades yet";
+  const n = coverage.seasonsRead.length;
+  return `No trades in the ${n} season${n === 1 ? "" : "s"} we could read`;
+}
+var MAX_SEASONS_BACK, LEDGER_MAX_WEEK;
+var init_leagueHistory = __esm({
+  "src/utils/leagueHistory.js"() {
+    init_constants();
+    MAX_SEASONS_BACK = 8;
+    LEDGER_MAX_WEEK = 18;
+  }
+});
+
+// mcp/history.js
 async function fetchPastSeason(get, leagueInfo) {
   const id = leagueInfo.league_id;
   const [rosters, drafts] = await Promise.all([
@@ -1136,7 +1235,7 @@ async function fetchPastSeason(get, leagueInfo) {
     // One bad PAST season degrades the record rather than sinking the walk —
     // the same per-item contract the app keeps. Only losing everything is
     // unavailable, which the caller decides.
-    fetchDrafts(get, id).catch(() => [])
+    fetchDrafts(get, id).then((d) => ({ ok: true, d })).catch(() => ({ ok: false, d: [] }))
   ]);
   return {
     season: String(leagueInfo.season),
@@ -1147,7 +1246,8 @@ async function fetchPastSeason(get, leagueInfo) {
     rosters: rosters ?? [],
     transactions: [],
     // not fetched — see the header
-    drafts
+    drafts: drafts.d,
+    draftsFailed: !drafts.ok
   };
 }
 async function getLeagueHistory({
@@ -1162,15 +1262,10 @@ async function getLeagueHistory({
   if (!leagueId) throw new Error("getLeagueHistory requires a leagueId");
   const get = fetcher ?? createFetcher({ concurrency });
   const ttl = force ? -1 : ttlMs;
-  const loaded = await loadSource(store, historyKeyFor(leagueId), ttl, async () => {
-    const pastLeagues = [];
-    let prevId = leagueInfo?.previous_league_id;
-    while (prevId && prevId !== "0" && pastLeagues.length < MAX_SEASONS_BACK) {
-      const info = await get(`${SLEEPER_BASE}/league/${prevId}`, { label: "Sleeper league" }).catch(() => null);
-      if (!info) break;
-      pastLeagues.push(info);
-      prevId = info.previous_league_id;
-    }
+  let ranLoader = false;
+  const load = async () => {
+    ranLoader = true;
+    const { pastLeagues, chainBroken } = await walkLeagueChain(get, leagueInfo, { base: SLEEPER_BASE });
     let currentDraftsFailed = false;
     const [currentDrafts, ...pastSeasons] = await Promise.all([
       fetchDrafts(get, leagueId).catch(() => {
@@ -1185,10 +1280,15 @@ async function getLeagueHistory({
     return {
       currentSeason: String(leagueInfo?.season ?? ""),
       currentDrafts,
-      pastSeasons
+      pastSeasons,
       // newest → oldest
+      chainBroken
     };
-  }).catch((err) => ({ data: null, fetchedAt: null, stale: false, error: err.message }));
+  };
+  let loaded = await loadSource(store, historyKeyFor(leagueId), ttl, load).catch((err) => ({ data: null, fetchedAt: null, stale: false, error: err.message }));
+  if (loaded.data?.chainBroken && !ranLoader) {
+    loaded = await loadSource(store, historyKeyFor(leagueId), -1, load).catch(() => loaded);
+  }
   if (!loaded.data) {
     return {
       available: false,
@@ -1200,39 +1300,26 @@ async function getLeagueHistory({
       ]
     };
   }
+  const notes = [];
+  const cb = loaded.data.chainBroken;
+  if (cb) {
+    notes.push(
+      `The league's history chain could not be followed past ${cb.afterSeason} (${cb.error}), so any older seasons are UNKNOWN, not absent \u2014 records cover only the seasons reached.`
+    );
+  }
+  const draftGaps = (loaded.data.pastSeasons ?? []).filter((ps) => ps.draftsFailed).map((ps) => ps.season);
+  if (draftGaps.length) {
+    notes.push(`The ${draftGaps.join(", ")} draft list could not be loaded, so those drafts are missing from the record.`);
+  }
   return {
     available: true,
     reason: null,
     history: loaded.data,
     seasonsBack: loaded.data.pastSeasons?.length ?? 0,
+    chainBroken: cb ?? null,
     sources: { history: stampSource(loaded) },
-    notes: []
+    notes
   };
-}
-function playedWeeks(leagueInfo) {
-  const last = Number(leagueInfo?.settings?.last_scored_leg);
-  return Number.isFinite(last) && last >= 1 ? Math.min(LEDGER_MAX_WEEK, last) : LEDGER_MAX_WEEK;
-}
-async function fetchSeasonLedger(get, leagueInfo) {
-  const id = leagueInfo.league_id;
-  const weeks = Array.from({ length: playedWeeks(leagueInfo) }, (_, i) => i + 1);
-  const [users, ...buckets] = await Promise.all([
-    get(`${SLEEPER_BASE}/league/${id}/users`, { label: "Sleeper users" }).catch(() => null),
-    ...weeks.map((w) => get(`${SLEEPER_BASE}/league/${id}/transactions/${w}`, { label: `Sleeper transactions w${w}` }).catch(() => null))
-  ]);
-  const failedWeeks = weeks.filter((_, i) => !Array.isArray(buckets[i]));
-  if (failedWeeks.length === weeks.length) {
-    throw new Error(`no transaction week of the ${leagueInfo.season} season could be loaded`);
-  }
-  const transactions = [];
-  buckets.forEach((txs, i) => {
-    ;
-    (Array.isArray(txs) ? txs : []).forEach((tx) => {
-      if (tx?.status === "complete") transactions.push({ ...tx, week: weeks[i] });
-    });
-  });
-  transactions.sort((a, b) => (b.status_updated ?? 0) - (a.status_updated ?? 0));
-  return { users: Array.isArray(users) ? users : [], usersFailed: !Array.isArray(users), transactions, failedWeeks, weeks: weeks.length };
 }
 async function getLedgerHistory({
   leagueId,
@@ -1258,7 +1345,7 @@ async function getLedgerHistory({
   const get = fetcher ?? createFetcher({ concurrency });
   const ttl = force ? -1 : ttlMs;
   const past = base.history.pastSeasons ?? [];
-  const loaded = await Promise.all(past.map((ps) => loadSource(store, ledgerSeasonKey(ps.leagueId), ttl, () => fetchSeasonLedger(get, ps.leagueInfo)).catch((err) => ({ data: null, fetchedAt: null, stale: false, error: err.message }))));
+  const loaded = await Promise.all(past.map((ps) => loadSource(store, ledgerSeasonKey(ps.leagueId), ttl, () => fetchLedger(get, ps.leagueInfo)).catch((err) => ({ data: null, fetchedAt: null, stale: false, error: err.message }))));
   const failedSeasons = [];
   const partialSeasons = [];
   const pastSeasons = past.map((ps, i) => {
@@ -1288,6 +1375,7 @@ async function getLedgerHistory({
     seasonsBack: past.length,
     ledgerSeasons: pastSeasons.filter((_, i) => loaded[i].data).map((ps) => ps.season),
     failedSeasons,
+    chainBroken: base.chainBroken ?? null,
     partialSeasons,
     sources: {
       history: stampSource({
@@ -1299,19 +1387,20 @@ async function getLedgerHistory({
     notes
   };
 }
-var DEFAULT_HISTORY_TTL_MS, MAX_SEASONS_BACK, historyKeyFor, defaultStore5, LEDGER_MAX_WEEK, ledgerSeasonKey;
+var DEFAULT_HISTORY_TTL_MS, historyKeyFor, defaultStore5, fetchDrafts, ledgerSeasonKey, fetchLedger;
 var init_history = __esm({
   "mcp/history.js"() {
     init_constants();
+    init_leagueHistory();
     init_limit();
     init_snapshot();
     init_store();
     DEFAULT_HISTORY_TTL_MS = 6 * 60 * 60 * 1e3;
-    MAX_SEASONS_BACK = 8;
     historyKeyFor = (leagueId) => `history:${leagueId}`;
     defaultStore5 = memoryStore();
-    LEDGER_MAX_WEEK = 18;
+    fetchDrafts = (get, leagueId) => fetchDraftsWithPicks(get, leagueId, { base: SLEEPER_BASE });
     ledgerSeasonKey = (seasonLeagueId) => `ledger:${seasonLeagueId}`;
+    fetchLedger = (get, leagueInfo) => fetchSeasonLedger(get, leagueInfo, { base: SLEEPER_BASE });
   }
 });
 
@@ -40584,8 +40673,8 @@ function buildTendencies(ledger, faab, leagueAvgBidPct) {
   }
   return { labels: labels.slice(0, 3), picksGot, picksGave, ageGot, ageGave, posGot };
 }
-function activityLabel(tradeCount, seasonCount) {
-  if (tradeCount === 0) return "No trades yet";
+function activityLabel(tradeCount, seasonCount, coverage) {
+  if (tradeCount === 0) return noTradesLabel(coverage);
   const rate = tradeCount / Math.max(1, seasonCount);
   if (rate >= 2.5) return "Active dealer";
   if (rate >= 1) return "Occasional dealer";
@@ -40599,7 +40688,7 @@ function rankOf(profiles, ownerId, metric, filterFn = () => true) {
 function fmtNet(net) {
   return `${net >= 0 ? "+" : "\u2212"}${Math.abs(Math.round(net)).toLocaleString()}`;
 }
-function buildMyInsights(profiles, me) {
+function buildMyInsights(profiles, me, coverage) {
   if (!me) return { strengths: [], workOn: [] };
   const strengths = [];
   const workOn = [];
@@ -40621,7 +40710,7 @@ function buildMyInsights(profiles, me) {
     if (me.biggestWin && me.biggestWin.net > 1e3) {
       strengths.push(`Best deal: landed ${me.biggestWin.got.map((a) => a.label).join(", ")} (${fmtNet(me.biggestWin.net)}).`);
     }
-  } else {
+  } else if (!coverage || coverage.complete) {
     workOn.push(`You haven't completed a trade yet \u2014 the most active managers are reshaping their rosters around you.`);
   }
   if (me.faab.budgetsCommitted >= FAAB_COACHING_MIN_BUDGETS && me.faab.valuePerBudget != null) {
@@ -40669,7 +40758,7 @@ function buildDraftGrades({ history, currentLeague, playerMap, pickEntries, play
   const resolvers = makeResolvers(playerMap, playerDB ?? {}, pickEntries ?? [], buildPickIndex(seasons));
   return buildDraftRecords(seasons, resolvers);
 }
-function buildManagerProfiles({ history, currentLeague, playerMap, pickEntries, playerDB, myOwnerId }) {
+function buildManagerProfiles({ history, currentLeague, playerMap, pickEntries, playerDB, myOwnerId, coverage = null }) {
   const seasons = normalizeSeasons(history, currentLeague);
   const pickIndex = buildPickIndex(seasons);
   const resolvers = makeResolvers(playerMap, playerDB ?? {}, pickEntries ?? [], pickIndex);
@@ -40716,7 +40805,7 @@ function buildManagerProfiles({ history, currentLeague, playerMap, pickEntries, 
       biggestLoss: byNet[byNet.length - 1]?.net < 0 ? byNet[byNet.length - 1] : null,
       tendencies: tendencies.labels,
       tendencyDetail: tendencies,
-      activity: activityLabel(ledger.length, seasonsActive.length),
+      activity: activityLabel(ledger.length, seasonsActive.length, coverage),
       faab,
       draft: draftRecords[ownerId] ?? { picks: [], count: 0, totalValue: 0, hits: 0, avgDelta: 0, best: null }
     };
@@ -40747,13 +40836,16 @@ function buildManagerProfiles({ history, currentLeague, playerMap, pickEntries, 
     seasonList,
     // ['2026', '2025', ...] newest first
     userById: userNameById,
-    insights: buildMyInsights(profiles, my)
+    insights: buildMyInsights(profiles, my, coverage),
+    coverage
+    // which seasons' trades were read (null = all)
   };
 }
 var ROUND_LABELS, TRADE_EDGE, STARTUP_ROUNDS, DRAFT_HIT_VALUE, STEAL_DELTA, FAAB_COACHING_MIN_BUDGETS, DEFAULT_FAAB_BUDGET, EMPTY_FAAB;
 var init_managerAnalysis = __esm({
   "src/utils/managerAnalysis.js"() {
     init_pickCapital();
+    init_leagueHistory();
     ROUND_LABELS = ["", "1st", "2nd", "3rd", "4th", "5th"];
     TRADE_EDGE = 0.05;
     STARTUP_ROUNDS = 6;
@@ -46510,14 +46602,17 @@ function buildScoutAnswer(snapshot, { history, transactions, tradeValues } = {},
   const currentSeason = String(league.leagueInfo?.season ?? snapshot.nflState?.season ?? "");
   const currentRead = !!transactions?.available;
   const historyRead = !!history?.available;
-  const pastRead = historyRead ? history.ledgerSeasons ?? [] : [];
-  const seasonsRead = [...currentRead ? [currentSeason] : [], ...pastRead];
-  const seasonsMissing = [
-    ...currentRead ? [] : [currentSeason],
-    ...historyRead ? history.failedSeasons ?? [] : ["every past season"]
-  ];
-  const ledgerAvailable = seasonsRead.length > 0;
-  const ledgerComplete = ledgerAvailable && seasonsMissing.length === 0;
+  const coverage = ledgerCoverage({
+    currentSeason,
+    currentRead,
+    historyRead,
+    ledgerSeasons: history?.ledgerSeasons ?? [],
+    failedSeasons: history?.failedSeasons ?? [],
+    chainBroken: history?.chainBroken ?? null
+  });
+  const { seasonsRead, seasonsMissing } = coverage;
+  const ledgerAvailable = coverage.available;
+  const ledgerComplete = coverage.complete;
   const myOwnerId = league.allRosters.find((r) => r.rosterId === myRosterId)?.owner?.user_id ?? null;
   const analysis = buildManagerProfiles({
     history: historyRead ? history.history : { currentSeason, currentDrafts: [], pastSeasons: [] },
@@ -46530,7 +46625,8 @@ function buildScoutAnswer(snapshot, { history, transactions, tradeValues } = {},
     playerMap: values.playerMap,
     pickEntries: values.pickEntries,
     playerDB: snapshot.playerDB,
-    myOwnerId
+    myOwnerId,
+    coverage
   });
   const nameOf = (ownerId) => {
     const r = league.allRosters.find((x) => x.owner?.user_id === ownerId);
@@ -46538,13 +46634,7 @@ function buildScoutAnswer(snapshot, { history, transactions, tradeValues } = {},
     const u = analysis.userById?.[ownerId];
     return u ? getTeamName(u) : "a former manager";
   };
-  const activityOf = (p) => {
-    if (!ledgerAvailable) return null;
-    if (p.tradeCount === 0 && !ledgerComplete) {
-      return `No trades in the ${seasonsRead.length} season${seasonsRead.length === 1 ? "" : "s"} we could read`;
-    }
-    return p.activity;
-  };
+  const activityOf = (p) => ledgerAvailable ? p.activity : null;
   const archive = tradeValues?.available ? tradeValues.data : null;
   const tradeRow = (t) => {
     const then = archive ? tradeTimeTotals(archive, t) : null;
@@ -46616,10 +46706,9 @@ function buildScoutAnswer(snapshot, { history, transactions, tradeValues } = {},
     you: me ? {
       ...summary(me),
       strengths: ledgerAvailable ? analysis.insights.strengths : [],
-      // buildMyInsights writes "You haven't completed a trade yet" off an empty
-      // ledger. Over seasons we could not read that is the very claim this
-      // tool must not make, so it is dropped rather than reworded.
-      workOn: ledgerAvailable ? analysis.insights.workOn.filter((w) => ledgerComplete || !/haven't completed a trade/.test(w)) : []
+      // buildMyInsights already drops "You haven't completed a trade yet"
+      // over a partial read (the coverage it was given).
+      workOn: ledgerAvailable ? analysis.insights.workOn : []
     } : null,
     // Sorted by trade activity, as Trade › Managers sorts its cards.
     managers: [...profiles].sort((a, b) => b.tradeCount - a.tradeCount || b.netValue - a.netValue).map(summary)
@@ -46744,6 +46833,7 @@ var DEFAULT_TRADE_LIMIT, MAX_TRADE_LIMIT, MAX_DRAFT_PICKS, MAX_MANAGERS, round, 
 var init_scoutManagers = __esm({
   "mcp/tools/scoutManagers.js"() {
     init_managerAnalysis();
+    init_leagueHistory();
     init_teamName();
     init_teams();
     DEFAULT_TRADE_LIMIT = 10;

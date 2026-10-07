@@ -285,7 +285,7 @@ export default function ManagerScoutingSheet({ profile, tier, userById, onClose 
             <SectionHeader label="Trade Ledger" count={profile.tradeCount} />
             {profile.tradeCount === 0 ? (
               <p className="font-body text-sm text-text-tertiary dark:text-text-tertiary py-4 text-center">
-                No completed trades on record.
+                {profile.activity === 'No trades yet' ? 'No completed trades on record.' : `${profile.activity}.`}
               </p>
             ) : (
               <div className="flex flex-col gap-2">

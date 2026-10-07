@@ -157,12 +157,35 @@ function ManagerCard({ profile, tier, onOpen }) {
   )
 }
 
+// What the history walk could NOT read, in one or two plain sentences — so a
+// quiet manager is never mistaken for one whose seasons failed to load
+// (CODE-REVIEW-1 #3). Empty when everything was read.
+function readGaps(analysis) {
+  const out = []
+  const cov = analysis.coverage
+  const rs = analysis.readState ?? {}
+  const lost = (cov?.seasonsMissing ?? []).filter(s => !/^any season before/.test(s))
+  if (lost.length) {
+    out.push(`Trades and FAAB from ${lost.join(', ')} couldn't be loaded — totals cover ${cov.seasonsRead.join(', ')} only.`)
+  }
+  if (rs.chainBroken) {
+    out.push(`League history couldn't be followed past ${rs.chainBroken.afterSeason}, so any older seasons are missing.`)
+  }
+  if (rs.partialSeasons?.length) {
+    out.push(`Some weeks of ${rs.partialSeasons.map(p => p.season).join(', ')} didn't load, so those seasons undercount.`)
+  }
+  if (rs.draftGaps?.length) {
+    out.push(`The ${rs.draftGaps.join(', ')} draft${rs.draftGaps.length > 1 ? 's' : ''} couldn't be loaded, so draft records are incomplete.`)
+  }
+  return out
+}
+
 // League › Managers: behavioral scouting reports built from every season of
 // league history — my report card up top, then every opponent ranked by how
 // active a trade partner they actually are.
 export default function ManagersView() {
   const { league } = useLeagueContext()
-  const { analysis, loading, error, retry } = useManagerProfiles()
+  const { analysis, loading, error, retry, retryHistory } = useManagerProfiles()
   const [openOwnerId, setOpenOwnerId] = useState(null)
 
   const tiers = useMemo(
@@ -175,6 +198,7 @@ export default function ManagersView() {
   if (!analysis) return <ErrorState message="Could not build manager profiles." onRetry={retry} />
 
   const { profiles, my, seasonList, userById, insights } = analysis
+  const gaps = readGaps(analysis)
   const opponents = profiles
     .filter(p => !p.isMe)
     .sort((a, b) => b.tradeCount - a.tradeCount || b.netValue - a.netValue)
@@ -196,6 +220,16 @@ export default function ManagersView() {
         <p className="font-body text-[10px] text-text-tertiary dark:text-text-tertiary mt-0.5">
           All moves graded at today's prices — did the deal age well?
         </p>
+        {gaps.length > 0 && (
+          <div className="mt-2 flex items-start justify-between gap-3">
+            <div className="flex flex-col gap-0.5">
+              {gaps.map(g => (
+                <p key={g} className="font-body text-xs text-warning leading-snug">{g}</p>
+              ))}
+            </div>
+            <Button variant="secondary" size="sm" onClick={retryHistory}>Try again</Button>
+          </div>
+        )}
       </div>
 
       {my && (
