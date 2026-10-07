@@ -546,7 +546,9 @@ GET https://api.fantasycalc.com/values/current
 |`trend30Day`      |30-day value change (positive = rising)|
 
 **Display rules:** whole numbers, no decimals. Trend arrow ↑ green if
-`trend30Day > 50`, ↓ red if `< -50`, → grey between.
+`trend30Day > 50`, ↓ red if `< -50`, → grey between. **The ±50 and the
+buy-low / sell-high eligibility rule live ONLY in `src/utils/marketTrend.js`**
+(rule 11).
 
 **Picks** come from FantasyCalc too — "2026 1st" (round-level) and "2026 Pick
 1.09" (exact slot, once the order is set) — include them in the dataset.
@@ -3094,6 +3096,7 @@ dynastyedge/
 │   │   ├── rosterAnalysis.js    ← positional strength, win window tiers, Targets ranking (need × value × movability)
 │   │   ├── recommendations.js   ← THE assistant-GM brain: keep/givability scores (round-priced picks, past-peak age tilt), FA pickups, two-sided sell moves, the cash-out board
 │   │   ├── faabBid.js           ← THE FAAB bid (OPEN-3), shared with recommend_free_agents: CURRENT period's budget from settings (never assumed), 11/16/23% of the FULL budget capped at what is left, $2 floor on $1000, null for DEF/unpriced
+│   │   ├── marketTrend.js       ← THE market-trend rules (±50, buy-low/sell-high eligibility, % move) — one home, read by every arrow, list and MCP tool
 │   │   ├── fairBand.js          ← THE definition of "fair" (±5%), shared by the Analyzer's verdict and every surface that PREDICTS it
 │   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation
 │   │   ├── seasonWindow.js      ← THE "has the rookie draft happened yet?" resolver — the live pick window + which draft the Tracker shows (replaced the hand-rolled PICK_YEARS)
@@ -3150,6 +3153,7 @@ dynastyedge/
 │   ├── rookieAdp.test.mjs           ← ROOKIE-1: rookie→FantasyCalc join by sleeperId only (the two Jaylen Smiths; a same-name-same-position veteran)
 │   ├── valueHistory.test.mjs        ← the sparkline rule: 4-point threshold, dated series = getValueSeries, tracked-short vs untracked, slicing never widens
 │   ├── rookieResearch.test.mjs      ← opportunity blend, one points scale, within-position divergence, fit re-ranking (score untouched), measurables can never move a score
+│   ├── marketTrend.test.mjs         ← the ±50 boundary (exactly 50 is flat), predicates = the literals they replaced, AND a source scan that fails on a second copy
 │   ├── recommendations.test.mjs     ← suggestSellMove two-sided; pick keep by round; past-peak tilt (decline-only, never protects); cash-out gap = buildFairBand's
 │   ├── fantasyCalcValues.test.mjs   ← pipeline FantasyCalc reader: non-numeric id is a PICK, NULL not 0, old presence classifier as a regression statement
 │   ├── sourceHealth.test.mjs        ← the alarm AND its restraint: 3-day gap fires, 1-day blip doesn't, fresh archive never alarms, one dark source implicates no other
@@ -3195,8 +3199,8 @@ because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
 **Current counts (verified 2026-10-07 by moving `node_modules` aside):** with
-dependencies **`# tests 828 / # pass 828`**; without them **`# tests 785 / #
-pass 780 / # fail 5`**. **If the test count isn't 828, run `npm ci` before
+dependencies **`# tests 835 / # pass 835`**; without them **`# tests 792 / #
+pass 787 / # fail 5`**. **If the test count isn't 835, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React
@@ -3451,7 +3455,12 @@ Two things the roll must not break, both test-pinned:
 1. **Dynasty values display:** whole numbers only, 0–10000 scale. **Never
    decimals.**
 1. **Trend arrows:** `trend30Day > 50` → ↑ green · `< -50` → ↓ red · between →
-   → grey.
+   → grey. **One home: `src/utils/marketTrend.js`** (`TREND_THRESHOLD`,
+   `MIN_TARGET_VALUE`, `trendDirection`, `trendPct`, `isBuyLowCandidate`,
+   `isSellHighCandidate`, `trendTag`) — every arrow, Market Movers, The Edge,
+   the pickup recommender and the MCP tools read it. Until 2026-10-07 the ±50
+   was written out in ten places; `tests/marketTrend.test.mjs` fails if a
+   second copy reappears in `src/` or `mcp/`.
 1. **Offseason mode:** always check `/state/nfl` on load. If `season_type !==
    'regular'`, hide current matchups, the lineup optimizer and weekly
    projections; everything else stays fully functional.
@@ -3545,6 +3554,18 @@ Two things the roll must not break, both test-pinned:
    is bounded, and takes `leagueId` / `rosterId` as parameters. **Rate-limit and
    retry logic lives in `mcp/limit.js`, never in `fetchJSON`.** See **The MCP
    Server**.
+1. **The proper fix beats the convenient one** (owner, 2026-10-07). When the
+   technically correct change and the quick one differ, do the correct one, or
+   name both and recommend the correct one. **When a rule, threshold or
+   formula is written in more than one place, give it ONE home and have every
+   consumer import it** — as its own change, with a test that fails if a copy
+   reappears (the `marketTrend.js` pattern). A scope limit written by an
+   earlier session is not the owner's rule unless the owner set it; when one
+   blocks the proper fix, say so and ask.
+1. **The owner is not technical — explain in plain English** (owner,
+   2026-10-07). Decisions, trade-offs and results are written for a reader who
+   does not read code: what it does, why it matters, what it costs. Code terms
+   only where unavoidable, and explained when used.
 
 -----
 

@@ -8,6 +8,7 @@ import {
   assignWinWindowTiers,
 } from '../../utils/rosterAnalysis'
 import { POSITIONS } from '../../constants'
+import { isRising, isFalling, trendPct, isBuyLowCandidate, isSellHighCandidate } from '../../utils/marketTrend'
 import { useWatchlist } from '../../hooks/useWatchlist'
 import { useValueHistory } from '../../hooks/useValueHistory'
 import { POS_BG } from '../../utils/positionColors'
@@ -18,16 +19,11 @@ import { Magnitude, PositionBand, Row, RuledList, Loading } from '../ui'
 
 // Ignore deep free agents whose tiny values produce noisy trend swings.
 const MIN_FA_VALUE = 500
-const MIN_TARGET_VALUE = 1000
-const TREND_THRESHOLD = 50
 
 function TrendChip({ trend, value }) {
   const positive = trend > 0
   const neutral = trend === 0
-  // % change against the value 30 days ago — a +120 move means a lot more
-  // on an 800 player than on a 7,500 one.
-  const baseline = (value ?? 0) - trend
-  const pct = baseline > 0 ? Math.round((trend / baseline) * 100) : null
+  const pct = trendPct(trend, value)
   const color = neutral
     ? 'text-text-tertiary'
     : positive ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'
@@ -161,12 +157,12 @@ export default function MarketMovers() {
     const relevant = all.filter(p => p.ownerRoster || p.value >= MIN_FA_VALUE)
 
     const risers = relevant
-      .filter(p => p.trend30Day > TREND_THRESHOLD)
+      .filter(p => isRising(p.trend30Day))
       .sort((a, b) => b.trend30Day - a.trend30Day)
       .slice(0, 10)
 
     const fallers = relevant
-      .filter(p => p.trend30Day < -TREND_THRESHOLD)
+      .filter(p => isFalling(p.trend30Day))
       .sort((a, b) => a.trend30Day - b.trend30Day)
       .slice(0, 10)
 
@@ -186,12 +182,11 @@ export default function MarketMovers() {
     // Buy low: falling value, fills one of my deficits, not on my roster.
     // A rebuilding owner makes it a prime target.
     const buyLow = all
-      .filter(p =>
-        p.trend30Day < -TREND_THRESHOLD &&
-        p.value >= MIN_TARGET_VALUE &&
-        myDeficits.includes(p.position) &&
-        p.ownerRoster?.rosterId !== myRosterId
-      )
+      .filter(p => isBuyLowCandidate(p, {
+        deficits: myDeficits,
+        ownerRosterId: p.ownerRoster?.rosterId,
+        myRosterId,
+      }))
       .sort((a, b) => a.trend30Day - b.trend30Day)
       .slice(0, 8)
       .map(p => ({
@@ -201,11 +196,7 @@ export default function MarketMovers() {
 
     // Sell high: my players rising at positions where I'm already above average.
     const sellHigh = league.myRoster.players
-      .filter(p =>
-        p.trend30Day > TREND_THRESHOLD &&
-        p.value >= MIN_TARGET_VALUE &&
-        mySurpluses.includes(p.position)
-      )
+      .filter(p => isSellHighCandidate(p, { surpluses: mySurpluses }))
       .sort((a, b) => b.trend30Day - a.trend30Day)
       .slice(0, 8)
       .map(p => ({ ...p, ownerRoster: league.myRoster }))

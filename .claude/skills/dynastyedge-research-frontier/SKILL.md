@@ -99,8 +99,8 @@ prices), what fraction did the briefing surface *beforehand*?
 advice. KTC/DynastyProcess publish values, never "we told you to buy X on
 date D and here is how that aged." The app's own heuristics are equally
 unmeasured: `computeEdgeSignals` picks buy-low as *the single most-negative
-`trend30Day` player ≥ 1000 value at a deficit position* (verified,
-`edgeBriefing.js` lines ~50–62) — a plausible rule with zero evidence it
+`trend30Day` player ≥ 1000 value at a deficit position* (the eligibility
+rule is `isBuyLowCandidate` in `src/utils/marketTrend.js` since 2026-10-07) — a plausible rule with zero evidence it
 selects players who subsequently recover.
 
 **This project's specific asset (verified).**
@@ -359,7 +359,7 @@ than the start of a permanent repricing. If falling players keep falling,
 **Why current SOTA fails.** FantasyCalc/KTC show trend arrows; none publish
 whether their own dips revert. DynastyProcess sells historical value data but
 no timing signal. The app's threshold (±50, `TREND_THRESHOLD` in
-`edgeBriefing.js`; same rule in CLAUDE.md's display spec) is a display
+`src/utils/marketTrend.js` — its one home since 2026-10-07; CLAUDE.md rule 11) is a display
 convention, not a measured signal.
 
 **This project's specific asset (verified) — and its honest limit.**

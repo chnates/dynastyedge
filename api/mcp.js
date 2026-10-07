@@ -41184,6 +41184,35 @@ var init_teamName = __esm({
   }
 });
 
+// src/utils/marketTrend.js
+function trendDirection(trend) {
+  if (trend > TREND_THRESHOLD) return "up";
+  if (trend < -TREND_THRESHOLD) return "down";
+  return "flat";
+}
+function isBuyLowCandidate(p, { deficits, ownerRosterId, myRosterId }) {
+  return isFalling(p.trend30Day) && (p.value ?? 0) >= MIN_TARGET_VALUE && deficits.includes(p.position) && ownerRosterId !== myRosterId;
+}
+function isSellHighCandidate(p, { surpluses }) {
+  return isRising(p.trend30Day) && (p.value ?? 0) >= MIN_TARGET_VALUE && surpluses.includes(p.position);
+}
+function trendTag(trend) {
+  const dir = trendDirection(trend);
+  if (dir === "up") return ` \u2191${trend}`;
+  if (dir === "down") return ` \u2193${trend}`;
+  return "";
+}
+var TREND_THRESHOLD, MIN_TARGET_VALUE, isRising, isFalling, isMoving;
+var init_marketTrend = __esm({
+  "src/utils/marketTrend.js"() {
+    TREND_THRESHOLD = 50;
+    MIN_TARGET_VALUE = 1e3;
+    isRising = (trend) => trendDirection(trend) === "up";
+    isFalling = (trend) => trendDirection(trend) === "down";
+    isMoving = (trend) => trendDirection(trend) !== "flat";
+  }
+});
+
 // mcp/teams.js
 function describeTeams(rosters) {
   return (rosters ?? []).map((r) => ({
@@ -41513,7 +41542,7 @@ function renderRosterText(a) {
     rows.forEach((p) => {
       const val = p.value == null ? "\u2014" : p.value.toLocaleString("en-US");
       const rank = p.positionRank ? ` ${p.position}${p.positionRank}` : "";
-      const tr = p.trend30Day > 50 ? ` \u2191${p.trend30Day}` : p.trend30Day < -50 ? ` \u2193${p.trend30Day}` : "";
+      const tr = trendTag(p.trend30Day);
       L.push(`  ${p.position.padEnd(3)} ${p.name}${p.nflTeam ? ` (${p.nflTeam})` : ""} \u2014 ${val}${rank}${tr}${p.unranked ? " [unranked]" : ""}`);
     });
     L.push("");
@@ -41533,6 +41562,7 @@ var init_getRoster = __esm({
   "mcp/tools/getRoster.js"() {
     init_rosterAnalysis();
     init_teamName();
+    init_marketTrend();
     init_teams();
     init_news();
     MAX_PLAYERS = 60;
@@ -41860,10 +41890,10 @@ function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 5, minV
       score += Math.min(2, upgradeMargin / 600);
       reasons.push(`+${Math.round(upgradeMargin).toLocaleString()} over your ${pos} depth`);
     }
-    if (trend > 50) {
+    if (isRising(trend)) {
       score += Math.min(1.5, trend / 400);
       reasons.push("Trending up the last 30 days");
-    } else if (trend < -50) {
+    } else if (isFalling(trend)) {
       score -= 0.5;
     }
     if (myTier === "Rebuilding" && age != null && age <= 24) {
@@ -41874,7 +41904,7 @@ function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 5, minV
       reasons.push("Win-now depth");
     }
     return { player: p, score, reasons, isNeed, isUpgrade, upgradeMargin, trend };
-  }).filter((r) => r.isNeed || r.isUpgrade || r.trend > 50).sort((a, b) => b.score - a.score);
+  }).filter((r) => r.isNeed || r.isUpgrade || isRising(r.trend)).sort((a, b) => b.score - a.score);
   return scored.slice(0, limit).map((r) => ({
     ...r,
     primaryReason: r.reasons[0] ?? "Available value"
@@ -41954,6 +41984,7 @@ var init_recommendations = __esm({
     init_peakWindows();
     init_fairBand();
     init_teamName();
+    init_marketTrend();
     CORE_DEPTH = { QB: 2, RB: 3, WR: 3, TE: 1 };
     PICK_ROUND_KEEP = { 1: 0.65, 2: 0.5, 3: 0.4, 4: 0.3 };
     PICK_KEEP_DEFAULT = 0.5;
@@ -42072,20 +42103,20 @@ function computeEdgeSignals({ league, values, watchlist, nflState, myRosterId })
       ownerByPlayer[p.sleeperId] = r;
     });
   });
-  const buyLow = Object.values(values.playerMap).filter(
-    (p) => p.trend30Day < -TREND_THRESHOLD && p.value >= MIN_TARGET_VALUE && myDeficits.includes(p.position) && ownerByPlayer[p.sleeperId]?.rosterId !== myRosterId
-  ).map((p) => ({
+  const buyLow = Object.values(values.playerMap).filter((p) => isBuyLowCandidate(p, {
+    deficits: myDeficits,
+    ownerRosterId: ownerByPlayer[p.sleeperId]?.rosterId,
+    myRosterId
+  })).map((p) => ({
     ...p,
     ownerRoster: ownerByPlayer[p.sleeperId] ?? null,
     ownerTier: ownerByPlayer[p.sleeperId] ? tiers[ownerByPlayer[p.sleeperId].rosterId] : null
   })).sort((a, b) => a.trend30Day - b.trend30Day)[0] ?? null;
-  const sellHigh = myRoster.players.filter(
-    (p) => p.trend30Day > TREND_THRESHOLD && p.value >= MIN_TARGET_VALUE && mySurpluses.includes(p.position)
-  ).sort((a, b) => b.trend30Day - a.trend30Day)[0] ?? null;
+  const sellHigh = myRoster.players.filter((p) => isSellHighCandidate(p, { surpluses: mySurpluses })).sort((a, b) => b.trend30Day - a.trend30Day)[0] ?? null;
   const watchSet = new Set(watchlist.map(String));
   const myIds = new Set(myRoster.players.map((p) => p.sleeperId));
   const watchMovers = Object.values(values.playerMap).filter((p) => watchSet.has(String(p.sleeperId)) && p.trend30Day !== 0).sort((a, b) => Math.abs(b.trend30Day) - Math.abs(a.trend30Day));
-  const myMovers = myRoster.players.filter((p) => Math.abs(p.trend30Day ?? 0) > TREND_THRESHOLD && !p.unranked).sort((a, b) => Math.abs(b.trend30Day) - Math.abs(a.trend30Day));
+  const myMovers = myRoster.players.filter((p) => isMoving(p.trend30Day) && !p.unranked).sort((a, b) => Math.abs(b.trend30Day) - Math.abs(a.trend30Day));
   const radar = [];
   const radarSeen = /* @__PURE__ */ new Set();
   [...watchMovers, ...myMovers].forEach((p) => {
@@ -42172,7 +42203,6 @@ function buildTeamValueSeries(history, roster) {
   });
   return sums;
 }
-var TREND_THRESHOLD, MIN_TARGET_VALUE;
 var init_edgeBriefing = __esm({
   "src/utils/edgeBriefing.js"() {
     init_rosterAnalysis();
@@ -42183,8 +42213,7 @@ var init_edgeBriefing = __esm({
     init_freeAgents();
     init_valueHistory();
     init_constants();
-    TREND_THRESHOLD = 50;
-    MIN_TARGET_VALUE = 1e3;
+    init_marketTrend();
   }
 });
 
@@ -42228,7 +42257,7 @@ function buildSellHighAnswer(snapshot, { myRosterId } = {}) {
   const { myRoster, allRosters } = league;
   const move = signals.sellHigh ? suggestSellMove(signals.sellHigh, myRoster, allRosters) : null;
   const alternatives = myRoster.players.filter(
-    (p) => (p.trend30Day ?? 0) > TREND_THRESHOLD2 && (p.value ?? 0) >= MIN_TARGET_VALUE2 && signals.mySurpluses.includes(p.position) && String(p.sleeperId) !== String(signals.sellHigh?.sleeperId ?? "")
+    (p) => isSellHighCandidate(p, { surpluses: signals.mySurpluses }) && String(p.sleeperId) !== String(signals.sellHigh?.sleeperId ?? "")
   ).sort((a, b) => b.trend30Day - a.trend30Day).slice(0, MAX_ALTERNATIVES).map(playerRow);
   return {
     ok: true,
@@ -42297,12 +42326,12 @@ function buildNotes2(snapshot, signals) {
   }
   if (!signals.sellHigh) {
     notes.push(
-      signals.mySurpluses.length ? `No player on your roster is up more than ${TREND_THRESHOLD2} over 30 days at a surplus position (${signals.mySurpluses.join(", ")}) and worth at least ${MIN_TARGET_VALUE2}. There is no sell-high right now \u2014 that is the answer, not a gap in the data.` : "You are not above league average at any position, so there is no surplus to sell from."
+      signals.mySurpluses.length ? `No player on your roster is up more than ${TREND_THRESHOLD} over 30 days at a surplus position (${signals.mySurpluses.join(", ")}) and worth at least ${MIN_TARGET_VALUE}. There is no sell-high right now \u2014 that is the answer, not a gap in the data.` : "You are not above league average at any position, so there is no surplus to sell from."
     );
   }
   if (!signals.buyLow) {
     notes.push(
-      signals.myDeficits.length ? `No opponent holds a falling player at your deficit positions (${signals.myDeficits.join(", ")}) worth at least ${MIN_TARGET_VALUE2}.` : "You are at or above league average everywhere, so no position is flagged as a deficit to buy into."
+      signals.myDeficits.length ? `No opponent holds a falling player at your deficit positions (${signals.myDeficits.join(", ")}) worth at least ${MIN_TARGET_VALUE}.` : "You are at or above league average everywhere, so no position is flagged as a deficit to buy into."
     );
   }
   if (!signals.anyRecords) {
@@ -42362,15 +42391,14 @@ function renderSellHighText(a) {
   a.notes.forEach((n) => L.push(`Note: ${n}`));
   return L.join("\n").trimEnd();
 }
-var MAX_ALTERNATIVES, TREND_THRESHOLD2, MIN_TARGET_VALUE2, num;
+var MAX_ALTERNATIVES, num;
 var init_findSellHigh = __esm({
   "mcp/tools/findSellHigh.js"() {
     init_edgeBriefing();
     init_recommendations();
     init_teamName();
+    init_marketTrend();
     MAX_ALTERNATIVES = 5;
-    TREND_THRESHOLD2 = 50;
-    MIN_TARGET_VALUE2 = 1e3;
     num = (n) => n == null ? "\u2014" : n.toLocaleString("en-US");
   }
 });
@@ -42683,7 +42711,7 @@ function renderFreeAgentText(a) {
     L.push("");
     a.recommendations.forEach((p, i) => {
       const proj = p.projectedPoints != null ? ` \xB7 proj ${p.projectedPoints}` : "";
-      const tr = p.trend30Day > 50 ? ` \u2191${p.trend30Day}` : p.trend30Day < -50 ? ` \u2193${p.trend30Day}` : "";
+      const tr = trendTag(p.trend30Day);
       L.push(`${String(i + 1).padStart(2)}. ${p.position.padEnd(3)} ${p.name}${p.nflTeam ? ` (${p.nflTeam})` : ""} \u2014 ${num2(p.value)}${proj}${tr}`);
       p.reasons.forEach((r) => L.push(`      ${r}`));
       const b = p.faabBid;
@@ -42705,6 +42733,7 @@ var init_recommendFreeAgents = __esm({
     init_faabBid();
     init_projections();
     init_teamName();
+    init_marketTrend();
     init_constants();
     DEFAULT_LIMIT = 8;
     MAX_LIMIT = 25;

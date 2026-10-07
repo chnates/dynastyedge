@@ -4,6 +4,7 @@ import NewsArticleSheet from './NewsArticleSheet'
 import { usePlayerNews } from '../../hooks/usePlayerNews'
 import { usePlayerIntel, relativeTime, TOUCH_LABEL } from '../../hooks/usePlayerIntel'
 import { getPeakStatus } from '../../utils/peakWindows'
+import { isMoving } from '../../utils/marketTrend'
 import { measurables, ageAtDraftRead, positionArticle } from '../../utils/rookieResearch'
 import { useWatchlist } from '../../hooks/useWatchlist'
 import { useRookieResearchFor } from '../../hooks/useRookieResearch'
@@ -846,7 +847,7 @@ export default function PlayerProfileDrawer({
           )}
 
           {/* Trend detail */}
-          {player.trend30Day != null && Math.abs(player.trend30Day) > 50 && (
+          {player.trend30Day != null && isMoving(player.trend30Day) && (
             <Card padding="sm">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary mb-1.5">
                 30-Day Trend
