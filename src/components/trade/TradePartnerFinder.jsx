@@ -5,6 +5,7 @@ import { useLeagueContext } from '../../context/LeagueContext'
 import { useWatchlist } from '../../hooks/useWatchlist'
 import { useManagerProfiles } from '../../hooks/useManagerProfiles'
 import { usePlayoffOdds } from '../../hooks/usePlayoffOdds'
+import { getDeadlineVerdict } from '../../utils/playoffOdds'
 import { rankTradePartners } from '../../utils/rosterAnalysis'
 import { buildAgeCurves, buildRosterTrajectory, getTrajectoryRead } from '../../utils/dynastyTrajectory'
 import WinWindowBadge from '../shared/WinWindowBadge'
@@ -65,10 +66,12 @@ function ScoutingLine({ profile }) {
 // Likely buyer/seller read from this opponent's live playoff odds. A long shot
 // tends to sell; a near-lock tends to buy. Only surfaces at the extremes
 // in-season — renders nothing in the offseason (no odds yet) or in the middle.
+// The cut-offs are getDeadlineVerdict's, the app's one definition.
 function OddsSignal({ odds }) {
   if (!odds) return null
   const p = odds.playoffPct
-  if (p < 0.35) {
+  const { stance } = getDeadlineVerdict(p)
+  if (stance === 'Seller') {
     return (
       <div className="flex items-center gap-1.5 min-w-0">
         <span className="font-body text-[11px] text-text-secondary dark:text-text-secondary truncate">
@@ -77,7 +80,7 @@ function OddsSignal({ odds }) {
       </div>
     )
   }
-  if (p >= 0.7) {
+  if (stance === 'Buyer') {
     return (
       <div className="flex items-center gap-1.5 min-w-0">
         <span className="font-body text-[11px] text-text-secondary dark:text-text-secondary truncate">

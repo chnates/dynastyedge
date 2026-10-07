@@ -35,7 +35,7 @@
 // reader actually asks, and the notes say the distribution was dropped rather
 // than letting its absence read as "the model does not compute it".
 
-import { getDeadlineVerdict, buildPlayoffOutlook } from '../../src/utils/playoffOdds.js'
+import { getDeadlineVerdict, buildPlayoffOutlook, BUYER_PCT, SELLER_PCT } from '../../src/utils/playoffOdds.js'
 import { getWinWindowTier } from '../../src/utils/rosterAnalysis.js'
 import { getTeamName } from '../../src/utils/teamName.js'
 import { resolveTeam } from '../teams.js'
@@ -177,7 +177,8 @@ function buildNotes({ snapshot, season, outlook, teamCount }) {
   notes.push(
     `This league seats ${outlook.playoffTeams} of ${teamCount}, so ` +
     `${Math.round(outlook.playoffTeams / teamCount * 100)}% is the coin-flip baseline, not 50%. ` +
-    'The Buyer (>=70%) and Seller (<35%) thresholds separate the top and bottom of the league cleanly ' +
+    `The Buyer (>=${Math.round(BUYER_PCT * 100)}%) and Seller (<${Math.round(SELLER_PCT * 100)}%) thresholds separate` +
+    ' the top and bottom of the league cleanly ' +
     'and compress the middle — read a bubble team\'s number against that baseline, not against 50.'
   )
   notes.push(

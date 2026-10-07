@@ -21,17 +21,17 @@ function pct(p) {
   return `${Math.round(p * 100)}%`
 }
 
-// Likelihood color for an odds number: confident green, coin-flip amber, long-shot red.
+// Likelihood colour for an odds number, from the deadline stance itself — so a
+// number's colour and the Buyer / Seller read can never use different cut-offs.
+const TONE_TEXT = { success: 'text-success', warning: 'text-warning', danger: 'text-danger' }
+const TONE_BAR  = { success: 'bg-success',   warning: 'bg-warning',   danger: 'bg-danger' }
+
 function oddsClass(p) {
-  if (p >= 0.7) return 'text-success'
-  if (p >= 0.35) return 'text-warning'
-  return 'text-danger'
+  return TONE_TEXT[getDeadlineVerdict(p).tone] ?? 'text-text-secondary'
 }
 
 function oddsBarClass(p) {
-  if (p >= 0.7) return 'bg-success'
-  if (p >= 0.35) return 'bg-warning'
-  return 'bg-danger'
+  return TONE_BAR[getDeadlineVerdict(p).tone] ?? 'bg-text-tertiary'
 }
 
 function ordinal(n) {

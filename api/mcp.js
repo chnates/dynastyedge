@@ -40986,14 +40986,14 @@ function getDeadlineVerdict(playoffPct, tier) {
   if (playoffPct == null) {
     return { stance: "Wait", text: "Odds activate once the season starts \u2014 revisit this after Week 1." };
   }
-  if (playoffPct >= 0.7) {
+  if (playoffPct >= BUYER_PCT) {
     return {
       stance: "Buyer",
       tone: "success",
       text: "You're a strong bet to make the playoffs. This is the time to trade future picks for proven win-now help."
     };
   }
-  if (playoffPct >= 0.35) {
+  if (playoffPct >= SELLER_PCT) {
     return {
       stance: "On the bubble",
       tone: "warning",
@@ -41070,7 +41070,7 @@ function buildPlayoffOutlook({
     firstPlayoffWeek
   };
 }
-var BASELINE_MEAN, BASELINE_STD, STRENGTH_SENSITIVITY, PRIOR_GAMES, ITERATIONS;
+var BASELINE_MEAN, BASELINE_STD, STRENGTH_SENSITIVITY, PRIOR_GAMES, ITERATIONS, BUYER_PCT, SELLER_PCT;
 var init_playoffOdds = __esm({
   "src/utils/playoffOdds.js"() {
     init_lineupHistory();
@@ -41079,6 +41079,8 @@ var init_playoffOdds = __esm({
     STRENGTH_SENSITIVITY = 0.4;
     PRIOR_GAMES = 4;
     ITERATIONS = 1e4;
+    BUYER_PCT = 0.7;
+    SELLER_PCT = 0.35;
   }
 });
 
@@ -45044,7 +45046,7 @@ function buildNotes7({ snapshot, season, outlook, teamCount }) {
     notes.push("The regular season is complete, so these are outcomes rather than odds \u2014 100% or 0%.");
   }
   notes.push(
-    `This league seats ${outlook.playoffTeams} of ${teamCount}, so ${Math.round(outlook.playoffTeams / teamCount * 100)}% is the coin-flip baseline, not 50%. The Buyer (>=70%) and Seller (<35%) thresholds separate the top and bottom of the league cleanly and compress the middle \u2014 read a bubble team's number against that baseline, not against 50.`
+    `This league seats ${outlook.playoffTeams} of ${teamCount}, so ${Math.round(outlook.playoffTeams / teamCount * 100)}% is the coin-flip baseline, not 50%. The Buyer (>=${Math.round(BUYER_PCT * 100)}%) and Seller (<${Math.round(SELLER_PCT * 100)}%) thresholds separate the top and bottom of the league cleanly and compress the middle \u2014 read a bubble team's number against that baseline, not against 50.`
   );
   notes.push(
     "The full per-seed distribution is computed but not returned, to keep the response bounded; avgSeed and topSeedPct summarise it."
