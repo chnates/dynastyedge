@@ -5,7 +5,7 @@ description: How to write and maintain DynastyEdge documentation at the house st
 
 # DynastyEdge Docs & Writing
 
-**The premise:** CLAUDE.md (repo root, ~108 KB — verify: `wc -c CLAUDE.md`) is
+**The premise:** CLAUDE.md (repo root, ~480 KB / ~7,100 lines as of 2026-10-07 — verify: `wc -c CLAUDE.md`) is
 the **doc of record**. Every future session reads it before writing code; it
 is the *only* onboarding this one-person project has. A stale sentence in it
 doesn't mislead one reader — it poisons every session from then on. This skill
@@ -46,26 +46,27 @@ Build your mental map from the file itself, never from memory:
 
 ```bash
 grep -n '^## ' CLAUDE.md          # top-level sections
-grep -n '^### Feature' CLAUDE.md  # the 17 feature entries
+grep -n '^### Feature' CLAUDE.md  # the 19 feature entries
 ```
 
-### Section map (verified 2026-07-06)
+### Section map (re-verified 2026-10-07)
 
 | Section (in order) | Purpose — one line |
 |---|---|
 | What This App Is | Elevator pitch, target device (iPhone 390px), hosting (GitHub Pages static) |
 | Tech Stack (+ Non-negotiable rules) | Framework table + the always/never architectural laws |
 | League Context (+ Roster slots) | The one league's exact settings: IDs, scoring, slots, taxi rules |
-| Data Sources | Sleeper API endpoint table · news pipeline · value-history pipeline · FantasyCalc contract |
-| Features 1–17 | One `### Feature N — Name (Location)` entry per feature |
-| Trade deadline banner | Small cross-feature UI contract (lives after Feature 17) |
-| Navigation | The **live** nav truth: drawer tree, sub-tabs, route map, redirects |
+| Data Sources | Sleeper API endpoint table · news, source-health, value-history and rookie-intel pipelines · FantasyCalc contract |
+| The MCP Server (`mcp/`) | The second consumer of `src/utils`: architecture, transport, OAuth, deployment, the thirteen tools and each cache layer's TTL argument |
+| Features 1–19 | One `### Feature N — Name (Location)` entry per feature, then the recommendation engine |
+| Trade deadline banner | Small cross-feature UI contract (lives after the recommendation engine) |
+| Navigation | The **live** nav truth: bottom tab bar, contents rails, the Index, route map, redirects |
 | Navigation Refactor (Planned — phased…) | Phased plan + status line ("Phase 1 complete… Phase 2 complete") + watch-items |
 | Design System | Component library table, palettes, position/tier/round color maps, logo, typography, motion |
 | File Structure | Annotated tree of the whole repo — every file with a one-line role |
 | GitHub Pages Deployment | deploy.yml listing, vite `base`, one-time Pages setting |
 | Constants File | The `src/constants.js` contract ("never hardcode these anywhere else") |
-| Rules Claude Code Must Always Follow | Numbered rules 1–23: joins, caches, display formats, sheets, storage keys |
+| Rules Claude Code Must Always Follow | Numbered rules 1–25: joins, caches, display formats, sheets, storage keys, the MCP boundary |
 | Future Features (Do Not Build Yet) + Already built | Backlog, and the graduation ledger for shipped ones |
 
 ### Which sections a change type must touch

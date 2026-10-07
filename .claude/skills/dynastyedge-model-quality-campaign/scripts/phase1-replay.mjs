@@ -5,7 +5,7 @@
 // OFFLINE mode (runs here, validates the harness itself against a season
 // with KNOWN team strengths):
 //   cd /home/user/dynastyedge
-//   node --import ./.claude/skills/dynastyedge-model-quality-campaign/scripts/reg.mjs \
+//   node --import ./.claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs \
 //        ./.claude/skills/dynastyedge-model-quality-campaign/scripts/phase1-replay.mjs --synthetic
 //
 // REAL-DATA mode (after fetch-season.mjs has written season files — network

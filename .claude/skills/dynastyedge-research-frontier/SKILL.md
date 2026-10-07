@@ -46,9 +46,7 @@ references were verified against the repo **as of 2026-07-05**.
 - **Fantasy-football terms or domain reasoning** (what FAAB/Superflex mean,
   why a pick is priced that way) → `dynasty-fantasy-reference`.
 - Anything that would contradict CLAUDE.md's **Future Features** section:
-  the FAAB (free-agent bidding budget) bid recommender is explicitly
-  *do-not-build-yet* (research is fine;
-  the build needs an explicit owner ask), and push notifications are noted as
+  push notifications are noted as
   blocked on Sleeper's read-only API + the no-backend architecture. Item 5
   below explores the honest edges of that constraint — it does not override it.
 
@@ -206,7 +204,9 @@ player for nothing.
 tiers ("bid 15–20% for a starting RB") calibrated on thousands of leagues'
 averages. It knows nothing about *this* 10-team league's actual clearing
 prices or which specific opponents chase which positions. The app itself
-currently offers no bid guidance at all.
+shipped bid guidance on 2026-10-07 (OPEN-3, `src/utils/faabBid.js`): a tier
+ladder chosen by what the player does for this roster, deliberately NOT a
+contest prediction. What is still open is grading it (open-items §0 #13).
 
 **This project's specific asset (verified).**
 - `managerAnalysis.js` → `buildFaabStats` already aggregates, per owner across
