@@ -31,6 +31,12 @@ export function loadPlayerDB() {
             age: p.age ?? null,
             years_exp: p.years_exp ?? null,
             injury_status: p.injury_status ?? null,
+            // The detail behind the status, for the player card and the trade
+            // cards ("Out — Knee"). They used to come from a separate
+            // per-player request that read a failure as "healthy"; the MCP
+            // server's trim already kept both.
+            injury_body_part: p.injury_body_part ?? null,
+            injury_notes: p.injury_notes || null,
             espn_id: p.espn_id ?? null,
             depth_chart_position: p.depth_chart_position ?? null,
             depth_chart_order: p.depth_chart_order ?? null,

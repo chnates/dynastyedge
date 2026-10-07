@@ -100,7 +100,6 @@ League ID: `1313933520715907072` (constant `LEAGUE_ID`).
 | `/draft/{draft_id}/picks` | `useSleeperDraft` · `useLeagueHistory` | Best-effort `.catch(() => [])` |
 | `/draft/{draft_id}/traded_picks` | `useSleeperDraft` | Best-effort `.catch(() => [])` |
 | `/players/nfl` (~5–8 MB) | `usePlayerDB` (`loadPlayerDB`) | **Once per session**, module cache; raw response trimmed then discarded (see field list below). Never fetch anywhere else |
-| `/players/nfl/{playerId}` | `usePlayerNews` (`fetchPlayerNews`) | Per-player Map cache; failure → green flag, silent |
 | `/user/{username}` | `LoginScreen.jsx` (sign-in only) | On submit only; reads `user_id` |
 | `/projections/nfl/regular/{season}/{week}` | `useLineupData` | Per-mount, in-season only |
 | `/schedule/nfl/regular/{season}` | `useLineupData` | Per-mount, in-season only. **`SLEEPER_ROOT` — NOT under `/v1`** (the `/v1` path 404s for every season). Best-effort `.catch(() => [])` |
@@ -170,18 +169,19 @@ League ID: `1313933520715907072` (constant `LEAGUE_ID`).
 - **`/draft/{id}/traded_picks`**: in-draft pick trades — `season`, `round`,
   `roster_id` (original), `owner_id` (current); merged into
   `buildDraftOrder`.
-- **`/players/nfl`** — `usePlayerDB` keeps exactly these 10 fields per
+- **`/players/nfl`** — `usePlayerDB` keeps exactly these 12 fields per
   player and discards the rest (verified in `usePlayerDB.js`):
   `name` (joined `first_name` + `last_name`), `position`, `team`, `age`,
-  `years_exp`, `injury_status`, `espn_id`, `depth_chart_position`,
-  `depth_chart_order`, `news_updated`. The **MCP server's** trim
-  (`mcp/snapshot.js`) is a smaller mirror and additionally keeps
+  `years_exp`, `injury_status`, `injury_body_part`, `injury_notes`, `espn_id`,
+  `depth_chart_position`, `depth_chart_order`, `news_updated`. The **MCP
+  server's** trim (`mcp/snapshot.js`) is a smaller mirror that also keeps
   **`injury_body_part`** and **`injury_notes`** — the two fields that turn a
-  bare "Doubtful" into "Doubtful · Knee - Meniscus · Surgery". **If you need another field, add it
+  bare "Doubtful" into "Doubtful · Knee - Meniscus · Surgery". **What a status
+  MEANS is `src/utils/injuryStatus.js`** (2026-10-07), never a local list. **If you need another field, add it
   to this trim list — consumers never see the raw response.**
-- **`/players/nfl/{playerId}`** (usePlayerNews only): `injury_status`,
-  `injury_body_part`, `injury_notes` → three-tier flag (red: out/ir/
-  doubtful/pup/sus; yellow: questionable; green otherwise).
+- **`/players/nfl/{playerId}` is no longer called** (2026-10-07).
+  `usePlayerNews` reads the shared trim above; it used to fetch per player and
+  turn a failure into a green "healthy" flag.
 - **`/stats/nfl/regular/{year}[/{week}]`**: `pts_half_ppr`, `gp`,
   `gms_active`, `pass_att`, `rush_att`, `rec_tgt`. Positional finishes are
   ranked **client-side** from `pts_half_ppr`.

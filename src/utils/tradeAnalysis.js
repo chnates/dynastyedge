@@ -1043,25 +1043,42 @@ export function getCounterSuggestion(analysis, myRoster, opponentRoster, giveAss
 const VERDICT_UPGRADE   = { Decline: 'Counter', Counter: 'Accept', Accept: 'Accept' }
 const VERDICT_DOWNGRADE = { Accept: 'Counter',  Counter: 'Decline', Decline: 'Decline' }
 
+// The injury layer. Which statuses count as "out" is NOT decided here — each
+// live-intelligence row carries `injuryFlag` from utils/injuryStatus.js, the
+// one rule the Lineup Optimizer and the player card read too (owner call
+// 2026-10-07, docs/analysis/code-review-2026-10.md):
+//   red (out)        — getting him downgrades Accept → Counter; giving him
+//                      can lift the verdict (selling an injured asset).
+//   yellow           — Questionable / Doubtful: a caution note on a player
+//                      you are GETTING, and the verdict never moves. A
+//                      one-week tag barely moves a multi-year asset.
+//   unavailable      — the status could not be read: say so. A failed
+//                      lookup is never treated as healthy.
+const join = names => names.join(' and ')
+
 export function adjustVerdictForInjuries(baseVerdict, liveIntelligence, giveAssets, getAssets) {
   if (!baseVerdict || !liveIntelligence?.length) return baseVerdict
 
   const getNames  = new Set(getAssets.filter(a => a.type === 'player').map(a => a.name))
   const giveNames = new Set(giveAssets.filter(a => a.type === 'player').map(a => a.name))
+  const inTrade = i => getNames.has(i.playerName) || giveNames.has(i.playerName)
 
-  const getOut  = liveIntelligence.filter(i => i.injuryFlag === 'red' && getNames.has(i.playerName))
-  const giveOut = liveIntelligence.filter(i => i.injuryFlag === 'red' && giveNames.has(i.playerName))
+  const getOut   = liveIntelligence.filter(i => i.injuryFlag === 'red' && getNames.has(i.playerName))
+  const giveOut  = liveIntelligence.filter(i => i.injuryFlag === 'red' && giveNames.has(i.playerName))
+  const getDoubt = liveIntelligence.filter(i => i.injuryFlag === 'yellow' && getNames.has(i.playerName))
+  const unknown  = liveIntelligence.filter(i => i.unavailable && inTrade(i))
 
-  if (!getOut.length && !giveOut.length) return baseVerdict
+  if (!getOut.length && !giveOut.length && !getDoubt.length && !unknown.length) return baseVerdict
 
   let { verdict, reasoning } = baseVerdict
+  const before = verdict
   const notes = []
 
   // Getting an injured player → downgrade Accept → Counter
   if (getOut.length > 0 && verdict === 'Accept') {
     verdict = VERDICT_DOWNGRADE[verdict]
-    const names = getOut.map(i => i.playerName).join(' and ')
-    notes.push(`${names} ${getOut.length > 1 ? 'are' : 'is'} currently out — verify status before accepting`)
+    const names = getOut.map(i => i.playerName)
+    notes.push(`${join(names)} ${names.length > 1 ? 'are' : 'is'} currently out — verify status before accepting`)
   }
 
   // Giving an injured player → upgrade (selling high on injured asset)
@@ -1069,16 +1086,25 @@ export function adjustVerdictForInjuries(baseVerdict, liveIntelligence, giveAsse
     const prev = verdict
     verdict = VERDICT_UPGRADE[verdict]
     if (verdict !== prev) {
-      const names = giveOut.map(i => i.playerName).join(' and ')
-      notes.push(`you may be selling high on ${names} who ${giveOut.length > 1 ? 'are' : 'is'} currently out`)
+      const names = giveOut.map(i => i.playerName)
+      notes.push(`you may be selling high on ${join(names)} who ${names.length > 1 ? 'are' : 'is'} currently out`)
     }
+  }
+
+  // Questionable / Doubtful on a player you get: worth a look, not a verdict.
+  if (getDoubt.length > 0) {
+    notes.push(`${join(getDoubt.map(i => `${i.playerName} (${i.injuryStatus})`))} — a short-term tag; check the latest before accepting`)
+  }
+
+  if (unknown.length > 0) {
+    notes.push(`injury status could not be checked for ${join(unknown.map(i => i.playerName))}`)
   }
 
   const updatedReasoning = notes.length > 0
     ? `${reasoning} Note: ${notes.join('; ')}.`
     : reasoning
 
-  return { verdict, reasoning: updatedReasoning, adjustedByIntelligence: notes.length > 0 }
+  return { verdict, reasoning: updatedReasoning, adjustedByIntelligence: verdict !== before }
 }
 
 // Build a one-line, plain-English read of where a package's pieces come from —

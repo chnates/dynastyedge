@@ -86,6 +86,7 @@ import { buildReplacementLevels } from '../../src/utils/positionalValue.js'
 import { getRosterLimits } from '../../src/utils/rosterSpace.js'
 import { buildPartnerActivity } from '../../src/utils/partnerActivity.js'
 import { getTeamName } from '../../src/utils/teamName.js'
+import { injuryFromMeta, INJURY_UNAVAILABLE } from '../../src/utils/injuryStatus.js'
 import { resolveTeam } from '../teams.js'
 
 export const MAX_ASSETS_PER_SIDE = 12
@@ -244,10 +245,21 @@ export function buildTradeAnswer(snapshot, weekly, {
   if (!analysis) throw new Error('Trade analysis unavailable — roster or league data missing')
 
   const verdict = getTradeVerdict(analysis)
-  // liveIntelligence is a per-player news/injury fetch the app makes lazily on
-  // the drawer. Passing null is its documented no-op: the verdict is returned
-  // unchanged rather than adjusted on evidence we do not have.
-  const adjusted = adjustVerdictForInjuries(verdict, null, giveAssets, getAssets)
+  // The injury layer, built exactly as the app builds it: one row per player
+  // in the trade, read off the snapshot's player DB through the one status
+  // rule (src/utils/injuryStatus.js). Until 2026-10-07 this passed null and
+  // skipped the layer, so the server and the app could grade the same trade
+  // differently. A missing player DB is `unavailable`, and the verdict says
+  // the check could not be made — never "healthy".
+  const tradePlayers = [
+    ...giveAssets.filter(a => a.type === 'player'),
+    ...getAssets.filter(a => a.type === 'player'),
+  ]
+  const liveIntelligence = tradePlayers.map(a => ({
+    playerName: a.name,
+    ...(snapshot.playerDB ? injuryFromMeta(snapshot.playerDB[String(a.sleeperId)]) : INJURY_UNAVAILABLE),
+  }))
+  const adjusted = adjustVerdictForInjuries(verdict, liveIntelligence, giveAssets, getAssets)
   const counter = bothSides && adjusted?.verdict === 'Counter'
     ? getCounterSuggestion(analysis, myRoster, opponentRoster, giveAssets, getAssets)
     : null
@@ -274,9 +286,7 @@ export function buildTradeAnswer(snapshot, weekly, {
       ? {
         verdict: adjusted?.verdict ?? null,
         reasoning: adjusted?.reasoning ?? null,
-        // True when adjustVerdictForInjuries moved it. Always false here
-        // (liveIntelligence is null) — stated rather than omitted so the
-        // field means the same thing as it does in the app.
+        // True when the injury layer moved the verdict (an "out" player).
         injuryAdjusted: !!adjusted && adjusted.verdict !== verdict?.verdict,
       }
       : null,

@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSleeperRookies, getPlayerMetaMap } from '../../hooks/useSleeperRookies'
 import { suggestSellMove } from '../../utils/recommendations'
+import { isIrEligible } from '../../utils/injuryStatus'
 import { Button, Lede, Mark, PositionBand, RuledList } from '../ui'
 import { PICK_YEARS } from '../../constants'
 
@@ -62,7 +63,7 @@ function ActionCard({ item, onDismiss, onAction }) {
   )
 }
 
-export default function RosterActionItems({ myRoster, nflState, allRosters, pickYears }) {
+export default function RosterActionItems({ myRoster, nflState, allRosters, pickYears, leagueInfo }) {
   // Trigger the /players/nfl fetch so meta is available (module-level cached)
   useSleeperRookies()
   const navigate = useNavigate()
@@ -135,19 +136,29 @@ export default function RosterActionItems({ myRoster, nflState, allRosters, pick
     if (Object.keys(playerMeta).length > 0) {
       const stashable = myRoster.players.filter(p => {
         if (p.isIR || p.isTaxi) return false
-        const status = playerMeta[p.sleeperId]?.injury_status
-        return status === 'Out' || status === 'PUP'
+        // Eligibility is the LEAGUE's rule (Sleeper's reserve_allow_* settings),
+        // read through utils/injuryStatus.js — not a hand-kept list.
+        return isIrEligible(playerMeta[p.sleeperId]?.injury_status, leagueInfo?.settings)
       })
-      if (stashable.length) {
+      // Only worth saying when there is ROOM. With every IR slot taken the
+      // advice "move him to IR" cannot be followed (live 2026-10-07: two of the
+      // owner's players carry Sleeper's IR tag while both IR slots are full).
+      const irSlots = Number(leagueInfo?.settings?.reserve_slots) || 0
+      const irOpen = Math.max(0, irSlots - myRoster.players.filter(p => p.isIR).length)
+      if (stashable.length && irOpen > 0) {
         const names = stashable.map(p => p.name)
+        const fit = Math.min(irOpen, stashable.length)
+        const mover = stashable.length === 1 ? 'him' : fit === 1 ? 'one of them' : 'them'
         result.push({
           key: 'ir',
-          conditionSnapshot: stashable.map(p => p.sleeperId).sort().join(','),
+          // The open-slot count is part of the condition: a dismissal made
+          // while one slot was open re-surfaces when a second opens.
+          conditionSnapshot: `${stashable.map(p => p.sleeperId).sort().join(',')}|${irOpen}`,
           eyebrow: 'Roster spots',
           headline: stashable.length === 1
             ? <>{names[0]} can go on <Mark tone="alt">IR</Mark></>
             : <><Mark tone="alt">{stashable.length} spots</Mark> are sitting on injured players</>,
-          message: `${listNames(names)} ${stashable.length === 1 ? 'is' : 'are'} out. Moving ${stashable.length === 1 ? 'him' : 'them'} to injured reserve frees ${stashable.length === 1 ? 'an active roster spot' : `${stashable.length} active roster spots`} without dropping anyone.`,
+          message: `${listNames(names)} ${stashable.length === 1 ? 'is' : 'are'} eligible for injured reserve under this league's rules, and you have ${irOpen === 1 ? 'an open IR slot' : `${irOpen} open IR slots`}. Moving ${mover} there frees ${fit === 1 ? 'an active roster spot' : `${fit} active roster spots`} without dropping anyone.`,
         })
       }
     }
@@ -173,7 +184,7 @@ export default function RosterActionItems({ myRoster, nflState, allRosters, pick
     }
 
     return result
-  }, [myRoster, nflState, allRosters, pickYears, dismissals]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [myRoster, nflState, allRosters, pickYears, leagueInfo, dismissals]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filter out dismissed items whose condition snapshot still matches
   const visible = items.filter(item => {
