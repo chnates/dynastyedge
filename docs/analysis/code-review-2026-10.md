@@ -1,8 +1,8 @@
 # CODE-REVIEW-1 — where the code took the convenient path (2026-10-07)
 
-**Status:** review only — no code changed here. The owner answered the three
-open questions and set the build order on 2026-10-07 (see **Owner decisions**);
-each finding becomes its own small PR (one home per rule, plus a test
+**Status: DONE 2026-10-07.** Every finding below was fixed in its own PR (see
+**Outcome**). The owner answered the three open questions and set the build
+order the same day (see **Owner decisions**); each finding became its own small PR (one home per rule, plus a test
 that fails if a copy comes back — the `marketTrend.js` pattern).
 
 **Scope:** `src/`, `mcp/`, `scripts/`, `.github/workflows/`, against the five
@@ -360,6 +360,36 @@ September) so it never goes stale.
   example) — after #6 they can import `src/constants.js` too.
 
 ---
+
+## Outcome (2026-10-07) — every finding fixed, each with a guard test
+
+| # | Finding | PR | What it changed for the owner |
+|---|---|---|---|
+| 1 | Injury status, three lists | #79 | One rule everywhere; Doubtful a note in trades; DNR/COV/Sus now block; a failed lookup is "unavailable", never "Active"; IR item follows league rules and open slots; MCP `analyze_trade` applies it too |
+| 2 | Buyer/seller thresholds | #80 | `BUYER_PCT` / `SELLER_PCT` one home; no visible change |
+| 3 | History walk | #82 | "Couldn't read" named on Trade › Managers with Try again; one walk shared with MCP; broken chains reported |
+| 4 | Trajectory cut-offs | #81 | 3-year change coloured by the verdict's own cut-offs |
+| 5 | "Even" trade rules | #83 | Ledger + Activity share the hindsight rule; fair band kept separate (owner) |
+| 6 | FantasyCalc reader ×3 | #91 | One reader for app, MCP and pipelines; pipelines run on the resolver hook; outputs byte-identical; verified on `main` |
+| 7 | Round labels ×8 | #85 | `roundSuffix` / `pickRoundLabel` |
+| 8 | Bye parser copy | #86 | `parseByeTeams` beside `parseLockedTeams` |
+| 9 | Two player-DB trims | #92 | `trimPlayerDB` shared |
+| 10 | News matcher ×3 | #93 | `newsMatch.js`; same 95 items matched live, 6 roundups re-tagged by the feed's own order |
+| 11 | FAAB `?? 100` | #84 | Unknown budget reads `—` (owner) |
+| 12 | Storage keys | #87 | `src/storageKeys.js` |
+| 13 | Resolver hook ×2 | #88 | `scripts/loader.mjs`; shims keep every command working |
+| 14 | ESPN news docs | #89 | Dead fallback removed; docs say what was measured (phone check owed) |
+| 15 | Year-stamped seeds | #90 | `seedPickYears` from the date |
+| 16 | Small copies | #94 | `POSITIONS` (13 copies), `WIN_WINDOW_TIERS`, `VALUE_HISTORY_DAYS`; unread trade weeks logged |
+
+Tests went **841 → 902** with the no-`node_modules` gap held at **43** throughout.
+Fixing found three things the review had missed, all fixed in their PRs: the
+MCP trade grader skipped injuries entirely (#79), the IR suggestion ignored
+full IR slots (#79), and the MCP scouting tool had its own copy of the
+"partial read" wording (#82).
+
+**Still owed by the owner:** confirm on the phone that a player with no feed
+news shows ESPN items in his profile (#14).
 
 ## Owner decisions (2026-10-07)
 
