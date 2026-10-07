@@ -2122,7 +2122,11 @@ one-line read, Analyzer Layer 3's partner line, The Edge's closing-window item.
   **balanced**. Asymmetric because pick maturation lifts every roster ~2–3%;
   classified on **net change, not interim peak** (maturation pushes peaks
   later). Per-player/position tags use symmetric ±5% (`seriesDirection`) and
-  `peakStatusShort`.
+  `peakStatusShort`. **The team cut-offs live in `teamDirection`**, shared by the
+  verdict and `getTrajectoryRead`; the Trajectory screen colours its 3-year
+  change from the verdict and each player row from `seriesDirection` — **never a
+  local ±5%** (a −3% roster used to read "sliding" over a grey number;
+  `tests/dynastyTrajectory.test.mjs` scans `src/components` for a copy).
 
 **UI (`TrajectoryView.jsx`):** a **`Lede`** verdict (eyebrow "Window peaks
 {year}", direction `Mark`ed) — **never a coloured left rail**; a forward value
@@ -3135,7 +3139,7 @@ dynastyedge/
 │   │   ├── injuryStatus.js      ← THE injury-status rule (OUT / QUESTIONABLE, IR eligibility from league settings) — one home, read by the Optimizer, player card, trade verdict, IR item and MCP
 │   │   ├── marketTrend.js       ← THE market-trend rules (±50, buy-low/sell-high eligibility, % move) — one home, read by every arrow, list and MCP tool
 │   │   ├── fairBand.js          ← THE definition of "fair" (±5%), shared by the Analyzer's verdict and every surface that PREDICTS it
-│   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation
+│   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation; teamDirection = THE team cut-offs (−1% / +5%)
 │   │   ├── seasonWindow.js      ← THE "has the rookie draft happened yet?" resolver — the live pick window + which draft the Tracker shows (replaced the hand-rolled PICK_YEARS)
 │   │   ├── pickCapital.js       ← pick ownership (year weights relative to the window, never literal years) + THE spent-pick ladder shared by Activity and the ledger (buildDraftPickIndex, buildGenericRoundValues)
 │   │   ├── leagueResults.js     ← THE bracket reader: champion = w of the p:1 game, placements carry owner_id; pure, used by get_league_results
@@ -3182,7 +3186,7 @@ dynastyedge/
 │   ├── tradeTargets.test.mjs        ← Targets: deficit gate, scoped mode keeps depth (never empty), movability TILT (nothing hidden), position filter INSIDE the ranking
 │   ├── tradeAnalysis.test.mjs       ← the trade engine: suggestion inside buildFairBand (asked, never a literal; old search kept as an executable bug statement), Layer 3 odds/tier basis, alternative, phase-2 trade-off, fills scored once, my-lineup gate (only downgrades), verdict ladder, counter, lineup-sim fit, myFit can NEVER move a verdict, depth charts (post-trade getContext), two-phase builder, pick identity triple
 │   ├── tradeContext.test.mjs        ← the five negotiating signals — NONE may move the verdict
-│   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation
+│   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation; teamDirection / seriesDirection cut-offs AND a scan that fails if a screen re-derives a direction
 │   ├── lineupBuild.test.mjs         ← slot-fill order (singles → FLEX → SFLX), IR/taxi excluded, who-starts identity
 │   ├── lineupMoves.test.mjs         ← start/sit engine: GAME LOCKS (no move from a sealed slot; played score is fact; no live score → projection, NEVER 0; empty set = unknown), Σ gains = headline, both old per-slot bugs, empty DEF, confidence + coin-flip demotion
 │   ├── freeAgents.test.mjs          ← waiver options: FantasyCalc must not gate the list, TEAM_* guard, `—` for unranked, one-defense rule
@@ -3238,8 +3242,8 @@ because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
 **Current counts (verified 2026-10-07 by moving `node_modules` aside):** with
-dependencies **`# tests 859 / # pass 859`**; without them **`# tests 816 / #
-pass 811 / # fail 5`**. **If the test count isn't 859, run `npm ci` before
+dependencies **`# tests 862 / # pass 862`**; without them **`# tests 819 / #
+pass 814 / # fail 5`**. **If the test count isn't 862, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React

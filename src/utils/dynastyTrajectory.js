@@ -247,6 +247,18 @@ export function seriesDirection(series) {
   return 'stable'
 }
 
+// THE team-level direction, from the net change over the horizon. Shared by
+// getTrajectoryVerdict (the Trajectory screen) and getTrajectoryRead (Partner
+// cards, Layer 3, The Edge) — and the Trajectory screen colours its own
+// 3-year-change figure from it, so the headline and the number beside it can
+// never use different cut-offs (CODE-REVIEW-1 #4: a −3% roster used to get a
+// "sliding" headline over a grey number).
+export function teamDirection(endPct) {
+  if (endPct < TEAM_DECLINE_CUT) return 'declining'
+  if (endPct > TEAM_ASCEND_CUT) return 'ascending'
+  return 'stable'
+}
+
 export function getTrajectoryVerdict(trajectory) {
   const { totalByYear, seasons } = trajectory
   const now = totalByYear[0]
@@ -258,14 +270,15 @@ export function getTrajectoryVerdict(trajectory) {
   const peakSeason = seasons[peakIdx]
   const lastSeason = seasons[seasons.length - 1]
 
-  if (endPct < TEAM_DECLINE_CUT) {
+  const direction = teamDirection(endPct)
+  if (direction === 'declining') {
     return {
       tone: 'declining',
       peakSeason,
       headline: `Your roster value is set to slide through ${lastSeason}. Your window is open — spend future picks on win-now help and sell aging veterans before their value drops.`,
     }
   }
-  if (endPct > TEAM_ASCEND_CUT) {
+  if (direction === 'ascending') {
     return {
       tone: 'ascending',
       peakSeason,
@@ -294,10 +307,11 @@ export function getTrajectoryRead(trajectory) {
   const lastSeason = seasons[seasons.length - 1]
   const peakSeason = seasons[peakIdx]
 
-  if (endPct < TEAM_DECLINE_CUT) {
+  const direction = teamDirection(endPct)
+  if (direction === 'declining') {
     return { direction: 'declining', pct: endPct, peakSeason, lastSeason, label: `Value slides through ${lastSeason} — selling vets` }
   }
-  if (endPct > TEAM_ASCEND_CUT) {
+  if (direction === 'ascending') {
     return { direction: 'ascending', pct: endPct, peakSeason, lastSeason, label: `Value climbing toward ${peakSeason} — building` }
   }
   return { direction: 'stable', pct: endPct, peakSeason, lastSeason, label: `Value holds near ${peakSeason} — balanced window` }

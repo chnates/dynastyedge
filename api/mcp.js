@@ -41780,6 +41780,11 @@ function seriesDirection(series) {
   if (pct4 < -0.05) return "declining";
   return "stable";
 }
+function teamDirection(endPct) {
+  if (endPct < TEAM_DECLINE_CUT) return "declining";
+  if (endPct > TEAM_ASCEND_CUT) return "ascending";
+  return "stable";
+}
 function getTrajectoryRead(trajectory) {
   const { totalByYear, seasons } = trajectory;
   const now = totalByYear[0];
@@ -41791,10 +41796,11 @@ function getTrajectoryRead(trajectory) {
   const endPct = (totalByYear[totalByYear.length - 1] - now) / now;
   const lastSeason = seasons[seasons.length - 1];
   const peakSeason = seasons[peakIdx];
-  if (endPct < TEAM_DECLINE_CUT) {
+  const direction = teamDirection(endPct);
+  if (direction === "declining") {
     return { direction: "declining", pct: endPct, peakSeason, lastSeason, label: `Value slides through ${lastSeason} \u2014 selling vets` };
   }
-  if (endPct > TEAM_ASCEND_CUT) {
+  if (direction === "ascending") {
     return { direction: "ascending", pct: endPct, peakSeason, lastSeason, label: `Value climbing toward ${peakSeason} \u2014 building` };
   }
   return { direction: "stable", pct: endPct, peakSeason, lastSeason, label: `Value holds near ${peakSeason} \u2014 balanced window` };

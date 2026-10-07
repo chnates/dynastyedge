@@ -348,6 +348,10 @@ OPEN-3, the FAAB bid recommender (2026-10-07), moved both by the same 20
 imports only `src/utils` and the shared fixture, and the three new
 `mcpRecommendFreeAgents` tests reach neither React nor `zod`.
 
+The Trajectory one-rule fix (2026-10-07, CODE-REVIEW-1 #4) moved both by the
+same 3 (859/816 → **862/819**), the gap holding at 43: the new cases sit in
+`dynastyTrajectory.test.mjs`, which imports only pure utils and `node:fs`.
+
 The buyer/seller one-home fix (2026-10-07, CODE-REVIEW-1 #2) moved both by the
 same 3 (856/813 → **859/816**), the gap holding at 43:
 `deadlineThresholds.test.mjs` imports only the pure `playoffOdds.js`.

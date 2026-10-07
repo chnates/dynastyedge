@@ -12,6 +12,8 @@
 //    rookie-aged (22) young asset that ages on a generic … curve."
 
 import { test } from 'node:test'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import assert from 'node:assert/strict'
 
 import {
@@ -20,8 +22,7 @@ import {
   buildRosterTrajectory,
   getTrajectoryRead,
   getTrajectoryVerdict,
-  TRAJECTORY_HORIZON,
-} from '../src/utils/dynastyTrajectory.js'
+  TRAJECTORY_HORIZON, teamDirection, seriesDirection } from '../src/utils/dynastyTrajectory.js'
 
 // Hand-built curves: exact ratios, so the clamp is the only variable.
 function flatCurveExcept(entries) {
@@ -133,4 +134,45 @@ test('buildAgeCurves produces a full 21–39 curve per position from the Fantasy
   assert.ok(generic[22] > 0)
   // The projection horizon the whole feature is built around (current → +3).
   assert.equal(TRAJECTORY_HORIZON, 3)
+})
+
+
+// ── One direction rule per level (CODE-REVIEW-1 #4, 2026-10-07) ─────────────
+// The Trajectory screen coloured its 3-year-change figure with its own ±5%
+// while the headline used the team cut-offs (−1% / +5%): a −3% roster read
+// "sliding" over a grey number. The screen now reads teamDirection / the
+// verdict for the team and seriesDirection for players.
+
+test('teamDirection: asymmetric team cut-offs, −1% / +5%', () => {
+  assert.equal(teamDirection(-0.03), 'declining')   // the case the screen used to grey out
+  assert.equal(teamDirection(-0.01), 'stable')
+  assert.equal(teamDirection(0.05), 'stable')
+  assert.equal(teamDirection(0.0501), 'ascending')
+})
+
+test('seriesDirection stays the symmetric ±5% player rule', () => {
+  assert.equal(seriesDirection([100, 97]), 'stable')
+  assert.equal(seriesDirection([100, 94]), 'declining')
+  assert.equal(seriesDirection([100, 106]), 'ascending')
+  assert.equal(seriesDirection([0, 50]), 'stable')
+})
+
+test('no screen re-derives a trajectory direction from a local ±5%', () => {
+  const root = new URL('..', import.meta.url).pathname
+  const files = []
+  const walk = dir => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name)
+      if (statSync(p).isDirectory()) walk(p)
+      else if (/\.(js|jsx|mjs)$/.test(name)) files.push(p)
+    }
+  }
+  walk(join(root, 'src', 'components'))
+  const copies = []
+  for (const f of files) {
+    readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+      if (/[pP]ct\s*[<>]=?\s*-?0\.0[15]\b/.test(line)) copies.push(`${f.slice(root.length)}:${i + 1}`)
+    })
+  }
+  assert.deepEqual(copies, [], 'use teamDirection / getTrajectoryVerdict / seriesDirection')
 })

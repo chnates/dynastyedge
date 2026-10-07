@@ -24,6 +24,11 @@ import {
 
 const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 
+// The two figures that carry a direction take it from the MODEL, never from a
+// local ±5%: the 3-year-change card from the verdict (team cut-offs −1% / +5%),
+// each player row from seriesDirection (±5%). Stable stays neutral there.
+const DIR_CLASS = { ascending: 'text-success', declining: 'text-danger' }
+
 const TONE_TEXT = {
   ascending: 'text-success',
   declining: 'text-danger',
@@ -288,13 +293,13 @@ export default function TrajectoryView() {
         <StatCard
           label={`Projected ${lastSeason}`}
           value={trajectory.totalByYear[TRAJECTORY_HORIZON].toLocaleString()}
-          valueClass={overallPct > 0.05 ? 'text-success' : overallPct < -0.05 ? 'text-danger' : 'text-text-primary'}
+          valueClass={DIR_CLASS[verdict.tone] ?? 'text-text-primary'}
         />
         <StatCard label="Peak Season" value={trajectory.seasons[peakIdx]} />
         <StatCard
           label={`3-Yr Change`}
           value={fmtPct(overallPct)}
-          valueClass={overallPct > 0.05 ? 'text-success' : overallPct < -0.05 ? 'text-danger' : 'text-text-secondary'}
+          valueClass={DIR_CLASS[verdict.tone] ?? 'text-text-secondary'}
         />
       </div>
 
@@ -336,7 +341,7 @@ export default function TrajectoryView() {
         {players.map(({ player, series }, i) => {
           const pct = deltaPct(series)
           const peak = peakStatusShort(player.position, player.age)
-          const tone = pct > 0.05 ? 'text-success' : pct < -0.05 ? 'text-danger' : 'text-text-secondary'
+          const tone = DIR_CLASS[seriesDirection(series)] ?? 'text-text-secondary'
           return (
             <button
               key={player.sleeperId}
