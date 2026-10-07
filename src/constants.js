@@ -18,7 +18,6 @@ export const SLEEPER_ROOT = 'https://api.sleeper.app'
 export const FANTASYCALC_BASE = 'https://api.fantasycalc.com'
 // Unofficial ESPN API — no auth; used only for per-player news, degrades silently
 export const ESPN_BASE = 'https://site.api.espn.com'
-export const ESPN_WEB_BASE = 'https://site.web.api.espn.com'
 
 // Aggregated news feed published by .github/workflows/news.yml to the
 // news-data branch (raw.githubusercontent.com sends CORS headers)

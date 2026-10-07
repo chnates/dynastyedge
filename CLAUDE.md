@@ -340,8 +340,12 @@ GitHub Actions** and served as a static file — keeping the app backend-free.
   and (from The Edge) "View profile". Full articles are never embedded —
   sources block cross-origin framing.
 - With no feed items for a player, the client falls back to ESPN's unofficial
-  per-player endpoints — CORS-blocked in practice; they cost nothing and
-  degrade silently.
+  per-player news endpoint (`site.api.espn.com/apis/fantasy/v2/…/news/players`).
+  **It is NOT CORS-blocked** — probed 2026-10-07 it answers 200 with
+  `access-control-allow-origin: *` (confirm on the phone before relying on it).
+  The old second endpoint (`site.web.api.espn.com …/athletes/{id}/news`) 404'd
+  for every player and was removed (CODE-REVIEW-1 #14). Still unofficial and
+  best-effort: any failure hides the section.
 - **News must never block a panel, show an error, or retry-loop** — on any
   failure the section hides. With every source and the player DB unreachable
   the script republishes the retained window; with no previous feed either, it
@@ -3441,7 +3445,6 @@ export const SLEEPER_ROOT = 'https://api.sleeper.app'
 export const FANTASYCALC_BASE = 'https://api.fantasycalc.com'
 // Unofficial ESPN API — no auth; per-player news only, degrades silently
 export const ESPN_BASE = 'https://site.api.espn.com'
-export const ESPN_WEB_BASE = 'https://site.web.api.espn.com'
 
 // Static feeds published by GitHub Actions to their data branches
 export const NEWS_FEED_URL      = '…/dynastyedge/news-data/news.json'

@@ -675,16 +675,16 @@ names.
 
 ## 4. ESPN unofficial endpoints (best-effort bonus only)
 
-`ESPN_BASE = 'https://site.api.espn.com'`,
-`ESPN_WEB_BASE = 'https://site.web.api.espn.com'`. Used only in
-`usePlayerIntel.loadEspnNews` as a fallback when the aggregated feed has no
-items for a player:
+`ESPN_BASE = 'https://site.api.espn.com'`. Used only in
+`usePlayerIntel.loadEspnNews` when the aggregated feed has no items for a player:
 
-- Primary: `{ESPN_BASE}/apis/fantasy/v2/games/ffl/news/players?playerId={espnId}&limit=3`
-- Fallback: `{ESPN_WEB_BASE}/apis/common/v3/sports/football/nfl/athletes/{espnId}/news?limit=3`
+- `{ESPN_BASE}/apis/fantasy/v2/games/ffl/news/players?playerId={espnId}&limit=3`
 
-Both are **CORS-blocked in practice from the browser** — they cost nothing
-and degrade silently (`.catch(() => [])`, 8 s timeout, per-espnId session
+Probed 2026-10-07: 200 with `access-control-allow-origin: *` — it is **not**
+CORS-blocked, as this section used to say. The former fallback
+(`site.web.api.espn.com/apis/common/v3/sports/football/nfl/athletes/{id}/news`)
+404'd for every player and was removed with `ESPN_WEB_BASE`. Still unofficial;
+it degrades silently (`.catch(() => [])`, 8 s timeout, per-espnId session
 cache). `parseEspnItems` handles both response shapes (`{feed}` v2 and
 `{articles}` v3). Never build a feature that depends on these succeeding.
 The server-side news script also hits
@@ -740,7 +740,7 @@ pattern; storage failure must degrade to in-memory behavior, never crash.
 | `LEAGUE_ID` | `'1313933520715907072'` — the one league; also hardcoded (deliberately, no imports in Actions scripts) in `scripts/snapshot-trade-values.mjs` |
 | `MY_ROSTER_ID` (6) / `MY_USERNAME` / `MY_TEAM_NAME` | **Legacy — original-owner reference only.** Runtime identity comes from `useIdentity` (localStorage `dynastyedge_identity_v1`, set on the login screen); "am I this team?" checks use `myRosterId` from LeagueContext. Do not write new code against `MY_ROSTER_ID` |
 | `SLEEPER_BASE` / `FANTASYCALC_BASE` | API bases |
-| `ESPN_BASE` / `ESPN_WEB_BASE` | Unofficial ESPN bases (best-effort news only) |
+| `ESPN_BASE` | Unofficial ESPN base (best-effort per-player news only) |
 | `NEWS_FEED_URL` / `VALUES_HISTORY_URL` / `TRADE_VALUES_URL` / `ROOKIE_INTEL_URL` | The four static feeds (section 3) |
 | `FANTASYCALC_PARAMS` | The four immutable market params (section 2) |
 | `PICK_YEARS` | **SEED ONLY.** The live pick-capital horizon is `pickYears` on LeagueContext, derived per load by `utils/seasonWindow.js` from `/state/nfl` + the drafts list (no extra request): the upcoming rookie draft plus the two after it, rolling itself the moment a season's non-auction draft reports `status: "complete"`. This constant is only what renders before NFL state resolves. Do not write new code against it, and never key anything on a literal year |
