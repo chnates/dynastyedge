@@ -10,6 +10,7 @@ import { getWinWindowTier } from '../../src/utils/rosterAnalysis.js'
 import { getTeamName } from '../../src/utils/teamName.js'
 import { faabDisplay } from '../../src/utils/leagueState.js'
 import { trendTag } from '../../src/utils/marketTrend.js'
+import { readTradeDeadline, isDeadlineWindow } from '../../src/utils/tradeDeadline.js'
 // Team resolution moved to mcp/teams.js in phase 1b so analyze_trade's
 // `partner` argument resolves through the SAME code. Re-exported here because
 // this module's existing tests (and its contract) name it.
@@ -124,6 +125,7 @@ export function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId,
       isOffseason: snapshot.isOffseason,
       teams: allRosters.length,
     },
+    calendar: buildCalendar(snapshot, league.leagueInfo),
     team: {
       rosterId: roster.rosterId,
       teamName: getTeamName(roster.owner),
@@ -158,6 +160,38 @@ export function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId,
     // Caveats the reader needs in order to read the numbers correctly. These
     // are conditions, not decoration — each one changes what a number means.
     notes: buildNotes(snapshot, roster, players, picks),
+  }
+}
+
+// THE LEAGUE CALENDAR (open-items §0 #9) — so the scheduled brief READS the
+// trade deadline from league settings instead of having a date typed into its
+// prompt. Orchestration only: the arithmetic is src/utils/tradeDeadline.js,
+// the same rule the Trade banner and The Edge use. The waiver fields are
+// Sleeper's settings passed through UNDECODED: Sleeper does not document how
+// `waiver_day_of_week` / `daily_waivers_hour` map to clock time, and a guessed
+// decoding stated as fact is the confident-wrong answer §7 exists to prevent.
+// (Measured instead, 2026-10-07: claims process at noon ET daily, Wednesday
+// the big run — docs/analysis/proactive-delivery-2026-10.md §2.)
+function buildCalendar(snapshot, leagueInfo) {
+  const settings = leagueInfo?.settings ?? {}
+  const deadline = readTradeDeadline({
+    tradeDeadline: settings.trade_deadline,
+    nflState: snapshot.nflState,
+    isOffseason: snapshot.isOffseason,
+  })
+  const num = v => (Number.isFinite(Number(v)) ? Number(v) : null)
+  return {
+    tradeDeadline: deadline ? { ...deadline, inWindow: isDeadlineWindow(deadline) } : null,
+    tradeDeadlineWeek: num(settings.trade_deadline),
+    playoffWeekStart: num(settings.playoff_week_start),
+    waiverSettings: {
+      dailyWaivers: settings.daily_waivers == null ? null : settings.daily_waivers === 1,
+      waiverType: num(settings.waiver_type),
+      waiverDayOfWeek: num(settings.waiver_day_of_week),
+      dailyWaiversHour: num(settings.daily_waivers_hour),
+      waiverClearDays: num(settings.waiver_clear_days),
+      decoded: false,
+    },
   }
 }
 
@@ -229,6 +263,14 @@ export function renderRosterText(a) {
   L.push(`Total value ${a.totals.totalValue.toLocaleString('en-US')} (#${a.totals.valueRank} of ${a.league.teams}) · players ${a.totals.playerValue.toLocaleString('en-US')} · picks ${a.totals.pickValue.toLocaleString('en-US')}`)
   L.push(`Win window: ${a.winWindow}${a.record ? ` · ${a.record.wins}-${a.record.losses}${a.record.ties ? '-' + a.record.ties : ''} · ${a.record.pointsFor} PF` : ' · no games played yet'}`)
   L.push(`FAAB ${a.faab.display} of ${faabDisplay(a.faab.budget)}${a.totals.avgStarterAge ? ` · avg starter age ${a.totals.avgStarterAge}` : ''}`)
+  const dl = a.calendar?.tradeDeadline
+  if (dl) {
+    L.push(dl.status === 'passed'
+      ? `Trade deadline passed (Week ${dl.week})`
+      : dl.status === 'this-week'
+        ? `Trade deadline is THIS WEEK (Week ${dl.week})`
+        : `Trade deadline: Week ${dl.week} · ${dl.weeksLeft} week${dl.weeksLeft === 1 ? '' : 's'} away`)
+  }
   L.push('')
   for (const group of ['STARTER', 'BENCH', 'TAXI', 'IR']) {
     const rows = a.players.filter(p => p.slot === group)
