@@ -51,10 +51,31 @@ export function resolvePickOwnership(tradedPicks, rosters, years) {
   return result
 }
 
-const ROUND_SUFFIX = ['', '1st', '2nd', '3rd', '4th', '5th']
+// THE round label — "1st", "2nd", "3rd", "4th"… — for every screen and for
+// the FantasyCalc lookup below, which matches on it ("2027 1st"). Until
+// 2026-10-07 it was written out in eight files; half stopped at "4th", so a
+// later round read "R5" on some screens and "5th" on others, and two of the
+// copies were not labels but the KEY used to price a pick (CODE-REVIEW-1 #7).
+// tests/pickCapital.test.mjs fails if a copy returns.
+export function roundSuffix(round) {
+  const n = Number(round)
+  if (!Number.isInteger(n) || n < 1) return null
+  const mod100 = n % 100
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`
+  return `${n}${({ 1: 'st', 2: 'nd', 3: 'rd' })[n % 10] ?? 'th'}`
+}
+
+// "2027 1st". An unreadable round keeps the old "R{n}" fallback.
+export function pickRoundLabel(pick) {
+  return `${pick.season} ${roundSuffix(pick.round) ?? `R${pick.round}`}`
+}
+
+// The rounds FantasyCalc lists round-level pick entries for — the range the
+// generic round medians are built over.
+const PRICED_ROUNDS = 5
 
 export function findPickValue(pick, pickEntries) {
-  const suffix = ROUND_SUFFIX[pick.round]
+  const suffix = roundSuffix(pick.round)
   if (!suffix) return 0
 
   const matches = pickEntries.filter(
@@ -172,8 +193,8 @@ export function buildDraftPickIndex(draft, picks, rosters) {
 // Surfaces mark it approximate (≈) rather than passing it off as a market price.
 export function buildGenericRoundValues(pickEntries) {
   const byRound = {}
-  for (let round = 1; round < ROUND_SUFFIX.length; round++) {
-    const suffix = ROUND_SUFFIX[round]
+  for (let round = 1; round <= PRICED_ROUNDS; round++) {
+    const suffix = roundSuffix(round)
     const matches = (pickEntries ?? [])
       .filter(e => e.name.includes(suffix))
       .sort((a, b) => a.value - b.value)

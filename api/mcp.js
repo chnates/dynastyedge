@@ -322,8 +322,18 @@ function resolvePickOwnership(tradedPicks, rosters, years) {
   );
   return result;
 }
+function roundSuffix(round4) {
+  const n = Number(round4);
+  if (!Number.isInteger(n) || n < 1) return null;
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  return `${n}${{ 1: "st", 2: "nd", 3: "rd" }[n % 10] ?? "th"}`;
+}
+function pickRoundLabel(pick2) {
+  return `${pick2.season} ${roundSuffix(pick2.round) ?? `R${pick2.round}`}`;
+}
 function findPickValue(pick2, pickEntries) {
-  const suffix = ROUND_SUFFIX[pick2.round];
+  const suffix = roundSuffix(pick2.round);
   if (!suffix) return 0;
   const matches = pickEntries.filter(
     (e) => e.name.includes(pick2.season) && e.name.includes(suffix)
@@ -392,8 +402,8 @@ function buildDraftPickIndex(draft, picks, rosters) {
 }
 function buildGenericRoundValues(pickEntries) {
   const byRound = {};
-  for (let round4 = 1; round4 < ROUND_SUFFIX.length; round4++) {
-    const suffix = ROUND_SUFFIX[round4];
+  for (let round4 = 1; round4 <= PRICED_ROUNDS; round4++) {
+    const suffix = roundSuffix(round4);
     const matches = (pickEntries ?? []).filter((e) => e.name.includes(suffix)).sort((a, b) => a.value - b.value);
     byRound[round4] = matches.length ? matches[Math.floor(matches.length / 2)].value : 0;
   }
@@ -406,11 +416,11 @@ function computePickCapitalScore(picks, pickEntries, years) {
     return total + weight * findPickValue(pick2, pickEntries);
   }, 0);
 }
-var ROUNDS, ROUND_SUFFIX, PICK_YEAR_WEIGHTS;
+var ROUNDS, PRICED_ROUNDS, PICK_YEAR_WEIGHTS;
 var init_pickCapital = __esm({
   "src/utils/pickCapital.js"() {
     ROUNDS = 4;
-    ROUND_SUFFIX = ["", "1st", "2nd", "3rd", "4th", "5th"];
+    PRICED_ROUNDS = 5;
     PICK_YEAR_WEIGHTS = [3, 2, 1];
   }
 });
@@ -40481,7 +40491,7 @@ function makeResolvers(playerMap, playerDB, pickEntries, pickIndex) {
   }
   function pickAsset(pk) {
     const season = String(pk.season);
-    const roundLabel = ROUND_LABELS[pk.round] ?? `R${pk.round}`;
+    const roundLabel = roundSuffix(pk.round) ?? `R${pk.round}`;
     const pickKey = `${season}-${pk.round}-${pk.roster_id}`;
     const resolved = pickIndex[pickKey];
     if (resolved) {
@@ -40876,13 +40886,12 @@ function buildManagerProfiles({ history, currentLeague, playerMap, pickEntries, 
     // which seasons' trades were read (null = all)
   };
 }
-var ROUND_LABELS, STARTUP_ROUNDS, DRAFT_HIT_VALUE, STEAL_DELTA, FAAB_COACHING_MIN_BUDGETS, DEFAULT_FAAB_BUDGET, EMPTY_FAAB;
+var STARTUP_ROUNDS, DRAFT_HIT_VALUE, STEAL_DELTA, FAAB_COACHING_MIN_BUDGETS, DEFAULT_FAAB_BUDGET, EMPTY_FAAB;
 var init_managerAnalysis = __esm({
   "src/utils/managerAnalysis.js"() {
     init_pickCapital();
     init_leagueHistory();
     init_fairBand();
-    ROUND_LABELS = ["", "1st", "2nd", "3rd", "4th", "5th"];
     STARTUP_ROUNDS = 6;
     DRAFT_HIT_VALUE = 1e3;
     STEAL_DELTA = 5;
@@ -43201,10 +43210,6 @@ var init_positionalValue = __esm({
 });
 
 // src/utils/tradeAnalysis.js
-function pickLabel(pick2) {
-  const suffix = PICK_SUFFIXES[pick2.round] ?? `R${pick2.round}`;
-  return `${pick2.season} ${suffix}`;
-}
 function buildDepthContext(rosterPlayers, markedPlayers, starterIds, opts = {}) {
   const { marker = "out" } = opts;
   const positions = [...new Set((markedPlayers ?? []).map((p) => p.position).filter(Boolean))];
@@ -44043,7 +44048,7 @@ function suggestFairPackage(targetPlayer, myRoster, allRosters = null, opponentR
   }
   return null;
 }
-var MY_LINEUP_MATERIAL_PCT, SCARCITY_FLOOR, SCARCITY_GAP, APPEAL_RANK, PICK_SUFFIXES, addAsPlayer, SEAT_VOICE, VERDICT_UPGRADE, VERDICT_DOWNGRADE, join, ALTERNATIVE_MIN_SAVING, APPEAL_BONUS, PACKAGE_BAND;
+var MY_LINEUP_MATERIAL_PCT, SCARCITY_FLOOR, SCARCITY_GAP, APPEAL_RANK, addAsPlayer, pickLabel, SEAT_VOICE, VERDICT_UPGRADE, VERDICT_DOWNGRADE, join, ALTERNATIVE_MIN_SAVING, APPEAL_BONUS, PACKAGE_BAND;
 var init_tradeAnalysis = __esm({
   "src/utils/tradeAnalysis.js"() {
     init_rosterAnalysis();
@@ -44053,13 +44058,13 @@ var init_tradeAnalysis = __esm({
     init_positionalValue();
     init_dynastyTrajectory();
     init_fairBand();
+    init_pickCapital();
     init_recommendations();
     init_fairBand();
     MY_LINEUP_MATERIAL_PCT = 0.01;
     SCARCITY_FLOOR = 500;
     SCARCITY_GAP = 10;
     APPEAL_RANK = { Weak: 0, Fair: 1, Strong: 2 };
-    PICK_SUFFIXES = ["", "1st", "2nd", "3rd", "4th"];
     addAsPlayer = (a) => ({
       sleeperId: String(a.sleeperId),
       name: a.name,
@@ -44070,6 +44075,7 @@ var init_tradeAnalysis = __esm({
       isIR: false,
       isTaxi: false
     });
+    pickLabel = pickRoundLabel;
     SEAT_VOICE = {
       them: {
         valueAhead: (pct4) => `They come out ${pct4}% ahead on raw dynasty value.`,

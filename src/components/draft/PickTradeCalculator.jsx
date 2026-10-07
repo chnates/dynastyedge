@@ -8,7 +8,8 @@ import {
   buildPickMarket, buildPriceBoard, makePickPricer, pickRoundLabel, suggestPickPackages,
 } from '../../utils/pickTrades'
 import { buildRookieProspects } from '../../utils/rookieAdp'
-import { ROUND_TEXT, ROUND_LABELS } from '../../utils/roundColors'
+import { ROUND_TEXT } from '../../utils/roundColors'
+import { roundSuffix } from '../../utils/pickCapital'
 import SectionHeader from '../shared/SectionHeader'
 import ErrorState from '../shared/ErrorState'
 import { Card, Loading } from '../ui'
@@ -64,7 +65,7 @@ function PickHeaderRow({ pick, subtitle, expanded, onTap }) {
   return (
     <button onClick={onTap} className="focus-ring press w-full flex items-center gap-2 py-2.5 text-left">
       <span className={`font-mono text-sm font-bold tabular-nums shrink-0 w-12 ${ROUND_TEXT[pick.round] ?? 'text-text-primary'}`}>
-        {pick.slotLabel ?? ROUND_LABELS[pick.round] ?? `R${pick.round}`}
+        {pick.slotLabel ?? roundSuffix(pick.round) ?? `R${pick.round}`}
       </span>
       <span className="flex-1 font-body text-sm text-text-primary dark:text-text-primary truncate min-w-0">
         {subtitle}
@@ -89,7 +90,7 @@ function PriceBoard({ board, draftSeason }) {
       {board.map(row => (
         <div key={row.round} className="flex items-center gap-2 py-1 border-t border-border-default/60 dark:border-border-default/60 first:border-t-0">
           <span className={`w-8 shrink-0 font-mono text-xs font-bold ${ROUND_TEXT[row.round] ?? 'text-text-primary'}`}>
-            {ROUND_LABELS[row.round] ?? `R${row.round}`}
+            {roundSuffix(row.round) ?? `R${row.round}`}
           </span>
           <span className="flex-1 font-mono text-[11px] text-text-primary dark:text-text-primary tabular-nums">
             {row.median > 0 ? `~${row.median.toLocaleString()}` : '—'}

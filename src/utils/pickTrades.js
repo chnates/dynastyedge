@@ -2,14 +2,10 @@
 // move-down package suggestions. Pure functions over cached league and
 // FantasyCalc data; no fetches.
 
-import { findPickValue, findExactSlotValue } from './pickCapital'
+import { findPickValue, findExactSlotValue, pickRoundLabel } from './pickCapital'
 
-const ROUND_SUFFIX = ['', '1st', '2nd', '3rd', '4th']
-
-export function pickRoundLabel(pick) {
-  const suffix = ROUND_SUFFIX[pick.round] ?? `R${pick.round}`
-  return `${pick.season} ${suffix}`
-}
+// The label lives in pickCapital.js; re-exported for existing importers.
+export { pickRoundLabel }
 
 // Slot-aware pick price. FantasyCalc lists exact-slot picks as "2026 Pick 1.09"
 // once a draft season's order is known; a known slot maps to that entry.

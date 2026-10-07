@@ -15,6 +15,8 @@
 //    which is what survives the window rolling forward each September.
 
 import { test } from 'node:test'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import assert from 'node:assert/strict'
 
 import {
@@ -25,8 +27,7 @@ import {
   slotForRound,
   computePickCapitalScore,
   buildDraftPickIndex,
-  buildGenericRoundValues,
-} from '../src/utils/pickCapital.js'
+  buildGenericRoundValues, roundSuffix, pickRoundLabel } from '../src/utils/pickCapital.js'
 
 const ROSTERS = [{ roster_id: 1 }, { roster_id: 2 }]
 // The live pick window is supplied by the caller (utils/seasonWindow.js derives
@@ -258,4 +259,51 @@ test('buildGenericRoundValues: median per round across EVERY listed season ("a 2
   assert.equal(byRound[4], 0)
   assert.equal(buildGenericRoundValues([])[1], 0)
   assert.equal(buildGenericRoundValues(null)[1], 0)
+})
+
+
+// ── The round label has ONE home (CODE-REVIEW-1 #7, 2026-10-07) ─────────────
+// It was written out in eight files; half stopped at "4th" (a 5th-rounder read
+// "R5" on some screens, "5th" on others), and two copies were the KEY that
+// prices a pick against FantasyCalc's "2027 1st" names.
+
+test('roundSuffix: the ordinal for any round, null for an unreadable one', () => {
+  const old = ['', '1st', '2nd', '3rd', '4th', '5th']
+  for (let r = 1; r <= 5; r++) assert.equal(roundSuffix(r), old[r], `round ${r}`)
+  assert.equal(roundSuffix(6), '6th')
+  assert.equal(roundSuffix(11), '11th')
+  assert.equal(roundSuffix(12), '12th')
+  assert.equal(roundSuffix(13), '13th')
+  assert.equal(roundSuffix(21), '21st')
+  assert.equal(roundSuffix('2'), '2nd')
+  for (const bad of [0, null, undefined, 'x', 1.5]) assert.equal(roundSuffix(bad), null, String(bad))
+})
+
+test('pickRoundLabel: "2027 1st", with the R{n} fallback kept', () => {
+  assert.equal(pickRoundLabel({ season: '2027', round: 1 }), '2027 1st')
+  assert.equal(pickRoundLabel({ season: '2028', round: 5 }), '2028 5th')
+  assert.equal(pickRoundLabel({ season: '2028', round: null }), '2028 Rnull')
+})
+
+test('no second copy of the round-label ladder in src/ or mcp/', () => {
+  const root = new URL('..', import.meta.url).pathname
+  const files = []
+  const walk = dir => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name)
+      if (statSync(p).isDirectory()) walk(p)
+      else if (/\.(js|jsx|mjs)$/.test(name)) files.push(p)
+    }
+  }
+  walk(join(root, 'src'))
+  walk(join(root, 'mcp'))
+  const copies = []
+  for (const f of files) {
+    if (f.endsWith('utils/pickCapital.js')) continue
+    readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+      if (line.trim().startsWith('//')) return
+      if (/'1st',\s*'2nd'|1:\s*'1st'/.test(line)) copies.push(`${f.slice(root.length)}:${i + 1}`)
+    })
+  }
+  assert.deepEqual(copies, [], 'use roundSuffix / pickRoundLabel from src/utils/pickCapital.js')
 })
