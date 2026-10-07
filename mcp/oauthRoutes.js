@@ -6,7 +6,8 @@
 //   GET  /.well-known/oauth-authorization-server RFC 8414 — where to log in
 //   GET  /api/oauth/authorize                    start; bounce to GitHub
 //   GET  /api/oauth/callback/github              GitHub returns here
-//   POST /api/oauth/token                        code + verifier -> token
+//   POST /api/oauth/token                        code + verifier -> tokens;
+//                                                refresh token -> tokens
 //
 // ── REDIRECT URI VALIDATION IS THE LOAD-BEARING CHECK ──────────────────────
 //
@@ -26,7 +27,7 @@
 import {
   mintGithubState, readGithubState, mintAuthCode, redeemAuthCode, mintAccessToken,
   protectedResourceMetadata, authorizationServerMetadata, ACCESS_TOKEN_TTL_S,
-  mintClientId, readClientId,
+  mintClientId, readClientId, mintRefreshToken, redeemRefreshToken,
 } from './oauth.js'
 
 export const DEFAULT_REDIRECT_ORIGINS = [
@@ -216,31 +217,53 @@ export function createOAuthRoutes({
     } catch {
       return json({ error: 'invalid_request' }, 400)
     }
-    if (form.get('grant_type') !== 'authorization_code') {
-      return json({ error: 'unsupported_grant_type' }, 400)
-    }
+    const grantType = form.get('grant_type')
+    const clientIdParam = form.get('client_id')
 
-    const result = redeemAuthCode(form.get('code'), {
-      clientId: form.get('client_id'),
-      redirectUri: form.get('redirect_uri'),
-      codeVerifier: form.get('code_verifier'),
-    }, signingKey)
-
-    if (!result.ok) {
-      return json({ error: result.error, error_description: result.reason }, 400)
-    }
-    // The token is bound to the resource the client asked for, defaulting to
-    // this server — so it cannot be replayed at a different one.
-    return json({
+    // Both grants end the same way: a one-hour access token for the resource
+    // the human originally signed in for, plus a renewed refresh token.
+    const issue = ({ login, resource: res, authAt }) => json({
       access_token: mintAccessToken({
-        login: result.login,
-        audience: result.resource || resource,
-        clientId: form.get('client_id'),
+        login,
+        audience: res || resource,
+        clientId: clientIdParam,
       }, signingKey),
       token_type: 'Bearer',
       expires_in: ACCESS_TOKEN_TTL_S,
+      refresh_token: mintRefreshToken({
+        login, clientId: clientIdParam, resource: res || resource, authAt,
+      }, signingKey),
       scope: 'mcp',
     })
+
+    if (grantType === 'authorization_code') {
+      const result = redeemAuthCode(form.get('code'), {
+        clientId: clientIdParam,
+        redirectUri: form.get('redirect_uri'),
+        codeVerifier: form.get('code_verifier'),
+      }, signingKey)
+      if (!result.ok) {
+        return json({ error: result.error, error_description: result.reason }, 400)
+      }
+      // The token is bound to the resource the client asked for, defaulting to
+      // this server — so it cannot be replayed at a different one. The GitHub
+      // login just happened, so the renewal chain starts now.
+      return issue({ ...result, authAt: Math.floor(Date.now() / 1000) })
+    }
+
+    if (grantType === 'refresh_token') {
+      // The resource is carried by the refresh token itself, never taken from
+      // the request — a renewal cannot widen what the original sign-in got.
+      const result = redeemRefreshToken(form.get('refresh_token'), {
+        clientId: clientIdParam, allowedLogin,
+      }, signingKey)
+      if (!result.ok) {
+        return json({ error: result.error, error_description: result.reason }, 400)
+      }
+      return issue(result)
+    }
+
+    return json({ error: 'unsupported_grant_type' }, 400)
   }
 
   // ── POST /api/oauth/register (RFC 7591) ─────────────────────────────────
@@ -278,7 +301,7 @@ export function createOAuthRoutes({
       // A PUBLIC client: no secret is issued, and PKCE is what protects the
       // exchange. Saying so explicitly stops a client waiting for one.
       token_endpoint_auth_method: 'none',
-      grant_types: ['authorization_code'],
+      grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],
       client_id_issued_at: Math.floor(Date.now() / 1000),
       client_name: body?.client_name ?? null,

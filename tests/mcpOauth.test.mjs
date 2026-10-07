@@ -23,6 +23,7 @@ import {
   deriveSigningKey, sign, verify, verifyPkce, mintAuthCode, redeemAuthCode,
   mintAccessToken, verifyAccessToken, authorizationServerMetadata,
   protectedResourceMetadata, mintClientId, readClientId,
+  mintRefreshToken, redeemRefreshToken, REFRESH_TOKEN_TTL_S, REFRESH_SESSION_MAX_S,
 } from '../mcp/oauth.js'
 import { createOAuthRoutes, DEFAULT_REDIRECT_ORIGINS } from '../mcp/oauthRoutes.js'
 
@@ -170,6 +171,9 @@ test('the metadata documents say what we actually implement', () => {
   // Advertising no registration endpoint was the first cut, on the reading
   // that RFC 7591 is a SHOULD. A real client could then not START sign-in.
   assert.equal(as.registration_endpoint, `${ORIGIN}/api/oauth/register`)
+  // Without refresh_token the connector fell to "needs reconnect" an hour
+  // after every sign-in, and a scheduled routine could never get in (§0 #9).
+  assert.deepEqual(as.grant_types_supported, ['authorization_code', 'refresh_token'])
   const prm = protectedResourceMetadata(ORIGIN, `${ORIGIN}/mcp`)
   assert.deepEqual(prm.authorization_servers, [ORIGIN])
   assert.equal(prm.resource, `${ORIGIN}/mcp`,
@@ -413,4 +417,126 @@ test('the router serves both discovery documents and declines unknown paths', as
 test('the default redirect allowlist is Claude plus loopback, and nothing else', () => {
   assert.deepEqual(DEFAULT_REDIRECT_ORIGINS,
     ['https://claude.ai', 'https://claude.com', 'http://localhost', 'http://127.0.0.1'])
+})
+
+// ── refresh tokens (open-items §0 #9, owner-approved 2026-10-07) ───────────
+//
+// Like everything else here they are signed, not stored, so they cannot be
+// revoked one at a time. These tests pin the bounds that stand in for that.
+
+const nowSec = () => Math.floor(Date.now() / 1000)
+const refreshFor = (over = {}, opts) => mintRefreshToken({
+  login: LOGIN, clientId: CLIENT_ID, resource: `${ORIGIN}/mcp`, authAt: nowSec(), ...over,
+}, KEY, opts)
+
+test('the shipped lifetimes: 30-day refresh tokens, renewals capped at ~6 months', () => {
+  assert.equal(REFRESH_TOKEN_TTL_S, 30 * 24 * 3600)
+  assert.equal(REFRESH_SESSION_MAX_S, 180 * 24 * 3600)
+})
+
+test('a refresh token renews, carrying the login, the resource and the ORIGINAL sign-in time', () => {
+  const authAt = nowSec() - 1000
+  const out = redeemRefreshToken(refreshFor({ authAt }), { clientId: CLIENT_ID, allowedLogin: LOGIN }, KEY)
+  assert.deepEqual(out, { ok: true, login: LOGIN, resource: `${ORIGIN}/mcp`, authAt })
+})
+
+test('a refresh token is bound to its client', () => {
+  const out = redeemRefreshToken(refreshFor(), { clientId: 'someone-else', allowedLogin: LOGIN }, KEY)
+  assert.equal(out.ok, false)
+  assert.equal(out.error, 'invalid_grant')
+})
+
+test('the ALLOWLIST is re-checked at every renewal', () => {
+  const out = redeemRefreshToken(refreshFor({ login: 'someone-else' }), { clientId: CLIENT_ID, allowedLogin: LOGIN }, KEY)
+  assert.equal(out.ok, false, 'a refresh token minted before the allowlist changed must stop renewing')
+})
+
+test('an expired refresh token is refused', () => {
+  const t = refreshFor()
+  const later = Date.now() + (REFRESH_TOKEN_TTL_S + 1) * 1000
+  assert.equal(redeemRefreshToken(t, { clientId: CLIENT_ID, allowedLogin: LOGIN }, KEY, { now: later }).ok, false)
+})
+
+test('THE CAP: a chain of renewals cannot outlive the sign-in by more than ~6 months', () => {
+  // A token minted near the end of the session is clipped to the session's end…
+  const authAt = nowSec() - REFRESH_SESSION_MAX_S + 60
+  const near = refreshFor({ authAt })
+  const [body] = near.split('.')
+  const { exp } = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'))
+  assert.equal(exp, authAt + REFRESH_SESSION_MAX_S, 'never a fresh 30 days past the cap')
+  // …and a session already past the cap cannot renew, whatever exp claims.
+  const stale = sign({ kind: 'refresh', login: LOGIN, clientId: CLIENT_ID, resource: ORIGIN,
+    authAt: nowSec() - REFRESH_SESSION_MAX_S - 1, exp: nowSec() + 3600 }, KEY)
+  assert.equal(redeemRefreshToken(stale, { clientId: CLIENT_ID, allowedLogin: LOGIN }, KEY).ok, false)
+  const noAuthAt = sign({ kind: 'refresh', login: LOGIN, clientId: CLIENT_ID, resource: ORIGIN, exp: nowSec() + 3600 }, KEY)
+  assert.equal(redeemRefreshToken(noAuthAt, { clientId: CLIENT_ID, allowedLogin: LOGIN }, KEY).ok, false,
+    'no sign-in time means no cap can be checked, so no renewal')
+})
+
+test('the token kinds stay apart: refresh ≠ access ≠ code', () => {
+  const access = mintAccessToken({ login: LOGIN, audience: ORIGIN, clientId: CLIENT_ID }, KEY)
+  assert.equal(redeemRefreshToken(access, { clientId: CLIENT_ID, allowedLogin: LOGIN }, KEY).ok, false,
+    'an access token cannot be traded for a refresh')
+  assert.equal(redeemRefreshToken(codeFor(), { clientId: CLIENT_ID, allowedLogin: LOGIN }, KEY).ok, false)
+  assert.equal(verifyAccessToken(refreshFor(), { audience: ORIGIN, allowedLogin: LOGIN }, KEY), null,
+    'a refresh token is never a bearer')
+  assert.equal(redeem(refreshFor()).ok, false, 'nor an authorization code')
+})
+
+test('a forged refresh token (wrong key) is refused', () => {
+  const forged = mintRefreshToken({ login: LOGIN, clientId: CLIENT_ID, resource: ORIGIN, authAt: nowSec() },
+    deriveSigningKey('someone-elses-secret'))
+  assert.equal(redeemRefreshToken(forged, { clientId: CLIENT_ID, allowedLogin: LOGIN }, KEY).ok, false)
+})
+
+const tokenPost = (handler, params) => handler(new Request(`${ORIGIN}/api/oauth/token`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  body: new URLSearchParams(params).toString(),
+}))
+
+test('THE ENDPOINT: a code returns a refresh token, and the refresh token renews into a working bearer', async () => {
+  const handler = routes()
+  const first = await (await tokenPost(handler, {
+    grant_type: 'authorization_code', code: codeFor({ resource: `${ORIGIN}/mcp` }),
+    client_id: CLIENT_ID, redirect_uri: 'https://claude.ai/cb', code_verifier: VERIFIER,
+  })).json()
+  assert.ok(first.refresh_token, 'without it the connector signs out after an hour')
+
+  const res = await tokenPost(handler, { grant_type: 'refresh_token', refresh_token: first.refresh_token, client_id: CLIENT_ID })
+  assert.equal(res.status, 200)
+  const renewed = await res.json()
+  assert.ok(renewed.expires_in <= 3600, 'the ACCESS token stays short-lived')
+  assert.ok(renewed.refresh_token, 're-issued on every use, so weekly use keeps it alive')
+  const info = verifyAccessToken(renewed.access_token, { audience: `${ORIGIN}/mcp`, allowedLogin: LOGIN }, KEY)
+  assert.equal(info?.extra.login, LOGIN)
+})
+
+test('THE ENDPOINT: a renewal cannot change the audience the sign-in was for', async () => {
+  const handler = routes()
+  const t = refreshFor({ resource: `${ORIGIN}/mcp` })
+  const renewed = await (await tokenPost(handler, {
+    grant_type: 'refresh_token', refresh_token: t, client_id: CLIENT_ID, resource: 'https://evil.example',
+  })).json()
+  const [body] = renewed.access_token.split('.')
+  assert.equal(JSON.parse(Buffer.from(body, 'base64url').toString('utf8')).aud, `${ORIGIN}/mcp`)
+})
+
+test('THE ENDPOINT: a refresh token for a de-listed login, another client, or garbage is invalid_grant', async () => {
+  const handler = routes()
+  for (const params of [
+    { refresh_token: refreshFor({ login: 'someone-else' }), client_id: CLIENT_ID },
+    { refresh_token: refreshFor(), client_id: 'someone-else' },
+    { refresh_token: 'not-a-token', client_id: CLIENT_ID },
+    { client_id: CLIENT_ID },
+  ]) {
+    const res = await tokenPost(handler, { grant_type: 'refresh_token', ...params })
+    assert.equal(res.status, 400)
+    assert.equal((await res.json()).error, 'invalid_grant')
+  }
+})
+
+test('THE ENDPOINT: any other grant is still unsupported', async () => {
+  const res = await tokenPost(routes(), { grant_type: 'client_credentials', client_id: CLIENT_ID })
+  assert.equal((await res.json()).error, 'unsupported_grant_type')
 })
