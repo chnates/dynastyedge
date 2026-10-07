@@ -261,7 +261,8 @@ GitHub Actions** and served as a static file — keeping the app backend-free.
   runs/day** (3.3–4.4h mean gap, 6.0h worst observed — measured 2026-09-21 and
   09-25), not 48, and does not make up skipped runs. **Anything that matters to
   freshness must be measured from run timestamps, never read off the cron**;
-  treat cadence as a range, not a constant. Tightening the cron is not a fix.
+  treat cadence as a range, not a constant, and never re-derive a number from a
+  single window. Tightening the cron is not a fix.
 - **Sources, in priority order** (each probed before adoption —
   `docs/analysis/news-sources-2026-09.md`): ESPN news API (the only one shipping
   `athleteIds`), **RotoWire's news page**, RotoWire RSS, Yardbarker, PFF, The
@@ -623,6 +624,8 @@ expose the same tools, **pinned by name in a test** — a tool added to
   failure is intermittent (warm passes, cold fails). The transport runs
   **stateless** (`sessionIdGenerator: undefined`, `enableJsonResponse: true`),
   a fresh server per request; a test asserts no `mcp-session-id` is minted.
+  **Anything remembered between requests must live where a second instance can
+  see it** (the same reasoning as `store.js`).
 - **The limiter is hoisted to module scope** — a per-request limiter would hand
   every concurrent request the full budget. `createServer` takes `fetcher` and
   `store` so a warm instance shares one of each.
@@ -1875,6 +1878,8 @@ there.
   - **No raw-dollar field leaves `buildFaabStats`** (`dollars`, `avgBid`,
     `valuePer100` are gone; a test pins their absence and that no `budgetPct`
     returns).
+  - The **`budgetsCommitted >= 0.2`** coaching gate means "committed ≥ 20% of a
+    budget" (on raw dollars it tripped at 2% of 2026's $1000).
   - A season with no `waiver_budget` falls back to **100** (matching
     `leagueState.js`). UI: **"Budgets Used · 1.7×"**, **"Value / Full Budget"**.
 - **Rookie draft grades:** slot vs current-value rank within the class (Δ ≥ +5
@@ -3510,7 +3515,8 @@ Two things the roll must not break, both test-pinned:
    key to that wipe list if it is tied to *which team you are*.**
 1. **Shared components:** `ErrorState`, `SectionHeader` and `SectionContents`
    live in `src/components/shared/` — **import them, never redefine them.**
-   Within-section navigation is always `SectionContents`; primary navigation is
+   Within-section navigation is always `SectionContents` (pass it a section key);
+   primary navigation is
    `TabBar`. **Never add a destination to a component — add it to
    `src/navigation.js`**, which the tab bar, rails, Index and search all read.
 1. **Design System library:** all new UI comes from `src/components/ui`
