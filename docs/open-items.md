@@ -57,7 +57,7 @@ login, a phone or a decision that no sandbox can supply.
 |---|---|---|---|---|
 | 7 | **Buy-low timing research** (`dynastyedge-research-frontier` Item 4) — **FIRST PASS DONE 2026-10-07.** For players worth 1,000+ (what Buy-Low/Sell-High show), dips beat matched non-movers by **+2.4%** over 30 days (CI −0.1 … +4.9) and risers trailed by **−2.3%** (CI −4.8 … +0.3): not falling knives, no reliable bounce, no age effect. **No app change** on one window. Write-up `docs/analysis/buylow-timing-2026-10.md`; the ±50 got one home first (`src/utils/marketTrend.js`) | Me | 1 | It decides whether the buy-low/sell-high advice should be trusted for deadline trading |
 | 7b | **Re-run the buy-low timing study** — `node scripts/dev/buylow-timing-backtest.mjs`. Doubles the +30 sample, adds regular-season events, and makes **+60 days** measurable for the first time. **Pre-register the decision rule first** (memo §7): a change to the app needs the same sign, clear of zero, in both windows. Also worth an independent refutation pass before anything rests on it | Me | <1 | **Trigger: on or after 2026-11-06** (the merged series reaches 120 days). Still ahead of the Week 13 deadline |
-| 7c | **CODE-REVIEW-1: the "proper over convenient" review** (owner-asked 2026-10-07) — spec + kickoff prompt in §2 | Me | 1–2 | **Next in line.** The owner's stated worry, findings may touch the trade advice the deadline rests on, and every later build inherits the cleanup. Before #8 |
+| 7c | **CODE-REVIEW-1: the "proper over convenient" review** (owner-asked 2026-10-07) — spec + kickoff prompt in §2. **Review written 2026-10-07** (`docs/analysis/code-review-2026-10.md`, 16 ranked findings, no code changed); **waiting on the owner's pick of which to fix and in what order** | Me | 1–2 | **Next in line.** The owner's stated worry, findings may touch the trade advice the deadline rests on, and every later build inherits the cleanup. Before #8 |
 | 8 | **Proactive delivery feasibility note** (frontier Item 5): a scheduled Claude routine calling the MCP server, giving a weekly waiver brief plus a deadline-week brief | Me | <1 | The frontier memo is dated 2026-07-05 and **predates the MCP server**, which changes its answer: delivery no longer needs a backend in the app |
 | 9 | **Build the scheduled brief**, if #8 says yes | Me | 1 | Every waiver run before it exists is missed |
 | 10 | **Briefing decision-quality** (frontier Item 1): start recording what The Edge surfaced each day, so it can be scored against the moves that paid | Me | 1 | A week not recorded can never be scored |
@@ -142,7 +142,7 @@ the repo's gates):
 
 ## 1. Active
 
-Nothing is active. §0 is the queue; the next item in order is #7c, CODE-REVIEW-1 (#7b waits on its 2026-11-06 trigger).
+**CODE-REVIEW-1 (#7c)** — review written (`docs/analysis/code-review-2026-10.md`); each accepted finding becomes its own small PR once the owner picks the order. #7b waits on its 2026-11-06 trigger.
 
 ---
 
