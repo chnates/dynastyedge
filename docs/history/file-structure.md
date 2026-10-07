@@ -348,6 +348,10 @@ OPEN-3, the FAAB bid recommender (2026-10-07), moved both by the same 20
 imports only `src/utils` and the shared fixture, and the three new
 `mcpRecommendFreeAgents` tests reach neither React nor `zod`.
 
+The one player-DB trim (2026-10-07, CODE-REVIEW-1 #9) moved both by the same 2
+(893/850 → **895/852**), the gap holding at 43: both cases sit in
+`mcpSnapshot.test.mjs`, which loads without `node_modules`.
+
 The FantasyCalc one-reader fix (2026-10-07, CODE-REVIEW-1 #6) moved both by
 the same 4 (889/846 → **893/850**), the gap holding at 43: the new cases sit in
 `fantasyCalcValues.test.mjs`, which imports only pure utils and scripts.

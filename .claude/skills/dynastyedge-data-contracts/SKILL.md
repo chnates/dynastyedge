@@ -173,10 +173,11 @@ League ID: `1313933520715907072` (constant `LEAGUE_ID`).
   player and discards the rest (verified in `usePlayerDB.js`):
   `name` (joined `first_name` + `last_name`), `position`, `team`, `age`,
   `years_exp`, `injury_status`, `injury_body_part`, `injury_notes`, `espn_id`,
-  `depth_chart_position`, `depth_chart_order`, `news_updated`. The **MCP
-  server's** trim (`mcp/snapshot.js`) is a smaller mirror that also keeps
-  **`injury_body_part`** and **`injury_notes`** — the two fields that turn a
-  bare "Doubtful" into "Doubtful · Knee - Meniscus · Surgery". **What a status
+  `depth_chart_position`, `depth_chart_order`, `news_updated`. **The list is ONE
+  function, `src/utils/playerDB.js`'s `trimPlayerDB`**, used by the app and the
+  MCP server alike since 2026-10-07 (the server's had been a drifting mirror).
+  `injury_body_part` / `injury_notes` are what turn a bare "Doubtful" into
+  "Doubtful · Knee - Meniscus · Surgery". **What a status
   MEANS is `src/utils/injuryStatus.js`** (2026-10-07), never a local list. **If you need another field, add it
   to this trim list — consumers never see the raw response.**
 - **`/players/nfl/{playerId}` is no longer called** (2026-10-07).
