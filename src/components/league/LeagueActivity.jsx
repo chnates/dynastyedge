@@ -4,6 +4,7 @@ import { useTransactions } from '../../hooks/useTransactions'
 import { usePlayerDB } from '../../hooks/usePlayerDB'
 import { getTeamName } from '../../hooks/useLeague'
 import { findPickValue, buildDraftPickIndex, buildGenericRoundValues } from '../../utils/pickCapital'
+import { hindsightGapIsMeaningful } from '../../utils/fairBand'
 import { useSleeperDraft } from '../../hooks/useSleeperDraft'
 import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
@@ -75,11 +76,12 @@ function TradeCard({ tx, teamName, resolveAsset, resolvePick, onSelectPlayer }) 
     return { rosterId, assets, total }
   }).filter(s => s.assets.length > 0)
 
-  // Color the larger haul green when the gap is meaningful (>5%)
+  // Color the larger haul green when the gap is meaningful — the scouting
+  // ledger's own win/loss rule (utils/fairBand.js), so the two screens that
+  // show one trade can never disagree about who came out ahead.
   const totals = sides.map(s => s.total).filter(t => t > 0)
   const maxTotal = Math.max(0, ...totals)
-  const minTotal = Math.min(...(totals.length ? totals : [0]))
-  const meaningfulGap = totals.length > 1 && maxTotal > 0 && (maxTotal - minTotal) / maxTotal > 0.05
+  const meaningfulGap = hindsightGapIsMeaningful(totals)
 
   return (
     <div className="flex flex-col gap-2">

@@ -41,3 +41,36 @@ export function buildFairBand(giveTotal, getTotal) {
     axisHigh: Math.round(Math.max(high, giveTotal) * 1.1),
   }
 }
+
+// ── The OTHER "even": a completed trade, judged in hindsight ─────────────────
+//
+// The manager-scouting ledger (W-L-E per manager) and League › Activity's
+// "bigger haul" highlight ask a different question from the Analyzer: not "is
+// what I give within 5% of what I get?" (one seat, the band above) but "did
+// either side come out clearly ahead?" — and the answer must be the SAME from
+// both seats, or one manager's loss could be the other's "even".
+//
+// So the gap is measured against the LARGER side, which is symmetric by
+// construction. The owner chose to keep the two rules separate on 2026-10-07
+// (docs/analysis/code-review-2026-10.md, decision on #5): the fair band
+// applied to both seats can grade one side a loss and the other even, which
+// would break the ledger. This is the one home for the hindsight rule;
+// tests/fairBand.test.mjs fails if a copy reappears.
+export const HINDSIGHT_EDGE_PCT = 0.05
+
+// 'win' | 'loss' | 'even' for the side that got `gotValue` and gave `gaveValue`.
+export function hindsightResult(gotValue, gaveValue) {
+  const size = Math.max(gotValue, gaveValue)
+  if (!(size > 0)) return 'even'
+  const net = gotValue - gaveValue
+  return Math.abs(net) / size > HINDSIGHT_EDGE_PCT ? (net > 0 ? 'win' : 'loss') : 'even'
+}
+
+// Is the spread between the sides' totals big enough to call one the bigger
+// haul? Same rule, any number of sides. Zero-value sides are ignored.
+export function hindsightGapIsMeaningful(totals) {
+  const t = (totals ?? []).filter(v => v > 0)
+  if (t.length < 2) return false
+  const max = Math.max(...t)
+  return (max - Math.min(...t)) / max > HINDSIGHT_EDGE_PCT
+}

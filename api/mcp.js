@@ -40360,6 +40360,38 @@ var init_mcp = __esm({
   }
 });
 
+// src/utils/fairBand.js
+function buildFairBand(giveTotal, getTotal) {
+  if (!getTotal && !giveTotal) return null;
+  const low = Math.round(getTotal * (1 - FAIR_BAND_PCT));
+  const high = Math.round(getTotal * (1 + FAIR_BAND_PCT));
+  return {
+    low,
+    high,
+    target: getTotal,
+    current: giveTotal,
+    inside: giveTotal >= low && giveTotal <= high,
+    // Signed distance to the near edge — what closing it actually costs.
+    gapToBand: giveTotal < low ? low - giveTotal : giveTotal > high ? giveTotal - high : 0,
+    // Rendering bounds, padded so the band never sits flush against an end.
+    axisLow: Math.round(Math.min(low, giveTotal) * 0.9),
+    axisHigh: Math.round(Math.max(high, giveTotal) * 1.1)
+  };
+}
+function hindsightResult(gotValue, gaveValue) {
+  const size = Math.max(gotValue, gaveValue);
+  if (!(size > 0)) return "even";
+  const net = gotValue - gaveValue;
+  return Math.abs(net) / size > HINDSIGHT_EDGE_PCT ? net > 0 ? "win" : "loss" : "even";
+}
+var FAIR_BAND_PCT, HINDSIGHT_EDGE_PCT;
+var init_fairBand = __esm({
+  "src/utils/fairBand.js"() {
+    FAIR_BAND_PCT = 0.05;
+    HINDSIGHT_EDGE_PCT = 0.05;
+  }
+});
+
 // src/utils/managerAnalysis.js
 function faabBudgetOf(budget) {
   return Number.isFinite(budget) && budget > 0 ? budget : DEFAULT_FAAB_BUDGET;
@@ -40523,8 +40555,7 @@ function buildTradeLedgers(seasons, resolvers) {
         const gotValue = got.reduce((sum, a) => sum + a.value, 0);
         const gaveValue = gave.reduce((sum, a) => sum + a.value, 0);
         const net = gotValue - gaveValue;
-        const size = Math.max(gotValue, gaveValue);
-        const result = size > 0 && Math.abs(net) / size > TRADE_EDGE ? net > 0 ? "win" : "loss" : "even";
+        const result = hindsightResult(gotValue, gaveValue);
         if (!byOwner[ownerId]) byOwner[ownerId] = [];
         byOwner[ownerId].push({
           txId: tx.transaction_id,
@@ -40841,13 +40872,13 @@ function buildManagerProfiles({ history, currentLeague, playerMap, pickEntries, 
     // which seasons' trades were read (null = all)
   };
 }
-var ROUND_LABELS, TRADE_EDGE, STARTUP_ROUNDS, DRAFT_HIT_VALUE, STEAL_DELTA, FAAB_COACHING_MIN_BUDGETS, DEFAULT_FAAB_BUDGET, EMPTY_FAAB;
+var ROUND_LABELS, STARTUP_ROUNDS, DRAFT_HIT_VALUE, STEAL_DELTA, FAAB_COACHING_MIN_BUDGETS, DEFAULT_FAAB_BUDGET, EMPTY_FAAB;
 var init_managerAnalysis = __esm({
   "src/utils/managerAnalysis.js"() {
     init_pickCapital();
     init_leagueHistory();
+    init_fairBand();
     ROUND_LABELS = ["", "1st", "2nd", "3rd", "4th", "5th"];
-    TRADE_EDGE = 0.05;
     STARTUP_ROUNDS = 6;
     DRAFT_HIT_VALUE = 1e3;
     STEAL_DELTA = 5;
@@ -41913,31 +41944,6 @@ var init_dynastyTrajectory = __esm({
     TEAM_DECLINE_CUT = -0.01;
     TEAM_ASCEND_CUT = 0.05;
     clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-  }
-});
-
-// src/utils/fairBand.js
-function buildFairBand(giveTotal, getTotal) {
-  if (!getTotal && !giveTotal) return null;
-  const low = Math.round(getTotal * (1 - FAIR_BAND_PCT));
-  const high = Math.round(getTotal * (1 + FAIR_BAND_PCT));
-  return {
-    low,
-    high,
-    target: getTotal,
-    current: giveTotal,
-    inside: giveTotal >= low && giveTotal <= high,
-    // Signed distance to the near edge — what closing it actually costs.
-    gapToBand: giveTotal < low ? low - giveTotal : giveTotal > high ? giveTotal - high : 0,
-    // Rendering bounds, padded so the band never sits flush against an end.
-    axisLow: Math.round(Math.min(low, giveTotal) * 0.9),
-    axisHigh: Math.round(Math.max(high, giveTotal) * 1.1)
-  };
-}
-var FAIR_BAND_PCT;
-var init_fairBand = __esm({
-  "src/utils/fairBand.js"() {
-    FAIR_BAND_PCT = 0.05;
   }
 });
 
