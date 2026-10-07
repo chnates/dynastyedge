@@ -3338,7 +3338,7 @@ Repo → Settings → Pages → Source: **GitHub Actions**. Set once.
 
 ## Constants File
 
-`src/constants.js` — never hardcode these values anywhere else:
+`src/constants.js` — **never hardcode these values anywhere else:**
 
 ```js
 export const LEAGUE_ID = '1313933520715907072'
@@ -3381,50 +3381,30 @@ export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 export const ROSTER_SLOTS = [ /* QB · RB×2 · WR×2 · TE · FLEX×3 · SFLX · DEF */ ]
 ```
 
-(The four feed URLs are elided above for width — they are full
-`raw.githubusercontent.com/chnates/…` URLs in the real file.)
+(The four feed URLs are full `raw.githubusercontent.com/chnates/…` URLs in the
+real file.)
 
-**`PICK_YEARS` is a SEED, not the source of truth.** The live three-season pick
-window is derived per load by **`utils/seasonWindow.js`** and reaches the app as
+**`PICK_YEARS` is a SEED, not the source of truth.** The live three-season
+window comes from **`utils/seasonWindow.js`** and reaches the app as
 **`pickYears` on `LeagueContext`**; every pick surface reads that, and the
-constant is only what renders in the moment before `/state/nfl` resolves.
-
+constant only renders before `/state/nfl` resolves.
 `resolvePickYears(nflState, drafts, seed)` asks one question — **has this
 season's rookie draft been held?** The window starts at the current NFL season
 until that season's non-auction draft reports `status: "complete"`, then at the
-next one, plus the two seasons after it. Both inputs are already in the
-`useSleeper` payload, so this costs **no extra request**. It degrades to the
-seed when NFL state hasn't landed (never an empty window — every pick surface
-is built from it).
+next one, plus the two after. **No extra request; with no NFL state it degrades
+to the seed — never an empty window.** Why it stopped being hand-rolled:
+**FantasyCalc retires a season's pick entries the moment its draft completes**,
+so a stale window manufactures picks priced at 0 and hides the newest season.
+(History: `docs/history/constants.md`.)
 
-**Why it stopped being a hand-rolled constant (2026-09-07).** The moment a
-rookie draft completes, **FantasyCalc retires that season's pick entries** —
-verified live the day this shipped: three days after the 2026 draft, all 24 of
-its pick entries were 2027/2028/2029. So a stale window is not cosmetic. It
-generated **40 spent picks across the league, every one priced at 0**, which
-cluttered the Trade Analyzer's add sheet, roster pick badges and TeamCard grids;
-and it left the newly tradable **2029** picks — four per team, priced by
-FantasyCalc at 1,933 for a 1st — invisible to every surface in the app.
-Measured on the live league at the fix: 120 picks, **0 priced at 0**, against
-40 of 120 before.
-
-Two things the roll must not break, both pinned by tests:
-
-- **Year weights follow the WINDOW, not the calendar.** Feature 2's pick-capital
-  score weights the nearest draft 3× / next 2× / third 1×. Keyed by literal year
-  (`{ '2026': 3, … }`, as it was) the newly surfaced third season silently
-  scores **0** the first time the window rolls.
-- **The Draft Tracker keeps its recap.** `selectTrackedDraft` follows the
-  upcoming draft whenever Sleeper has one — its whole purpose on draft day —
-  and otherwise falls back to the **most recent completed** draft, so its recap
-  stays on screen through the ~10 months before the league creates next year's
-  board instead of collapsing to an empty "no draft yet" placeholder.
-  `useSleeperDraft` therefore exports `FALLBACK_DRAFT_SEASON` (a seed), not the
-  old `DRAFT_SEASON` constant, and the Tracker reads the season off the draft it
-  is actually showing. **Trade › Pick Trades reads `pickYears[0]` instead** — it
-  trades the *next* draft's picks — and refuses to borrow a draft board from a
-  different season, so last draft's slots can never be stamped onto next
-  draft's picks.
+Two things the roll must not break, both test-pinned:
+- **Year weights follow the WINDOW, not the calendar** (nearest draft 3×, next
+  2×, third 1×). Keyed by literal year, a newly surfaced season scores 0.
+- **The Draft Tracker keeps its recap** — `selectTrackedDraft` follows the
+  upcoming draft whenever Sleeper has one, else the most recent completed one.
+  `useSleeperDraft` exports `FALLBACK_DRAFT_SEASON` (a seed), and the Tracker
+  reads its season off the draft it shows. **Trade › Pick Trades reads
+  `pickYears[0]`** and refuses to borrow another season's draft board.
 
 -----
 
