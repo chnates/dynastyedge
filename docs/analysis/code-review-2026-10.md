@@ -1,7 +1,8 @@
 # CODE-REVIEW-1 — where the code took the convenient path (2026-10-07)
 
-**Status:** review only. No code changed. Each finding below waits for the
-owner's OK before it becomes its own small PR (one home per rule, plus a test
+**Status:** review only — no code changed here. The owner answered the three
+open questions and set the build order on 2026-10-07 (see **Owner decisions**);
+each finding becomes its own small PR (one home per rule, plus a test
 that fails if a copy comes back — the `marketTrend.js` pattern).
 
 **Scope:** `src/`, `mcp/`, `scripts/`, `.github/workflows/`, against the five
@@ -359,6 +360,18 @@ September) so it never goes stale.
   example) — after #6 they can import `src/constants.js` too.
 
 ---
+
+## Owner decisions (2026-10-07)
+
+| # | Question | Decision | Why |
+|---|---|---|---|
+| 1 | Which injury tags count as "out", for trades too? | **One list everywhere.** Out = Out, IR, PUP, Sus (and the legacy Suspended/SUSP/NFI spellings), NA, **DNR**, **COV**. Questionable = Questionable, **Doubtful**. An "out" player keeps today's trade treatment (warning + Accept → Counter); Doubtful gets a caution note only | A Doubtful tag is a one-week question in a multi-year trade, and the Optimizer's handling of Doubtful is the one that has been right on game days. DNR / COV mean the player is not with the team |
+| 5 | Should the scouting record's "even" be the Analyzer's fair band? | **No — two rules, on purpose.** The ledger and League › Activity share one home; the Analyzer keeps `fairBand` | The fair band is one-sided (measured against what *you* get). Applied to both seats of one trade it can call one side a loss and the other even, which breaks the W-L-E ledger. The ledger's rule is symmetric by construction |
+| 11 | No `waiver_budget` from Sleeper: show `—` or assume $100? | **Show `—`**, as the bid recommender already does. Past seasons in the scouting record keep their $100 fallback | $100 is not this league's budget any more ($1000); assuming it would show a confident wrong remainder. `—` is the app's "unknown" |
+
+**Build order (owner-approved):** #1 injury status → #2 buyer/seller thresholds →
+#4 Trajectory cut-offs → #3 manager history; the rest after, by size. Each is its
+own PR with a test that fails if a copy returns.
 
 ## Re-judged and kept (with the reason that still holds)
 
