@@ -431,7 +431,16 @@ detection.
 
 ## Item 5 — Proactive delivery: how does the right move reach the owner without a backend?
 
-**Status: open (feasibility memo, not a build).** The north star says
+**Status: MEMO WRITTEN 2026-10-07 — awaiting the owner's decision.**
+`docs/analysis/proactive-delivery-2026-10.md` adds option **E** (a scheduled
+Claude routine calling the MCP connector, with Claude-app push) and recommends
+it, blocked on one server gap: the MCP server issues no refresh tokens, so an
+unattended run finds the connector signed out. A dry-run routine with no
+connector still reported SUCCEEDED (failures are silent unless the prompt
+reports them). D stays speculative; B is the fallback. The table below is the
+2026-07-05 original.
+
+**Original status: open (feasibility memo, not a build).** The north star says
 *proactively surfaces* — today The Edge is pull-only: intelligence exists
 only when the owner opens the app. CLAUDE.md already rules that push
 notifications for trade offers are blocked (read-only Sleeper API + no
