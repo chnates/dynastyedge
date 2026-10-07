@@ -231,9 +231,21 @@ and there are no TODO/FIXME markers. The weight is elsewhere.
   PR workflow. `git cherry` cannot confirm their content landed, because main's
   history was rewritten since (commit-count drift grows with branch age), so
   patch ids no longer match. They are 3–4 months behind two full redesigns.
-- **Proposal:** delete all 112. For the ~40 PR-less ones, push an
-  `archive/<name>` tag first only if the owner wants them recoverable; tags
-  cost nothing but clutter the tag list.
+- **DECIDED 2026-10-07 (owner delegated the call): delete all 112, and tag
+  every branch `main` does not contain as `archive/<name>` first** — 68
+  of them, not just the PR-less 49. A closed PR keeps the commits it had *when
+  it closed*, so a branch that gained commits afterwards would otherwise lose
+  them. A tag costs nothing and is the only thing that keeps an unmerged tip
+  recoverable.
+- **How: `.github/workflows/archive-branches.yml`, manual dispatch, `dry_run`
+  on by default.** A session cannot do this itself — the session git proxy
+  only accepts pushes to the session's own branch (a tag push returned HTTP
+  403, and nothing landed). The workflow skips any branch heading an open PR,
+  and it refuses to delete a branch whose tag did not verifiably land at the
+  same commit. Local dry run against origin, 2026-10-07: **deleted=112
+  tagged_first=68 kept=1** (this PR's own branch). **To run:** after merge,
+  dispatch it once with the default (read the plan in the log), then once with
+  `dry_run` unticked. Afterwards the workflow file can itself be archived.
 - **Never touch** `news-data`, `values-history` or `rookie-intel`: they are
   workflow-owned data branches.
 

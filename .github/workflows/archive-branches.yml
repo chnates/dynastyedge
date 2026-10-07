@@ -1,0 +1,77 @@
+name: Archive stale branches
+
+# CLEANUP-1 §A (docs/open-items.md). Manual only — never scheduled.
+#
+# Deletes every `claude/*` branch on origin. A branch whose tip `main` does NOT
+# contain is first tagged `archive/<branch>` at its exact tip, and the delete
+# is skipped unless that tag verifiably points at the same commit — so no
+# commit becomes unreachable. Branches heading an OPEN pull request are left
+# alone, as are the data branches (news-data, values-history, rookie-intel),
+# which this never touches because they are not under `claude/`.
+#
+# It is a workflow rather than a session push because agent sessions can only
+# push their own branch; GITHUB_TOKEN here can manage refs.
+#
+# dry_run defaults to TRUE: the first dispatch only prints the plan.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Only print what would be tagged and deleted'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: archive-branches
+
+jobs:
+  archive:
+    # Same guard as the data pipelines: only the default branch's copy of this
+    # file may act on the repository's refs.
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Tag unmerged branches, then delete
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          git fetch --quiet origin '+refs/heads/main:refs/remotes/origin/main' '+refs/heads/claude/*:refs/remotes/origin/claude/*' '+refs/tags/*:refs/tags/*'
+          open_heads=$(gh pr list --state open --limit 200 --json headRefName --jq '.[].headRefName')
+          deleted=0; tagged=0; kept=0
+          for ref in $(git for-each-ref --format='%(refname:strip=4)' refs/remotes/origin/claude/); do
+            branch="claude/$ref"
+            sha=$(git rev-parse "refs/remotes/origin/$branch")
+            if grep -qxF "$branch" <<< "$open_heads"; then
+              echo "KEEP   $branch (open PR)"; kept=$((kept+1)); continue
+            fi
+            if git merge-base --is-ancestor "$sha" origin/main; then
+              echo "DELETE $branch (in main)"
+            else
+              tag="archive/$ref"
+              echo "TAG    $tag -> ${sha:0:7}, then DELETE $branch"
+              if [ "$DRY_RUN" != "true" ]; then
+                git tag -f "$tag" "$sha"
+                git push --quiet origin "refs/tags/$tag"
+                remote=$(git ls-remote origin "refs/tags/$tag" | cut -f1)
+                if [ "$remote" != "$sha" ]; then
+                  echo "::error::tag $tag did not land at $sha — keeping $branch"; kept=$((kept+1)); continue
+                fi
+              fi
+              tagged=$((tagged+1))
+            fi
+            if [ "$DRY_RUN" != "true" ]; then
+              git push --quiet origin --delete "$branch"
+            fi
+            deleted=$((deleted+1))
+          done
+          echo "SUMMARY dry_run=$DRY_RUN deleted=$deleted tagged_first=$tagged kept=$kept"
