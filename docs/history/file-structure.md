@@ -348,6 +348,10 @@ OPEN-3, the FAAB bid recommender (2026-10-07), moved both by the same 20
 imports only `src/utils` and the shared fixture, and the three new
 `mcpRecommendFreeAgents` tests reach neither React nor `zod`.
 
+The storage-key registry (2026-10-07, CODE-REVIEW-1 #12) moved both by the
+same 4 (883/840 → **887/844**), the gap holding at 43: `storageKeys.test.mjs`
+imports only the plain `src/storageKeys.js`.
+
 The bye-reader one-home fix (2026-10-07, CODE-REVIEW-1 #8) moved both by the
 same 2 (881/838 → **883/840**), the gap holding at 43: both cases sit in
 `projections.test.mjs`.

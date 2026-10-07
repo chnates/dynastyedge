@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
+import { STORAGE_KEYS } from '../storageKeys'
 
-const THEME_KEY = 'dynastyedge_theme'
+const THEME_KEY = STORAGE_KEYS.theme
 
 // The iOS status-bar color comes from the STATIC prefers-color-scheme
 // theme-color metas in index.html (honored + updated live by the browser),

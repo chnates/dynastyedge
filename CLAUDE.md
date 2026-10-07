@@ -3190,6 +3190,7 @@ dynastyedge/
 │   │   └── LeagueContext.jsx
 │   ├── navigation.js            ← THE navigation map — one tree read by TabBar, SectionContents, IndexView and global search
 │   ├── constants.js             ← league ID, API base URLs, feed URLs, PICK_YEARS, ROSTER_SLOTS
+│   ├── storageKeys.js           ← THE storage keys (every dynastyedge_* name) + the roster-scoped wipe lists
 │   ├── App.jsx
 │   └── main.jsx
 ├── docs/                        ← durable analysis + design records (not shipped)
@@ -3272,8 +3273,8 @@ because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
 **Current counts (verified 2026-10-07 by moving `node_modules` aside):** with
-dependencies **`# tests 883 / # pass 883`**; without them **`# tests 840 / #
-pass 835 / # fail 5`**. **If the test count isn't 883, run `npm ci` before
+dependencies **`# tests 887 / # pass 887`**; without them **`# tests 844 / #
+pass 839 / # fail 5`**. **If the test count isn't 887, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React
@@ -3583,7 +3584,9 @@ Two things the roll must not break, both test-pinned:
 1. **Theme toggle:** `localStorage` `dynastyedge_theme`, default `dark`, theme
    class on `<html>`. **All theme logic lives in `useTheme` — never duplicate
    it.**
-1. **localStorage / sessionStorage keys** (all prefixed `dynastyedge_`):
+1. **localStorage / sessionStorage keys** (all prefixed `dynastyedge_`) — **every
+   one is declared in `src/storageKeys.js` and imported from there**, never
+   written as a string elsewhere (`tests/storageKeys.test.mjs` scans `src/`):
    `dynastyedge_identity_v1` (signed-in roster — Feature 18) ·
    `dynastyedge_theme` · `dynastyedge_watchlist_v1` ·
    `dynastyedge_action_dismissals` · `dynastyedge_edge_last_visit` ·
@@ -3596,7 +3599,8 @@ Two things the roll must not break, both test-pinned:
    **Roster-scoped keys** — `dynastyedge_action_dismissals`,
    `dynastyedge_trade_draft`, `dynastyedge_targets_team` — are wiped by
    `useIdentity` on any identity change; league-wide caches are not. **Add a new
-   key to that wipe list if it is tied to *which team you are*.**
+   key to that wipe list if it is tied to *which team you are*.** The wipe list
+   (`ROSTER_SCOPED_LOCAL` / `_SESSION`) lives beside the keys in `storageKeys.js`.
 1. **Shared components:** `ErrorState`, `SectionHeader` and `SectionContents`
    live in `src/components/shared/` — **import them, never redefine them.**
    Within-section navigation is always `SectionContents` (pass it a section key);

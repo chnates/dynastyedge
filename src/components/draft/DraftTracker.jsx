@@ -12,10 +12,11 @@ import ErrorState from '../shared/ErrorState'
 import PlayerProfileDrawer from '../shared/PlayerProfileDrawer'
 import { POS_CHIP_ACTIVE, POS_TEXT } from '../../utils/positionColors'
 import { rankClass } from '../../utils/rankColors'
+import { draftTrackerKey } from '../../storageKeys'
 
 // Keyed by season: a manual log belongs to the draft it was kept for, and must
 // not leak into the next one once the window rolls forward.
-const manualStorageKey = season => `dynastyedge_draft_tracker_${season}`
+const manualStorageKey = draftTrackerKey
 const POS_FILTERS = ['ALL', 'QB', 'RB', 'WR', 'TE']
 const FALLBACK_ROUNDS = 4
 const FALLBACK_TEAMS = 10

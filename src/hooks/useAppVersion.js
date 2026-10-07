@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { fetchJSON } from '../utils/fetchJSON'
 import { buildReloadUrl } from '../utils/appVersion'
+import { STORAGE_KEYS } from '../storageKeys'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // "Am I running the build the server has?"
@@ -27,7 +28,7 @@ import { buildReloadUrl } from '../utils/appVersion'
 // Marks which build id we already auto-reloaded toward, so a reload that fails
 // to land on the new build can never loop. Session-scoped: a genuinely new
 // launch gets a fresh attempt.
-const RELOAD_KEY = 'dynastyedge_version_reload'
+const RELOAD_KEY = STORAGE_KEYS.versionReload
 
 const CHECK_TIMEOUT_MS = 8000
 

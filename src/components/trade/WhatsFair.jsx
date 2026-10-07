@@ -13,6 +13,7 @@ import {
   Loading, TrendArrow, WinWindowBadge, cn,
 } from '../ui'
 import { POS_BG, POS_CHIP_ACTIVE } from '../../utils/positionColors'
+import { STORAGE_KEYS } from '../../storageKeys'
 
 const POSITION_FILTERS = ['All', 'QB', 'RB', 'WR', 'TE']
 
@@ -51,7 +52,7 @@ const MY_APPEAL_LINE = {
 // scouted team — same contract as the League tab's sort/position filters.
 // Roster-scoped: useIdentity wipes it on any identity change (the valid
 // opponent set depends on which team you are).
-const TEAM_KEY = 'dynastyedge_targets_team'
+const TEAM_KEY = STORAGE_KEYS.targetsTeam
 
 function loadTeamFilter() {
   try {

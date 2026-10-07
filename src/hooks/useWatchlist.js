@@ -1,6 +1,7 @@
 import { useSyncExternalStore, useCallback } from 'react'
+import { STORAGE_KEYS } from '../storageKeys'
 
-const KEY = 'dynastyedge_watchlist_v1'
+const KEY = STORAGE_KEYS.watchlist
 
 // Tiny external store so every component sharing the watchlist re-renders
 // together when a player is starred/unstarred anywhere in the app.
