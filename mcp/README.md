@@ -176,8 +176,7 @@ mcp/
   teams.js        resolveTeam — one definition, three tools
   limit.js        concurrency gate + retry/backoff
   config.js       league / identity / TTLs, env-first
-  register.mjs    the extensionless-import resolver hook
-  loader.mjs      (the hook itself)
+  register.mjs    registers THE resolver hook (../scripts/loader.mjs, shared with npm test)
   tools/
     getRoster.js  findSellHigh.js  recommendFreeAgents.js
     resolveAssets.js  analyzeTrade.js  lineupAdvice.js
