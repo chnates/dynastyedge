@@ -57,6 +57,7 @@ login, a phone or a decision that no sandbox can supply.
 |---|---|---|---|---|
 | 7 | **Buy-low timing research** (`dynastyedge-research-frontier` Item 4) — **FIRST PASS DONE 2026-10-07.** For players worth 1,000+ (what Buy-Low/Sell-High show), dips beat matched non-movers by **+2.4%** over 30 days (CI −0.1 … +4.9) and risers trailed by **−2.3%** (CI −4.8 … +0.3): not falling knives, no reliable bounce, no age effect. **No app change** on one window. Write-up `docs/analysis/buylow-timing-2026-10.md`; the ±50 got one home first (`src/utils/marketTrend.js`) | Me | 1 | It decides whether the buy-low/sell-high advice should be trusted for deadline trading |
 | 7b | **Re-run the buy-low timing study** — `node scripts/dev/buylow-timing-backtest.mjs`. Doubles the +30 sample, adds regular-season events, and makes **+60 days** measurable for the first time. **Pre-register the decision rule first** (memo §7): a change to the app needs the same sign, clear of zero, in both windows. Also worth an independent refutation pass before anything rests on it | Me | <1 | **Trigger: on or after 2026-11-06** (the merged series reaches 120 days). Still ahead of the Week 13 deadline |
+| 7c | **CODE-REVIEW-1: the "proper over convenient" review** (owner-asked 2026-10-07) — spec + kickoff prompt in §2 | Me | 1–2 | **Next in line.** The owner's stated worry, findings may touch the trade advice the deadline rests on, and every later build inherits the cleanup. Before #8 |
 | 8 | **Proactive delivery feasibility note** (frontier Item 5): a scheduled Claude routine calling the MCP server, giving a weekly waiver brief plus a deadline-week brief | Me | <1 | The frontier memo is dated 2026-07-05 and **predates the MCP server**, which changes its answer: delivery no longer needs a backend in the app |
 | 9 | **Build the scheduled brief**, if #8 says yes | Me | 1 | Every waiver run before it exists is missed |
 | 10 | **Briefing decision-quality** (frontier Item 1): start recording what The Edge surfaced each day, so it can be scored against the moves that paid | Me | 1 | A week not recorded can never be scored |
@@ -141,11 +142,64 @@ the repo's gates):
 
 ## 1. Active
 
-Nothing is active. §0 is the queue; the next item in order is #8 (#7b waits on its 2026-11-06 trigger).
+Nothing is active. §0 is the queue; the next item in order is #7c, CODE-REVIEW-1 (#7b waits on its 2026-11-06 trigger).
 
 ---
 
 ## 2. Deferred — waiting on a trigger
+
+### CODE-REVIEW-1 — find what was done for convenience instead of properly **[owner-asked 2026-10-07; ready now — §0 #7c]**
+
+**Why.** On 2026-10-07 the owner set a new working rule (CLAUDE.md Rules: *the
+proper fix beats the convenient one; one home per rule*). The same day showed
+the code has not been held to it: the ±50 trend threshold lived in ten places
+(fixed in #75), and a five-minute sweep found more of the same — `MAX_DAYS`
+(90) in the snapshot script and the MCP tool, `MAX_SEASONS_BACK` (8) in the
+app hook and `mcp/history.js`, `TX_WEEKS` (18) in the hook and a pipeline
+script, `MY_ROSTER_ID` copied into a dev script, and two ±5% "even" rules
+(`TRADE_EDGE` in managerAnalysis, `FAIR_BAND_PCT` in fairBand) that may or may
+not be meant to be one. The owner asked what else is like this.
+
+**Scope — five kinds of shortcut, all of `src/`, `mcp/`, `scripts/`, workflows:**
+1. **Duplicated rules** — any threshold, formula, list or mapping written in
+   more than one place (beyond the five above).
+2. **Documented "deliberate copies"** — every place CLAUDE.md or a comment says
+   a copy is intentional (the MCP player-DB trim, `mcp/register.mjs`, the
+   FantasyCalc query string in three scripts, LEAGUE_ID in the pipelines):
+   re-judge each under the new rule; keep the ones that still have a reason.
+3. **Swallowed failures** — `catch {}` / `.catch(() => [])` that hide a fault
+   which is not a documented best-effort contract.
+4. **Hand-rolled where a shared piece exists** — logic re-implemented beside
+   the util or primitive that already does it.
+5. **Stale workarounds** — code or docs kept for a reason that no longer holds
+   (e.g. the 88 pick rows in values-history.json age out ~2026-12-19 on their
+   own; anything similar that will not).
+
+**Deliverable:** a ranked list in `docs/analysis/code-review-2026-10.md` — each
+finding with where, what the proper fix is, what it risks, and size — written
+in plain English first. **Fix nothing in the review PR**; each accepted finding
+becomes its own small PR, one home per rule, with a test that fails if a copy
+returns (the `marketTrend.js` pattern).
+
+**Done when** every finding is fixed, scheduled with a trigger, or recorded as
+deliberately kept with its reason.
+
+**Kickoff prompt** (dated 2026-10-07):
+
+```
+Do CODE-REVIEW-1 in docs/open-items.md §2. Read CLAUDE.md first — especially
+the two 2026-10-07 owner rules at the end of Rules — and load
+dynastyedge-architecture-contract, dynastyedge-change-control and
+dynastyedge-failure-archaeology before reading code.
+
+Review src/, mcp/, scripts/ and .github/workflows for the five kinds of
+shortcut in the entry. Measure, don't guess: show the grep or the call sites
+for every finding. Write docs/analysis/code-review-2026-10.md, plain English
+first, ranked by risk to the owner's decisions. Change no code in this PR.
+
+Show me the ranked list and wait for my OK on which to fix and in what order.
+Gates: npm ci, lint + test + build, test count unchanged. Open a PR, watch it.
+```
 
 ### CLEANUP-3 — dedupe CLAUDE.md (one home per rule) **[owner-approved 2026-10-07; trigger: after §0 #12]**
 

@@ -364,10 +364,10 @@ same-date null:
   points statistic beside the mean** whenever near-zero values are in scope.
 - **All values:** risers give back (−15.6%, CI −23.1 … −8.5, survives date
   resampling), mostly cheap players and rookies.
-- **+60 days was infeasible** (90-day file). Solved without a workflow change:
-  `values-consensus.json` already holds a permanent daily FantasyCalc column
-  (identical on all 5,924 overlap cells) and the 07-09 … 09-21 gap is frozen in
-  `docs/analysis/data/`. The merged series grows one day per day.
+- **+60 days was infeasible** (90-day file). Fixed at the root in #77:
+  `values-consensus.json` is now the one permanent home of daily FantasyCalc
+  values, unbroken from **2026-07-09** (every nightly run carries in any day the
+  rolling file holds). The series grows one day per day.
 - **No app change** — one window, and standing rule 1 forbids re-ranking on one.
 
 The original framing follows.

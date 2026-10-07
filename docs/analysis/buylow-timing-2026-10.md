@@ -1,8 +1,8 @@
 # Buy-low timing — do the app's dips bounce back? (2026-10)
 
 **Open item:** `docs/open-items.md` §0 #7 · `dynastyedge-research-frontier` Item 4
-**Script:** `scripts/dev/buylow-timing-backtest.mjs` (`--frozen` reproduces every number here)
-**Data:** `docs/analysis/data/values-history-2026-10-06.json.gz` (sha256 of the JSON `e32a25535acd3baa…`) + `players-2026-10-07.json.gz`
+**Script:** `scripts/dev/buylow-timing-backtest.mjs` (`--frozen` reproduces every number here — verified from the archive after #77)
+**Data:** daily FantasyCalc values 2026-07-09 → 10-06 from the permanent archive (`values-consensus.json`, `fantasycalc` source; values-history.json sha256 at analysis time `e32a25535acd3baa…`) + the frozen player DB `docs/analysis/data/players-2026-10-07.json.gz`
 **Status:** measured once, one 30-day window. **Re-run on or after 2026-11-06** (see §7).
 
 ---
@@ -239,24 +239,28 @@ change rests on the November re-run.
 
 ---
 
-## 6. The 90-day window binds — drafted proposal (NOT applied)
+## 6. The 90-day window binds — resolved by #77 (2026-10-07)
 
 **The window binds:** +60 days is infeasible, and +30 has only 30 eligible
 event days.
 
-**Proposal: no workflow change.** The pieces already exist:
+**What was found:** `values-consensus.json` has kept a **permanent** daily
+FantasyCalc column since 2026-09-22, identical to `values-history.json` on
+every overlapping cell. But the days *before* it (2026-07-09 … 09-21) lived
+only in the rolling file, which was deleting one per morning.
 
-1. `values-consensus.json` keeps a **permanent** daily FantasyCalc column
-   since 2026-09-22, identical to `values-history.json` on every overlapping
-   cell. The script merges it in, so the series keeps growing after the
-   rolling file drops a day.
-2. The gap between them — 2026-07-09 … 09-21, which the rolling file was
-   deleting one day per morning — is closed by the **frozen copy committed
-   with this note** (`docs/analysis/data/values-history-2026-10-06.json.gz`,
-   **80.6 KB**, plus a 10.0 KB player subset). The merged series is unbroken
-   from 2026-07-09 and grows one day per day.
+**The fix (owner-approved, shipped in #77):** the archive is now the one
+permanent home of daily FantasyCalc values. Every nightly run carries any day
+the rolling file holds and the archive lacks into it (`backfillFantasyCalc`).
+The first run, dispatched on `main` on 2026-10-07, added the 75 missing days —
+**all 35,788 values identical to the rolling file** — so the archive runs
+unbroken from **2026-07-09**. That was the same morning the rolling file
+dropped 07-09. This study reads the archive; the frozen copy that bridged the
+gap during the work was deleted once the archive was verified.
 
-**Cost: 90.6 KB of repo, once. Zero bytes on the phone. Zero workflow change.**
+**Cost:** the archive grew 37 KB → 102 KB on the wire. **Zero bytes on the
+phone** (the app never fetches it), no workflow-file change, and the rolling
+file stays at 90 days.
 
 **Alternative considered and rejected:** raising `MAX_DAYS` in
 `snapshot-values.mjs`. The phone fetches that file for every sparkline;
@@ -279,7 +283,7 @@ runs. It would also need a workflow change and change control.
 
 ```bash
 git fetch origin values-history
-node scripts/dev/buylow-timing-backtest.mjs          # frozen copy + live branch
+node scripts/dev/buylow-timing-backtest.mjs          # everything archived so far
 ```
 
 **What would justify a change to the app** (pre-register before the re-run):

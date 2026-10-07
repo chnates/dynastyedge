@@ -10,32 +10,28 @@
 // Pre-registered 2026-10-07 before any forward return was computed; the
 // registration is quoted verbatim in docs/analysis/buylow-timing-2026-10.md.
 //
-// DATA
-//   values-history.json from the values-history branch, read VIA GIT (never
-//   the raw CDN, which caches ~5 min). Players only: the file still carries
-//   88 draft-pick rows written before the 2026-09-21 classifier fix; their ids
-//   are non-numeric and they are dropped here (CLAUDE.md, "Classify player vs
-//   pick by id SHAPE").
-//   values-consensus.json (same branch) — its `fantasycalc` source is a
-//   PERMANENT daily FantasyCalc column since 2026-09-22, identical to
-//   values-history on every overlapping cell (5,924 / 5,924 on 2026-10-07).
-//   The two are merged, so the series keeps growing after the 90-day file
-//   rolls its oldest day off; a disagreement on an overlap day aborts.
-//   Sleeper /players/nfl for position + birth_date (age AT THE EVENT DATE).
+// DATA — read VIA GIT from the values-history branch (never the raw CDN,
+// which caches ~5 min):
+//   values-consensus.json's `fantasycalc` source — THE permanent home of daily
+//   FantasyCalc values since 2026-10-07 (#77), unbroken from 2026-07-09.
+//   values-history.json — the phone's rolling 90-day file. Merged in only as a
+//   cross-check and for a newest day the archive may not hold yet; any
+//   disagreement on a shared day aborts. Players only: it still carries 88
+//   draft-pick rows written before the 2026-09-21 classifier fix (non-numeric
+//   ids — CLAUDE.md, "Classify player vs pick by id SHAPE"); they age out
+//   ~2026-12-19.
+//   Sleeper /players/nfl for position + birth_date (age AT THE EVENT DATE);
+//   the 2026-10-07 copy is frozen in docs/analysis/data/ because positions,
+//   teams and listed birth dates drift.
 //
 // THE THRESHOLD is imported from src/utils/marketTrend.js — the same file every
 // arrow, list and MCP tool reads — so the research tests the shipped rule.
 //
-//   docs/analysis/data/values-history-2026-10-06.json.gz — the rolling file
-//   FROZEN on 2026-10-06 and committed. The branch file drops its oldest day
-//   every morning and the permanent archive only starts 2026-09-22, so without
-//   this copy the 2026-07-09 … 09-21 daily values would be lost for good. It
-//   is merged with the live files, so the series runs unbroken from 07-09.
-//
 // Usage:
 //   git fetch origin values-history
-//   node scripts/dev/buylow-timing-backtest.mjs            # RE-RUN: frozen copy + live branch + live player DB
-//   node scripts/dev/buylow-timing-backtest.mjs --frozen   # REPRODUCE the 2026-10 report exactly
+//   node scripts/dev/buylow-timing-backtest.mjs            # RE-RUN on everything archived so far
+//   node scripts/dev/buylow-timing-backtest.mjs --frozen   # REPRODUCE the 2026-10 report: data through
+//                                                          # 2026-10-06 + the frozen player DB
 //   Overrides: --history <file> --consensus <file> --players <file> --json <out.json>
 //
 // Zero dependencies. Deterministic: the bootstrap uses a fixed seed.
@@ -68,26 +64,31 @@ const fromBranch = path =>
   execFileSync('git', ['show', `origin/values-history:${path}`], { encoding: 'utf8', maxBuffer: 256 << 20 })
 
 const FROZEN = process.argv.includes('--frozen')
-const DATA_DIR = new URL('../../docs/analysis/data/', import.meta.url)
-const FROZEN_HISTORY = new URL('values-history-2026-10-06.json.gz', DATA_DIR)
-const FROZEN_PLAYERS = new URL('players-2026-10-07.json.gz', DATA_DIR)
-const readGz = url => gunzipSync(readFileSync(url)).toString('utf8')
+const FROZEN_THROUGH = '2026-10-06'   // the last day the 2026-10 report saw
+const FROZEN_PLAYERS = new URL('../../docs/analysis/data/players-2026-10-07.json.gz', import.meta.url)
+
+// Keep only the days up to `through` (inclusive) — how --frozen reproduces a
+// report from an archive that has kept growing since.
+function sliceThrough(src, through) {
+  if (!src || !through) return src
+  const keep = src.dates.map((d, i) => (d <= through ? i : -1)).filter(i => i >= 0)
+  const players = {}
+  for (const [id, series] of Object.entries(src.players)) players[id] = keep.map(i => series[i] ?? null)
+  return { ...src, dates: keep.map(i => src.dates[i]), players }
+}
 
 function loadHistory() {
-  const frozenRaw = readGz(FROZEN_HISTORY)
   const file = arg('history')
-  const raw = file ? readFileSync(file, 'utf8') : FROZEN ? frozenRaw : fromBranch('values-history.json')
+  const raw = file ? readFileSync(file, 'utf8') : fromBranch('values-history.json')
   const cfile = arg('consensus')
-  let craw = null
-  if (!FROZEN || cfile) {
-    try { craw = cfile ? readFileSync(cfile, 'utf8') : fromBranch('values-consensus.json') } catch { craw = null }
-  }
-  const rolling = JSON.parse(raw)
-  const fc = craw ? JSON.parse(craw)?.sources?.fantasycalc : null
-  const archive = fc ? { dates: JSON.parse(craw).dates, players: fc.players } : null
-  const sources = [rolling, archive]
-  if (raw !== frozenRaw) sources.push(JSON.parse(frozenRaw))
-  return { raw, craw, data: mergeSeries(sources) }
+  const craw = cfile ? readFileSync(cfile, 'utf8') : fromBranch('values-consensus.json')
+  const consensus = JSON.parse(craw)
+  const fc = consensus?.sources?.fantasycalc
+  if (!Array.isArray(consensus?.dates) || !fc?.players) throw new Error('values-consensus.json has no fantasycalc source')
+  const through = FROZEN ? FROZEN_THROUGH : null
+  const rolling = sliceThrough(JSON.parse(raw), through)
+  const archive = sliceThrough({ dates: consensus.dates, players: fc.players }, through)
+  return { raw, craw, data: mergeSeries([rolling, archive]) }
 }
 
 // Union of the daily FantasyCalc series, one column per date. Players only
@@ -121,7 +122,7 @@ function mergeSeries(srcs) {
 async function loadPlayers() {
   const file = arg('players')
   if (file) return JSON.parse(readFileSync(file, 'utf8'))
-  if (FROZEN) return JSON.parse(readGz(FROZEN_PLAYERS)).players
+  if (FROZEN) return JSON.parse(gunzipSync(readFileSync(FROZEN_PLAYERS)).toString('utf8')).players
   const res = await fetch('https://api.sleeper.app/v1/players/nfl')
   if (!res.ok) throw new Error(`Sleeper players ${res.status}`)
   return res.json()
