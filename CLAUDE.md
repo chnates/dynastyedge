@@ -1299,8 +1299,8 @@ middle 4 Middle.**
 needs and surpluses; pick capital Rich / Neutral / Depleted; tier badge; a ⚠️
 **win-window mismatch warning** (*"They're rebuilding — expect them to ask for
 picks"*) — **shown, never hidden or deprioritized**; a buyer/seller read from
-live playoff odds (< 35% "likely seller", ≥ 70% "buying win-now"; hidden
-offseason); a trajectory read from `getTrajectoryRead` (Feature 17). **Tap →
+live playoff odds (< 35% "likely seller", ≥ 70% "buying win-now" — read
+through `getDeadlineVerdict`, never typed in; hidden offseason); a trajectory read from `getTrajectoryRead` (Feature 17). **Tap →
 Analyzer pre-loaded with this team.** A **"See their targets →"** footer button
 — **a sibling *below* the card, never nested in its `<button>`** — opens Trade ›
 Targets scoped to them.
@@ -2050,7 +2050,11 @@ in the offseason.**
 
 **Baseline caveat:** 6 of 10 make it, so **60% is the coin-flip** and the
 thresholds compress the middle. Recalibrating to `playoff_teams / numTeams` is
-unmeasured and moves three surfaces — **do not change them casually.**
+unmeasured — **do not change them casually.** **They live in ONE place —
+`BUYER_PCT` / `SELLER_PCT` in `utils/playoffOdds.js`** (2026-10-07): Partners,
+the Playoffs page colours, Layer 3, The Edge and the MCP note all read them
+through `getDeadlineVerdict`, and `tests/deadlineThresholds.test.mjs` fails if a
+copy reappears. A recalibration is one edit.
 
 -----
 
@@ -3148,7 +3152,7 @@ dynastyedge/
 │   │   ├── lineupConfidence.js  ← the MEASURED hit-rate curve behind "61% likely to be the right call" — regenerate, never hand-edit
 │   │   ├── freeAgents.js        ← THE waiver-options list (never gated on FantasyCalc; TEAM_* guard) AND the dynasty FA pool, which can never return a defense
 │   │   ├── lineupHistory.js     ← optimal-lineup POINTS math for efficiency review (delegates to lineupBuild)
-│   │   ├── playoffOdds.js       ← scoring model + Monte Carlo + deadline verdict; buildPlayoffOutlook is THE composition (the hook keeps only the memo)
+│   │   ├── playoffOdds.js       ← scoring model + Monte Carlo + deadline verdict (THE buyer/seller cut-offs: BUYER_PCT / SELLER_PCT); buildPlayoffOutlook is THE composition (the hook keeps only the memo)
 │   │   └── projections.js       ← lineup optimization, matchup quality
 │   ├── context/
 │   │   └── LeagueContext.jsx
@@ -3167,6 +3171,7 @@ dynastyedge/
 │   ├── draftLive.test.mjs           ← draft live path on the real 2025 draft: order (both tiers), clock/countdown at every pick, Best Available, capital; recap VOE sums to zero, volume never earns a grade, unpriced class = no grade
 │   ├── sleeperDraft.test.mjs        ← mocked-fetch: single-draft endpoint merged over the list (slot_to_roster_id), session cache, best-effort sub-fetch degradation
 │   ├── projections.test.mjs         ← lineup engine inputs: defense rankings via player DB + schedule, home/away, Week-1 empty stats, flags
+│   ├── deadlineThresholds.test.mjs  ← BUYER_PCT / SELLER_PCT are the shipped 70% / 35%, read at both edges, AND a source scan that fails on a second copy
 │   ├── playoffOdds.test.mjs         ← fixed-seed determinism, Σ odds = playoff teams, thresholds; buildPlayoffOutlook's three states (posted-but-unplayed is ACTIVE)
 │   ├── seasonWindow.test.mjs        ← the draft-completion boundary (only `complete` rolls a season; auctions never count); Tracker selection; no NFL state → seed
 │   ├── pickCapital.test.mjs         ← ownership, round medians, year weights BY DISTANCE (a rolled year never scores 0), the spent-pick ladder
@@ -3233,8 +3238,8 @@ because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
 **Current counts (verified 2026-10-07 by moving `node_modules` aside):** with
-dependencies **`# tests 856 / # pass 856`**; without them **`# tests 813 / #
-pass 808 / # fail 5`**. **If the test count isn't 856, run `npm ci` before
+dependencies **`# tests 859 / # pass 859`**; without them **`# tests 816 / #
+pass 811 / # fail 5`**. **If the test count isn't 859, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React

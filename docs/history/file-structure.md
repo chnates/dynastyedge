@@ -348,6 +348,10 @@ OPEN-3, the FAAB bid recommender (2026-10-07), moved both by the same 20
 imports only `src/utils` and the shared fixture, and the three new
 `mcpRecommendFreeAgents` tests reach neither React nor `zod`.
 
+The buyer/seller one-home fix (2026-10-07, CODE-REVIEW-1 #2) moved both by the
+same 3 (856/813 → **859/816**), the gap holding at 43:
+`deadlineThresholds.test.mjs` imports only the pure `playoffOdds.js`.
+
 The injury-status one-home fix (2026-10-07, CODE-REVIEW-1 #1) moved both by
 the same 15 (841/798 → **856/813**), the gap holding at 43: the new
 `injuryStatus.test.mjs` imports only pure utils, and the three new

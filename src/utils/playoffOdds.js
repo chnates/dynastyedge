@@ -220,20 +220,31 @@ export function buildStrengthPreview(allRosters, playoffTeams, strengths) {
     .map((r, i) => ({ ...r, projSeed: i + 1, projectedIn: i < playoffTeams }))
 }
 
-// Plain-English trade-deadline stance from a team's playoff odds. Exported so the
-// Trade Analyzer / Partner Finder can reuse the same call in a later pass.
+// THE buyer / seller thresholds — the one home (CODE-REVIEW-1 #2, 2026-10-07).
+// Trade Partners' buyer/seller line, the Playoffs page colours, the Trade
+// Analyzer's Layer 3, The Edge and the MCP server all read these through
+// getDeadlineVerdict; before, two screens typed 0.7 / 0.35 in themselves, so
+// a recalibration would have left them behind. This league seats 6 of 10, so
+// 60% is the coin-flip baseline and these compress the middle — retuning them
+// is an open, unmeasured question (CLAUDE.md Feature 14). Change them HERE.
+// tests/deadlineThresholds.test.mjs fails if a copy reappears.
+export const BUYER_PCT = 0.7
+export const SELLER_PCT = 0.35
+
+// Plain-English trade-deadline stance from a team's playoff odds — THE one
+// definition of buyer / seller.
 export function getDeadlineVerdict(playoffPct, tier) {
   if (playoffPct == null) {
     return { stance: 'Wait', text: 'Odds activate once the season starts — revisit this after Week 1.' }
   }
-  if (playoffPct >= 0.7) {
+  if (playoffPct >= BUYER_PCT) {
     return {
       stance: 'Buyer',
       tone: 'success',
       text: "You're a strong bet to make the playoffs. This is the time to trade future picks for proven win-now help.",
     }
   }
-  if (playoffPct >= 0.35) {
+  if (playoffPct >= SELLER_PCT) {
     return {
       stance: 'On the bubble',
       tone: 'warning',
