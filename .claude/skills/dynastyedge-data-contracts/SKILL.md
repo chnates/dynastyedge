@@ -447,8 +447,10 @@ app's ladder at archive time — that season's round median, then the generic
 round median across every season listed, then **`null`**.
 
 > **A pick value is NEVER 0, and a 0 you find in this file is a known bug's
-> output.** Classification and pricing live in `scripts/fantasyCalcValues.mjs`
-> (shared by all three snapshot scripts, pinned by
+> output.** Classification and pricing are THE shared reader
+> (`src/utils/fantasyCalcPayload.js` + `pickRoundMedian`), reached by the
+> snapshot scripts through `scripts/fantasyCalcValues.mjs` since 2026-10-07 —
+> the same code as the app and MCP server (pinned by
 > `tests/fantasyCalcValues.test.mjs`). Before 2026-09-21 this script
 > classified FantasyCalc entries by `if (sid)`, which stopped recognising
 > picks the moment FantasyCalc gave them synthetic non-numeric ids — so every

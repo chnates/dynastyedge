@@ -370,6 +370,13 @@ to remember, because it is about **where a fix does and does not travel.**
   null on the next run (FantasyCalc never prices a pick at 0, so a stored 0
   can only be the bug's output), delivered through the normal publish path
   rather than a hand-edit of the data branch.
+- **Closed for good 2026-10-07 (CODE-REVIEW-1 #6):** the pipelines no longer
+  keep their own copy at all. They run with the repo's resolver hook
+  (`node --import ./scripts/register.mjs`) and call
+  `src/utils/fantasyCalcPayload.js` — the app's and the MCP server's reader —
+  so a future fix to one IS a fix to all three. Ruling 1 below still stands for
+  anything a script reimplements; the switch was verified by running old and
+  new scripts on the same live data (all four outputs byte-identical).
 - **Rulings:**
   1. **A fix to `useFantasyCalc` is not a fix to the pipelines.** They are a
      third copy of the payload reader, invisible to every app-side test and to

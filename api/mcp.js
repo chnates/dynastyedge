@@ -327,6 +327,51 @@ var init_limit = __esm({
   }
 });
 
+// src/utils/fantasyCalcPayload.js
+function fantasyCalcValuesUrl(base = FANTASYCALC_BASE, params = FANTASYCALC_PARAMS) {
+  const qs = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]));
+  return `${base}/values/current?${qs}`;
+}
+function isPlayerSleeperId(sid) {
+  return sid != null && /^\d+$/.test(String(sid));
+}
+function splitFantasyCalcPayload(data, { strict = true } = {}) {
+  if (!Array.isArray(data)) {
+    if (!strict) return { playerMap: {}, pickEntries: [] };
+    throw new Error("FantasyCalc returned unexpected data \u2014 player values unavailable");
+  }
+  const playerMap = {};
+  const pickEntries = [];
+  data.forEach((entry) => {
+    const sid = entry?.player?.sleeperId;
+    if (isPlayerSleeperId(sid)) {
+      playerMap[String(sid)] = {
+        name: entry.player.name,
+        position: entry.player.position,
+        team: entry.player.maybeTeam || "",
+        age: entry.player.maybeAge ?? null,
+        value: Math.round(entry.value ?? 0),
+        overallRank: entry.overallRank ?? null,
+        positionRank: entry.positionRank ?? null,
+        trend30Day: entry.trend30Day ?? 0,
+        experience: entry.player.experience ?? null,
+        sleeperId: String(sid)
+      };
+    } else if (entry?.player?.name) {
+      pickEntries.push({ name: entry.player.name, value: Math.round(entry.value ?? 0) });
+    }
+  });
+  if (strict && Object.keys(playerMap).length === 0) {
+    throw new Error("FantasyCalc returned no player values \u2014 try again later");
+  }
+  return { playerMap, pickEntries };
+}
+var init_fantasyCalcPayload = __esm({
+  "src/utils/fantasyCalcPayload.js"() {
+    init_constants();
+  }
+});
+
 // src/utils/pickCapital.js
 function resolvePickOwnership(tradedPicks, rosters, years) {
   const ownership = {};
@@ -373,15 +418,18 @@ function roundSuffix(round4) {
 function pickRoundLabel(pick2) {
   return `${pick2.season} ${roundSuffix(pick2.round) ?? `R${pick2.round}`}`;
 }
-function findPickValue(pick2, pickEntries) {
-  const suffix = roundSuffix(pick2.round);
-  if (!suffix) return 0;
-  const matches = pickEntries.filter(
-    (e) => e.name.includes(pick2.season) && e.name.includes(suffix)
+function pickRoundMedian(pickEntries, round4, season = null) {
+  const suffix = roundSuffix(round4);
+  if (!suffix) return null;
+  const matches = (pickEntries ?? []).filter(
+    (e) => e.name.includes(suffix) && (season == null || e.name.includes(String(season)))
   );
-  if (!matches.length) return 0;
-  matches.sort((a, b) => a.value - b.value);
-  return matches[Math.floor(matches.length / 2)]?.value ?? 0;
+  if (!matches.length) return null;
+  const sorted = [...matches].sort((a, b) => a.value - b.value);
+  return sorted[Math.floor(sorted.length / 2)].value;
+}
+function findPickValue(pick2, pickEntries) {
+  return pickRoundMedian(pickEntries, pick2.round, pick2.season) ?? 0;
 }
 function findExactSlotValue({ season, round: round4, slot }, pickEntries) {
   if (slot != null) {
@@ -444,9 +492,7 @@ function buildDraftPickIndex(draft, picks, rosters) {
 function buildGenericRoundValues(pickEntries) {
   const byRound = {};
   for (let round4 = 1; round4 <= PRICED_ROUNDS; round4++) {
-    const suffix = roundSuffix(round4);
-    const matches = (pickEntries ?? []).filter((e) => e.name.includes(suffix)).sort((a, b) => a.value - b.value);
-    byRound[round4] = matches.length ? matches[Math.floor(matches.length / 2)].value : 0;
+    byRound[round4] = pickRoundMedian(pickEntries, round4) ?? 0;
   }
   return byRound;
 }
@@ -652,36 +698,6 @@ var init_store = __esm({
 });
 
 // mcp/snapshot.js
-function splitValues(data) {
-  if (!Array.isArray(data)) {
-    throw new Error("FantasyCalc returned unexpected data \u2014 player values unavailable");
-  }
-  const playerMap = {};
-  const pickEntries = [];
-  data.forEach((entry) => {
-    const sid = entry.player?.sleeperId;
-    if (sid != null && /^\d+$/.test(String(sid))) {
-      playerMap[String(sid)] = {
-        name: entry.player.name,
-        position: entry.player.position,
-        team: entry.player.maybeTeam || "",
-        age: entry.player.maybeAge ?? null,
-        value: Math.round(entry.value ?? 0),
-        overallRank: entry.overallRank ?? null,
-        positionRank: entry.positionRank ?? null,
-        trend30Day: entry.trend30Day ?? 0,
-        experience: entry.player.experience ?? null,
-        sleeperId: String(sid)
-      };
-    } else if (entry.player?.name) {
-      pickEntries.push({ name: entry.player.name, value: Math.round(entry.value ?? 0) });
-    }
-  });
-  if (Object.keys(playerMap).length === 0) {
-    throw new Error("FantasyCalc returned no player values \u2014 try again later");
-  }
-  return { playerMap, pickEntries };
-}
 function trimPlayerDB(data) {
   const meta3 = {};
   Object.entries(data).forEach(([id, p]) => {
@@ -738,7 +754,7 @@ async function getSnapshot({
   const ttl = force ? -1 : ttlMs;
   const [core, values, playerDB] = await Promise.all([
     loadSource(store, leagueKey(leagueId), ttl, () => fetchSleeperCore(get, leagueId)),
-    loadSource(store, VALUES_KEY, ttl, async () => splitValues(await get(`${FANTASYCALC_BASE}/values/current?${FC_PARAMS}`, {
+    loadSource(store, VALUES_KEY, ttl, async () => splitValues(await get(fantasyCalcValuesUrl(), {
       timeoutMs: 3e4,
       label: "FantasyCalc"
     }))),
@@ -820,20 +836,19 @@ function mergeAsOf(asOf, extraSources) {
 function stampSource(s) {
   return stamp(s);
 }
-var FC_PARAMS, VALUES_KEY, PLAYERDB_KEY, leagueKey, defaultStore;
+var VALUES_KEY, PLAYERDB_KEY, leagueKey, defaultStore, splitValues;
 var init_snapshot = __esm({
   "mcp/snapshot.js"() {
     init_constants();
+    init_fantasyCalcPayload();
     init_leagueState();
     init_limit();
     init_store();
-    FC_PARAMS = new URLSearchParams(
-      Object.entries(FANTASYCALC_PARAMS).map(([k, v]) => [k, String(v)])
-    );
     VALUES_KEY = "values";
     PLAYERDB_KEY = "playerdb";
     leagueKey = (leagueId) => `league:${leagueId}`;
     defaultStore = memoryStore();
+    splitValues = (data) => splitFantasyCalcPayload(data);
   }
 });
 

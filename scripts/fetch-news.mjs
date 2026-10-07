@@ -33,6 +33,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { windowDepthHours } from './newsCoverage.mjs'
 import { retainDiverse } from './newsRetention.mjs'
 import { trackSourceMisses } from './sourceHealth.mjs'
+import { SLEEPER_BASE } from '../src/constants.js'
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15'
 const MAX_STORY = 600
@@ -85,7 +86,7 @@ const PER_PLAYER_MAX = 3
 const PREV_FILE = 'news-prev.json'
 const OUT_FILE = 'news.json'
 
-const SLEEPER_PLAYERS = 'https://api.sleeper.app/v1/players/nfl'
+const SLEEPER_PLAYERS = `${SLEEPER_BASE}/players/nfl`
 const SKILL_POSITIONS = new Set(['QB', 'RB', 'WR', 'TE'])
 
 async function fetchOk(url, type) {

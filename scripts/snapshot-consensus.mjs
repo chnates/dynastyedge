@@ -22,6 +22,7 @@
 // miss — so a bad run leaves yesterday's file in place rather than erasing it.
 
 import { writeFileSync } from 'node:fs'
+import { FANTASYCALC_VALUES_URL as FANTASYCALC_URL } from './fantasyCalcValues.mjs'
 import { gzipSync } from 'node:zlib'
 import {
   splitFantasyCalcEntries, parseCSV, buildCrosswalk,
@@ -29,8 +30,6 @@ import {
   mergeConsensusColumn, backfillFantasyCalc, SOURCE_KEYS,
 } from './valuationSources.mjs'
 
-const FANTASYCALC_URL =
-  'https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=2&numTeams=10&ppr=0.5'
 const CROSSWALK_URL =
   'https://raw.githubusercontent.com/dynastyprocess/data/master/files/db_playerids.csv'
 const DYNASTYPROCESS_URL =

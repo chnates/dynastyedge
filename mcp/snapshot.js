@@ -28,14 +28,12 @@
 // right for the serverless deployment in phase 2, which has no warm process
 // and wants external KV — see mcp/README.md.
 
-import { SLEEPER_BASE, FANTASYCALC_BASE, FANTASYCALC_PARAMS } from '../src/constants.js'
+import { SLEEPER_BASE } from '../src/constants.js'
+import { fantasyCalcValuesUrl, splitFantasyCalcPayload } from '../src/utils/fantasyCalcPayload.js'
 import { buildLeagueState } from '../src/utils/leagueState.js'
 import { createFetcher } from './limit.js'
 import { memoryStore, loadSource } from './store.js'
 
-const FC_PARAMS = new URLSearchParams(
-  Object.entries(FANTASYCALC_PARAMS).map(([k, v]) => [k, String(v)])
-)
 
 // ── cache keys ─────────────────────────────────────────────────────────────
 //
@@ -61,43 +59,10 @@ export function resetSnapshotCache() {
   return defaultStore.clear()
 }
 
-// Mirrors useFantasyCalc's split EXACTLY. The player/pick classification is by
-// id SHAPE, not presence: FantasyCalc stamps pick entries with synthetic
-// non-numeric ids ("FP_2027_1", "DP_0_8"). Splitting on presence — the
-// pre-2026-07 bug — dumps every pick into playerMap under a key no roster
-// references and prices every pick at 0 app-wide.
-function splitValues(data) {
-  if (!Array.isArray(data)) {
-    throw new Error('FantasyCalc returned unexpected data — player values unavailable')
-  }
-  const playerMap = {}
-  const pickEntries = []
-  data.forEach(entry => {
-    const sid = entry.player?.sleeperId
-    if (sid != null && /^\d+$/.test(String(sid))) {
-      playerMap[String(sid)] = {
-        name: entry.player.name,
-        position: entry.player.position,
-        team: entry.player.maybeTeam || '',
-        age: entry.player.maybeAge ?? null,
-        value: Math.round(entry.value ?? 0),
-        overallRank: entry.overallRank ?? null,
-        positionRank: entry.positionRank ?? null,
-        trend30Day: entry.trend30Day ?? 0,
-        experience: entry.player.experience ?? null,
-        sleeperId: String(sid),
-      }
-    } else if (entry.player?.name) {
-      pickEntries.push({ name: entry.player.name, value: Math.round(entry.value ?? 0) })
-    }
-  })
-  // Guard a silent shape change: an empty playerMap would price every roster
-  // at 0 with no visible error. Same throw useFantasyCalc carries.
-  if (Object.keys(playerMap).length === 0) {
-    throw new Error('FantasyCalc returned no player values — try again later')
-  }
-  return { playerMap, pickEntries }
-}
+// THE FantasyCalc reader is shared with the app and the pipelines
+// (src/utils/fantasyCalcPayload.js): id-SHAPE classification and the two
+// shape guards. It was a hand-kept mirror until CODE-REVIEW-1 #6.
+const splitValues = data => splitFantasyCalcPayload(data)
 
 // Mirrors usePlayerDB's trim. The raw 5–8MB response is discarded; only these
 // fields survive. A tool needing another field adds it here — never a second
@@ -161,7 +126,7 @@ export async function getSnapshot({
   const [core, values, playerDB] = await Promise.all([
     loadSource(store, leagueKey(leagueId), ttl, () => fetchSleeperCore(get, leagueId)),
     loadSource(store, VALUES_KEY, ttl, async () =>
-      splitValues(await get(`${FANTASYCALC_BASE}/values/current?${FC_PARAMS}`, {
+      splitValues(await get(fantasyCalcValuesUrl(), {
         timeoutMs: 30000, label: 'FantasyCalc',
       }))),
     // The player DB is what makes rule 7 possible: a rostered player

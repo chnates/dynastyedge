@@ -53,7 +53,7 @@ jobs:
         # Exits non-zero only when no source returned anything AND nothing was
         # retained. The job then fails before the publish step, so the branch
         # keeps the feed it already has.
-        run: node scripts/fetch-news.mjs
+        run: node --import ./scripts/register.mjs scripts/fetch-news.mjs
       # Only the default branch publishes (same guard as rookie-intel.yml). A
       # workflow_dispatch aimed at a feature branch is a DRY RUN: the scripts
       # run and their log is readable, but unreviewed code must never

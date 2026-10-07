@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { FANTASYCALC_BASE, FANTASYCALC_PARAMS } from '../constants'
 import { fetchJSON } from '../utils/fetchJSON'
+import { fantasyCalcValuesUrl, splitFantasyCalcPayload } from '../utils/fantasyCalcPayload'
 
 let moduleCache = null
 let fetchPromise = null
@@ -9,56 +9,15 @@ let moduleFetchedAt = null
 function loadValues(force = false) {
   if (moduleCache && !force) return Promise.resolve(moduleCache)
   if (!fetchPromise) {
-    const params = new URLSearchParams(
-      Object.entries(FANTASYCALC_PARAMS).map(([k, v]) => [k, String(v)])
-    )
-    fetchPromise = fetchJSON(`${FANTASYCALC_BASE}/values/current?${params}`, {
+    // URL, classifier and shape guards are THE shared reader
+    // (utils/fantasyCalcPayload.js) — the MCP server and the pipelines run
+    // the same code (CODE-REVIEW-1 #6).
+    fetchPromise = fetchJSON(fantasyCalcValuesUrl(), {
       timeoutMs: 30000,
       label: 'FantasyCalc',
     })
       .then(data => {
-        if (!Array.isArray(data)) {
-          throw new Error('FantasyCalc returned unexpected data — player values unavailable')
-        }
-
-        const playerMap = {}
-        const pickEntries = []
-
-        data.forEach(entry => {
-          const sid = entry.player?.sleeperId
-          // Real players carry a numeric Sleeper id. FantasyCalc now also
-          // stamps its draft-pick entries with synthetic non-numeric ids
-          // ("FP_2026_1" round-level, "DP_0_8" slot-level) — before, picks had
-          // no id at all. Classify by id SHAPE, not mere presence: numeric →
-          // player, anything else (or none) → pick. Without this every pick
-          // lands in playerMap under a key no Sleeper roster references, leaving
-          // pickEntries empty so every pick prices at 0.
-          if (sid != null && /^\d+$/.test(String(sid))) {
-            playerMap[String(sid)] = {
-              name: entry.player.name,
-              position: entry.player.position,
-              team: entry.player.maybeTeam || '',
-              age: entry.player.maybeAge ?? null,
-              value: Math.round(entry.value ?? 0),
-              overallRank: entry.overallRank ?? null,
-              positionRank: entry.positionRank ?? null,
-              trend30Day: entry.trend30Day ?? 0,
-              experience: entry.player.experience ?? null,
-              sleeperId: String(sid),
-            }
-          } else if (entry.player?.name) {
-            pickEntries.push({
-              name: entry.player.name,
-              value: Math.round(entry.value ?? 0),
-            })
-          }
-        })
-
-        // Guard against a silent API shape change: an empty playerMap would
-        // make every roster render blank with no visible error.
-        if (Object.keys(playerMap).length === 0) {
-          throw new Error('FantasyCalc returned no player values — try again later')
-        }
+        const { playerMap, pickEntries } = splitFantasyCalcPayload(data)
 
         moduleFetchedAt = Date.now()
         moduleCache = { playerMap, pickEntries }

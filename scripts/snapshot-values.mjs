@@ -11,10 +11,8 @@
 // re-runs on the same day replace that day's column (idempotent).
 
 import { writeFileSync } from 'node:fs'
-import { splitFantasyCalcEntries } from './fantasyCalcValues.mjs'
+import { splitFantasyCalcEntries, FANTASYCALC_VALUES_URL as VALUES_URL } from './fantasyCalcValues.mjs'
 
-const VALUES_URL =
-  'https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=2&numTeams=10&ppr=0.5'
 const HISTORY_URL =
   'https://raw.githubusercontent.com/chnates/dynastyedge/values-history/values-history.json'
 

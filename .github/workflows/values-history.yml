@@ -48,16 +48,16 @@ jobs:
         with:
           node-version: 20
       - name: Append today's FantasyCalc snapshot
-        run: node scripts/snapshot-values.mjs
+        run: node --import ./scripts/register.mjs scripts/snapshot-values.mjs
       - name: Archive trade-time values
         continue-on-error: true   # best-effort — publish step preserves the old archive
-        run: node scripts/snapshot-trade-values.mjs
+        run: node --import ./scripts/register.mjs scripts/snapshot-trade-values.mjs
       - name: Archive monthly values snapshot
         continue-on-error: true   # best-effort — publish step preserves the old archive
-        run: node scripts/snapshot-values-archive.mjs
+        run: node --import ./scripts/register.mjs scripts/snapshot-values-archive.mjs
       - name: Archive the three-source valuation consensus
         continue-on-error: true   # best-effort — publish step preserves the old archive
-        run: node scripts/snapshot-consensus.mjs
+        run: node --import ./scripts/register.mjs scripts/snapshot-consensus.mjs
       # Only the default branch publishes (same guard as rookie-intel.yml). A
       # workflow_dispatch aimed at a feature branch is a DRY RUN: the scripts
       # run and their log is readable, but unreviewed code must never
