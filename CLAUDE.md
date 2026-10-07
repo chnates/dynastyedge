@@ -391,6 +391,12 @@ pattern, so it gets an instrument (NEWS-6).
 - **A MISSING FILE IS ITSELF AN ALARM** — every snapshot step is
   `continue-on-error`, so a script that died outright leaves the run green.
 - **A fresh archive never alarms** — the check needs a full window of history.
+- **The briefing ledger has its own alarm** (`scripts/check-briefing-ledger.mjs`,
+  policy `assessLedger` in `scripts/briefingLedger.mjs`): after publish, it
+  fails the run when the newest READABLE day is **2+ days** old — one missed
+  run is a blip, two is a gap. Unreadable days are a named gap and cannot hold
+  it off; a missing or empty ledger is an alarm. It runs `if: !cancelled()` so
+  a failed valuation alarm before it cannot silence it.
 - The message names the source, how long it has been silent, the likeliest
   cause, and that **a genuinely dead source should be removed** — an alarm
   nobody can clear stops meaning anything.
@@ -485,6 +491,39 @@ accumulated by a daily snapshot, same architecture as news:
   - **It does NOT replace FantasyCalc and does NOT average the sources** —
     every model is calibrated on FantasyCalc's scale, and an average destroys
     the disagreement, which is the product. 4b/4c are not built.
+- **`scripts/record-briefing.mjs`** (`continue-on-error`) — **the briefing
+  ledger** (open-items §0 #10, frontier Item 1): one entry per UTC day in the
+  permanent `briefing-ledger.json` recording what The Edge's briefing would
+  name, so it can be **scored later** against the moves that paid. **The app
+  never fetches it.** The scoring plan was fixed before any data existed —
+  `docs/analysis/briefing-decision-quality-2026-10.md`; **scoring is not
+  built**, first pass on or after 2026-12-15.
+  - **It runs the APP'S code, never a copy:** the league is `mcp/snapshot.js`'s
+    `getSnapshot` (the `buildLeagueState` join), the claims are
+    `computeEdgeSignals`, the order is `buildBriefing`. The policy that turns
+    them into a record is pure in **`scripts/briefingLedger.mjs`** — **do not
+    inline it into the script, and never re-derive a pick there**:
+    `tests/briefingLedger.test.mjs` fails if a selection rule (the trend
+    predicates, the pickup engine, the trajectory model, tiers) appears in it.
+  - **Only the five checkable items are recorded** — buy-low, sell-high,
+    pickup, closing-window, underperformer — each with its subject, the numbers
+    it rested on, and a **comparison group**: the eligible pools
+    `computeEdgeSignals` now also returns (`buyLowCandidates`,
+    `sellHighCandidates`, ≤ 10 rows + true count), the pickup's
+    `alternatives`, every opponent's trajectory read (`opponentTrajectories`),
+    every team's value/record ranks (`rankGaps`). Teams carry **`ownerId`**.
+  - **All five are recorded whether or not they would make the 5-card cut**;
+    `slot` is the position among items a SERVER can build (no watchlist, last
+    visit or playoff odds — none of which changes who is named). We score the
+    advice, not the layout.
+  - **Null, never 0:** an unpriced player is `value: null` / `trend30Day: null`;
+    a quiet signal is `fired: false`; **a day it cannot read is still written**
+    as `status: 'unreadable'` with the reason, and an unreadable re-run never
+    overwrites a recorded day. **Never pruned.** Each day stamps
+    **`codeVersion`** (`GITHUB_SHA`) so a rule change can split the series.
+  - Same load contract as the consensus archive (only a 404 starts fresh; a
+    wrong-shape 200 aborts) and the same publish carry-forward. Measured
+    2026-10-07: **8.2KB raw / 2.0KB wire per day**.
 - **Keepalive step** (first step, `continue-on-error`): GitHub disables
   scheduled workflows after ~60 days without default-branch commits, and
   data-branch force-pushes don't count. When `main`'s last commit is 45+ days
@@ -2019,6 +2058,13 @@ season and out. **Zero new data sources** — composes LeagueContext,
 `useTransactions`, `useLeagueNews`, `useValueHistory`, `useSleeperDraft`. Pure
 logic in `utils/edgeBriefing.js`.
 
+**Its claims are recorded daily** (the briefing ledger — Value history
+pipeline) so they can be scored. `computeEdgeSignals` therefore also returns
+the pools its picks are the head of (`buyLowCandidates`, `sellHighCandidates`,
+`opponentTrajectories`, `rankGaps`): **a pick is always `pool[0]`, so the pick
+and its comparison group can never be chosen by different rules.** The app
+ignores the pools.
+
 **Sections (top to bottom, the press-run entrance):**
 - **Hero (poster):** cap bar (team · "Franchise Report", dateline) over the ink
   field: greeting, a generated GM line ("2 items on your desk · 3 new league
@@ -3024,7 +3070,7 @@ dynastyedge/
 │       ├── deploy.yml          ← GitHub Actions auto-deploy (lint + test gate before build)
 │       ├── ci.yml              ← lint + test + build on branch pushes / PRs (no deploy)
 │       ├── news.yml            ← news aggregation (cron asks 2×/h; only main publishes) → news-data branch; ends with the source-health alarm
-│       ├── values-history.yml  ← daily value snapshot + trade archive + monthly archive + consensus archive → values-history (only main publishes); ends with the source-health alarm (its snapshot steps are continue-on-error)
+│       ├── values-history.yml  ← daily value snapshot + trade archive + monthly archive + consensus archive + briefing ledger → values-history (only main publishes); ends with the source-health alarm and the briefing-ledger alarm (its snapshot steps are continue-on-error)
 │       └── rookie-intel.yml   ← daily rookie depth-chart + draft-capital feed → rookie-intel branch; `mode` also runs the CFBD analyses (publish nothing)
 ├── scripts/
 │   ├── loader.mjs / register.mjs ← THE Node resolver hook for src/utils' extensionless imports — used by npm test, npm run mcp and the skill's reg.mjs shim
@@ -3035,6 +3081,9 @@ dynastyedge/
 │   ├── sourceHealth.mjs        ← THE source-alarm policy, pure + tested, shared by both pipelines: a persistent gap, never a blip
 │   ├── check-source-health.mjs ← THE alarm: runs AFTER publish (can never cost data) and FAILS the workflow; a missing file is itself an alarm
 │   ├── valuationSources.mjs    ← THE multi-source valuation readers, pure + tested (imports fantasyCalcValues.mjs, never copies it): crosswalk (`"NA"` = null), DynastyProcess, KTC JSON island joined on mfl_id (NOT ktc_id), archive merge
+│   ├── briefingLedger.mjs      ← THE briefing-ledger policy, pure + tested: records computeEdgeSignals / buildBriefing output (never re-derives a pick), null never 0, unreadable days named, never pruned; assessLedger = the alarm rule
+│   ├── record-briefing.mjs     ← daily: what The Edge would name → permanent briefing-ledger.json (app never fetches it); the scoring plan is docs/analysis/briefing-decision-quality-2026-10.md
+│   ├── check-briefing-ledger.mjs ← the ledger's alarm: after publish, fails when the newest readable day is 2+ days old; a missing file is an alarm
 │   ├── snapshot-consensus.mjs  ← phase 4a: permanent DAILY three-source archive (app never fetches it); a failed source is an all-null column, never 0
 │   ├── snapshot-values.mjs     ← daily FantasyCalc snapshot appender (runs in Actions)
 │   ├── snapshot-values-archive.mjs ← permanent MONTHLY values archive for trajectory back-testing (app never fetches it)
@@ -3304,6 +3353,7 @@ dynastyedge/
 │   ├── recommendations.test.mjs     ← suggestSellMove two-sided; pick keep by round; past-peak tilt (decline-only, never protects); cash-out gap = buildFairBand's
 │   ├── fantasyCalcValues.test.mjs   ← the FantasyCalc reader: non-numeric id is a PICK, NULL not 0, old presence classifier as a regression statement; URL = the old literal, app price = pipeline price, AND a scan for a second reader/URL
 │   ├── sourceHealth.test.mjs        ← the alarm AND its restraint: 3-day gap fires, 1-day blip doesn't, fresh archive never alarms, one dark source implicates no other
+│   ├── briefingLedger.test.mjs      ← the briefing ledger: records EXACTLY computeEdgeSignals' picks and buildBriefing's slots, pick = pool head, pools bounded with true count, null never 0, unreadable day written and never overwrites, never pruned, the 2-day alarm, AND a scan that fails if a selection rule appears in the recorder
 │   ├── valuationSources.test.mjs    ← three-source readers: "NA" null, KTC on mfl_id (Gore Jr./Sr.), superflexValues only; a failed source all-null, never 0, never prunes
 │   ├── newsMatch.test.mjs           ← the matcher order (playerIds › athleteIds › longest full name), short names never match, AND a scan for a second matcher/normaliser
 │   ├── newsCoverage.test.mjs        ← the depth metric: stragglers cannot set it; general items excluded
@@ -3346,9 +3396,9 @@ report that honestly**: it prints failing tests that read like a code regression
 because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
-**Current counts (verified 2026-10-07 by moving `node_modules` aside, after the §0 #9 close-out):** with
-dependencies **`# tests 931 / # pass 931`**; without them **`# tests 888 / #
-pass 883 / # fail 5`**. **If the test count isn't 931, run `npm ci` before
+**Current counts (verified 2026-10-07 by moving `node_modules` aside, after §0 #10's briefing ledger):** with
+dependencies **`# tests 947 / # pass 947`**; without them **`# tests 904 / #
+pass 899 / # fail 5`**. **If the test count isn't 947, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React

@@ -58,6 +58,13 @@ jobs:
       - name: Archive the three-source valuation consensus
         continue-on-error: true   # best-effort — publish step preserves the old archive
         run: node --import ./scripts/register.mjs scripts/snapshot-consensus.mjs
+      # What The Edge's briefing would tell the owner today, recorded so it can
+      # be scored later against the moves that paid (open-items §0 #10). Runs
+      # the app's own computeEdgeSignals / buildBriefing; the app never fetches
+      # the file. A day it cannot read is still written, as `unreadable`.
+      - name: Record the briefing
+        continue-on-error: true   # best-effort — publish step preserves the old ledger; the alarm below catches a dead recorder
+        run: node --import ./scripts/register.mjs scripts/record-briefing.mjs
       # Only the default branch publishes (same guard as rookie-intel.yml). A
       # workflow_dispatch aimed at a feature branch is a DRY RUN: the scripts
       # run and their log is readable, but unreviewed code must never
@@ -119,12 +126,21 @@ jobs:
           elif [ -n "$PREV" ] && git cat-file -e "$PREV:values-consensus.json" 2>/dev/null; then
             git checkout "$PREV" -- values-consensus.json
           fi
+          # Briefing ledger: same permanent-carry-forward contract. A day not
+          # recorded can never be scored, so the record must never be
+          # force-pushed away by a run whose recorder produced nothing.
+          if [ -f "$GITHUB_WORKSPACE/briefing-ledger.json" ]; then
+            cp "$GITHUB_WORKSPACE/briefing-ledger.json" .
+          elif [ -n "$PREV" ] && git cat-file -e "$PREV:briefing-ledger.json" 2>/dev/null; then
+            git checkout "$PREV" -- briefing-ledger.json
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add values-history.json
           if [ -f trade-values.json ]; then git add trade-values.json; fi
           if [ -f values-archive.json ]; then git add values-archive.json; fi
           if [ -f values-consensus.json ]; then git add values-consensus.json; fi
+          if [ -f briefing-ledger.json ]; then git add briefing-ledger.json; fi
           git commit -m "Update values history"
           git push --force "$REMOTE" values-history
       # AFTER the publish, never before — the day's data is already on the
@@ -135,3 +151,11 @@ jobs:
       # (or a script that died outright) leaves the run GREEN forever.
       - name: Alarm if a valuation source has gone dark
         run: node scripts/check-source-health.mjs --archive values-consensus.json
+      # Same AFTER-publish placement and reasoning, for the briefing ledger: the
+      # recorder is continue-on-error, so a dead one would leave every run green
+      # while unrecoverable days went unrecorded. Fails after 2 days without a
+      # readable record (one missed run is a blip). `!cancelled()` so it still
+      # runs when the valuation alarm above has already failed the job.
+      - name: Alarm if the briefing ledger has stopped recording
+        if: ${{ !cancelled() }}
+        run: node --import ./scripts/register.mjs scripts/check-briefing-ledger.mjs briefing-ledger.json

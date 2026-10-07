@@ -77,10 +77,13 @@ chain; each link **forces** the next:
    URLs live in `src/constants.js` (`NEWS_FEED_URL`, `VALUES_HISTORY_URL`,
    `TRADE_VALUES_URL`, `ROOKIE_INTEL_URL`).
 
-   **Two files on `values-history` are written but NEVER fetched by the app**,
+   **Three files on `values-history` are written but NEVER fetched by the app**,
    and that is a deliberate shape rather than an oversight:
-   `values-archive.json` (permanent monthly values) and
-   `values-consensus.json` (permanent daily three-source valuations, phase 4a).
+   `values-archive.json` (permanent monthly values),
+   `values-consensus.json` (permanent daily three-source valuations, phase 4a)
+   and `briefing-ledger.json` (permanent daily record of what The Edge's
+   briefing named, for later scoring — §0 #10, 2026-10-07; it runs the app's
+   `computeEdgeSignals` in Actions, never a copy).
    They exist for offline analysis that needs memory the rolling 90-day file
    cannot keep, and having no client means they cost the phone nothing — no
    request, no constant, no bundle weight. **An archive whose only job is to
