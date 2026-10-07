@@ -575,9 +575,17 @@ non-numeric-or-absent → `pickEntries`. A presence test files every pick under 
 key no roster references and prices every pick at 0 app-wide.
 **The same rule binds the Actions pipelines**, which got it wrong for two months
 longer (`snapshot-trade-values.mjs` archived every pick at 0 until 2026-09-21).
-The classifier and pick pricer live once in **`scripts/fantasyCalcValues.mjs`**
-(pure, pinned by `tests/fantasyCalcValues.test.mjs`) — **do not inline it back
-into a fetch script.**
+**ONE reader for app, MCP server and pipelines: `src/utils/fantasyCalcPayload.js`**
+(the URL from `FANTASYCALC_PARAMS`, the id-shape classifier, the shape guards)
+plus `pickRoundMedian` in `utils/pickCapital.js` (2026-10-07, CODE-REVIEW-1 #6).
+The pipelines used to keep a hand-mirrored copy because Actions "could not import
+`src/utils`" — false since the repo's resolver hook: **every snapshot/news/rookie
+script now runs as `node --import ./scripts/register.mjs scripts/…`** in its
+workflow. `scripts/fantasyCalcValues.mjs` is only the pipeline-shaped wrapper
+(player values, a pricer ending in **null**) — **do not inline it back into a
+fetch script**, and never retype the URL (`tests/fantasyCalcValues.test.mjs`
+scans for one). Measured on the switch: all four archive outputs byte-identical
+to the old scripts' on the same live data.
 
 **Rookie ADP rule:** FantasyCalc has no rookie ADP field, and its `rookiesOnly`
 endpoint returns non-rookies — **never use it**. "Rk ADP" is derived locally
@@ -2970,7 +2978,7 @@ dynastyedge/
 │   ├── fetch-news.mjs          ← multi-source news fetcher (runs in Actions)
 │   ├── newsCoverage.mjs        ← THE feed depth metric (`coverage.depthHours`, p90 age of the player window), pure + tested — `spanHours` is set by stragglers
 │   ├── newsRetention.mjs       ← THE feed retention policy, pure + tested: diversity-aware eviction so the cap never binds before the 7-day window
-│   ├── fantasyCalcValues.mjs   ← THE pipelines' FantasyCalc reader, pure + tested: classify by id SHAPE; price a pick down the app's ladder, ending in NULL, never 0
+│   ├── fantasyCalcValues.mjs   ← the pipelines' wrapper over THE FantasyCalc reader (src/utils/fantasyCalcPayload.js): player values + a pick pricer ending in NULL, never 0
 │   ├── sourceHealth.mjs        ← THE source-alarm policy, pure + tested, shared by both pipelines: a persistent gap, never a blip
 │   ├── check-source-health.mjs ← THE alarm: runs AFTER publish (can never cost data) and FAILS the workflow; a missing file is itself an alarm
 │   ├── valuationSources.mjs    ← THE multi-source valuation readers, pure + tested (imports fantasyCalcValues.mjs, never copies it): crosswalk (`"NA"` = null), DynastyProcess, KTC JSON island joined on mfl_id (NOT ktc_id), archive merge
@@ -3171,6 +3179,7 @@ dynastyedge/
 │   │   ├── faabBid.js           ← THE FAAB bid (OPEN-3), shared with recommend_free_agents: CURRENT period's budget from settings (never assumed), 11/16/23% of the FULL budget capped at what is left, $2 floor on $1000, null for DEF/unpriced
 │   │   ├── injuryStatus.js      ← THE injury-status rule (OUT / QUESTIONABLE, IR eligibility from league settings) — one home, read by the Optimizer, player card, trade verdict, IR item and MCP
 │   │   ├── marketTrend.js       ← THE market-trend rules (±50, buy-low/sell-high eligibility, % move) — one home, read by every arrow, list and MCP tool
+│   │   ├── fantasyCalcPayload.js ← THE FantasyCalc reader (URL, id-SHAPE classifier, shape guards) — app, MCP server and pipelines all call it
 │   │   ├── fairBand.js          ← THE definition of "fair" (±5%), shared by the Analyzer's verdict and every surface that PREDICTS it; PLUS the separate, symmetric hindsight rule (ledger W-L-E + Activity's bigger haul)
 │   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation; teamDirection = THE team cut-offs (−1% / +5%)
 │   │   ├── seasonWindow.js      ← THE "has the rookie draft happened yet?" resolver — the live pick window + which draft the Tracker shows (replaced the hand-rolled PICK_YEARS)
@@ -3235,7 +3244,7 @@ dynastyedge/
 │   ├── injuryStatus.test.mjs        ← the owner's OUT / QUESTIONABLE grouping for every live Sleeper status, unknown = flagged never healthy, IR eligibility from league settings, trade verdict (Doubtful a note, unreadable said out loud), AND a source scan that fails on a second list
 │   ├── marketTrend.test.mjs         ← the ±50 boundary (exactly 50 is flat), predicates = the literals they replaced, AND a source scan that fails on a second copy
 │   ├── recommendations.test.mjs     ← suggestSellMove two-sided; pick keep by round; past-peak tilt (decline-only, never protects); cash-out gap = buildFairBand's
-│   ├── fantasyCalcValues.test.mjs   ← pipeline FantasyCalc reader: non-numeric id is a PICK, NULL not 0, old presence classifier as a regression statement
+│   ├── fantasyCalcValues.test.mjs   ← the FantasyCalc reader: non-numeric id is a PICK, NULL not 0, old presence classifier as a regression statement; URL = the old literal, app price = pipeline price, AND a scan for a second reader/URL
 │   ├── sourceHealth.test.mjs        ← the alarm AND its restraint: 3-day gap fires, 1-day blip doesn't, fresh archive never alarms, one dark source implicates no other
 │   ├── valuationSources.test.mjs    ← three-source readers: "NA" null, KTC on mfl_id (Gore Jr./Sr.), superflexValues only; a failed source all-null, never 0, never prunes
 │   ├── newsCoverage.test.mjs        ← the depth metric: stragglers cannot set it; general items excluded
@@ -3279,8 +3288,8 @@ because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
 **Current counts (verified 2026-10-07 by moving `node_modules` aside):** with
-dependencies **`# tests 889 / # pass 889`**; without them **`# tests 846 / #
-pass 841 / # fail 5`**. **If the test count isn't 889, run `npm ci` before
+dependencies **`# tests 893 / # pass 893`**; without them **`# tests 850 / #
+pass 845 / # fail 5`**. **If the test count isn't 893, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React

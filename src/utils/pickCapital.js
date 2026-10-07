@@ -74,17 +74,25 @@ export function pickRoundLabel(pick) {
 // generic round medians are built over.
 const PRICED_ROUNDS = 5
 
-export function findPickValue(pick, pickEntries) {
-  const suffix = roundSuffix(pick.round)
-  if (!suffix) return 0
-
-  const matches = pickEntries.filter(
-    e => e.name.includes(pick.season) && e.name.includes(suffix)
+// THE round median: the median value of FantasyCalc's round-level entries for
+// a round — of one season when `season` is given, else of every season listed
+// ("a 2nd is a 2nd"). NULL when nothing matches, never 0: the caller decides
+// what an unpriced pick means (the app shows `—` and counts 0; the permanent
+// archives store null). Shared with the pipelines' pricer
+// (scripts/fantasyCalcValues.mjs) — CODE-REVIEW-1 #6.
+export function pickRoundMedian(pickEntries, round, season = null) {
+  const suffix = roundSuffix(round)
+  if (!suffix) return null
+  const matches = (pickEntries ?? []).filter(e =>
+    e.name.includes(suffix) && (season == null || e.name.includes(String(season)))
   )
-  if (!matches.length) return 0
+  if (!matches.length) return null
+  const sorted = [...matches].sort((a, b) => a.value - b.value)
+  return sorted[Math.floor(sorted.length / 2)].value
+}
 
-  matches.sort((a, b) => a.value - b.value)
-  return matches[Math.floor(matches.length / 2)]?.value ?? 0
+export function findPickValue(pick, pickEntries) {
+  return pickRoundMedian(pickEntries, pick.round, pick.season) ?? 0
 }
 
 // Exact per-slot pick price. FantasyCalc lists slot picks as "2026 Pick 1.09"
@@ -194,13 +202,7 @@ export function buildDraftPickIndex(draft, picks, rosters) {
 export function buildGenericRoundValues(pickEntries) {
   const byRound = {}
   for (let round = 1; round <= PRICED_ROUNDS; round++) {
-    const suffix = roundSuffix(round)
-    const matches = (pickEntries ?? [])
-      .filter(e => e.name.includes(suffix))
-      .sort((a, b) => a.value - b.value)
-    byRound[round] = matches.length
-      ? matches[Math.floor(matches.length / 2)].value
-      : 0
+    byRound[round] = pickRoundMedian(pickEntries, round) ?? 0
   }
   return byRound
 }

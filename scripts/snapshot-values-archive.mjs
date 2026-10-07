@@ -25,10 +25,8 @@
 // the archived value for a month is that month's latest daily snapshot.
 
 import { writeFileSync } from 'node:fs'
-import { splitFantasyCalcEntries } from './fantasyCalcValues.mjs'
+import { splitFantasyCalcEntries, FANTASYCALC_VALUES_URL as VALUES_URL } from './fantasyCalcValues.mjs'
 
-const VALUES_URL =
-  'https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=2&numTeams=10&ppr=0.5'
 const ARCHIVE_URL =
   'https://raw.githubusercontent.com/chnates/dynastyedge/values-history/values-archive.json'
 

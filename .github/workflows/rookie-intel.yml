@@ -72,7 +72,7 @@ jobs:
         with:
           node-version: 20
       - name: Build today's rookie intel feed
-        run: node scripts/snapshot-rookie-intel.mjs
+        run: node --import ./scripts/register.mjs scripts/snapshot-rookie-intel.mjs
       # Only the default branch publishes. A workflow_dispatch aimed at a
       # feature branch runs the snapshot for inspection but must never
       # force-push the production data branch with unreviewed output.

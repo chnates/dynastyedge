@@ -115,3 +115,69 @@ test('REGRESSION: the old presence-based classifier priced every pick at 0', () 
   assert.equal(oldPickEntries.length, 0, 'the old classifier saw no picks at all')
   assert.equal(buildPickPricer(oldPickEntries)('2027', 1), null, 'so every pick was unpriced')
 })
+
+// ── ONE reader for app, server and pipelines (CODE-REVIEW-1 #6, 2026-10-07) ──
+// The pipelines kept their own copy because Actions "could not import
+// src/utils"; that copy archived every pick at 0 for two months. They now run
+// with scripts/register.mjs and call src/utils/fantasyCalcPayload.js.
+import { readFileSync as readSrc, readdirSync as readDir, statSync as statOf } from 'node:fs'
+import { join as joinPath } from 'node:path'
+import { splitFantasyCalcPayload, fantasyCalcValuesUrl, isPlayerSleeperId } from '../src/utils/fantasyCalcPayload.js'
+import { findPickValue, pickRoundMedian } from '../src/utils/pickCapital.js'
+import { FANTASYCALC_VALUES_URL } from '../scripts/fantasyCalcValues.mjs'
+
+test('the URL is built from the four never-change parameters, byte-identical to the old literal', () => {
+  const old = 'https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=2&numTeams=10&ppr=0.5'
+  assert.equal(fantasyCalcValuesUrl(), old)
+  assert.equal(FANTASYCALC_VALUES_URL, old)
+})
+
+test('strict (app/server) throws on a bad shape; lenient (pipelines) returns empty', () => {
+  assert.throws(() => splitFantasyCalcPayload(null), /unexpected data/)
+  assert.throws(() => splitFantasyCalcPayload([{ player: { name: '2027 1st', sleeperId: 'FP_2027_1' }, value: 5 }]), /no player values/)
+  assert.deepEqual(splitFantasyCalcPayload(null, { strict: false }), { playerMap: {}, pickEntries: [] })
+  assert.equal(isPlayerSleeperId('4034'), true)
+  assert.equal(isPlayerSleeperId('FP_2027_1'), false)
+  assert.equal(isPlayerSleeperId(null), false)
+})
+
+test('the app\'s pick price and the pipelines\' agree wherever the app prices', () => {
+  const entries = [
+    { name: '2027 1st', value: 3000 }, { name: '2027 1st (Mid)', value: 3200 }, { name: '2028 1st', value: 2600 },
+    { name: '2027 2nd', value: 1100 }, { name: '2026 Pick 1.09', value: 2900 },
+  ]
+  const pipeline = buildPickPricer(entries)
+  for (const [season, round] of [['2027', 1], ['2028', 1], ['2027', 2]]) {
+    assert.equal(findPickValue({ season, round }, entries), pipeline(season, round), `${season} ${round}`)
+  }
+  // Where the app shows 0 (no market for that season), the pipeline walks to
+  // the generic median, then null — never 0.
+  assert.equal(findPickValue({ season: '2029', round: 2 }, entries), 0)
+  assert.equal(pipeline('2029', 2), 1100)
+  assert.equal(pipeline('2029', 4), null)
+  assert.equal(pickRoundMedian(entries, 4), null)
+})
+
+test('no second FantasyCalc reader or URL in src/, mcp/ or the pipeline scripts', () => {
+  const root = new URL('..', import.meta.url).pathname
+  const files = []
+  const walk = dir => {
+    for (const name of readDir(dir)) {
+      const p = joinPath(dir, name)
+      if (statOf(p).isDirectory()) { if (name !== 'dev') walk(p) }
+      else if (/\.(js|jsx|mjs)$/.test(name)) files.push(p)
+    }
+  }
+  walk(joinPath(root, 'src'))
+  walk(joinPath(root, 'mcp'))
+  walk(joinPath(root, 'scripts'))
+  const copies = []
+  for (const f of files) {
+    if (f.endsWith('utils/fantasyCalcPayload.js')) continue
+    readSrc(f, 'utf8').split('\n').forEach((line, i) => {
+      if (line.trim().startsWith('//')) return
+      if (/api\.fantasycalc\.com\/values|\\d\+\$\/\.test\(String\(sid\)\)/.test(line)) copies.push(`${f.slice(root.length)}:${i + 1}`)
+    })
+  }
+  assert.deepEqual(copies, [], 'use src/utils/fantasyCalcPayload.js')
+})

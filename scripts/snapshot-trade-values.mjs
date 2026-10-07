@@ -17,14 +17,10 @@
 // older would be recorded at today's prices and mislabeled as trade-time.
 
 import { writeFileSync } from 'node:fs'
-import { splitFantasyCalcEntries, buildPickPricer } from './fantasyCalcValues.mjs'
-
-const LEAGUE_ID = '1313933520715907072'
-const VALUES_URL =
-  'https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=2&numTeams=10&ppr=0.5'
+import { splitFantasyCalcEntries, buildPickPricer, FANTASYCALC_VALUES_URL as VALUES_URL } from './fantasyCalcValues.mjs'
+import { LEAGUE_ID, SLEEPER_BASE } from '../src/constants.js'
 const ARCHIVE_URL =
   'https://raw.githubusercontent.com/chnates/dynastyedge/values-history/trade-values.json'
-const SLEEPER_BASE = 'https://api.sleeper.app/v1'
 
 const RECENT_DAYS = 8   // > daily cadence, with margin for missed runs
 const TX_WEEKS = 18
