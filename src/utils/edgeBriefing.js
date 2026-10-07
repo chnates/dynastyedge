@@ -11,6 +11,7 @@ import { buildFreeAgentPool } from './freeAgents'
 import { MIN_SPARKLINE_POINTS } from './valueHistory'
 import { POSITIONS } from '../constants'
 import { trendPct, isMoving, isBuyLowCandidate, isSellHighCandidate } from './marketTrend'
+import { readTradeDeadline, isDeadlineWindow } from './tradeDeadline'
 
 // The Edge's assistant-GM logic: turn everything the app already caches into
 // a small set of prioritized, actionable briefing items. Pure functions —
@@ -197,23 +198,22 @@ export function buildBriefing({
     })
   }
 
-  // 2. Trade deadline urgency (in-season, ≤2 weeks out).
-  if (!isOffseason && tradeDeadline && nflState?.week != null) {
-    const weeksLeft = tradeDeadline - nflState.week
-    if (weeksLeft >= 0 && weeksLeft <= 2) {
-      items.push({
-        id: 'deadline',
-        icon: 'deadline',
-        tone: 'warning',
-        title: weeksLeft === 0
-          ? 'Trade deadline is THIS WEEK'
-          : `Trade deadline in ${weeksLeft} week${weeksLeft === 1 ? '' : 's'}`,
-        mark: weeksLeft === 0 ? 'THIS WEEK' : `${weeksLeft} week${weeksLeft === 1 ? '' : 's'}`,
-        cta: 'Open the trade desk',
-        body: 'Last call to fix roster gaps before the market closes.',
-        action: { type: 'route', to: '/trade' },
-      })
-    }
+  // 2. Trade deadline urgency (in-season, ≤ DEADLINE_SOON_WEEKS out — utils/tradeDeadline.js).
+  const deadline = readTradeDeadline({ tradeDeadline, nflState, isOffseason })
+  if (isDeadlineWindow(deadline)) {
+    const { weeksLeft } = deadline
+    items.push({
+      id: 'deadline',
+      icon: 'deadline',
+      tone: 'warning',
+      title: weeksLeft === 0
+        ? 'Trade deadline is THIS WEEK'
+        : `Trade deadline in ${weeksLeft} week${weeksLeft === 1 ? '' : 's'}`,
+      mark: weeksLeft === 0 ? 'THIS WEEK' : `${weeksLeft} week${weeksLeft === 1 ? '' : 's'}`,
+      cta: 'Open the trade desk',
+      body: 'Last call to fix roster gaps before the market closes.',
+      action: { type: 'route', to: '/trade' },
+    })
   }
 
   // 2b. Playoff odds standing (in-season, once the sim has real odds). A

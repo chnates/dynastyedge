@@ -2368,7 +2368,10 @@ player's depth rank):
 Under the Trade rail during the regular season (deadline week from league
 settings): > 2 weeks out neutral "Trade deadline: Week 13 · N weeks away";
 ≤ 2 weeks amber, deadline week "THIS WEEK"; after, muted "Trade deadline
-passed". **Hidden in the offseason.**
+passed". **Hidden in the offseason.** The arithmetic (weeks left, "soon" =
+`DEADLINE_SOON_WEEKS` 2) has **one home, `src/utils/tradeDeadline.js`**, read
+by this banner, The Edge's deadline item and the MCP league calendar;
+`tests/tradeDeadline.test.mjs` fails on a second copy.
 
 -----
 
@@ -3182,6 +3185,7 @@ dynastyedge/
 │   │   ├── recommendations.js   ← THE assistant-GM brain: keep/givability scores (round-priced picks, past-peak age tilt), FA pickups, two-sided sell moves, the cash-out board
 │   │   ├── faabBid.js           ← THE FAAB bid (OPEN-3), shared with recommend_free_agents: CURRENT period's budget from settings (never assumed), 11/16/23% of the FULL budget capped at what is left, $2 floor on $1000, null for DEF/unpriced
 │   │   ├── injuryStatus.js      ← THE injury-status rule (OUT / QUESTIONABLE, IR eligibility from league settings) — one home, read by the Optimizer, player card, trade verdict, IR item and MCP
+│   │   ├── tradeDeadline.js     ← THE trade-deadline arithmetic (weeks left, the 2-week "soon" window) — one home, read by the Trade banner, The Edge and the MCP league calendar
 │   │   ├── marketTrend.js       ← THE market-trend rules (±50, buy-low/sell-high eligibility, % move) — one home, read by every arrow, list and MCP tool
 │   │   ├── fantasyCalcPayload.js ← THE FantasyCalc reader (URL, id-SHAPE classifier, shape guards) — app, MCP server and pipelines all call it
 │   │   ├── fairBand.js          ← THE definition of "fair" (±5%), shared by the Analyzer's verdict and every surface that PREDICTS it; PLUS the separate, symmetric hindsight rule (ledger W-L-E + Activity's bigger haul)
