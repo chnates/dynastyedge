@@ -5,7 +5,8 @@ description: How to write and maintain DynastyEdge documentation at the house st
 
 # DynastyEdge Docs & Writing
 
-**The premise:** CLAUDE.md (repo root, ~480 KB / ~7,100 lines as of 2026-10-07 — verify: `wc -c CLAUDE.md`) is
+**The premise:** CLAUDE.md (repo root, ~230 KB / ~3,600 lines after CLEANUP-2 slimmed it from
+~480 KB / ~7,100 on 2026-10-07 — verify: `wc -lc CLAUDE.md`) is
 the **doc of record**. Every future session reads it before writing code; it
 is the *only* onboarding this one-person project has. A stale sentence in it
 doesn't mislead one reader — it poisons every session from then on. This skill
@@ -61,13 +62,34 @@ grep -n '^### Feature' CLAUDE.md  # the 19 feature entries
 | Features 1–19 | One `### Feature N — Name (Location)` entry per feature, then the recommendation engine |
 | Trade deadline banner | Small cross-feature UI contract (lives after the recommendation engine) |
 | Navigation | The **live** nav truth: bottom tab bar, contents rails, the Index, route map, redirects |
-| Navigation Refactor (Planned — phased…) | Phased plan + status line ("Phase 1 complete… Phase 2 complete") + watch-items |
+| Navigation Refactor (complete — history) | A two-line pointer + the surviving IA principle; the plan itself is `docs/history/navigation-refactor.md` |
 | Design System | Component library table, palettes, position/tier/round color maps, logo, typography, motion |
 | File Structure | Annotated tree of the whole repo — every file with a one-line role |
 | GitHub Pages Deployment | deploy.yml listing, vite `base`, one-time Pages setting |
 | Constants File | The `src/constants.js` contract ("never hardcode these anywhere else") |
 | Rules Claude Code Must Always Follow | Numbered rules 1–25: joins, caches, display formats, sheets, storage keys, the MCP boundary |
 | Future Features (Do Not Build Yet) + Already built | Backlog, and the graduation ledger for shipped ones |
+
+### Where dated evidence goes — `docs/history/` (CLEANUP-2, 2026-10-07)
+
+CLAUDE.md holds **rules, contracts, invariants and traps, each with its
+one-line WHY**. The evidence behind them — measurements, "verified live on
+<date>" paragraphs, superseded rulings, incident narratives, test-count logs —
+lives in **`docs/history/<section>.md`**, one file per CLAUDE.md section
+(`overview`, `league-context`, `data-sources`, `mcp-server`, `features`,
+`navigation`, `navigation-refactor`, `design-system`, `file-structure`,
+`deployment`, `constants`, `rules`, `future-features`). Each opens with the
+section's verbatim pre-slim text; **append new evidence below it under a dated
+heading — never edit the snapshot.** Each CLAUDE.md section carries a one-line
+pointer to its file.
+
+**Why:** the file had grown to ~480KB because every change appended its
+measurement next to its rule, and every session pays for all of it. **Do not
+let CLAUDE.md regrow a log**: a re-measured number *replaces* the old one in
+CLAUDE.md (the `npm ci` block keeps only current counts) and the old one goes
+to history. The test for what stays: a sentence that says never / always /
+must / do not, or names a trap, stays (shortened if it can be); when in doubt,
+it stays.
 
 ### Which sections a change type must touch
 
@@ -79,7 +101,8 @@ Treat this as a checklist — a change that skips a row ships doc drift.
 | **New data source / endpoint / feed** | **Data Sources** (endpoint table row or a new pipeline subsection) · the consuming feature's "data sources" line · `constants.js` snippet in **Constants File** if a URL constant was added |
 | **Component/route moved** | **File Structure** if the file moved; if only the route moved, do NOT move it in the tree — annotate with the **route-only move** convention: "(routed under X; file stays here)" (models: PickTradeCalculator, ManagersView/FreeAgentsView notes) · **Navigation** table + redirect list ("`/old` → `/new` redirects so saved deep-links keep working") |
 | **Rule changed** | **Rules** (and/or Non-negotiable rules) — restate the rule *with its reason*; if it supersedes an old rule, rewrite the old text, don't append a contradiction |
-| **Refactor phase lands** | The **Navigation Refactor** status line + its "Doc upkeep during the refactor" checklist (it names the exact sections per phase) |
+| **A phase of a multi-commit plan lands** | The plan's own `Status:` line, advanced in the same commit. When the plan completes, move it verbatim to `docs/history/` and leave a pointer (the Navigation Refactor is the worked example) |
+| **A measurement, live verification, or superseded ruling** | **Not CLAUDE.md** — append it to the section's `docs/history/<section>.md` under a dated heading; CLAUDE.md keeps only the rule and its one-line WHY (see below) |
 | **New storage key** | Rules → the storage-key rule's exhaustive list (all keys prefixed `dynastyedge_`) |
 | **Design primitive added** | Design System → component library table · File Structure `ui/` block |
 | **Pipeline/workflow change** | The pipeline's subsection under Data Sources (cron, branch, file schema) · File Structure `.github/workflows` annotations |
@@ -117,7 +140,7 @@ data-source declaration is below standard.
 
 ## 2. House style — extracted from the document itself
 
-Match these patterns; they are consistent across all ~2,000 lines.
+Match these patterns; they are consistent across the whole file.
 
 - **Bold the load-bearing term**, not whole sentences: "**Format is columnar**
   to stay mobile-sized", "**Strictly best-effort:**". One bold anchor per
@@ -146,8 +169,7 @@ Match these patterns; they are consistent across all ~2,000 lines.
   shipped item under "Do Not Build Yet".
 - **Negative space is documented.** The doc says what does *not* exist and
   why: "**No saved history.** … that lives in Sleeper", "no
-  verb/keyword synonym map yet", "**There is NO bottom tab bar.** … This is a
-  deliberate design decision". When you decide not to build something, write
+  verb/keyword synonym map yet", "**There is no spinner** in this app" (Design System › Motion). When you decide not to build something, write
   the decision down where the next session would go looking for the feature.
 - **Exceptions are enumerated, never implied:** "those two are the sanctioned
   hand-rolled overlays". If a rule has a carve-out, name every member of it.

@@ -218,7 +218,8 @@ Notes on specific stages:
   write the retirement entry and take the win.
 - **Staged landing for multi-step ideas.** Big ideas land as phases, each
   independently shippable, with an explicit status line in CLAUDE.md updated
-  as each phase lands. Verified precedent: the Navigation Refactor — plan
+  as each phase lands. Verified precedent: the Navigation Refactor (the full
+  plan now lives in `docs/history/navigation-refactor.md`) — plan
   committed first (`d4f9e75`), then `59627db` (Phase 1.1), `9fb39df`
   (Phase 1.2), `77bb3fe` (Phase 2a), `f7df308` (Phase 2b), all with
   same-commit CLAUDE.md updates and the plan's status line advanced each
@@ -278,7 +279,7 @@ Each verified against `git log`/`git show` on 2026-07-05. Treat these as
    real-device checklist before being called done — simulators and desktop
    Safari are inadmissible for these claims.
 3. **Phased plans with status lines in CLAUDE.md.** The Navigation Refactor
-   (plan `d4f9e75`; phases `59627db`/`9fb39df`/`77bb3fe`/`f7df308`) shows
+   (plan `d4f9e75`, archived in `docs/history/navigation-refactor.md`; phases `59627db`/`9fb39df`/`77bb3fe`/`f7df308`) shows
    the shape: spec first, small independently-shippable steps, doc status
    advanced each landing. *Practice:* any multi-commit idea gets a written
    phase plan with an explicit "Status:" line before phase 1 lands.
@@ -399,7 +400,7 @@ failed>", with commands and numbers for every attack you ran.
 |---|---|---|
 | **Eyeball verdicts** ("looks better/faster") | The test suite covers no visuals — your eye is the gate, and you skipped it | Neon glow `e31deaf` shipped on aesthetic judgment, reverted same day `aa0892b` once actually viewed in dark mode on the device. Cheap only because it was killed fast. |
 | **Tuning on the evaluation set** | With N=10 teams you can fit noise perfectly and "prove" anything | Standing fence in `dynastyedge-model-quality-campaign`: tune on season A, evaluate frozen on season B; the holdout is named in the pre-registration and touched once. |
-| **Changing two things at once** | Tiny N gives you zero statistical attribution; isolation is the only attribution you get | The Navigation Refactor deliberately split IA restructure (Phases 1–2, `59627db`…`f7df308`) from the visual repaint (Phase 3, still unbuilt) — CLAUDE.md states the reason: "so we don't restructure and restyle at once". |
+| **Changing two things at once** | Tiny N gives you zero statistical attribution; isolation is the only attribution you get | The Navigation Refactor deliberately split IA restructure (Phases 1–2, `59627db`…`f7df308`) from the visual repaint (Phase 3, still unbuilt) — the plan (`docs/history/navigation-refactor.md`) states the reason: "so we don't restructure and restyle at once". |
 | **Claiming without explaining the negatives** | Two half-explanations hide a wrong model; the unexplained case is where it bites | First PWA status-bar fix `cfd9ad0` addressed the observed symptom via the (wrong) theme-color-override diagnosis, reverted `3083f0c` same day; accepted fix `78b6c29` — restore `black-translucent` + light-mode-only dark strip, since iOS standalone ignores live theme-color — covered all observations in both themes. |
 | **Experiment lingering half-landed on main** | main auto-deploys to the owner's phone — a half-experiment is a broken pocket app; violates always-shippable | House rule from the lifecycle: candidate logic lives in scratch/skill scripts until it passes refutation; multi-step adoptions land as independently-shippable phases with CLAUDE.md status lines (`d4f9e75` pattern). Same-day-revert culture (`aa0892b`, `3083f0c`) exists precisely so nothing lingers. |
 | **Claiming live-data runs you did not run** | A fabricated "verified against live rosters" poisons the whole evidence chain | Network posture varies by session — proxy-blocked 2026-07-05, fully reachable 2026-08-14 (see §context). Probe, then either run it for real or write "requires network — not run here" and route through the runbook. |

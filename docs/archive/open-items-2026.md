@@ -125,6 +125,60 @@ deleted. The active work queue remains `docs/build-plan-2026-09.md`).
 
 ## Closed and shipped items formerly in §1 (Active)
 
+### CLEANUP-2 — slim CLAUDE.md **CLOSED 2026-10-07 — EXECUTED (owner reviews before merge)**
+
+**7,064 lines, 468KB, read in full at the start of every session.** By
+section: Features 2,396 · The MCP Server 1,438 · Design System 880 · Data
+Sources 761 · File Structure 578 · Navigation 207 · Rules 177 · Navigation
+Refactor 144 (a completed plan kept as history).
+
+**The bulk is measurement narrative, not rules.** Examples: the `npm ci`
+block's re-measure log of every test-count pair since July (~150 lines), each
+MCP tool's "measured live" paragraph, the trade engine's dated rulings, and the
+Navigation Refactor plan.
+
+**Proposal:** CLAUDE.md keeps every rule, contract, invariant and the one-line
+WHY for each. The dated evidence moves to `docs/history/` (per section), with
+a pointer at each cut. **Target ≤ ~2,000 lines.**
+
+**Risk:** this is the doc of record. A rule cut by accident is a rule the next
+session breaks. So the PR must list every rule-bearing sentence it removed and
+where that sentence now lives, and the owner reviews it before merge.
+**Done when:** a fresh session following only the slimmed CLAUDE.md passes the
+same gates and finds every contract it needs.
+
+**Executed 2026-10-07.** The proposal above, as written, with one honest miss.
+
+- **Result:** CLAUDE.md **7,123 → 3,586 lines, 482,071 → 229,417 bytes
+  (−52%)**, in one `docs:` commit per section. Every `##` heading kept; every
+  `###` kept except the Navigation Refactor's five sub-headings (the plan moved
+  whole) and a few `####` lead-ins inside Feature 3 and the Design System that
+  nothing outside CLAUDE.md cites.
+- **Where the evidence went:** `docs/history/<section>.md`, thirteen files,
+  each opening with that section's **verbatim** pre-slim text (so nothing was
+  deleted, and nothing in history was edited). The convention for new evidence
+  is in `dynastyedge-docs-and-writing` §1.
+- **The target was missed — ≤ ~2,000 lines, revised to ~2,250 in-session.**
+  Stripped of measurements, the rules and contracts themselves run ~3,500
+  lines: Features 1,127, MCP 585, Design System 472, Data Sources 440, File
+  Structure 394 (its 306-entry tree kept whole, annotations shortened 56.6KB →
+  38.2KB). The owner's rule was "when in doubt, it stays", so the number moved
+  rather than the rules. A further cut would mean deleting contracts or
+  duplicates (e.g. the MCP tool contracts restate Features); that is a
+  separate decision.
+- **Verification:** a mechanical audit of every rule-bearing sentence in the
+  pre-slim file (never / always / must / do not / trap — 376) against the
+  slimmed sections; the 188 low-overlap hits were read by hand and **four
+  dropped clauses were restored**. Every quoted CLAUDE.md phrase cited from
+  tests, `mcp/` and skills was checked; three were restored in CLAUDE.md's
+  wording and three skill references repointed. Test counts re-verified
+  828 / 785 by moving `node_modules` aside.
+- **Corrections made on the way** (drift the slim exposed): Tech Stack's
+  navigation row still said "side drawer, 6 sections"; Feature 18 cited rule 21
+  for the storage-key list, which is rule 20.
+
+---
+
 ### CLEANUP-1 — the repo-wide cleanup scan, and what to archive **CLOSED 2026-10-07 — EXECUTED**
 
 **The inventory below is the scan's output.** Nothing has been moved or

@@ -4,7 +4,7 @@
 dated snapshot: unlike the old dated status snapshots (now in `docs/archive/`), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-10-07 (**CLEANUP-1 executed** — the stale branches are gone, the spent docs are in `docs/archive/`, and this file was cut from ~3,100 lines to the live items. The closed records and the old review changelog now live in **`docs/archive/open-items-2026.md`**, under the same headings and IDs. Earlier the same day **OPEN-3 shipped**: the FAAB bid recommender. Tests 828 / 785 with no `node_modules`, gap 43.)
+**Last reviewed:** 2026-10-07 (**CLEANUP-2 done** — CLAUDE.md slimmed 7,123 → 3,586 lines, 482KB → 229KB, every rule kept and the dated evidence moved verbatim to `docs/history/`; on the owner's review before merge. It missed its ~2,000-line target — see §3. Previously the same day: CLEANUP-1 executed and OPEN-3 shipped. Tests 828 / 785 with no `node_modules`, gap 43.)
 
 **How to use it:**
 - Each item states its **trigger** — the condition that makes it ready. An item
@@ -49,7 +49,7 @@ login, a phone or a decision that no sandbox can supply.
 | 3 | **MCP connector re-check on the phone** — all 13 tools in the connector's list; one question each to the five added since 2026-09-20 (see MCP-CARRY) | Owner | 15 min | No sandbox can do it |
 | 4 | **The two DESIGN-4 device checks** — re-add the home-screen app (icon + both `theme-color` metas), and Bricolage Grotesque on glass | Owner | 15 min | Same reason; do it alongside #3 |
 | 5 | **CLEANUP-1: mechanical cleanup** — **DONE 2026-10-07.** 113 branches deleted (9 unmerged tips tagged `archive/*` first), spent docs in `docs/archive/`, this file cut to the live items, five dead exports removed, skill drift fixed | Me | 1 | Right after the FAAB build: cleanup does not decay, FAAB does. It goes before the research queue, because every session after it reads less stale material. **Branch deletion needs the owner's yes first** |
-| 6 | **CLEANUP-2: slim CLAUDE.md** — 7,064 lines / 468KB, loaded by every session | Me | 1–2 | The largest cleanup lever, and the riskiest (it is the doc of record). After CLEANUP-1, so the archive layout it moves material into already exists |
+| 6 | **CLEANUP-2: slim CLAUDE.md** — **DONE 2026-10-07** (owner reviews before merge). 7,123 → 3,586 lines, 482KB → 229KB; every rule, contract and trap kept, the dated evidence moved verbatim to `docs/history/` (one file per section). Missed the ~2,000-line target — see §3 | Me | 1–2 | The largest cleanup lever, and the riskiest (it is the doc of record). After CLEANUP-1, so the archive layout it moves material into already exists |
 
 ### Before the trade deadline (by ~Week 12)
 
@@ -139,27 +139,7 @@ the repo's gates):
 
 ## 1. Active
 
-### CLEANUP-2 — slim CLAUDE.md **[executes as §0 #6]**
-
-**7,064 lines, 468KB, read in full at the start of every session.** By
-section: Features 2,396 · The MCP Server 1,438 · Design System 880 · Data
-Sources 761 · File Structure 578 · Navigation 207 · Rules 177 · Navigation
-Refactor 144 (a completed plan kept as history).
-
-**The bulk is measurement narrative, not rules.** Examples: the `npm ci`
-block's re-measure log of every test-count pair since July (~150 lines), each
-MCP tool's "measured live" paragraph, the trade engine's dated rulings, and the
-Navigation Refactor plan.
-
-**Proposal:** CLAUDE.md keeps every rule, contract, invariant and the one-line
-WHY for each. The dated evidence moves to `docs/history/` (per section), with
-a pointer at each cut. **Target ≤ ~2,000 lines.**
-
-**Risk:** this is the doc of record. A rule cut by accident is a rule the next
-session breaks. So the PR must list every rule-bearing sentence it removed and
-where that sentence now lives, and the owner reviews it before merge.
-**Done when:** a fresh session following only the slimmed CLAUDE.md passes the
-same gates and finds every contract it needs.
+Nothing is active. §0 is the queue; the next item in order is #7.
 
 ---
 
@@ -677,6 +657,7 @@ are as of 2026-07-17.
 
 | Item | Closed | How |
 |---|---|---|
+| CLEANUP-2 — slim CLAUDE.md | 2026-10-07 | **7,123 → 3,586 lines, 482KB → 229KB (−52%)**, in one `docs:` commit per section. Every rule, contract, invariant and trap stays with its one-line WHY; each section's pre-slim text is preserved **verbatim** in `docs/history/<section>.md` with a pointer at the cut. **Missed the ≤ ~2,000-line target** (and the ~2,250 revised in-session): the contracts alone carry ~3,500 lines once their measurements are gone, and the rule was "when in doubt, it stays". A mechanical audit of all 376 rule-bearing sentences found four dropped clauses, restored. Counts re-verified 828 / 785. Navigation Refactor heading renamed "(complete — history)". Detail in the archive |
 | CLEANUP-1 — the repo-wide cleanup | 2026-10-07 | `archive-branches.yml` (run 37556571494) deleted **113** `claude/*` branches and tagged the **9** whose tips `main` lacked as `archive/*`. The dry run's "68" was a shallow-clone artifact: `--is-ancestor` fails behind a graft. Spent docs moved to `docs/archive/` after their still-cited rules and specs were lifted (build plan §0/§8 → §0, §10 → PHASE-4BCD, OPEN-4 restated). This file cut 3,137 → ~800 lines, closed records archived verbatim. `assetGivability` + four `reset*Cache()` deleted (tests unchanged 828 / 785). Four skill drifts + OPEN-3's fixed. Detail in the archive |
 | OPEN-3 — the FAAB bid recommender | 2026-10-07 | Shipped as `src/utils/faabBid.js`, one util behind League › Free Agents and `recommend_free_agents` (zod schema extended, verified through a real MCP client). Floor $2 on $1000 (owner's call, dropping the spec's $10); ladder 11/16/23% of the full budget capped at the current period's remainder; no contest prediction, because value barely moves the contest rate. Budget read from settings, never assumed; null for a defense or an unpriced player. Grading bars and protocol pre-registered in the memo's §10 for §0 #13. Detail in the archive |
 | NEWS-7 — ESPN RSS gave Actions nothing | 2026-09-22 | The recorded diagnosis ("catch branch, so it throws — 403 or timeout") was wrong on every count: the log read `0 items` in ~95ms, not `FAILED`. The script was made to print what a zero-item 2xx returned, and the next run read **HTTP 202 · text/html · 0 bytes** — a bot-manager deferral, which `res.ok` accepts. Same URL + UA from outside Actions: 200, 29 items. **Removed** at 8 of 12 consecutive misses; the zero-item diagnostic stays. Detail in the archive |
