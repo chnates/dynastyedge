@@ -303,7 +303,7 @@ forever, or retry-loop. On any failure the UI surface simply hides.**
 |---|---|---|
 | Aggregated news feed | `usePlayerIntel.js` `loadNewsFeed()` | `.catch(() => [])`, single cached promise |
 | News matched to roster/watchlist | `useLeagueNews.js` / `useNewsFeed.js` | consume `loadNewsFeed`; empty ⇒ section hides |
-| ESPN per-player fallback endpoints | `usePlayerIntel.js` (`espnNewsCache`) | unofficial, CORS-blocked in practice; degrades silently |
+| ESPN per-player news endpoint | `usePlayerIntel.js` (`espnNewsCache`) | unofficial; answers with ACAO `*` (probed 2026-10-07, the dead 404 fallback removed); degrades silently |
 | Value history / sparklines | `useValueHistory.js` | `historyFailed` latch → `getSeries` returns `null`; < 4 points also `null` (a 2-point "line" reads as broken) |
 | Trade-time value archive | `useTradeTimeValues.js` | `archiveFailed` latch; missing entry ⇒ "at trade time" line hides |
 | Rookie intel | `useRookieIntel.js` | `intelFailed` latch; a missing branch renders Draft › Research's "hasn't published yet" explainer, and the board falls back to dynasty-value order — never an `ErrorState`. The branch first published 2026-08-14, so a miss now means the pipeline stopped rather than never started |
@@ -418,9 +418,10 @@ task legitimately touches them.
    silently in a quiet offseason. Any push re-enables them. Symptom: stale
    `news.json` / no new value columns — check the Actions tab before
    debugging client code.
-4. **The ESPN per-player endpoints are unofficial and CORS-blocked in
-   practice.** Kept only because they cost nothing and degrade silently
-   (Class B). Never build anything that *depends* on them working.
+4. **The ESPN per-player news endpoint is unofficial.** It answered 200 with
+   `access-control-allow-origin: *` when probed 2026-10-07 (it had been
+   documented as CORS-blocked; its 404 fallback was removed). Class B — never
+   build anything that *depends* on it working.
 5. **FantasyCalc is a single point of failure for all pricing.** Every value,
    rank, trend, pick price, trade verdict, trajectory, and playoff prior
    traces to one unauthenticated endpoint. The only mitigation is at sign-in

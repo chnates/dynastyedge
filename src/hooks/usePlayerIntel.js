@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { SLEEPER_BASE, ESPN_BASE, ESPN_WEB_BASE, NEWS_FEED_URL } from '../constants'
+import { SLEEPER_BASE, ESPN_BASE, NEWS_FEED_URL } from '../constants'
 import { fetchJSON } from '../utils/fetchJSON'
 import { loadPlayerDB } from './usePlayerDB'
 
@@ -172,22 +172,22 @@ function parseEspnItems(data) {
     .filter(n => n.headline)
 }
 
+// ESPN's per-player news, used only when the aggregated feed has nothing for a
+// player. Probed 2026-10-07 (CODE-REVIEW-1 #14): this endpoint answers 200 with
+// `access-control-allow-origin: *`, so it is NOT the "CORS-blocked" dead end the
+// docs used to call it. The old fallback (site.web.api.espn.com …/athletes/{id}/
+// news) returned 404 for every player tried, so it was removed rather than kept
+// as a second request that can never succeed. Still unofficial and best-effort
+// (Class B): any failure is [] and the section hides.
 export function loadEspnNews(espnId) {
   if (!espnId) return Promise.resolve([])
   if (!espnNewsCache.has(espnId)) {
-    const primary  = `${ESPN_BASE}/apis/fantasy/v2/games/ffl/news/players?playerId=${espnId}&limit=3`
-    const fallback = `${ESPN_WEB_BASE}/apis/common/v3/sports/football/nfl/athletes/${espnId}/news?limit=3`
+    const url = `${ESPN_BASE}/apis/fantasy/v2/games/ffl/news/players?playerId=${espnId}&limit=3`
     espnNewsCache.set(
       espnId,
-      fetchJSON(primary, { timeoutMs: 8000, label: 'ESPN news' })
+      fetchJSON(url, { timeoutMs: 8000, label: 'ESPN news' })
         .then(parseEspnItems)
         .catch(() => [])
-        .then(items => items.length > 0
-          ? items
-          : fetchJSON(fallback, { timeoutMs: 8000, label: 'ESPN news' })
-              .then(parseEspnItems)
-              .catch(() => [])
-        )
     )
   }
   return espnNewsCache.get(espnId)
