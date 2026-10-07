@@ -4,7 +4,8 @@ import { useSleeperRookies } from '../../hooks/useSleeperRookies'
 import { usePlayerDB } from '../../hooks/usePlayerDB'
 import { useWeeklyProjections } from '../../hooks/weeklyProjections'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
-import { recommendFreeAgents } from '../../utils/recommendations'
+import { recommendFreeAgents, buildPickupContext } from '../../utils/recommendations'
+import { recommendFaabBid, readFaabPeriod, FAAB_CALIBRATION, FAAB_BATCH_WARNING } from '../../utils/faabBid'
 import { buildFreeAgentPool, buildAvailableDefenses, buildRosteredIdSet, VALUED_POSITIONS } from '../../utils/freeAgents'
 import { Card, Chip, RuledList, SearchInput, Loading } from '../ui'
 import ErrorState from '../shared/ErrorState'
@@ -38,9 +39,29 @@ function RookieBadge() {
   )
 }
 
+// The suggested FAAB bid under a pickup (utils/faabBid.js — the same number
+// the MCP server's recommend_free_agents quotes). A null bid is `—`, never a
+// fabricated one: it only happens when the league reports no budget.
+function BidLine({ bid }) {
+  if (!bid) return null
+  return (
+    <div className="flex items-baseline gap-2 pl-[21px]">
+      <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">Bid</span>
+      <span className="font-mono text-sm font-semibold tabular-nums text-text-primary">
+        {bid.bid != null ? `$${bid.bid}` : '—'}
+      </span>
+      {bid.bid != null && (
+        <span className="font-body text-[11px] text-text-secondary leading-snug">
+          {bid.label} · {bid.pctOfBudget}% of budget{bid.capped ? ' · all you have left' : ''}
+        </span>
+      )}
+    </div>
+  )
+}
+
 // Proactive "here's who to actually add" card — the assistant-GM read on the
 // free-agent pool, not just a filterable list.
-function RecommendedPickups({ recs, onSelect }) {
+function RecommendedPickups({ recs, bids, onSelect }) {
   if (!recs.length) return null
   return (
     <div>
@@ -75,10 +96,15 @@ function RecommendedPickups({ recs, onSelect }) {
                   </span>
                 ))}
               </div>
+              <BidLine bid={bids[p.sleeperId]} />
             </button>
           )
         })}
       </Card>
+      <p className="aside font-body text-[11px] text-text-tertiary leading-snug mt-1.5 text-balance">
+        Bids: {FAAB_CALIBRATION.charAt(0).toLowerCase() + FAAB_CALIBRATION.slice(1)}. Sized by what the
+        player does for your roster, not by who else might bid. {FAAB_BATCH_WARNING}
+      </p>
     </div>
   )
 }
@@ -131,7 +157,7 @@ function DefenseRosterNote({ myDefense, week }) {
 }
 
 export default function FreeAgentsView() {
-  const { league, loading, error, retry, values } = useLeagueContext()
+  const { league, loading, error, retry, values, nflState } = useLeagueContext()
   const { sleeperRookieMap } = useSleeperRookies()
   const { playerDB } = usePlayerDB()
   // Best-effort and in-season only: a failure just hides the Proj column.
@@ -242,6 +268,21 @@ export default function FreeAgentsView() {
     return posFilter === 'ALL' ? recs : recs.filter(r => r.player.position === posFilter)
   }, [freeAgents, league, posFilter])
 
+  // A FAAB bid per recommended pickup, against the CURRENT period's budget
+  // read from settings (the budget resets twice a league year).
+  const faabBids = useMemo(() => {
+    if (!league?.myRoster || !recommendations.length) return {}
+    const period = readFaabPeriod(league.leagueInfo, league.myRoster)
+    const isRegularSeason = nflState?.season_type === 'regular'
+    const ctx = buildPickupContext(league.myRoster, league.allRosters)
+    return Object.fromEntries(recommendations.map(r => [
+      r.player.sleeperId,
+      recommendFaabBid(r.player, league.myRoster, league.allRosters, {
+        period, week: isRegularSeason ? nflState?.week : null, isRegularSeason, ctx,
+      }),
+    ]))
+  }, [recommendations, league, nflState])
+
   const filtered = useMemo(() => {
     // Defenses live behind the DEF chip and NOWHERE else. You start exactly one
     // every week and there is no dynasty reason to hold a second, so mixing 14
@@ -330,7 +371,7 @@ export default function FreeAgentsView() {
         {/* Recommended pickups — assistant-GM advice, hidden while searching */}
         {!search.trim() && recommendations.length > 0 && (
           <div className="mb-3">
-            <RecommendedPickups recs={recommendations.slice(0, 4)} onSelect={setSelected} />
+            <RecommendedPickups recs={recommendations.slice(0, 4)} bids={faabBids} onSelect={setSelected} />
           </div>
         )}
 

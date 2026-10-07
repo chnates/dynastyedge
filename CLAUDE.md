@@ -1537,6 +1537,17 @@ max 25). `recommendations.recommendFreeAgents` over prerequisite C's
   `projectedPoints: null` with `projections.reason` naming why — **never 0**,
   which would read as "not worth starting". A *failed* in-season fetch reports
   a different reason, so the two are distinguishable.
+- **Every row carries `faabBid` (OPEN-3, 2026-10-07)** — `{ bid, tier, label,
+  pctOfBudget, capped, expectedWin, unavailable, reasons }` — and the answer
+  carries a `faab` block (`budget`, `remaining`, `week`, `multiplier`,
+  `calibration`). **Orchestration only**: the tool calls
+  `utils/faabBid.js`'s `recommendFaabBid` with the period from
+  `readFaabPeriod` and the week from `nflState`, so it quotes exactly the bid
+  League › Free Agents shows. The notes carry the calibration label and the
+  batch-trap warning. A league reporting no budget yields `bid: null` on every
+  row, never an assumed scale. Both new fields are **declared in the zod
+  output schema** (the closed-object trap) and were verified through a real
+  MCP client, not only by the unit tests.
 
 ### Tool 4 — `resolve_assets`
 
@@ -2436,6 +2447,18 @@ across future seasons.
   list from a filter into actual advice: each row carries plain-English reasons
   ("fills your TE deficit", "rising 30-day trend"). Respects the position
   filter; hidden while searching.
+
+  **Each Recommended Pickup carries a suggested FAAB bid** (OPEN-3, shipped
+  2026-10-07) — *"BID $110 · Value play · 11% of budget"* — from
+  `utils/faabBid.js`, the same function the MCP server's
+  `recommend_free_agents` quotes, so the phone and the chat cannot disagree.
+  Read against the **current period's** budget from settings (see the
+  recommendation engine below for the rule). A caption under the card states
+  the calibration honestly — *"calibrated on 2023–25 at $100; n = 3 contested
+  auctions on $1000"* — that the bid is sized by what the player does for
+  this roster rather than by who else might bid, and the batch trap (order
+  your claims). Only the four Recommended Pickups carry a bid; the full list
+  below does not.
 
   **Two axes, not one.** The list used to rank purely by dynasty value, which
   is the wrong yardstick for a waiver list — the two orderings correlate at
@@ -4738,6 +4761,45 @@ matter:
   do for *my* roster — fill a deficit, beat my replacement level at the
   position (my `CORE_DEPTH`-th best), ride a rising trend, fit my win window —
   and returns only players that genuinely move the needle, each with reasons.
+  Its roster facts (my deltas, tier and replacement levels) are
+  `buildPickupContext`, exported so the FAAB bid reads the same definition of
+  "fills your need".
+- **The FAAB bid (`utils/faabBid.js` → `recommendFaabBid`, OPEN-3, 2026-10-07)**
+  — the bid beside each Recommended Pickup and in `recommend_free_agents`.
+  Spec, the live re-run and the pre-registered grading bars:
+  `docs/analysis/faab-bid-corpus-2026-08.md` §10.
+  - **It does NOT predict whether anyone else will bid.** That was tested:
+    the 2023–25 contest rate barely moves with value (27% unpriced, ~39–44%
+    from 600 up). So the tier is chosen by **how much winning this player
+    matters to my roster**, from the same roster facts as the pickup list:
+    **must-win 23%** (fills a need AND starts in my dynasty-value best
+    lineup) · **default 16%** (starts, or fills a need AND beats my depth) ·
+    **value play 11%** (beats my depth, or sits at a need) · **floor**
+    (anything else). The ladder is §6's, from 2023–25 contested clearing
+    prices.
+  - **The floor is what this league actually pays uncontested** (owner
+    decision 2026-10-07, dropping the spec's 1% = $10): **0.2% of budget,
+    min $1, never under `waiver_bid_min`** — **$2** on $1000 (the 2026
+    in-season uncontested median) and $1 on $100 (the 2023–25 median).
+  - **Priced against the FULL budget, capped at what is left** — not "% of
+    remaining", which would underbid the market exactly when the period is
+    nearly spent. Week scaling (§6 Part C): **0.8×** weeks 1–4, **1.0×**
+    5–14, **0.3×** from 15; offseason 1.0×; the floor never scales.
+  - **The budget is READ, never assumed.** `readFaabPeriod` takes
+    `leagueInfo.settings.waiver_budget` and the roster's
+    `waiver_budget_used` (the **current period** — the budget resets twice
+    a league year). A league reporting no budget gets **no bid**, not a 100
+    or a 1000 — unlike `leagueState.js`'s display fallback.
+  - **Rule 7 and the one-defense doctrine:** a defense or an unpriced player
+    gets `bid: null`, never a fabricated number.
+  - **Measured on the live league (2026 Week 5):** across all ten seats the 81
+    recommended rows were **51 value play / 30 floor / 0 default / 0
+    must-win**. No waiver-tier player (≤ 1,300) cracks any team's
+    dynasty-value lineup; the top two tiers exist for a real starter cut
+    mid-season, and the tests pin that they fire then.
+  - **Graded at Weeks 13–15** against bars pre-registered in §10 of the memo
+    (wins ≥ 75% of contested auctions it enters; cost per contested win ≤ the
+    league median). Do not move the bars.
 - **Feature 3 — Trade Analyzer:** `buildGivabilityContext`, `assetKeepScore`,
   and `getDeficitPositions` back the "Giving Up" depth context and the fair
   package suggestions.
@@ -6231,6 +6293,7 @@ dynastyedge/
 │   │   ├── managerAnalysis.js   ← manager scouting: ledgers, tendencies, draft grades. buildDraftGrades exposes the draft record WITHOUT the ledger beside it, so the MCP server can reach it on a 14-request walk instead of ~169 — same buildDraftRecords both ways, equivalence proved by test. tradeTimeTotals is the "at trade time" rule, shared by useTradeTimeValues and scout_managers
 │   │   ├── rosterAnalysis.js    ← positional strength, win window tiers, Targets ranking (need × value × movability)
 │   │   ├── recommendations.js   ← THE assistant-GM brain: keep/givability scores (round-priced picks, past-peak age tilt), FA pickups, two-sided sell moves, the cash-out board
+│   │   ├── faabBid.js           ← THE FAAB bid (OPEN-3): one pure function behind League › Free Agents AND recommend_free_agents; reads the CURRENT period's budget from settings (never assumes 100/1000), ladder 11/16/23% of the FULL budget capped at what is left, $2 floor on $1000, null for a defense or an unpriced player
 │   │   ├── fairBand.js          ← THE definition of "fair" (±5%), shared by the Analyzer's verdict and every surface that PREDICTS it
 │   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation
 │   │   ├── seasonWindow.js      ← THE "has the rookie draft happened yet?" resolver — the live pick window + which draft the Tracker shows (replaced the hand-rolled PICK_YEARS)
@@ -6275,6 +6338,7 @@ dynastyedge/
 │   ├── seasonWindow.test.mjs        ← the draft-completion boundary: pre_draft/drafting/paused keep a season current, `complete` rolls it, an auction never counts, a past season's draft never rolls it; the Tracker prefers the upcoming draft and falls back to the most recent completed one; no NFL state degrades to the seed
 │   ├── pickCapital.test.mjs         ← pick ownership resolution, round-median pick values, year weights BY DISTANCE from the upcoming draft (a rolled year is never scored 0), and the spent-pick ladder (slot→player join incl. the string-roster-id trap and the draft_order fallback; season-agnostic round medians)
 │   ├── pickTrades.test.mjs          ← slot tiers (as coded), slot pricing fallback, package constraints
+│   ├── faabBid.test.mjs             ← the FAAB bid: budget read from settings (no budget → no bid, never an assumed scale), the current period's remainder, the same PERCENT at $100 and $1000, each tier reachable, the $2/$1 floor (not the spec's $10) and waiver_bid_min, week scaling, the full-budget-not-remainder pricing and the cap, null for a defense and an unpriced player, and the shared pickup context with recommendFreeAgents
 │   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
 │   ├── appVersion.test.mjs          ← reload URL: ?v= before the hash (HashRouter), encoding, null build id
 │   ├── tradeTargets.test.mjs        ← Targets ranking: deficit gate + value floor league-wide, team-scoped mode keeps depth (never empty), fillsNeed flag, the movability TILT (band under 2×, spare depth outranks an equal-value untouchable, nothing ever hidden), and the POSITION filter applied inside the ranking rather than to the slice — pinned by the case where filtering the sliced top-1 returns nothing
@@ -6330,11 +6394,11 @@ dynastyedge/
 **Install dependencies first: `npm ci`** (never `npm install` — it can rewrite
 the lockfile). A fresh clone has no `node_modules`, and every session on a
 remote/cloud runner starts from one. **`npm test` does not report that
-honestly:** instead of "cannot find module" it prints `# tests 765 / # pass 760
+honestly:** instead of "cannot find module" it prints `# tests 785 / # pass 780
 / # fail 5`, which reads like a code regression. A file that cannot load never
-runs its tests, so the count silently drops from **808** to 765.
+runs its tests, so the count silently drops from **828** to 785.
 `npm run build` in the same state fails with `sh: 1: vite: not found`.
-**If the test count isn't 808, run `npm ci` before debugging anything.**
+**If the test count isn't 828, run `npm ci` before debugging anything.**
 
 The pair was re-measured 2026-09-19 (MCP phase 1b) by renaming `node_modules`
 aside, and it had drifted seven times before that: 178/130, 177/115, 219/136,
@@ -6356,6 +6420,11 @@ those four raise only the first number. The 2026-09-07 trade-engine work added
 the broken-state count stayed at 152; the 2026-09-12 news-retention work moved
 both, because `newsRetention.test.mjs` imports only a zero-dependency pure
 module. **Re-measure both whenever the suite grows.**
+
+OPEN-3, the FAAB bid recommender (2026-10-07), moved both by the same 20
+(808/765 → **828/785**), the gap holding at 43: `faabBid.test.mjs` (+17)
+imports only `src/utils` and the shared fixture, and the three new
+`mcpRecommendFreeAgents` tests reach neither React nor `zod`.
 
 The MCP-CARRY closeout (2026-09-25) moved both by the same 25
 (783/740 → **808/765**), the gap holding at 43, across four commits: ROOKIE-1's
@@ -6444,7 +6513,8 @@ regression to the next session, which is the exact confusion the block exists
 to prevent, so re-measure rather than incrementing what is written.
 
 The useful invariant survived the drift and is worth preferring to either
-count: **the gap between them is 43 and has not moved.** 808 − 765 = 43,
+count: **the gap between them is 43 and has not moved.** 828 − 785 = 43,
+808 − 765 = 43,
 783 − 740 = 43,
 773 − 730 = 43,
 761 − 718 = 43,
@@ -7028,20 +7098,6 @@ Two things the roll must not break, both pinned by tests:
 These are noted so the codebase is structured to support them later.
 Do not implement them until explicitly asked.
 
-- FAAB bid recommender for waiver pickups — **research done; OWNER-ASKED
-  2026-09-25 as the next build** (shown both in League › Free Agents and in
-  the MCP server's `recommend_free_agents`, from one shared util). Not built
-  yet. The bid corpus, the "failed ≠ outbid" finding, and a proposed rule
-  spec live in `docs/analysis/faab-bid-corpus-2026-08.md` (re-runnable via
-  `node scripts/dev/faab-corpus.mjs`; §9 is the first in-season $1000 reading:
-  2 contested auctions, which is why `docs/open-items.md` OPEN-3 recommends
-  building now and grading live rather than waiting).
-  Note for whoever does: the league's FAAB budget changed **$100 → $1000 for
-  2026**, so all historical bids must be normalized to percent-of-budget — the
-  app's own aggregation was fixed that way on 2026-09-20 (Feature 11). And the
-  budget **resets twice a league year** (League Context), so a recommender must
-  know which period it is bidding in: unspent offseason money is lost, which
-  changes the whole "preserve budget" half of §6's Part A.
 - Push notifications for trade offers (requires backend — out of scope for v1;
   note Sleeper's API is read-only and may not even expose *pending* trade
   offers, so this is blocked on data availability, not just architecture)
@@ -7061,5 +7117,10 @@ Do not implement them until explicitly asked.
   Trade Analyzer Layer 3, Trade Partner Finder (buyer/seller flags), and The
   Edge (briefing item)
 - League-wide news feed page → News section (Feature 15)
+- FAAB bid recommender → League › Free Agents (beside each Recommended
+  Pickup) and the MCP server's `recommend_free_agents`, from one util,
+  `utils/faabBid.js` (OPEN-3, shipped 2026-10-07; see the recommendation
+  engine). Graded at Weeks 13–15 against the bars pre-registered in
+  `docs/analysis/faab-bid-corpus-2026-08.md` §10
 - Claude Design visual refresh → the "Primetime Blackout" rebrand
   (Navigation Refactor Phase 3, shipped 2026-07-20) — see Design System

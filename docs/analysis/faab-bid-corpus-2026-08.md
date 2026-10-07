@@ -1,7 +1,9 @@
 # FAAB Bid Corpus & Proposed Bid Rule — August 2026
 
-**Date:** 2026-08-08. **Status: RESEARCH ONLY.** The FAAB bid recommender
-remains under CLAUDE.md's **Future Features (Do Not Build Yet)**. This document
+**Date:** 2026-08-08. **Status: SHIPPED 2026-10-07 (OPEN-3) — see §10** for the
+rule as built, where it departs from §6, and the pre-registered grading bars.
+Originally RESEARCH ONLY: the recommender sat under CLAUDE.md's **Future
+Features (Do Not Build Yet)** until the owner asked for it on 2026-09-25. This document
 is the memo the `dynastyedge-research-frontier` skill (Item 2) specifies should
 exist *before* any build decision. §6 is a proposed rule spec, drafted at the
 owner's request — it is a proposal, not an approved build.
@@ -261,3 +263,76 @@ Period caveat: Sleeper's week-1 transaction bucket also holds offseason
 claims (the budget reset happens at the regular-season start; see CLAUDE.md
 League Context). Filtering on `created` ≥ 2026-09-10 is how in-season is
 separated here, and the cutoff is approximate to the day.
+
+## 10. Shipped 2026-10-07 (OPEN-3) — the rule as built, and its PRE-REGISTERED grading
+
+The owner asked for the build on 2026-09-25. It ships as `src/utils/faabBid.js`,
+one pure function behind both League › Free Agents (beside each Recommended
+Pickup) and the MCP tool `recommend_free_agents` (`faabBid` per row). Pinned
+by `tests/faabBid.test.mjs` and `tests/mcpRecommendFreeAgents.test.mjs`.
+
+### Live re-run the same day
+
+`node scripts/dev/faab-corpus.mjs`: 504 bid-bearing claims; 2026 at 44 (31
+won). **The 2026 in-season contested count is now 3, not §9's 2**: a third
+clean auction cleared on 2026-09-30 at **$161 over $8** (16%, with the
+runner-up at the floor). The 2023–25 numbers are unchanged (81 contested,
+uncontested median 1%, contested p50 11% / p80 23%). The shipped label reads
+"n = 3 contested auctions on $1000".
+
+### What was built, and where it departs from §6
+
+| §6 part | As built | Why |
+|---|---|---|
+| A — predict "will it be contested?" | **Not predicted.** The tier is chosen from roster facts: must-win (fills a need AND starts in my best lineup), default (starts, or fills a need AND beats my depth), value play (beats my depth, or sits at a need), floor (anything else) | Contest rate by today's value, 2023–25 (hindsight-contaminated): unpriced **27%**, 1–600 **41%**, 600–1500 **39%**, 1500–3000 **44%**. A signal that weak cannot carry a "nobody will bid" call, so the rule sizes the bid by how much winning matters instead, and says so |
+| A — floor | **0.2% of budget, min $1, never under `waiver_bid_min`** = **$2** on $1000 | Owner decision 2026-10-07: drop the 1% ($10). 2026 in-season uncontested median **$2**; the same rule gives **$1** at $100, the 2023–25 uncontested median (48% of those wins were $0) |
+| B — ladder | 11 / 16 / 23% unchanged; blank check (36%+) never suggested automatically | — |
+| B — "% of remaining" | **% of the FULL budget, capped at what is left** | The clearing prices were measured as a share of the budget; a share of a shrinking remainder underbids the market exactly when the period is nearly spent |
+| C — week | 0.8× wk 1–4 · 1.0× wk 5–14 · 0.3× wk 15+; offseason 1.0×; the floor never scales | — |
+| D — batch trap | Shown under the Recommended Pickups card and in every tool answer | — |
+
+Budget and remaining are read from `league.settings.waiver_budget` and
+`roster.settings.waiver_budget_used` (the CURRENT period, since the budget
+resets twice a league year); a league reporting no budget gets **no bid**,
+never an assumed scale. A defense or an unpriced player gets `bid: null`.
+
+**What it recommends on the live league today (2026 Week 5, Nix Cage, $999
+of $1000 left):** Kalif Raymond (WR, 1,036) **$110** value play (at a WR
+need, does not beat depth); Mayer, Daniels, Gesicki, Bagent, Mixon, Shipley
+**$2** floor (risers that do nothing for this roster). Across all ten seats
+the 81 recommended rows split **51 value play / 30 floor / 0 default / 0
+must-win** — no waiver-tier player (≤ 1,300) cracks any team's dynasty-value
+starting lineup. The two top tiers exist for the case they are named for: a
+real starter cut mid-season.
+
+### PRE-REGISTERED grading (fixed 2026-10-07 — do NOT move these later)
+
+Graded at Weeks 13–15 (`docs/open-items.md` §0 #13), on §6's two corrected
+bars as the owner set them:
+
+1. **Win rate:** the rule wins **≥ 75%** of the contested auctions it enters.
+2. **Efficiency:** its cost per contested win is **≤ the league's median**
+   winning bid in those same auctions.
+
+Protocol, fixed now so the grade cannot be shaped by the result:
+
+- **Population:** clean contested 2026 auctions (§4's definition: one winner,
+  no loser above the winner) whose claim was **created on or after
+  2026-10-07** and processed **through the end of Week 14**. Re-run with
+  `faab-corpus.mjs --json`.
+- **The rule's bid** for each auction is `recommendFaabBid` evaluated from
+  **the owner's seat (roster 6)**, at the claim's week, against a $1000 budget
+  with the remaining budget uncapped, using the player's FantasyCalc value on
+  the claim date from `values-history.json`. A player outside that file's
+  top 500 has no value, so the rule would not bid — not entered. Rosters are
+  those at grading time; historical rosters are not reconstructable, and that
+  approximation is disclosed rather than fixed.
+- **"Enters":** the rule bids above its floor (value play or higher). A floor
+  bid is a claim, not an entry into a contest.
+- **Win:** rule's bid **strictly greater** than the top losing bid (a tie
+  counts as a loss). **Cost per contested win:** mean rule bid over its wins,
+  compared with the median actual winning bid over the same population.
+- **Report both bars with n.** Expected n is small (~1 contested auction per
+  week, so ~8). At **n < 8 entered** the result is reported as indicative,
+  not a pass or fail, and is still recorded.
+- A failure is recorded as a failure, as §5's was. The bars do not move.

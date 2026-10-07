@@ -41829,16 +41829,19 @@ function getDeficitPositions(roster, allRosters) {
   const deltas = getPositionalDeltas(roster, leagueAverages);
   return new Set(POSITIONS.filter((pos) => deltas[pos] < 0));
 }
-function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 5, minValue = 600 } = {}) {
-  if (!freeAgents?.length || !myRoster) return [];
-  const ctx = buildGivabilityContext(myRoster, allRosters);
-  const { myDeltas, myTier } = ctx;
+function buildPickupContext(myRoster, allRosters) {
+  const { myDeltas, myTier } = buildGivabilityContext(myRoster, allRosters);
   const replacement = {};
   POSITIONS.forEach((pos) => {
     const mine = myRoster.players.filter((p) => p.position === pos && !p.isIR).map((p) => p.value || 0).sort((a, b) => b - a);
     const depth = CORE_DEPTH[pos] ?? 2;
     replacement[pos] = mine.length >= depth ? mine[depth - 1] : mine[mine.length - 1] ?? 0;
   });
+  return { myDeltas, myTier, replacement };
+}
+function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 5, minValue = 600 } = {}) {
+  if (!freeAgents?.length || !myRoster) return [];
+  const { myDeltas, myTier, replacement } = buildPickupContext(myRoster, allRosters);
   const scored = freeAgents.filter((p) => (p.value ?? 0) >= minValue && POSITIONS.includes(p.position)).map((p) => {
     const value = p.value ?? 0;
     const pos = p.position;
@@ -42372,6 +42375,112 @@ var init_findSellHigh = __esm({
   }
 });
 
+// src/utils/faabBid.js
+function faabSeasonMultiplier(week, isRegularSeason) {
+  if (!isRegularSeason) return 1;
+  const w = Number(week);
+  if (!Number.isFinite(w) || w < 1) return 1;
+  if (w <= 4) return 0.8;
+  if (w <= 14) return 1;
+  return 0.3;
+}
+function readFaabPeriod(leagueInfo, roster) {
+  const budget = Number(leagueInfo?.settings?.waiver_budget);
+  if (!Number.isFinite(budget) || budget <= 0 || !roster) return null;
+  const spent = Math.max(0, Number(roster.faabSpent) || 0);
+  const bidMin = Math.max(0, Number(leagueInfo?.settings?.waiver_bid_min) || 0);
+  return { budget, spent, remaining: Math.max(0, budget - spent), bidMin };
+}
+function faabFloor(period) {
+  return Math.max(FAAB_FLOOR_MIN, Math.round(period.budget * FAAB_FLOOR_PCT / 100), period.bidMin ?? 0);
+}
+function unavailable(reason, text) {
+  return { bid: null, tier: null, label: null, pctOfBudget: null, unavailable: reason, reasons: [text] };
+}
+function recommendFaabBid(player, myRoster, allRosters, {
+  period,
+  week = null,
+  isRegularSeason = false,
+  ctx = null
+} = {}) {
+  if (!player) return unavailable("no-player", "No player.");
+  if (player.position === "DEF") {
+    return unavailable("defense", "A defense is never a general pickup \u2014 you roster exactly one.");
+  }
+  if (!POSITIONS.includes(player.position) || !(player.value > 0)) {
+    return unavailable("unpriced", "Unpriced by FantasyCalc, so there is no honest bid to suggest.");
+  }
+  if (!period || !myRoster) {
+    return unavailable("budget-unknown", "The league does not report its FAAB budget, so no bid is suggested.");
+  }
+  const { myDeltas, replacement } = ctx ?? buildPickupContext(myRoster, allRosters);
+  const pos = player.position;
+  const fillsNeed = (myDeltas[pos] ?? 0) < 0;
+  const isUpgrade = (player.value ?? 0) > (replacement[pos] ?? 0);
+  const starts = buildValueLineup([...myRoster.players, player]).starterIds.has(String(player.sleeperId));
+  const tier = fillsNeed && starts ? "must-win" : starts || fillsNeed && isUpgrade ? "default" : isUpgrade || fillsNeed ? "value" : "floor";
+  const reasons = [];
+  if (tier === "must-win") reasons.push(`Fills your ${pos} need and would start in your best lineup`);
+  else if (tier === "default") reasons.push(starts ? `Would start in your best lineup at ${pos}` : `Fills your ${pos} need and beats your depth`);
+  else if (tier === "value") reasons.push(isUpgrade ? `Upgrades your ${pos} depth, but would not start` : `At a ${pos} need, but no better than your depth`);
+  else reasons.push("Worth a claim, not worth a fight");
+  const floor = faabFloor(period);
+  let basePct = null;
+  let multiplier = 1;
+  let target = floor;
+  if (tier !== "floor") {
+    basePct = FAAB_LADDER_PCT[tier];
+    multiplier = faabSeasonMultiplier(week, isRegularSeason);
+    target = Math.max(floor, Math.round(period.budget * basePct * multiplier / 100));
+    if (multiplier < 1) {
+      reasons.push(multiplier === 0.3 ? "Scaled to 0.3\xD7 \u2014 prices collapse once the playoffs start" : "Scaled to 0.8\xD7 \u2014 contested prices run cheaper in weeks 1\u20134");
+    }
+  }
+  const capped = target > period.remaining;
+  const bid = capped ? period.remaining : target;
+  if (capped) reasons.push(`Capped at the $${period.remaining} you have left this period`);
+  return {
+    bid,
+    tier,
+    label: TIER_LABEL[tier],
+    pctOfBudget: Math.round(bid / period.budget * 1e3) / 10,
+    basePct,
+    multiplier,
+    capped,
+    expectedWin: TIER_WINS[tier],
+    fillsNeed,
+    isUpgrade,
+    startsForMe: starts,
+    unavailable: null,
+    reasons
+  };
+}
+var FAAB_LADDER_PCT, FAAB_FLOOR_PCT, FAAB_FLOOR_MIN, FAAB_CALIBRATION, FAAB_BATCH_WARNING, TIER_LABEL, TIER_WINS;
+var init_faabBid = __esm({
+  "src/utils/faabBid.js"() {
+    init_recommendations();
+    init_lineupBuild();
+    init_constants();
+    FAAB_LADDER_PCT = { "must-win": 23, default: 16, value: 11 };
+    FAAB_FLOOR_PCT = 0.2;
+    FAAB_FLOOR_MIN = 1;
+    FAAB_CALIBRATION = "Calibrated on 2023\u201325 at $100; n = 3 contested auctions on $1000";
+    FAAB_BATCH_WARNING = "Order your claims: Sleeper fails the rest of your batch once roster spots or budget run out, so a high bid low in the queue can die without ever being outbid.";
+    TIER_LABEL = {
+      "must-win": "Must-win",
+      default: "Default",
+      value: "Value play",
+      floor: "Floor"
+    };
+    TIER_WINS = {
+      "must-win": "won ~85\u201390% of contested 2023\u201325 auctions",
+      default: "won ~83% of contested 2023\u201325 auctions",
+      value: "won ~50% of contested 2023\u201325 auctions",
+      floor: "wins only if nobody else bids \u2014 about 6 in 10 claims at this value went uncontested in 2023\u201325"
+    };
+  }
+});
+
 // mcp/tools/recommendFreeAgents.js
 function buildFreeAgentAnswer(snapshot, weekly, { position, limit, myRosterId } = {}) {
   const { league, values } = snapshot;
@@ -42408,6 +42517,28 @@ function buildFreeAgentAnswer(snapshot, weekly, { position, limit, myRosterId } 
   const ranked = recommendFreeAgents(filtered, league.myRoster, league.allRosters, { limit: cap });
   const inSeason = weekly?.available && !weekly.isOffseason;
   const projMap = inSeason ? weekly.projMap : null;
+  const period = readFaabPeriod(league.leagueInfo, league.myRoster);
+  const isRegularSeason = snapshot.nflState?.season_type === "regular";
+  const faabWeek = isRegularSeason ? snapshot.nflState?.week ?? null : null;
+  const pickupCtx = buildPickupContext(league.myRoster, league.allRosters);
+  const bidFor = (player) => {
+    const b = recommendFaabBid(player, league.myRoster, league.allRosters, {
+      period,
+      week: faabWeek,
+      isRegularSeason,
+      ctx: pickupCtx
+    });
+    return {
+      bid: b.bid,
+      tier: b.tier,
+      label: b.label,
+      pctOfBudget: b.pctOfBudget,
+      capped: b.capped ?? false,
+      expectedWin: b.expectedWin ?? null,
+      unavailable: b.unavailable,
+      reasons: b.reasons
+    };
+  };
   const recommendations = ranked.map((r) => ({
     sleeperId: String(r.player.sleeperId),
     name: r.player.name,
@@ -42424,7 +42555,8 @@ function buildFreeAgentAnswer(snapshot, weekly, { position, limit, myRosterId } 
     fillsNeed: r.isNeed,
     isUpgrade: r.isUpgrade,
     upgradeMargin: r.isUpgrade ? Math.round(r.upgradeMargin) : null,
-    reasons: r.reasons
+    reasons: r.reasons,
+    faabBid: bidFor(r.player)
   }));
   return {
     ok: true,
@@ -42445,6 +42577,13 @@ function buildFreeAgentAnswer(snapshot, weekly, { position, limit, myRosterId } 
       faabDisplay: `$${league.myRoster.faabRemaining}`
     },
     filter: { position: wanted, limit: cap },
+    faab: {
+      budget: period?.budget ?? null,
+      remaining: period?.remaining ?? null,
+      week: faabWeek,
+      multiplier: faabSeasonMultiplier(faabWeek, isRegularSeason),
+      calibration: FAAB_CALIBRATION
+    },
     projections: {
       // Explicit, so "why is projectedPoints null?" is answerable from the
       // response itself rather than by guessing.
@@ -42509,7 +42648,11 @@ function buildNotes3({ snapshot, weekly, projMap, recommendations, wanted, filte
     notes.push(`Showing the top ${cap}; raise \`limit\` (max ${MAX_LIMIT}) for more.`);
   }
   notes.push(
-    `Sleeper's API is read-only: place the claim yourself in the Sleeper app. You have $${league.myRoster.faabRemaining} of $${league.myRoster.faabBudget} FAAB left.`
+    `Suggested FAAB bids (faabBid): ${FAAB_CALIBRATION}. Treat the tiers as a measured ladder, not a forecast \u2014 whether anyone else bids is NOT predicted (dynasty value barely moves the contest rate), so the bid is sized by how much winning the player matters to this roster.`
+  );
+  notes.push(FAAB_BATCH_WARNING);
+  notes.push(
+    `Sleeper's API is read-only: place the claim yourself in the Sleeper app. You have $${league.myRoster.faabRemaining} of $${league.myRoster.faabBudget} FAAB left this period \u2014 the budget resets twice a league year.`
   );
   return notes;
 }
@@ -42530,6 +42673,7 @@ function renderFreeAgentText(a) {
   const L = [];
   L.push(`${a.team.teamName} \u2014 free agent recommendations${a.filter.position ? ` \xB7 ${a.filter.position}` : ""}`);
   L.push(`${a.league.name ?? "League"}${a.league.week ? ` \xB7 week ${a.league.week}` : a.league.isOffseason ? " \xB7 offseason" : ""} \xB7 FAAB ${a.team.faabDisplay} of $${a.team.faabBudget}`);
+  L.push(`Bids: ${a.faab.calibration}`);
   L.push(`As of ${a.asOf.oldestSourceAt ?? "unknown"}${a.asOf.stale ? " \u2014 STALE, a source failed to refresh" : ""}`);
   L.push("");
   if (!a.recommendations.length) {
@@ -42542,6 +42686,8 @@ function renderFreeAgentText(a) {
       const tr = p.trend30Day > 50 ? ` \u2191${p.trend30Day}` : p.trend30Day < -50 ? ` \u2193${p.trend30Day}` : "";
       L.push(`${String(i + 1).padStart(2)}. ${p.position.padEnd(3)} ${p.name}${p.nflTeam ? ` (${p.nflTeam})` : ""} \u2014 ${num2(p.value)}${proj}${tr}`);
       p.reasons.forEach((r) => L.push(`      ${r}`));
+      const b = p.faabBid;
+      L.push(b.bid != null ? `      Bid $${b.bid} (${b.pctOfBudget}% of budget, ${b.label}) \u2014 ${b.expectedWin}${b.capped ? " \xB7 capped at what you have left" : ""}` : `      No bid: ${b.reasons[0]}`);
     });
   }
   L.push("");
@@ -42556,6 +42702,7 @@ var init_recommendFreeAgents = __esm({
   "mcp/tools/recommendFreeAgents.js"() {
     init_freeAgents();
     init_recommendations();
+    init_faabBid();
     init_projections();
     init_teamName();
     init_constants();
@@ -46071,10 +46218,10 @@ function buildResultsAnswer(snapshot, results, { season } = {}) {
       "This league's past seasons could not be loaded, so past champions are unknown. That is a gap in our data \u2014 it is not a claim that any season went without a winner."
     );
   }
-  const unavailable = shaped.filter((r) => r.status === "unavailable").map((r) => r.season);
-  if (unavailable.length) {
+  const unavailable2 = shaped.filter((r) => r.status === "unavailable").map((r) => r.season);
+  if (unavailable2.length) {
     notes.push(
-      `The ${unavailable.join(", ")} bracket${unavailable.length > 1 ? "s" : ""} could not be read, so ${unavailable.length > 1 ? "those seasons carry" : "that season carries"} no champion here \u2014 unknown, not "nobody won". Retry with refresh: true.`
+      `The ${unavailable2.join(", ")} bracket${unavailable2.length > 1 ? "s" : ""} could not be read, so ${unavailable2.length > 1 ? "those seasons carry" : "that season carries"} no champion here \u2014 unknown, not "nobody won". Retry with refresh: true.`
     );
   }
   const live = shaped.find((r) => r.season === currentSeason && r.status === "in-progress");
@@ -47021,7 +47168,7 @@ function createServer({ env = process.env, fetcher, store } = {}) {
     "recommend_free_agents",
     {
       title: "Recommend free agents",
-      description: "Ranks available players by what they would actually do for YOUR roster \u2014 fill a positional deficit, beat your current depth at the spot, or ride a rising 30-day trend \u2014 each with plain-English reasons. Carries BOTH dynasty value and this week's Sleeper projection, which are different axes (they correlate at only r = 0.427). IN-SEASON ONLY for the projection column: in the offseason `projectedPoints` is null and the response says why, never zero. Defenses are excluded by design \u2014 you roster exactly one, ever.",
+      description: "Ranks available players by what they would actually do for YOUR roster \u2014 fill a positional deficit, beat your current depth at the spot, or ride a rising 30-day trend \u2014 each with plain-English reasons. Carries BOTH dynasty value and this week's Sleeper projection, which are different axes (they correlate at only r = 0.427). IN-SEASON ONLY for the projection column: in the offseason `projectedPoints` is null and the response says why, never zero. Each pick carries a suggested FAAB bid (`faabBid`) read off the CURRENT period's budget, sized by how much the player matters to your roster on a ladder calibrated on 2023-25 (n = 3 contested auctions on the $1000 scale) \u2014 the same bid the app shows. Defenses are excluded by design \u2014 you roster exactly one, ever.",
       inputSchema: {
         position: external_exports.string().optional().describe("Limit to QB, RB, WR or TE. Omit for all. DEF is not a general pickup and is rejected with an explanation."),
         limit: external_exports.number().int().optional().describe(`How many to return (default 8, max ${MAX_LIMIT}).`),
@@ -47089,8 +47236,27 @@ function createServer({ env = process.env, fetcher, store } = {}) {
           fillsNeed: external_exports.boolean(),
           isUpgrade: external_exports.boolean(),
           upgradeMargin: external_exports.number().nullable(),
-          reasons: external_exports.array(external_exports.string())
+          reasons: external_exports.array(external_exports.string()),
+          // utils/faabBid.js — null bid for an unpriced player or an unknown
+          // budget, never a fabricated number (rule 7).
+          faabBid: external_exports.object({
+            bid: external_exports.number().nullable(),
+            tier: external_exports.string().nullable(),
+            label: external_exports.string().nullable(),
+            pctOfBudget: external_exports.number().nullable(),
+            capped: external_exports.boolean(),
+            expectedWin: external_exports.string().nullable(),
+            unavailable: external_exports.string().nullable(),
+            reasons: external_exports.array(external_exports.string())
+          })
         })).optional(),
+        faab: external_exports.object({
+          budget: external_exports.number().nullable(),
+          remaining: external_exports.number().nullable(),
+          week: external_exports.number().nullable(),
+          multiplier: external_exports.number(),
+          calibration: external_exports.string()
+        }).optional(),
         notes: external_exports.array(external_exports.string()).optional()
       }
     },

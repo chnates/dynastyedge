@@ -208,11 +208,12 @@ export function getDeficitPositions(roster, allRosters) {
 // upgrade my depth at a position, ride a rising trend, and fit my win window
 // (a rebuilder values young stashes; a contender values win-now depth). Returns
 // only players that genuinely move the needle, each with plain-English reasons.
-export function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 5, minValue = 600 } = {}) {
-  if (!freeAgents?.length || !myRoster) return []
-
-  const ctx = buildGivabilityContext(myRoster, allRosters)
-  const { myDeltas, myTier } = ctx
+// What a pickup would do for MY roster, as roster facts: my positional deltas
+// (a negative one is a need), my win-window tier, and my replacement level per
+// position. Shared by recommendFreeAgents and utils/faabBid.js, so "fills your
+// need" means one thing on the pickup list and on the bid beside it.
+export function buildPickupContext(myRoster, allRosters) {
+  const { myDeltas, myTier } = buildGivabilityContext(myRoster, allRosters)
 
   // Replacement level per position: the value a pickup must beat to be a real
   // upgrade — my CORE_DEPTH-th best at that spot (or my worst if I'm shallow).
@@ -225,6 +226,14 @@ export function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 
     const depth = CORE_DEPTH[pos] ?? 2
     replacement[pos] = mine.length >= depth ? mine[depth - 1] : (mine[mine.length - 1] ?? 0)
   })
+
+  return { myDeltas, myTier, replacement }
+}
+
+export function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 5, minValue = 600 } = {}) {
+  if (!freeAgents?.length || !myRoster) return []
+
+  const { myDeltas, myTier, replacement } = buildPickupContext(myRoster, allRosters)
 
   const scored = freeAgents
     .filter(p => (p.value ?? 0) >= minValue && POSITIONS.includes(p.position))
