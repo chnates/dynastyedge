@@ -18,14 +18,15 @@
 //    returning an empty window; every pick surface is built from it.
 
 import { test } from 'node:test'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import assert from 'node:assert/strict'
 
 import {
   rookieDrafts,
   upcomingDraftSeason,
   resolvePickYears,
-  selectTrackedDraft,
-} from '../src/utils/seasonWindow.js'
+  selectTrackedDraft, seedPickYears } from '../src/utils/seasonWindow.js'
 
 const SEED = ['2026', '2027', '2028']
 const state = season => ({ season, season_type: 'regular' })
@@ -121,4 +122,40 @@ test('rookieDrafts: auctions and malformed entries are dropped', () => {
   ])
   assert.equal(list.length, 1)
   assert.equal(list[0].season, '2026')
+})
+
+
+// ── The seed derives from the date (CODE-REVIEW-1 #15, 2026-10-07) ──────────
+// It was a hand-written ['2026','2027','2028'] that went stale the day the
+// 2026 draft completed; the window module exists to design that chore out.
+
+test('seedPickYears: next year\'s draft from September, this year\'s before', () => {
+  assert.deepEqual(seedPickYears(new Date(Date.UTC(2026, 7, 31))), ['2026', '2027', '2028'])
+  assert.deepEqual(seedPickYears(new Date(Date.UTC(2026, 8, 1))), ['2027', '2028', '2029'])
+  assert.deepEqual(seedPickYears(new Date(Date.UTC(2026, 9, 7))), ['2027', '2028', '2029'])
+  assert.deepEqual(seedPickYears(new Date(Date.UTC(2027, 0, 15))), ['2027', '2028', '2029'])
+})
+
+test('no hard-coded season list or year-stamped pick prose in src/', () => {
+  const root = new URL('..', import.meta.url).pathname
+  const files = []
+  const walk = dir => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name)
+      if (statSync(p).isDirectory()) walk(p)
+      else if (/\.(js|jsx|mjs)$/.test(name)) files.push(p)
+    }
+  }
+  walk(join(root, 'src'))
+  const copies = []
+  for (const f of files) {
+    readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+      if (line.trim().startsWith('//')) return
+      const code = line.replace(/\s\/\/\s.*$/, '')   // drop a trailing comment
+      if (/\[\s*'20\d\d',\s*'20\d\d'/.test(code) || /\b20\d\d (first|1st|2nd|second)\b/.test(code)) {
+        copies.push(`${f.slice(root.length)}:${i + 1}`)
+      }
+    })
+  }
+  assert.deepEqual(copies, [], 'derive seasons (seedPickYears / pickYears), never write them')
 })

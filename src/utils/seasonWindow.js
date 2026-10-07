@@ -39,6 +39,19 @@ export function upcomingDraftSeason(nflState, drafts) {
   return held?.status === COMPLETE ? String(Number(season) + 1) : season
 }
 
+// The SEED window, used only before /state/nfl resolves (about a second after
+// load). It used to be a hand-written ['2026', '2027', '2028'] that went stale
+// the day this league's 2026 draft completed — the annual chore this module
+// exists to design out, brought back by its own fallback (CODE-REVIEW-1 #15).
+// Derived from the date instead: this league's rookie draft runs in late
+// summer (2026's completed Sep 4), so from September the upcoming draft is
+// next year's. Off by a few days at most, once a year, for one second.
+export function seedPickYears(now = new Date()) {
+  const y = now.getUTCFullYear()
+  const first = now.getUTCMonth() >= 8 ? y + 1 : y   // month 8 = September
+  return Array.from({ length: PICK_ROUNDS_AHEAD }, (_, i) => String(first + i))
+}
+
 // The three-season pick window, newest first: the upcoming rookie draft plus
 // the two after it. Falls back to the caller's seed (constants' PICK_YEARS)
 // when NFL state hasn't resolved — never returns an empty window, since every

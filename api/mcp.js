@@ -31,10 +31,42 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
+// src/utils/seasonWindow.js
+function rookieDrafts(drafts) {
+  return (drafts ?? []).filter((d) => d && d.type !== "auction" && d.season != null).sort((a, b) => String(b.season).localeCompare(String(a.season)));
+}
+function upcomingDraftSeason(nflState, drafts) {
+  const season = nflState?.season != null ? String(nflState.season) : null;
+  if (!season) return null;
+  const held = rookieDrafts(drafts).find((d) => String(d.season) === season);
+  return held?.status === COMPLETE ? String(Number(season) + 1) : season;
+}
+function seedPickYears(now = /* @__PURE__ */ new Date()) {
+  const y = now.getUTCFullYear();
+  const first = now.getUTCMonth() >= 8 ? y + 1 : y;
+  return Array.from({ length: PICK_ROUNDS_AHEAD }, (_, i) => String(first + i));
+}
+function resolvePickYears(nflState, drafts, fallback) {
+  const first = upcomingDraftSeason(nflState, drafts);
+  if (!first) return fallback;
+  return Array.from(
+    { length: PICK_ROUNDS_AHEAD },
+    (_, i) => String(Number(first) + i)
+  );
+}
+var PICK_ROUNDS_AHEAD, COMPLETE;
+var init_seasonWindow = __esm({
+  "src/utils/seasonWindow.js"() {
+    PICK_ROUNDS_AHEAD = 3;
+    COMPLETE = "complete";
+  }
+});
+
 // src/constants.js
 var LEAGUE_ID, MY_ROSTER_ID, SLEEPER_BASE, SLEEPER_ROOT, FANTASYCALC_BASE, NEWS_FEED_URL, VALUES_HISTORY_URL, TRADE_VALUES_URL, ROOKIE_INTEL_URL, FANTASYCALC_PARAMS, PICK_YEARS, POSITIONS, ROSTER_SLOTS;
 var init_constants = __esm({
   "src/constants.js"() {
+    init_seasonWindow();
     LEAGUE_ID = "1313933520715907072";
     MY_ROSTER_ID = 6;
     SLEEPER_BASE = "https://api.sleeper.app/v1";
@@ -50,7 +82,7 @@ var init_constants = __esm({
       numTeams: 10,
       ppr: 0.5
     };
-    PICK_YEARS = ["2026", "2027", "2028"];
+    PICK_YEARS = seedPickYears();
     POSITIONS = ["QB", "RB", "WR", "TE"];
     ROSTER_SLOTS = [
       { label: "QB", eligible: ["QB"] },
@@ -431,32 +463,6 @@ var init_pickCapital = __esm({
     ROUNDS = 4;
     PRICED_ROUNDS = 5;
     PICK_YEAR_WEIGHTS = [3, 2, 1];
-  }
-});
-
-// src/utils/seasonWindow.js
-function rookieDrafts(drafts) {
-  return (drafts ?? []).filter((d) => d && d.type !== "auction" && d.season != null).sort((a, b) => String(b.season).localeCompare(String(a.season)));
-}
-function upcomingDraftSeason(nflState, drafts) {
-  const season = nflState?.season != null ? String(nflState.season) : null;
-  if (!season) return null;
-  const held = rookieDrafts(drafts).find((d) => String(d.season) === season);
-  return held?.status === COMPLETE ? String(Number(season) + 1) : season;
-}
-function resolvePickYears(nflState, drafts, fallback) {
-  const first = upcomingDraftSeason(nflState, drafts);
-  if (!first) return fallback;
-  return Array.from(
-    { length: PICK_ROUNDS_AHEAD },
-    (_, i) => String(Number(first) + i)
-  );
-}
-var PICK_ROUNDS_AHEAD, COMPLETE;
-var init_seasonWindow = __esm({
-  "src/utils/seasonWindow.js"() {
-    PICK_ROUNDS_AHEAD = 3;
-    COMPLETE = "complete";
   }
 });
 

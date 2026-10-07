@@ -3212,7 +3212,7 @@ dynastyedge/
 │   ├── projections.test.mjs         ← lineup engine inputs: defense rankings via player DB + schedule, home/away, Week-1 empty stats, flags; parseByeTeams AND a scan for a second bye reader
 │   ├── deadlineThresholds.test.mjs  ← BUYER_PCT / SELLER_PCT are the shipped 70% / 35%, read at both edges, AND a source scan that fails on a second copy
 │   ├── playoffOdds.test.mjs         ← fixed-seed determinism, Σ odds = playoff teams, thresholds; buildPlayoffOutlook's three states (posted-but-unplayed is ACTIVE)
-│   ├── seasonWindow.test.mjs        ← the draft-completion boundary (only `complete` rolls a season; auctions never count); Tracker selection; no NFL state → seed
+│   ├── seasonWindow.test.mjs        ← the draft-completion boundary (only `complete` rolls a season; auctions never count); Tracker selection; no NFL state → seed; seedPickYears' September boundary AND a scan for hard-coded seasons
 │   ├── pickCapital.test.mjs         ← ownership, round medians, year weights BY DISTANCE (a rolled year never scores 0), the spent-pick ladder, the round label AND a scan for a copy
 │   ├── pickTrades.test.mjs          ← slot tiers (as coded), slot pricing fallback, package constraints
 │   ├── fairBand.test.mjs            ← the two "even" rules: hindsight ±5% of the larger side, symmetric from both seats (and the fair band shown NOT to be), Activity = ledger, AND a scan for a copy
@@ -3279,8 +3279,8 @@ because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
 **Current counts (verified 2026-10-07 by moving `node_modules` aside):** with
-dependencies **`# tests 887 / # pass 887`**; without them **`# tests 844 / #
-pass 839 / # fail 5`**. **If the test count isn't 887, run `npm ci` before
+dependencies **`# tests 889 / # pass 889`**; without them **`# tests 846 / #
+pass 841 / # fail 5`**. **If the test count isn't 889, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React
@@ -3460,7 +3460,8 @@ export const FANTASYCALC_PARAMS = {
 }
 
 // SEED ONLY — the live window is derived per load (see the note below).
-export const PICK_YEARS = ['2026', '2027', '2028']
+// The seed itself is derived from the date (seasonWindow.js's seedPickYears).
+export const PICK_YEARS = seedPickYears()
 export const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 
 // Ordered roster slots — indices match Sleeper's `starters` array positions.
@@ -3471,7 +3472,11 @@ export const ROSTER_SLOTS = [ /* QB · RB×2 · WR×2 · TE · FLEX×3 · SFLX �
 (The four feed URLs are full `raw.githubusercontent.com/chnates/…` URLs in the
 real file.)
 
-**`PICK_YEARS` is a SEED, not the source of truth.** The live three-season
+**`PICK_YEARS` is a SEED, not the source of truth** — and since 2026-10-07 the
+seed is **derived from the date** (`seedPickYears`: from September the upcoming
+draft is next year's), because a hand-written list went stale the day the 2026
+draft completed (CODE-REVIEW-1 #15; `tests/seasonWindow.test.mjs` fails on a
+hard-coded season list or year-stamped pick prose in `src/`). The live three-season
 window comes from **`utils/seasonWindow.js`** and reaches the app as
 **`pickYears` on `LeagueContext`**; every pick surface reads that, and the
 constant only renders before `/state/nfl` resolves.
