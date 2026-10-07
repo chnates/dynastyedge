@@ -8,6 +8,7 @@
 
 import { getWinWindowTier } from '../../src/utils/rosterAnalysis.js'
 import { getTeamName } from '../../src/utils/teamName.js'
+import { trendTag } from '../../src/utils/marketTrend.js'
 // Team resolution moved to mcp/teams.js in phase 1b so analyze_trade's
 // `partner` argument resolves through the SAME code. Re-exported here because
 // this module's existing tests (and its contract) name it.
@@ -235,7 +236,7 @@ export function renderRosterText(a) {
     rows.forEach(p => {
       const val = p.value == null ? '—' : p.value.toLocaleString('en-US')
       const rank = p.positionRank ? ` ${p.position}${p.positionRank}` : ''
-      const tr = p.trend30Day > 50 ? ` ↑${p.trend30Day}` : p.trend30Day < -50 ? ` ↓${p.trend30Day}` : ''
+      const tr = trendTag(p.trend30Day)
       L.push(`  ${p.position.padEnd(3)} ${p.name}${p.nflTeam ? ` (${p.nflTeam})` : ''} — ${val}${rank}${tr}${p.unranked ? ' [unranked]' : ''}`)
     })
     L.push('')

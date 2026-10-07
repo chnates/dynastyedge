@@ -5,6 +5,7 @@ import { TIER_TEXT } from '../../utils/tierColors'
 import { POSITIONS, PICK_YEARS } from '../../constants'
 import { POS_TEXT } from '../../utils/positionColors'
 import { rankClass } from '../../utils/rankColors'
+import { trendDirection } from '../../utils/marketTrend'
 import TeamAvatar from '../shared/TeamAvatar'
 import { Badge, Magnitude, MAGNITUDE_TEAM_REFERENCE, Mark, Row, cn } from '../ui'
 
@@ -66,10 +67,11 @@ function PositionalRead({ roster, leagueAverages }) {
         // A plain text arrow rotated with CSS, NOT the ↗/↘ codepoints: iOS
         // gives U+2197/U+2198 default emoji presentation (a colour glyph that
         // ignores our text colour), while U+2192 stays text.
-        const rotate = trend > 50 ? '-rotate-45' : trend < -50 ? 'rotate-45' : ''
-        const trendColor = trend > 50
+        const dir = trendDirection(trend)
+        const rotate = dir === 'up' ? '-rotate-45' : dir === 'down' ? 'rotate-45' : ''
+        const trendColor = dir === 'up'
           ? 'text-success'
-          : trend < -50 ? 'text-danger' : 'text-text-tertiary'
+          : dir === 'down' ? 'text-danger' : 'text-text-tertiary'
         return (
           <span key={pos} className="flex items-baseline gap-0.5">
             <span

@@ -17,13 +17,11 @@
 import { computeEdgeSignals } from '../../src/utils/edgeBriefing.js'
 import { suggestSellMove } from '../../src/utils/recommendations.js'
 import { getTeamName } from '../../src/utils/teamName.js'
+import { TREND_THRESHOLD, MIN_TARGET_VALUE, isSellHighCandidate } from '../../src/utils/marketTrend.js'
 
 // Bounded output (§7). These are "the best few", not a dump — the question is
 // "who do I sell?", and a list of twenty is not an answer to it.
 const MAX_ALTERNATIVES = 5
-
-const TREND_THRESHOLD = 50
-const MIN_TARGET_VALUE = 1000
 
 function playerRow(p) {
   return {
@@ -75,16 +73,12 @@ export function buildSellHighAnswer(snapshot, { myRosterId } = {}) {
     ? suggestSellMove(signals.sellHigh, myRoster, allRosters)
     : null
 
-  // Runners-up, by the SAME rule computeEdgeSignals picks its winner with
-  // (a riser above the trend threshold, at a surplus position, worth enough to
-  // be worth a phone call) — so the list and the headline cannot disagree.
-  // Re-stated here rather than exported from edgeBriefing because that module
-  // returns only the top one; the thresholds are its documented constants.
+  // Runners-up, by the SAME rule computeEdgeSignals picks its winner with —
+  // isSellHighCandidate from utils/marketTrend.js — so the list and the
+  // headline cannot disagree.
   const alternatives = myRoster.players
     .filter(p =>
-      (p.trend30Day ?? 0) > TREND_THRESHOLD &&
-      (p.value ?? 0) >= MIN_TARGET_VALUE &&
-      signals.mySurpluses.includes(p.position) &&
+      isSellHighCandidate(p, { surpluses: signals.mySurpluses }) &&
       String(p.sleeperId) !== String(signals.sellHigh?.sleeperId ?? '')
     )
     .sort((a, b) => b.trend30Day - a.trend30Day)

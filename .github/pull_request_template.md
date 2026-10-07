@@ -40,11 +40,12 @@ Highest rung this PR reaches (see `dynastyedge-validation-and-qa` §1):
 Machine gates — all three must pass before merge, and CI enforces them:
 
 - [ ] `npm run lint` exits 0
-- [ ] `npm test` — **828 passing**. A count near 785 means `node_modules` is
-      missing; run `npm ci` before debugging anything. (The gap between the two
-      is **43** and has held across every change — an unchanged gap means every
-      test you added loads with no `node_modules`, i.e. none reached React or
-      `zod`.)
+- [ ] `npm test` — the passing count matches CLAUDE.md's **Current counts**
+      block (its one home — this template deliberately does not repeat the
+      number). A count ~43 lower means `node_modules` is missing; run `npm ci`
+      before debugging anything. (That gap of **43** has held across every
+      change — an unchanged gap means every test you added loads with no
+      `node_modules`, i.e. none reached React or `zod`.)
 - [ ] `npm run build` ends `✓ built in …s`, bundle not wildly larger
 
 Applicable checks:

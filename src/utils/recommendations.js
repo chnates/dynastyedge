@@ -14,6 +14,7 @@ import { buildValueLineup } from './lineupBuild'
 import { PEAK_WINDOWS } from './peakWindows'
 import { buildFairBand, FAIR_BAND_PCT } from './fairBand'
 import { getTeamName } from './teamName'
+import { isRising, isFalling } from './marketTrend'
 
 // The starters we protect hardest at each position in this 10-team Superflex
 // Half-PPR league (QB doubles up via the Superflex slot; 3 FLEX spots make RB/WR
@@ -252,10 +253,10 @@ export function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 
         score += Math.min(2, upgradeMargin / 600)
         reasons.push(`+${Math.round(upgradeMargin).toLocaleString()} over your ${pos} depth`)
       }
-      if (trend > 50) {
+      if (isRising(trend)) {
         score += Math.min(1.5, trend / 400)
         reasons.push('Trending up the last 30 days')
-      } else if (trend < -50) {
+      } else if (isFalling(trend)) {
         score -= 0.5
       }
       if (myTier === 'Rebuilding' && age != null && age <= 24) {
@@ -270,7 +271,7 @@ export function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 
     })
     // Only surface players that actually do something — a need, an upgrade, or a
     // genuine riser. Everything else is just available value, not a recommendation.
-    .filter(r => r.isNeed || r.isUpgrade || r.trend > 50)
+    .filter(r => r.isNeed || r.isUpgrade || isRising(r.trend))
     .sort((a, b) => b.score - a.score)
 
   return scored.slice(0, limit).map(r => ({

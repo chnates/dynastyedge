@@ -10,20 +10,13 @@ import { recommendFreeAgents } from './recommendations'
 import { buildFreeAgentPool } from './freeAgents'
 import { MIN_SPARKLINE_POINTS } from './valueHistory'
 import { POSITIONS } from '../constants'
+import { trendPct, isMoving, isBuyLowCandidate, isSellHighCandidate } from './marketTrend'
 
 // The Edge's assistant-GM logic: turn everything the app already caches into
 // a small set of prioritized, actionable briefing items. Pure functions —
 // all data arrives resolved, nothing here fetches.
 
-const TREND_THRESHOLD = 50
-const MIN_TARGET_VALUE = 1000
 const MAX_BRIEFING_ITEMS = 5
-
-// Same shape as MarketMovers' TrendChip math: % vs the value 30 days ago.
-export function trendPct(trend, value) {
-  const baseline = (value ?? 0) - trend
-  return baseline > 0 ? Math.round((trend / baseline) * 100) : null
-}
 
 // ── Derived market / league signals ─────────────────────────────────────────
 
@@ -49,12 +42,11 @@ export function computeEdgeSignals({ league, values, watchlist, nflState, myRost
   // Best buy-low window: falling player at one of my deficit positions,
   // not mine. A rebuilding owner makes it prime.
   const buyLow = Object.values(values.playerMap)
-    .filter(p =>
-      p.trend30Day < -TREND_THRESHOLD &&
-      p.value >= MIN_TARGET_VALUE &&
-      myDeficits.includes(p.position) &&
-      ownerByPlayer[p.sleeperId]?.rosterId !== myRosterId
-    )
+    .filter(p => isBuyLowCandidate(p, {
+      deficits: myDeficits,
+      ownerRosterId: ownerByPlayer[p.sleeperId]?.rosterId,
+      myRosterId,
+    }))
     .map(p => ({
       ...p,
       ownerRoster: ownerByPlayer[p.sleeperId] ?? null,
@@ -64,11 +56,7 @@ export function computeEdgeSignals({ league, values, watchlist, nflState, myRost
 
   // Best sell-high: my biggest riser at a surplus position.
   const sellHigh = myRoster.players
-    .filter(p =>
-      p.trend30Day > TREND_THRESHOLD &&
-      p.value >= MIN_TARGET_VALUE &&
-      mySurpluses.includes(p.position)
-    )
+    .filter(p => isSellHighCandidate(p, { surpluses: mySurpluses }))
     .sort((a, b) => b.trend30Day - a.trend30Day)[0] ?? null
 
   // Market radar rows: watchlist movers first, then my roster's movers.
@@ -78,7 +66,7 @@ export function computeEdgeSignals({ league, values, watchlist, nflState, myRost
     .filter(p => watchSet.has(String(p.sleeperId)) && p.trend30Day !== 0)
     .sort((a, b) => Math.abs(b.trend30Day) - Math.abs(a.trend30Day))
   const myMovers = myRoster.players
-    .filter(p => Math.abs(p.trend30Day ?? 0) > TREND_THRESHOLD && !p.unranked)
+    .filter(p => isMoving(p.trend30Day) && !p.unranked)
     .sort((a, b) => Math.abs(b.trend30Day) - Math.abs(a.trend30Day))
 
   const radar = []
@@ -354,7 +342,7 @@ export function buildBriefing({
 
   // 7. Biggest watchlist mover.
   const watchMover = signals.radar.find(
-    p => p.isWatched && Math.abs(p.trend30Day ?? 0) > TREND_THRESHOLD
+    p => p.isWatched && isMoving(p.trend30Day)
   )
   if (watchMover) {
     const rising = watchMover.trend30Day > 0

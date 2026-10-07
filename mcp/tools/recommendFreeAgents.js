@@ -41,6 +41,7 @@ import {
 } from '../../src/utils/faabBid.js'
 import { getProjPts } from '../../src/utils/projections.js'
 import { getTeamName } from '../../src/utils/teamName.js'
+import { trendTag } from '../../src/utils/marketTrend.js'
 import { POSITIONS } from '../../src/constants.js'
 
 // Bounded output (§7). The free-agent pool is the whole FantasyCalc universe
@@ -306,7 +307,7 @@ export function renderFreeAgentText(a) {
     L.push('')
     a.recommendations.forEach((p, i) => {
       const proj = p.projectedPoints != null ? ` · proj ${p.projectedPoints}` : ''
-      const tr = p.trend30Day > 50 ? ` ↑${p.trend30Day}` : p.trend30Day < -50 ? ` ↓${p.trend30Day}` : ''
+      const tr = trendTag(p.trend30Day)
       L.push(`${String(i + 1).padStart(2)}. ${p.position.padEnd(3)} ${p.name}${p.nflTeam ? ` (${p.nflTeam})` : ''} — ${num(p.value)}${proj}${tr}`)
       p.reasons.forEach(r => L.push(`      ${r}`))
       const b = p.faabBid

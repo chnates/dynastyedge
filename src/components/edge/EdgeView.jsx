@@ -12,8 +12,9 @@ import { usePlayerDB } from '../../hooks/usePlayerDB'
 import { relativeTime } from '../../hooks/usePlayerIntel'
 import { getTeamName } from '../../hooks/useLeague'
 import {
-  computeEdgeSignals, buildBriefing, buildGmLine, buildTeamValueSeries, trendPct,
+  computeEdgeSignals, buildBriefing, buildGmLine, buildTeamValueSeries,
 } from '../../utils/edgeBriefing'
+import { trendPct } from '../../utils/marketTrend'
 import { POS_BG, POS_TEXT } from '../../utils/positionColors'
 import { TIER_BADGE, TIER_TEXT } from '../../utils/tierColors'
 import {
