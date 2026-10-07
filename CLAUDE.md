@@ -514,7 +514,7 @@ architecture:
 - **Coverage, measured (2026-09-04).** Before: 100 items, 25.7h deep, 25%
   naming a player, **5 of 26 rostered players** resolvable. After: 207 items,
   159h deep, 57% resolved to players, **10 of 26**. That **misses** the
-  pre-registered target of 12 (`docs/build-plan-2026-09.md` §3) and is
+  pre-registered target of 12 (`docs/archive/build-plan-2026-09.md` §3) and is
   recorded as a miss. The remaining 15 are genuine absence, not matching
   failures — each was checked, and none of their names appear anywhere in the
   feed's text; the app now resolves *every* player the matcher can find, so
@@ -548,7 +548,7 @@ so nothing threw. The source was removed; see the news pipeline section.) That i
 this exact shape — FantasyPros, "the most player-focused source in the old
 list", was dead across all three endpoints and "had been contributing nothing"
 until a hand probe found it months later. Twice is a pattern, so it gets an
-instrument (see `docs/open-items.md` **NEWS-6**).
+instrument (see `docs/archive/open-items-2026.md` **NEWS-6**).
 
 - **`scripts/sourceHealth.mjs`** is the policy — pure, shared by both
   pipelines, pinned by `tests/sourceHealth.test.mjs`. Same precedent as
@@ -691,7 +691,7 @@ architecture as the news pipeline:
   the app's only valuation source, so every trade verdict, roster total,
   trajectory curve and pick price traces to one provider. The useful question
   of three sources — *when they disagree, which one moves toward the others?*
-  (`docs/build-plan-2026-09.md` §10 4d) — needs history, and a day not archived
+  (`docs/archive/build-plan-2026-09.md` §10 4d) — needs history, and a day not archived
   cannot be recovered. So the archive ships **before** any UI, which is 4a's own
   instruction.
   **The join is ID-BASED END TO END, never by name** (rule 2), through
@@ -1212,7 +1212,7 @@ exactly like auto-deploy. The three tells, if it is ever disconnected again:
 deployment environment, and a **feature-branch** commit shows
 `target: production` (integration sends non-default branches to *preview*).
 The manual path — a `gitSource` deployment against the public repo, which
-needs no integration — remains the fallback. See `docs/open-items.md` MCP-2b.
+needs no integration — remains the fallback. See `docs/archive/open-items-2026.md` MCP-2b.
 
 **Three findings cost a deploy cycle each, and none was guessable from the
 docs. They are recorded because the next person will hit the same three.**
@@ -5078,7 +5078,7 @@ the route changed.
 > `SideDrawer` is now the always-expanded hierarchical map; and global search
 > jumps to sections/features as well as players. **Phase 3 complete
 > (2026-07-20)** — the "Primetime Blackout" visual refresh (owner-approved
-> direction 2026-07-19, spec: `docs/design/phase3-design-brief.md` + reference
+> direction 2026-07-19, spec: `docs/archive/design/phase3-design-brief.md` + reference
 > render) executed in the brief's six steps: token pass, primitive pass, red
 > score-bug heroes, per-section sweeps, red/silver logo re-cut, docs. The
 > **Design System section below is the live post-refresh truth** and matches
@@ -6322,11 +6322,8 @@ dynastyedge/
 │   └── main.jsx
 ├── docs/                        ← durable analysis + design records (not shipped)
 │   ├── open-items.md                ← THE living "what's next" backlog — deferred work + trigger conditions
-│   ├── build-plan-2026-09.md        ← owner-approved four-phase build plan (Sept 2026) — per-phase kickoff prompts, gates, and the four measured NOT-to-build decisions
-│   ├── project-status-2026-08.md    ← dated status snapshot (superseded by newer dated files)
-│   ├── repo-review-2026-07.md       ← full read-only audit + ranked backlog (all items landed)
+│   ├── archive/                     ← SPENT docs, kept as history and never deleted (CLEANUP-1): the Sept 2026 build plan, the Aug 2026 status snapshot, the July 2026 repo review, the Phase 3 "Primetime Blackout" brief, DESIGN-1's handoff prompts, open-items-2026.md (every closed open-items record, same IDs) and the one-off archive-branches workflow. README.md indexes it
 │   ├── analysis/                    ← model calibration + research notes (incl. optimizer-data-sources-2026-09.md: the Optimizer data-source feasibility study; asset-aging-and-pick-value-2026-09.md: THE keep-score calibration — player aging + pick realization; trade-my-side-read-2026-09.md: the one-engine-both-seats change, whose §4 is SUPERSEDED by trade-fair-band-2026-09.md: which of the two "fair" windows is allowed to answer which question — the suggestion is held inside buildFairBand and the wider assembly window is demoted to feeding `alternative`)
-│   ├── design/                      ← Phase 3 "Primetime Blackout" brief + reference render (SUPERSEDED — see below)
 │   └── design/review-2026-09/       ← THE UX/IA + visual review that superseded Phase 3: findings.md (audit) · inventory.md (all 21 destinations) · slop-checklist.md (researched AI-slop markers + how the shipped app scores) · directions.md (six mocked directions + the Matchday decision) · unasked.md · mocks/ (standalone, never imported by the app)
 ├── tests/                       ← plain-Node test suite (node:test + node:assert/strict, zero deps)
 │   ├── fixtures/
@@ -7086,10 +7083,11 @@ Two things the roll must not break, both pinned by tests:
 > living backlog of deferred work, each item with the trigger condition that
 > makes it ready, and **an item carrying a `Kickoff prompt` block is
 > ready-to-run work with the owner's sign-off already on it.**
-> `docs/build-plan-2026-09.md` was the active queue through 2026-09; **all four
+> `docs/archive/build-plan-2026-09.md` was the active queue through 2026-09; **all four
 > of its phases are now resolved** (1 shipped · 2 shipped-with-a-recorded-miss ·
-> 3 partial, 3b/3c null · 4 cut), so it is history plus the standing rules in
-> its §0 and §8 — not the queue.
+> 3 partial, 3b/3c null · 4 cut), so it is archived history. Its still-cited
+> §0/§8 standing rules now live in `open-items.md` §0, and Phase 4b–d's spec in
+> its PHASE-4BCD entry.
 > Read it before proposing next steps. Some items are **not** ready work and
 > say so explicitly (rolling `PICK_YEARS` before the rookie draft runs actively
 > breaks the Draft Tracker). The list below is the longer-horizon feature

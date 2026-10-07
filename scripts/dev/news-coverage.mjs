@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Analysis-only: measures how much of a news feed is actually about MY players.
 // This is the pre-registered acceptance test for the Phase 2 news work
-// (docs/build-plan-2026-09.md §3): >= 12 of the owner's 25 rostered players
+// (docs/archive/build-plan-2026-09.md §3): >= 12 of the owner's 25 rostered players
 // mentioned in a fresh pull, versus a baseline of 3.
 //
 //   node scripts/dev/news-coverage.mjs                       # measure the LIVE published feed

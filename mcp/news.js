@@ -57,10 +57,6 @@ export const NEWS_STALE_MINUTES = 35
 const NEWS_KEY = 'news:feed'
 const defaultStore = memoryStore()
 
-export function resetNewsCache() {
-  return defaultStore.clear()
-}
-
 export async function getNews({
   ttlMs = DEFAULT_NEWS_TTL_MS, force = false, fetcher, concurrency = 6, store = defaultStore,
 } = {}) {

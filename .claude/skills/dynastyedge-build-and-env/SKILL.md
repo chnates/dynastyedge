@@ -143,7 +143,7 @@ const cls = POS_TEXT[position]   // 'text-pos-qb' | 'text-pos-rb' | ...
 ```
 
 This is precisely why `src/utils/positionColors.js` (`POS_TEXT`, `POS_BG`,
-`POS_CHIP_ACTIVE`, `POS_TAG`, `POS_BAR`) and `src/utils/roundColors.js`
+`POS_FIELD`, `POS_CHIP_ACTIVE`, `POS_TAG`, `POS_SVG`; `POS_BAR` went with the positional bars in 2026-09) and `src/utils/roundColors.js`
 (`ROUND_CLASSES` etc.) are **lookup maps of full literal class strings** — the
 comment at the top of `positionColors.js` says so explicitly ("Class strings
 must stay literal so the Tailwind content scan picks them up"). The design

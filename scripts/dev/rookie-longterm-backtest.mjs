@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Dev/analysis tool — NOT part of the app or any workflow. Nothing imports it.
 //
-// The Phase 3c GATE (docs/build-plan-2026-09.md §4). Phase 3 proposed splitting
+// The Phase 3c GATE (docs/archive/build-plan-2026-09.md §4). Phase 3 proposed splitting
 // rookie research into TWO axes — "impact now" (will he play this season) and
 // "long term" (is he worth a taxi spot) — and required the long-term score to
 // beat NFL draft capital alone OUT OF SAMPLE before any of it shipped.

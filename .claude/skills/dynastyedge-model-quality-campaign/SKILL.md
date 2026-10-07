@@ -85,7 +85,7 @@ needs the resolver hook. This skill ships a self-contained copy (identical to
 
 ```
 cd /home/user/dynastyedge
-node --import ./.claude/skills/dynastyedge-model-quality-campaign/scripts/reg.mjs <script.mjs>
+node --import ./.claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs <script.mjs>
 ```
 
 (The `./` prefix is required — a bare relative path throws
@@ -93,7 +93,10 @@ node --import ./.claude/skills/dynastyedge-model-quality-campaign/scripts/reg.mj
 
 Scripts in `scripts/` (all repo-read-only):
 
-- `loader.mjs` + `reg.mjs` — resolver hook (never import loader directly).
+- The resolver hook is NOT here: it is the diagnostics skill's canonical
+  `dynastyedge-diagnostics-and-tooling/scripts/reg.mjs` (the commands above
+  use it). This folder carried a byte-identical copy until CLEANUP-1
+  (2026-10-07) deleted it so the two cannot drift.
 - `fixture.mjs` — deterministic synthetic 10-team league/season generator.
 - `phase0-baseline.mjs` — Gate 0 checks. **Run offline; passing output below.**
 - `phase1-replay.mjs` — walk-forward calibration replay. **Run offline in
@@ -111,7 +114,7 @@ produces, and pin the invariants a later change must not break.
 
 ```
 cd /home/user/dynastyedge
-node --import ./.claude/skills/dynastyedge-model-quality-campaign/scripts/reg.mjs \
+node --import ./.claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs \
      ./.claude/skills/dynastyedge-model-quality-campaign/scripts/phase0-baseline.mjs
 ```
 
@@ -192,7 +195,7 @@ real calibration.**
 ### Step 2 — replay (offline once files exist)
 
 ```
-node --import ./.claude/skills/dynastyedge-model-quality-campaign/scripts/reg.mjs \
+node --import ./.claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs \
      ./.claude/skills/dynastyedge-model-quality-campaign/scripts/phase1-replay.mjs \
      /tmp/seasons/season-*.json
 ```
@@ -224,7 +227,7 @@ strengths now, score them at season's end.)
 ### Harness self-validation (measured, synthetic — executed 2026-07-06)
 
 ```
-node --import ./.claude/skills/dynastyedge-model-quality-campaign/scripts/reg.mjs \
+node --import ./.claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs \
      ./.claude/skills/dynastyedge-model-quality-campaign/scripts/phase1-replay.mjs --synthetic
 ```
 

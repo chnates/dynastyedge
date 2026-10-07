@@ -43,10 +43,6 @@ const currentKey = leagueId => `bracket:${leagueId}`
 
 const defaultStore = memoryStore()
 
-export function resetResultsCache() {
-  return defaultStore.clear()
-}
-
 export async function getLeagueResults({
   leagueId, leagueInfo, ttlMs = DEFAULT_HISTORY_TTL_MS, currentTtlMs = DEFAULT_CURRENT_BRACKET_TTL_MS,
   force = false, fetcher, concurrency = 6, store = defaultStore,

@@ -9,7 +9,7 @@ feed; pass a path to measure a local `news.json`).
 
 ## 1. Re-verification of the build plan's §1 findings
 
-`docs/build-plan-2026-09.md` §1 recorded these on 2026-09-04. Re-measured the
+`docs/archive/build-plan-2026-09.md` §1 recorded these on 2026-09-04. Re-measured the
 same day against the live published feed, they had already drifted:
 
 | Finding | Build plan | Re-measured | Verdict |
@@ -108,7 +108,7 @@ bottleneck — volume is.
 
 ## 4. Acceptance test
 
-Pre-registered before the fetcher was touched (`docs/build-plan-2026-09.md`
+Pre-registered before the fetcher was touched (`docs/archive/build-plan-2026-09.md`
 §3): **≥ 12 of the owner's 25 rostered players mentioned in a fresh pull**,
 against a baseline of 3 (re-measured as 5).
 
