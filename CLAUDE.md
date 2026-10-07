@@ -2928,6 +2928,7 @@ dynastyedge/
 │       ├── trade-structure-backtest.mjs ← analysis-only: the DISCONFIRMED trade-structure profiling test (frontier Item 3); drives the shipped buildManagerProfiles so it cannot drift
 │       ├── optimizer-signal-backtest.mjs ← analysis-only: is a better weekly projection obtainable (no) and what DEF streaming is worth (docs/analysis/optimizer-data-sources-2026-09.md)
 │       ├── asset-aging-backtest.mjs ← analysis-only: THE keep-score calibration — longitudinal aging + pick realization (docs/analysis/asset-aging-and-pick-value-2026-09.md)
+│       ├── buylow-timing-backtest.mjs ← analysis-only: do trend < −50 dips bounce back? Imports the ±50 from marketTrend.js; reads values-consensus' FantasyCalc column (the one permanent home) cross-checked against values-history; `--frozen` reproduces docs/analysis/buylow-timing-2026-10.md
 │       ├── trade-fair-band-sweep.mjs ← analysis-only: THE OPEN-10 sweep — assembly window × APPEAL_BONUS jointly (one measurement), all ten seats, via the shipped suggestFairPackage's hooks
 │       ├── contrast-audit.mjs ← THE accessibility-floor instrument: tokens from src/index.css vs each theme's worst-case ground, plus band/ink reversals; exits non-zero — re-run after ANY ground-colour change
 │       └── news-coverage.mjs ← analysis-only: THE news acceptance metric — how many of my rostered players resolve in the feed (docs/analysis/news-sources-2026-09.md)
@@ -3137,7 +3138,7 @@ dynastyedge/
 ├── docs/                        ← durable analysis + design records (not shipped)
 │   ├── open-items.md                ← THE living "what's next" backlog — deferred work + trigger conditions
 │   ├── archive/                     ← SPENT docs, kept and never deleted (CLEANUP-1); README.md indexes it (incl. open-items-2026.md, every closed record)
-│   ├── analysis/                    ← model calibration + research notes (trade-fair-band-2026-09.md supersedes §4 of trade-my-side-read-2026-09.md)
+│   ├── analysis/                    ← model calibration + research notes. `analysis/data/` holds FROZEN inputs a write-up must be reproducible from and that exist nowhere permanent (e.g. the player DB as of a run) (trade-fair-band-2026-09.md supersedes §4 of trade-my-side-read-2026-09.md)
 │   └── design/review-2026-09/       ← THE review that superseded Phase 3: findings · inventory · slop-checklist · directions (Matchday) · unasked · mocks/ (never imported)
 ├── tests/                       ← plain-Node test suite (node:test + node:assert/strict, zero deps)
 │   ├── fixtures/
