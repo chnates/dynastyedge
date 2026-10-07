@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { faabDisplay } from '../../utils/leagueState'
 import { useNavigate } from 'react-router-dom'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { useTransactions } from '../../hooks/useTransactions'
@@ -330,7 +331,7 @@ export default function EdgeView() {
             </button>
             <div className="pl-3">
               <p className="font-mono text-base font-semibold tabular-nums leading-none text-bg-primary">
-                ${myRoster.faabRemaining}
+                {faabDisplay(myRoster.faabRemaining)}
               </p>
               <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-bg-primary/60 mt-1">FAAB</p>
             </div>

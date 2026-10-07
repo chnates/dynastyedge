@@ -87,7 +87,13 @@ export function buildLeagueState({
 
   const picksByRoster = resolvePickOwnership(tradedPicks, rosters, years)
 
-  const waiverBudget = leagueInfo?.settings?.waiver_budget ?? 100
+  // READ, never assumed (League Context: "never assume 100"; CODE-REVIEW-1
+  // #11, owner decision 2026-10-07). With no budget in the settings the
+  // remainder is UNKNOWN — null, rendered `—` by faabDisplay — not a figure off
+  // a $100 the league no longer uses ($1000 since 2026). faabBid.js already
+  // refuses to bid without one.
+  const rawBudget = Number(leagueInfo?.settings?.waiver_budget)
+  const waiverBudget = Number.isFinite(rawBudget) && rawBudget > 0 ? rawBudget : null
 
   function resolveRoster(roster) {
     // Sleeper IDs arrive as strings or numbers depending on endpoint —
@@ -176,7 +182,7 @@ export function buildLeagueState({
       picks: ownedPicks,
       totalValue: playerValue + pickValue,
       faabBudget: waiverBudget,
-      faabRemaining: waiverBudget - (settings.waiver_budget_used ?? 0),
+      faabRemaining: waiverBudget == null ? null : waiverBudget - (settings.waiver_budget_used ?? 0),
       faabSpent: settings.waiver_budget_used ?? 0,
       record: { wins, losses, ties },
       hasRecord: wins + losses + ties > 0,
@@ -201,4 +207,10 @@ export function buildLeagueState({
     pickYears: years,
     leagueId: leagueId ?? leagueInfo?.league_id ?? null,
   }
+}
+
+// THE FAAB figure as text: `$142`, or `—` when the budget is unknown (rule 9's
+// format, rule 7's honesty). Every surface that prints a FAAB amount uses it.
+export function faabDisplay(amount) {
+  return amount == null || !Number.isFinite(Number(amount)) ? '—' : `$${amount}`
 }

@@ -1,4 +1,5 @@
 import { getTeamName } from '../../hooks/useLeague'
+import { faabDisplay } from '../../utils/leagueState'
 import { useLeagueContext } from '../../context/LeagueContext'
 import { getPositionalStrength, POSITION_DEPTH } from '../../utils/rosterAnalysis'
 import { TIER_TEXT } from '../../utils/tierColors'
@@ -113,7 +114,7 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
   // What the right-hand figure is, by sort mode — the number the list is
   // currently ordered by, so the ordering is always legible from the rows.
   const figure = sortMode === 'faab'
-    ? { value: roster.faabRemaining, prefix: '$', label: `spent $${roster.faabSpent} of $${roster.faabBudget}` }
+    ? { value: roster.faabRemaining, prefix: '$', label: roster.faabBudget == null ? `spent $${roster.faabSpent} · budget unknown` : `spent $${roster.faabSpent} of $${roster.faabBudget}` }
     : sortMode === 'picks'
       ? { count: totalPicks, label: totalPicks === 1 ? 'pick' : 'picks' }
       : sortMode === 'record'
@@ -156,7 +157,7 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
               )}
               <Magnitude
                 value={figure.value > 0 ? figure.value : null}
-                reference={sortMode === 'faab' ? roster.faabBudget : MAGNITUDE_TEAM_REFERENCE}
+                reference={sortMode === 'faab' ? (roster.faabBudget ?? MAGNITUDE_TEAM_REFERENCE) : MAGNITUDE_TEAM_REFERENCE}
               />
             </span>
           )}
@@ -186,7 +187,7 @@ export default function TeamCard({ roster, rank, divergence, leagueAverages, win
         <div className="mt-1.5 pl-7 flex items-center justify-between gap-3">
           <PositionalRead roster={roster} leagueAverages={leagueAverages} />
           <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.14em] text-text-tertiary tabular-nums">
-            {years.map(yr => `${pickCountByYear[yr]}`).join('/')} picks · ${roster.faabRemaining}
+            {years.map(yr => `${pickCountByYear[yr]}`).join('/')} picks · {faabDisplay(roster.faabRemaining)}
           </span>
         </div>
       )}

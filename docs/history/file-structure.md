@@ -348,6 +348,10 @@ OPEN-3, the FAAB bid recommender (2026-10-07), moved both by the same 20
 imports only `src/utils` and the shared fixture, and the three new
 `mcpRecommendFreeAgents` tests reach neither React nor `zod`.
 
+The unknown-FAAB-budget fix (2026-10-07, CODE-REVIEW-1 #11) moved both by the
+same 1 (877/834 → **878/835**), the gap holding at 43: the old "falls back to
+100" test was rewritten to the owner's new rule and `faabDisplay` gained one.
+
 The hindsight-even one-home fix (2026-10-07, CODE-REVIEW-1 #5) moved both by
 the same 5 (872/829 → **877/834**), the gap holding at 43: `fairBand.test.mjs`
 imports only the pure `fairBand.js`.

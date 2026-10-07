@@ -127,7 +127,7 @@ export default function LeagueOverview() {
 
     const sortedRosters = [...allRosters].sort((a, b) => {
       if (effectiveSort === 'picks')  return (b.pickCapitalScore ?? 0) - (a.pickCapitalScore ?? 0)
-      if (effectiveSort === 'faab')   return b.faabRemaining - a.faabRemaining
+      if (effectiveSort === 'faab')   return (b.faabRemaining ?? -1) - (a.faabRemaining ?? -1)   // unknown sorts last
       if (effectiveSort === 'record') {
         const winDiff = (b.record?.wins ?? 0) - (a.record?.wins ?? 0)
         return winDiff !== 0 ? winDiff : (b.pointsFor ?? 0) - (a.pointsFor ?? 0)

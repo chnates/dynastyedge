@@ -80,6 +80,7 @@ optimization, and the league-wide competitive picture.
 **FAAB — read the budget from `league.settings.waiver_budget`, never assume
 100.** It went $100 → $1000 for 2026, so any cross-season bid comparison
 normalizes to **percent of budget** (`docs/analysis/faab-bid-corpus-2026-08.md`).
+No budget in the settings ⇒ the remainder is **unknown** (`—`), never figured off $100.
 
 **It also RESETS TWICE a league year** (offseason, then the regular season;
 offseason money unspent is lost — owner, 2026-09-20). Two consequences that are
@@ -1933,8 +1934,10 @@ was ever recreated instead of renewed, the chain ends there.
     returns).
   - The **`budgetsCommitted >= 0.2`** coaching gate means "committed ≥ 20% of a
     budget" (on raw dollars it tripped at 2% of 2026's $1000).
-  - A season with no `waiver_budget` falls back to **100** (matching
-    `leagueState.js`). UI: **"Budgets Used · 1.7×"**, **"Value / Full Budget"**.
+  - A PAST season with no `waiver_budget` falls back to **100** — history only,
+    the value those seasons had, used only to turn bids into percentages. The
+    **current** remainder never assumes one (`leagueState.js` → `null`, `—`).
+    UI: **"Budgets Used · 1.7×"**, **"Value / Full Budget"**.
 - **Rookie draft grades:** slot vs current-value rank within the class (Δ ≥ +5
   Steal, ≤ −5 Reach; ≥ 1000 = hit). Startup drafts (> 6 rounds) excluded.
 - **Head-to-head:** trade count + my net vs each opponent.
@@ -3143,7 +3146,7 @@ dynastyedge/
 │   │   └── useRookieADP.js
 │   ├── utils/
 │   │   ├── fetchJSON.js         ← shared fetch wrapper with timeout — use everywhere
-│   │   ├── leagueState.js       ← THE five-source join (buildLeagueState) every analysis function eats; useLeague only calls it
+│   │   ├── leagueState.js       ← THE five-source join (buildLeagueState) every analysis function eats; useLeague only calls it. faabDisplay = THE FAAB figure ($XXX, or — when the budget is unknown)
 │   │   ├── teamName.js         ← getTeamName — in utils, not hooks, so the analysis layer stays React-free (re-exported from useLeague for the 22 components that import it there)
 │   │   ├── valueHistory.js     ← MIN_SPARKLINE_POINTS + THE per-player series rule (getValueSeries) and its dated/coverage/slice/summary companions
 │   │   ├── appVersion.js        ← pure reload-URL builder for the version self-heal
@@ -3266,8 +3269,8 @@ because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
 **Current counts (verified 2026-10-07 by moving `node_modules` aside):** with
-dependencies **`# tests 877 / # pass 877`**; without them **`# tests 834 / #
-pass 829 / # fail 5`**. **If the test count isn't 877, run `npm ci` before
+dependencies **`# tests 878 / # pass 878`**; without them **`# tests 835 / #
+pass 830 / # fail 5`**. **If the test count isn't 878, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React
@@ -3518,7 +3521,10 @@ Two things the roll must not break, both test-pinned:
 1. **Sleeper ID normalization:** IDs arrive as strings or numbers by endpoint.
    **Normalize to `String(id)` at ingestion** (`useLeague` does); all lookups and
    joins use string IDs.
-1. **FAAB display:** always `$XXX` (`$142`, not `142`).
+1. **FAAB display:** always `$XXX` (`$142`, not `142`) — via **`faabDisplay`**
+   (`utils/leagueState.js`), which prints **`—`** when the league's budget is
+   unknown. `faabBudget` / `faabRemaining` are **null** then, never a figure off
+   an assumed $100 (owner, 2026-10-07; the MCP schemas declare them nullable).
 1. **Dynasty values display:** whole numbers only, 0–10000 scale. **Never
    decimals.**
 1. **Trend arrows:** `trend30Day > 50` → ↑ green · `< -50` → ↓ red · between →
