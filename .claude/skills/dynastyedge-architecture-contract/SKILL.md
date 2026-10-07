@@ -164,7 +164,8 @@ until a full page reload.
 response is discarded, only these survive): `name`, `position`, `team`, `age`,
 `years_exp`, `injury_status`, `injury_body_part`, `injury_notes` (added
 2026-10-07, when `usePlayerNews` stopped fetching per player), `espn_id`,
-`depth_chart_position`, `depth_chart_order`, `news_updated`. If a feature needs another field, add it
+`depth_chart_position`, `depth_chart_order`, `news_updated` — one function,
+`src/utils/playerDB.js`, shared with the MCP server. If a feature needs another field, add it
 to this trim list — do not fetch `/players/nfl` a second time anywhere.
 
 ### LeagueContext composition

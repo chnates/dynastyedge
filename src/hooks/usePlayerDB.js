@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { SLEEPER_BASE } from '../constants'
 import { fetchJSON } from '../utils/fetchJSON'
+import { trimPlayerDB } from '../utils/playerDB'
 
 // Single shared cache of Sleeper's full player DB (/players/nfl, ~5-8MB).
 // Fetched at most once per session; the raw response is trimmed to the
@@ -22,27 +23,8 @@ export function loadPlayerDB() {
       label: 'Sleeper player DB',
     })
       .then(data => {
-        const meta = {}
-        Object.entries(data).forEach(([id, p]) => {
-          meta[id] = {
-            name: [p.first_name, p.last_name].filter(Boolean).join(' ') || null,
-            position: p.position ?? null,
-            team: p.team || '',
-            age: p.age ?? null,
-            years_exp: p.years_exp ?? null,
-            injury_status: p.injury_status ?? null,
-            // The detail behind the status, for the player card and the trade
-            // cards ("Out — Knee"). They used to come from a separate
-            // per-player request that read a failure as "healthy"; the MCP
-            // server's trim already kept both.
-            injury_body_part: p.injury_body_part ?? null,
-            injury_notes: p.injury_notes || null,
-            espn_id: p.espn_id ?? null,
-            depth_chart_position: p.depth_chart_position ?? null,
-            depth_chart_order: p.depth_chart_order ?? null,
-            news_updated: p.news_updated ?? null,
-          }
-        })
+        // The kept fields are THE shared trim (utils/playerDB.js).
+        const meta = trimPlayerDB(data)
         moduleCache = meta
         fetchPromise = null
         return meta

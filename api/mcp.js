@@ -372,6 +372,39 @@ var init_fantasyCalcPayload = __esm({
   }
 });
 
+// src/utils/playerDB.js
+function trimPlayerRow(p) {
+  return {
+    name: [p.first_name, p.last_name].filter(Boolean).join(" ") || null,
+    position: p.position ?? null,
+    team: p.team || "",
+    age: p.age ?? null,
+    years_exp: p.years_exp ?? null,
+    injury_status: p.injury_status ?? null,
+    // The detail behind the status — "Out — Knee - ACL, surgery" rather than a
+    // bare label (the player card, the trade cards, the MCP injury fields).
+    injury_body_part: p.injury_body_part ?? null,
+    injury_notes: p.injury_notes || null,
+    // ESPN's athlete id: the secondary join into the news feed.
+    espn_id: p.espn_id ?? null,
+    // Depth room and news freshness (the player drawer).
+    depth_chart_position: p.depth_chart_position ?? null,
+    depth_chart_order: p.depth_chart_order ?? null,
+    news_updated: p.news_updated ?? null
+  };
+}
+function trimPlayerDB(data) {
+  const meta3 = {};
+  Object.entries(data ?? {}).forEach(([id, p]) => {
+    meta3[id] = trimPlayerRow(p ?? {});
+  });
+  return meta3;
+}
+var init_playerDB = __esm({
+  "src/utils/playerDB.js"() {
+  }
+});
+
 // src/utils/pickCapital.js
 function resolvePickOwnership(tradedPicks, rosters, years) {
   const ownership = {};
@@ -698,31 +731,6 @@ var init_store = __esm({
 });
 
 // mcp/snapshot.js
-function trimPlayerDB(data) {
-  const meta3 = {};
-  Object.entries(data).forEach(([id, p]) => {
-    meta3[id] = {
-      name: [p.first_name, p.last_name].filter(Boolean).join(" ") || null,
-      position: p.position ?? null,
-      team: p.team || "",
-      age: p.age ?? null,
-      years_exp: p.years_exp ?? null,
-      injury_status: p.injury_status ?? null,
-      // The three fields that turn a bare label into an answer. "Doubtful"
-      // tells a reader to go and look something up; "Doubtful — Knee/Meniscus,
-      // surgery" tells them the season is the question, not the afternoon.
-      // Measured on the live payload: Brock Bowers carried exactly that, and
-      // the tool that had it in hand reported only the word "Doubtful" and
-      // advised checking Sleeper.
-      injury_body_part: p.injury_body_part ?? null,
-      injury_notes: p.injury_notes || null,
-      // ESPN's athlete id, the secondary join into the news feed for items
-      // that carry `athleteIds` but no resolved Sleeper id.
-      espn_id: p.espn_id ?? null
-    };
-  });
-  return meta3;
-}
 async function fetchSleeperCore(get, leagueId) {
   const [leagueInfo, rosters, users, tradedPicks, nflState, drafts] = await Promise.all([
     get(`${SLEEPER_BASE}/league/${leagueId}`, { label: "Sleeper league" }),
@@ -841,6 +849,7 @@ var init_snapshot = __esm({
   "mcp/snapshot.js"() {
     init_constants();
     init_fantasyCalcPayload();
+    init_playerDB();
     init_leagueState();
     init_limit();
     init_store();

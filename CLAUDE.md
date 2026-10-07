@@ -918,7 +918,8 @@ Analyzer: `analyzeTrade` → `getTradeVerdict` → `adjustVerdictForInjuries` �
 plus the news feed. It exists because the server once answered a bare
 "Doubtful" while holding the injury detail and a fresh RotoWire item.
 - **`injury_body_part`, `injury_notes`, `espn_id` are in the player-DB trim** —
-  the app's trim (`usePlayerDB`) and the server's (`mcp/snapshot.js`) both.
+  ONE trim, `src/utils/playerDB.js`, used by `usePlayerDB` and `mcp/snapshot.js`
+  alike (the two lists had drifted until CODE-REVIEW-1 #9).
 - **A free-text name is allowed** but resolves through **`buildResolveAnswer`**
   — ambiguous returns candidates and refuses.
 - **The join is `playerIds`, with NO headline-name fallback** — the pipeline
@@ -3183,6 +3184,7 @@ dynastyedge/
 │   │   ├── fairBand.js          ← THE definition of "fair" (±5%), shared by the Analyzer's verdict and every surface that PREDICTS it; PLUS the separate, symmetric hindsight rule (ledger W-L-E + Activity's bigger haul)
 │   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation; teamDirection = THE team cut-offs (−1% / +5%)
 │   │   ├── seasonWindow.js      ← THE "has the rookie draft happened yet?" resolver — the live pick window + which draft the Tracker shows (replaced the hand-rolled PICK_YEARS)
+│   │   ├── playerDB.js          ← THE /players/nfl trim (the kept fields) — shared by usePlayerDB and mcp/snapshot.js
 │   │   ├── pickCapital.js       ← pick ownership (year weights relative to the window, never literal years) + THE spent-pick ladder shared by Activity and the ledger (buildDraftPickIndex, buildGenericRoundValues) + THE round label (roundSuffix, pickRoundLabel)
 │   │   ├── leagueHistory.js     ← THE history walk (chain, drafts list, season ledger) + ledgerCoverage — shared with mcp/history.js; a failure is named, never read as "never traded"
 │   │   ├── leagueResults.js     ← THE bracket reader: champion = w of the p:1 game, placements carry owner_id; pure, used by get_league_results
@@ -3288,8 +3290,8 @@ because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
 **Current counts (verified 2026-10-07 by moving `node_modules` aside):** with
-dependencies **`# tests 893 / # pass 893`**; without them **`# tests 850 / #
-pass 845 / # fail 5`**. **If the test count isn't 893, run `npm ci` before
+dependencies **`# tests 895 / # pass 895`**; without them **`# tests 852 / #
+pass 847 / # fail 5`**. **If the test count isn't 895, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React

@@ -240,3 +240,44 @@ test('the snapshot yields a real league state, with myRoster following myRosterI
     assert.equal(s.nflState.week, 3)
   })
 })
+
+// ── ONE player-DB trim (CODE-REVIEW-1 #9, 2026-10-07) ─────────────────────
+import { readFileSync as rf9, readdirSync as rd9, statSync as st9 } from 'node:fs'
+import { join as j9 } from 'node:path'
+import { trimPlayerDB } from '../src/utils/playerDB.js'
+
+test('the shared trim keeps exactly the fields both the app and the server read', () => {
+  const t = trimPlayerDB({ 1: {
+    first_name: 'Brock', last_name: 'Bowers', position: 'TE', team: 'LV', age: 23, years_exp: 2,
+    injury_status: 'Doubtful', injury_body_part: 'Knee', injury_notes: '', espn_id: 4432665,
+    depth_chart_position: 'TE', depth_chart_order: 1, news_updated: 1, height: '76', college: 'Georgia',
+  } })
+  assert.deepEqual(Object.keys(t[1]).sort(), [
+    'age', 'depth_chart_order', 'depth_chart_position', 'espn_id', 'injury_body_part',
+    'injury_notes', 'injury_status', 'name', 'news_updated', 'position', 'team', 'years_exp',
+  ])
+  assert.equal(t[1].name, 'Brock Bowers')
+  assert.equal(t[1].injury_notes, null)   // '' is no note
+})
+
+test('no second player-DB trim in src/ or mcp/', () => {
+  const root = new URL('..', import.meta.url).pathname
+  const files = []
+  const walk = dir => {
+    for (const name of rd9(dir)) {
+      const p = j9(dir, name)
+      if (st9(p).isDirectory()) walk(p)
+      else if (/\.(js|jsx|mjs)$/.test(name)) files.push(p)
+    }
+  }
+  walk(j9(root, 'src'))
+  walk(j9(root, 'mcp'))
+  const copies = []
+  for (const f of files) {
+    if (f.endsWith('utils/playerDB.js')) continue
+    rf9(f, 'utf8').split('\n').forEach((line, i) => {
+      if (/\[p\.first_name, p\.last_name\]/.test(line)) copies.push(`${f.slice(root.length)}:${i + 1}`)
+    })
+  }
+  assert.deepEqual(copies, [], 'use src/utils/playerDB.js')
+})

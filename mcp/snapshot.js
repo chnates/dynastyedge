@@ -30,6 +30,7 @@
 
 import { SLEEPER_BASE } from '../src/constants.js'
 import { fantasyCalcValuesUrl, splitFantasyCalcPayload } from '../src/utils/fantasyCalcPayload.js'
+import { trimPlayerDB } from '../src/utils/playerDB.js'
 import { buildLeagueState } from '../src/utils/leagueState.js'
 import { createFetcher } from './limit.js'
 import { memoryStore, loadSource } from './store.js'
@@ -64,34 +65,9 @@ export function resetSnapshotCache() {
 // shape guards. It was a hand-kept mirror until CODE-REVIEW-1 #6.
 const splitValues = data => splitFantasyCalcPayload(data)
 
-// Mirrors usePlayerDB's trim. The raw 5–8MB response is discarded; only these
-// fields survive. A tool needing another field adds it here — never a second
-// fetch of /players/nfl.
-function trimPlayerDB(data) {
-  const meta = {}
-  Object.entries(data).forEach(([id, p]) => {
-    meta[id] = {
-      name: [p.first_name, p.last_name].filter(Boolean).join(' ') || null,
-      position: p.position ?? null,
-      team: p.team || '',
-      age: p.age ?? null,
-      years_exp: p.years_exp ?? null,
-      injury_status: p.injury_status ?? null,
-      // The three fields that turn a bare label into an answer. "Doubtful"
-      // tells a reader to go and look something up; "Doubtful — Knee/Meniscus,
-      // surgery" tells them the season is the question, not the afternoon.
-      // Measured on the live payload: Brock Bowers carried exactly that, and
-      // the tool that had it in hand reported only the word "Doubtful" and
-      // advised checking Sleeper.
-      injury_body_part: p.injury_body_part ?? null,
-      injury_notes: p.injury_notes || null,
-      // ESPN's athlete id, the secondary join into the news feed for items
-      // that carry `athleteIds` but no resolved Sleeper id.
-      espn_id: p.espn_id ?? null,
-    }
-  })
-  return meta
-}
+// The player-DB trim is THE shared one (src/utils/playerDB.js), the same
+// fields the app keeps; a tool needing another field adds it there — never a
+// second fetch of /players/nfl.
 
 async function fetchSleeperCore(get, leagueId) {
   const [leagueInfo, rosters, users, tradedPicks, nflState, drafts] = await Promise.all([
