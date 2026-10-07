@@ -441,6 +441,17 @@ accumulated by a daily snapshot, same architecture as news:
   `{ updatedAt, dates, sources: { <key>: { asOf[], coverage[], players: { sleeperId: [v|null, …] } } } }`.
   **The app never fetches it.** It ships before any UI because a day not
   archived cannot be recovered.
+  - **It is the ONE permanent home of daily FantasyCalc values**
+    (2026-10-07). Each run first calls `backfillFantasyCalc`
+    (`valuationSources.mjs`, test-pinned) with the *published* rolling
+    `values-history.json`: a day the rolling file holds and the archive lacks
+    is **added FantasyCalc-only** (the other two null, never 0); a day whose
+    FantasyCalc read failed is **healed**; an archived day is **never
+    overwritten**. Pick rows never enter. The first run carried in
+    **2026-07-09 … 09-21** (75 days), which the rolling file had been deleting
+    one per morning; the two files agreed on all 35,788 overlapping values.
+    **The rolling file stays 90 days** — it is the phone's sparkline payload;
+    history work reads this archive.
   - **The join is ID-BASED END TO END, never by name**, through
     DynastyProcess's `files/db_playerids.csv` (see `dynastyedge-data-contracts`).
     Two silent traps: **`sleeper_id` is the literal string `"NA"`** on ~half its
@@ -3200,8 +3211,8 @@ because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
 **Current counts (verified 2026-10-07 by moving `node_modules` aside):** with
-dependencies **`# tests 835 / # pass 835`**; without them **`# tests 792 / #
-pass 787 / # fail 5`**. **If the test count isn't 835, run `npm ci` before
+dependencies **`# tests 841 / # pass 841`**; without them **`# tests 798 / #
+pass 793 / # fail 5`**. **If the test count isn't 841, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React

@@ -352,6 +352,10 @@ The market-trend one-home refactor (2026-10-07) moved both by the same 7
 (828/785 → **835/792**), the gap holding at 43: `marketTrend.test.mjs` imports
 only the zero-dependency `src/utils/marketTrend.js` plus `node:fs`.
 
+The consensus-archive backfill (2026-10-07) moved both by the same 6
+(835/792 → **841/798**), the gap holding at 43: the new
+`valuationSources.test.mjs` cases import only `scripts/valuationSources.mjs`.
+
 The MCP-CARRY closeout (2026-09-25) moved both by the same 25
 (783/740 → **808/765**), the gap holding at 43, across four commits: ROOKIE-1's
 `rookieAdp.test.mjs` (+4), `get_value_history` and the extracted sparkline
