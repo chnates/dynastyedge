@@ -38,3 +38,29 @@ lineup optimization with matchup context, and a full league-wide competitive lan
 -----
 
 
+## Tech Stack
+
+|Layer     |Tool            |Notes                              |
+|----------|----------------|-----------------------------------|
+|Framework |React (via Vite)|Functional components + hooks only |
+|Styling   |Tailwind CSS    |Dark mode default, mobile-first    |
+|Navigation|React Router v7 |Side drawer menu, 6 sections       |
+|Build tool|Vite            |Outputs to `dist/` for GitHub Pages|
+|Deployment|GitHub Pages    |Auto-deploys via GitHub Actions    |
+|CI/CD     |GitHub Actions  |Every push to `main`: lint + test, then deploy|
+|MCP server|`@modelcontextprotocol/sdk` (Node)|`mcp/`, stdio — **not** part of the web bundle|
+
+### Non-negotiable rules
+
+- Always use **functional React components with hooks**. Never class components.
+- All API calls live in **custom hooks** (`/src/hooks/`) or utility files. Never call APIs directly inside a component render.
+- **Mobile-first always.** Every component must look correct at 390px before anything else.
+- **FantasyCalc data is fetched once per app load and cached in memory.** Never re-fetch on every render — it is a large response. The app silently refetches when the tab regains focus with data older than 30 minutes (stale-while-revalidate: cached data stays on screen during the refresh).
+- **All fetches go through `src/utils/fetchJSON.js`** — it adds a hard timeout via AbortController so a hung API can never leave the app on a permanent spinner. Never call raw `fetch()` in a hook.
+- **Sleeper's full player DB (`/players/nfl`, ~5–8MB) is fetched at most once per session** via the shared `usePlayerDB` hook. Never fetch it anywhere else — rookie detection, injury statuses, unranked-player names, and lineup history all read from that one cache.
+- **Never hardcode player names, values, or roster data.** Everything comes live from APIs.
+- **Dark mode is the default.** The app ships in dark mode. A toggle is available to switch to light mode — store the preference in `localStorage`.
+
+-----
+
+

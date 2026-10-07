@@ -2109,7 +2109,7 @@ nothing renders until an identity is set.
   with a numeric `rosterId`**; anything else is logged-out. Storage failures
   degrade to in-memory.
 - **Switching identity wipes roster-scoped state** (`dynastyedge_action_dismissals`,
-  `dynastyedge_trade_draft`; the full list is rule 21). League-wide caches are
+  `dynastyedge_trade_draft`; the full list is rule 20). League-wide caches are
   deliberately left alone.
 - **Sign out / Switch team** at the bottom of the side drawer. `MY_ROSTER_ID` /
   `MY_USERNAME` / `MY_TEAM_NAME` are original-owner reference only — **use
