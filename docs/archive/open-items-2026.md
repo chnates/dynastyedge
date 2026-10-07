@@ -125,6 +125,60 @@ deleted. The active work queue remains `docs/build-plan-2026-09.md`).
 
 ## Closed and shipped items formerly in §1 (Active)
 
+### CODE-REVIEW-1 — find what was done for convenience instead of properly **CLOSED 2026-10-07 — all 16 findings fixed (PRs #79–#94)**
+
+**Why.** On 2026-10-07 the owner set a new working rule (CLAUDE.md Rules: *the
+proper fix beats the convenient one; one home per rule*). The same day showed
+the code has not been held to it: the ±50 trend threshold lived in ten places
+(fixed in #75), and a five-minute sweep found more of the same — `MAX_DAYS`
+(90) in the snapshot script and the MCP tool, `MAX_SEASONS_BACK` (8) in the
+app hook and `mcp/history.js`, `TX_WEEKS` (18) in the hook and a pipeline
+script, `MY_ROSTER_ID` copied into a dev script, and two ±5% "even" rules
+(`TRADE_EDGE` in managerAnalysis, `FAIR_BAND_PCT` in fairBand) that may or may
+not be meant to be one. The owner asked what else is like this.
+
+**Scope — five kinds of shortcut, all of `src/`, `mcp/`, `scripts/`, workflows:**
+1. **Duplicated rules** — any threshold, formula, list or mapping written in
+   more than one place (beyond the five above).
+2. **Documented "deliberate copies"** — every place CLAUDE.md or a comment says
+   a copy is intentional (the MCP player-DB trim, `mcp/register.mjs`, the
+   FantasyCalc query string in three scripts, LEAGUE_ID in the pipelines):
+   re-judge each under the new rule; keep the ones that still have a reason.
+3. **Swallowed failures** — `catch {}` / `.catch(() => [])` that hide a fault
+   which is not a documented best-effort contract.
+4. **Hand-rolled where a shared piece exists** — logic re-implemented beside
+   the util or primitive that already does it.
+5. **Stale workarounds** — code or docs kept for a reason that no longer holds
+   (e.g. the 88 pick rows in values-history.json age out ~2026-12-19 on their
+   own; anything similar that will not).
+
+**Deliverable:** a ranked list in `docs/analysis/code-review-2026-10.md` — each
+finding with where, what the proper fix is, what it risks, and size — written
+in plain English first. **Fix nothing in the review PR**; each accepted finding
+becomes its own small PR, one home per rule, with a test that fails if a copy
+returns (the `marketTrend.js` pattern).
+
+**Done when** every finding is fixed, scheduled with a trigger, or recorded as
+deliberately kept with its reason.
+
+**Kickoff prompt** (dated 2026-10-07):
+
+```
+Do CODE-REVIEW-1 in docs/open-items.md §2. Read CLAUDE.md first — especially
+the two 2026-10-07 owner rules at the end of Rules — and load
+dynastyedge-architecture-contract, dynastyedge-change-control and
+dynastyedge-failure-archaeology before reading code.
+
+Review src/, mcp/, scripts/ and .github/workflows for the five kinds of
+shortcut in the entry. Measure, don't guess: show the grep or the call sites
+for every finding. Write docs/analysis/code-review-2026-10.md, plain English
+first, ranked by risk to the owner's decisions. Change no code in this PR.
+
+Show me the ranked list and wait for my OK on which to fix and in what order.
+Gates: npm ci, lint + test + build, test count unchanged. Open a PR, watch it.
+```
+
+
 ### CLEANUP-2 — slim CLAUDE.md **CLOSED 2026-10-07 — EXECUTED (owner reviews before merge)**
 
 **7,064 lines, 468KB, read in full at the start of every session.** By
