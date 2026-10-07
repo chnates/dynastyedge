@@ -7,9 +7,10 @@ import { Card, Button, Badge, Loading } from '../ui'
 import { POS_TEXT } from '../../utils/positionColors'
 import { relativeTime } from '../../hooks/usePlayerIntel'
 
-const FLAG_DOT = { red: 'bg-danger', yellow: 'bg-warning', green: 'bg-success' }
-const FLAG_LABEL = { red: 'Injured', yellow: 'Questionable', green: 'Active' }
-const FLAG_TEXT  = { red: 'text-danger', yellow: 'text-warning', green: 'text-success' }
+// `unknown` = the player DB could not be read. Never drawn as green.
+const FLAG_DOT = { red: 'bg-danger', yellow: 'bg-warning', green: 'bg-success', unknown: 'bg-text-tertiary' }
+const FLAG_LABEL = { red: 'Injured', yellow: 'Questionable', green: 'Active', unknown: 'Unknown' }
+const FLAG_TEXT  = { red: 'text-danger', yellow: 'text-warning', green: 'text-success', unknown: 'text-text-secondary' }
 
 
 function ValueSummary({ giveTotal, getTotal, bothSides }) {
@@ -49,10 +50,12 @@ function ValueSummary({ giveTotal, getTotal, bothSides }) {
 }
 
 function PlayerNewsCard({ intel, onTap }) {
-  const flag = intel.injuryFlag ?? 'green'
-  const statusLabel = intel.injuryStatus
-    ? intel.injuryDetail ? `${intel.injuryStatus} — ${intel.injuryDetail}` : intel.injuryStatus
-    : 'Active'
+  const flag = intel.injuryFlag ?? 'unknown'
+  const statusLabel = intel.unavailable
+    ? 'Status unavailable'
+    : intel.injuryStatus
+      ? intel.injuryDetail ? `${intel.injuryStatus} — ${intel.injuryDetail}` : intel.injuryStatus
+      : 'Active'
 
   const extra   = intel.intel
   const summary = extra?.seasonSummary

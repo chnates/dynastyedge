@@ -348,6 +348,11 @@ OPEN-3, the FAAB bid recommender (2026-10-07), moved both by the same 20
 imports only `src/utils` and the shared fixture, and the three new
 `mcpRecommendFreeAgents` tests reach neither React nor `zod`.
 
+The injury-status one-home fix (2026-10-07, CODE-REVIEW-1 #1) moved both by
+the same 15 (841/798 → **856/813**), the gap holding at 43: the new
+`injuryStatus.test.mjs` imports only pure utils, and the three new
+`mcpAnalyzeTrade` cases ride a file that already loads without `node_modules`.
+
 The market-trend one-home refactor (2026-10-07) moved both by the same 7
 (828/785 → **835/792**), the gap holding at 43: `marketTrend.test.mjs` imports
 only the zero-dependency `src/utils/marketTrend.js` plus `node:fs`.

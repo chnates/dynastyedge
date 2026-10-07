@@ -846,6 +846,10 @@ modelled**.
 `give[]` / `get[]` as **resolved ids only**, plus `partner`. Mirrors the
 Analyzer: `analyzeTrade` → `getTradeVerdict` → `adjustVerdictForInjuries` →
 `getCounterSuggestion` → `buildTradePitch`.
+- **The injury layer runs on the snapshot's player DB** through
+  `utils/injuryStatus.js` — the app's rule, so the two grade a trade alike (it
+  used to pass `null` and skip the layer). No player DB ⇒ the reasoning says the
+  check could not be made, never "healthy".
 - **IDS ONLY, ENFORCED IN CODE.** A free-text name is **rejected with a pointer
   to `resolve_assets`, even when unambiguous** — the tool does no name matching,
   which makes grading the wrong player structurally impossible.
@@ -898,7 +902,8 @@ Analyzer: `analyzeTrade` → `getTradeVerdict` → `adjustVerdictForInjuries` �
 "What's the latest on Bowers?" / "Who on my team is hurt?" Sleeper injury fields
 plus the news feed. It exists because the server once answered a bare
 "Doubtful" while holding the injury detail and a fresh RotoWire item.
-- **`injury_body_part`, `injury_notes`, `espn_id` are in the player-DB trim.**
+- **`injury_body_part`, `injury_notes`, `espn_id` are in the player-DB trim** —
+  the app's trim (`usePlayerDB`) and the server's (`mcp/snapshot.js`) both.
 - **A free-text name is allowed** but resolves through **`buildResolveAnswer`**
   — ambiguous returns candidates and refuses.
 - **The join is `playerIds`, with NO headline-name fallback** — the pipeline
@@ -1197,7 +1202,12 @@ from live data:
 2. **Bloated QB room** — 4+ QBs; names the most expendable and, via
    `suggestSellMove`, a concrete partner and return, deep-linking the Analyzer
    with `preloadTrade` filling both sides.
-3. **IR slot opportunity** — an active player `Out` or `PUP` not yet on IR.
+3. **IR slot opportunity** — an active player the **league** lets onto IR
+   (`isIrEligible`: IR and PUP always; Out / Doubtful / Sus / NA / DNR / COV
+   only where Sleeper's `reserve_allow_*` setting is 1 — this league allows Out
+   and COV), **and only when an IR slot is open** (`reserve_slots` minus players
+   on IR). Advice that cannot be followed is not shown; the open-slot count is
+   part of the dismissal snapshot.
 4. **Missing future 1st** — no 1st in a `pickYears` season after the current
    one; deep-links to Trade Partners.
 
@@ -1655,9 +1665,19 @@ decision 2026-09-04) — you can't start a player you don't own.
 
 #### Status flags — shown on every player
 
-- 🔴 **Hard block:** Out, IR, Suspended, PUP, or bye — scores 0, excluded, always
-  **Must fix**.
-- 🟡 **Soft flag:** Questionable / Doubtful — startable, counted, surfaced.
+**ONE rule decides what a Sleeper `injury_status` means:
+`src/utils/injuryStatus.js`** (owner call 2026-10-07; the Optimizer, the player
+card, the trade verdict, the IR item and the MCP tools all read it, and
+`tests/injuryStatus.test.mjs` fails if a second list appears). Before it, three
+lists disagreed on live players — `Sus` never blocked, `NA` read "Active" on a
+card, `DNR` / `COV` were healthy everywhere
+(`docs/analysis/code-review-2026-10.md` #1).
+
+- 🔴 **Hard block (OUT):** Out, IR, PUP, Sus (and Suspended / SUSP / NFI), NA,
+  DNR, COV, or bye — scores 0, excluded, always **Must fix**.
+- 🟡 **Soft flag (QUESTIONABLE):** Questionable / Doubtful — startable, counted,
+  surfaced. **A status the rule has never seen lands here** — flagged, never
+  healthy and never blocking.
 - 🟢 **Confirmed:** healthy and optimal — a tick.
 
 #### Free agent layer
@@ -3088,7 +3108,7 @@ dynastyedge/
 │   │   ├── useSheetDrag.js      ← swipe-down-to-dismiss gesture for bottom sheets
 │   │   ├── useTheme.js          ← dark/light toggle
 │   │   ├── useAppVersion.js     ← build-id self-heal: reload off cached HTML (iOS standalone)
-│   │   ├── usePlayerNews.js     ← per-player injury status
+│   │   ├── usePlayerNews.js     ← one player's injury status, read off the shared player DB (no per-player fetch); an unreadable DB is `unavailable`, never "Active"
 │   │   ├── useSleeperRookies.js ← rookie map derived from usePlayerDB
 │   │   ├── useSleeperDraft.js   ← live rookie draft sync (order, picks, refresh/polling)
 │   │   └── useRookieADP.js
@@ -3108,6 +3128,7 @@ dynastyedge/
 │   │   ├── rosterAnalysis.js    ← positional strength, win window tiers, Targets ranking (need × value × movability)
 │   │   ├── recommendations.js   ← THE assistant-GM brain: keep/givability scores (round-priced picks, past-peak age tilt), FA pickups, two-sided sell moves, the cash-out board
 │   │   ├── faabBid.js           ← THE FAAB bid (OPEN-3), shared with recommend_free_agents: CURRENT period's budget from settings (never assumed), 11/16/23% of the FULL budget capped at what is left, $2 floor on $1000, null for DEF/unpriced
+│   │   ├── injuryStatus.js      ← THE injury-status rule (OUT / QUESTIONABLE, IR eligibility from league settings) — one home, read by the Optimizer, player card, trade verdict, IR item and MCP
 │   │   ├── marketTrend.js       ← THE market-trend rules (±50, buy-low/sell-high eligibility, % move) — one home, read by every arrow, list and MCP tool
 │   │   ├── fairBand.js          ← THE definition of "fair" (±5%), shared by the Analyzer's verdict and every surface that PREDICTS it
 │   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation
@@ -3165,6 +3186,7 @@ dynastyedge/
 │   ├── rookieAdp.test.mjs           ← ROOKIE-1: rookie→FantasyCalc join by sleeperId only (the two Jaylen Smiths; a same-name-same-position veteran)
 │   ├── valueHistory.test.mjs        ← the sparkline rule: 4-point threshold, dated series = getValueSeries, tracked-short vs untracked, slicing never widens
 │   ├── rookieResearch.test.mjs      ← opportunity blend, one points scale, within-position divergence, fit re-ranking (score untouched), measurables can never move a score
+│   ├── injuryStatus.test.mjs        ← the owner's OUT / QUESTIONABLE grouping for every live Sleeper status, unknown = flagged never healthy, IR eligibility from league settings, trade verdict (Doubtful a note, unreadable said out loud), AND a source scan that fails on a second list
 │   ├── marketTrend.test.mjs         ← the ±50 boundary (exactly 50 is flat), predicates = the literals they replaced, AND a source scan that fails on a second copy
 │   ├── recommendations.test.mjs     ← suggestSellMove two-sided; pick keep by round; past-peak tilt (decline-only, never protects); cash-out gap = buildFairBand's
 │   ├── fantasyCalcValues.test.mjs   ← pipeline FantasyCalc reader: non-numeric id is a PICK, NULL not 0, old presence classifier as a regression statement
@@ -3211,8 +3233,8 @@ because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
 **Current counts (verified 2026-10-07 by moving `node_modules` aside):** with
-dependencies **`# tests 841 / # pass 841`**; without them **`# tests 798 / #
-pass 793 / # fail 5`**. **If the test count isn't 841, run `npm ci` before
+dependencies **`# tests 856 / # pass 856`**; without them **`# tests 813 / #
+pass 808 / # fail 5`**. **If the test count isn't 856, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React

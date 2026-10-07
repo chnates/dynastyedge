@@ -59,6 +59,9 @@ const FLAG_STYLES = {
   red:    { dot: 'bg-danger',   text: 'text-danger',   label: 'Injured' },
   yellow: { dot: 'bg-warning',  text: 'text-warning',  label: 'Questionable' },
   green:  { dot: 'bg-success',  text: 'text-success',  label: 'Active' },
+  // The player DB could not be read. Never drawn as green: silence is a gap
+  // in what we know, not good health.
+  unknown: { dot: 'bg-text-tertiary', text: 'text-text-secondary', label: 'Unknown' },
 }
 
 // ── Role description per position ────────────────────────────────────────────
@@ -346,7 +349,7 @@ export default function PlayerProfileDrawer({
   const autoResearch = useRookieResearchFor(player.sleeperId)
   const researchRow = research ?? autoResearch
 
-  const { injuryFlag, injuryStatus, injuryDetail, injuryNotes, loading: newsLoading } = usePlayerNews(player.sleeperId)
+  const { injuryFlag, injuryStatus, injuryDetail, injuryNotes, unavailable: statusUnavailable, loading: newsLoading } = usePlayerNews(player.sleeperId)
   const intel = usePlayerIntel(player.sleeperId, ctx?.nflState)
   const peak = getPeakStatus(player.position, player.age)
   const { toggleWatch, isWatched } = useWatchlist()
@@ -458,7 +461,7 @@ export default function PlayerProfileDrawer({
     onClose()
   }
 
-  const flagStyle = FLAG_STYLES[injuryFlag] ?? FLAG_STYLES.green
+  const flagStyle = FLAG_STYLES[injuryFlag] ?? FLAG_STYLES.unknown
 
   // A team defense is not a dynasty asset in this app's model: FantasyCalc
   // ranks none, you start exactly one a week, and there is no reason to hold a
@@ -537,7 +540,7 @@ export default function PlayerProfileDrawer({
                 <span className={`inline-block w-2.5 h-2.5 shrink-0 mt-1 ${flagStyle.dot}`} />
                 <div>
                   <p className={`font-body text-sm font-semibold ${flagStyle.text}`}>
-                    {injuryStatus ?? 'Active'}
+                    {statusUnavailable ? 'Status unavailable' : (injuryStatus ?? 'Active')}
                     {injuryDetail ? ` — ${injuryDetail}` : ''}
                   </p>
                   {injuryNotes && (

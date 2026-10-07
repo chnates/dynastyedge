@@ -68,6 +68,69 @@ var init_constants = __esm({
   }
 });
 
+// src/utils/injuryStatus.js
+function classifyInjuryStatus(status) {
+  if (status == null) return "ok";
+  const s = String(status).trim().toLowerCase();
+  if (!s) return "ok";
+  if (OUT_LC.has(s)) return "out";
+  if (QUESTIONABLE_LC.has(s)) return "questionable";
+  return "questionable";
+}
+function injuryFlag(status) {
+  return INJURY_FLAG[classifyInjuryStatus(status)];
+}
+function injuryShortLabel(status) {
+  return status ? SHORT_LABEL[status] ?? status : null;
+}
+function injuryFromMeta(meta3) {
+  const status = meta3?.injury_status || null;
+  return {
+    injuryFlag: injuryFlag(status),
+    injuryKind: classifyInjuryStatus(status),
+    injuryStatus: status,
+    injuryDetail: meta3?.injury_body_part ?? null,
+    injuryNotes: meta3?.injury_notes ?? null,
+    unavailable: false
+  };
+}
+var OUT, QUESTIONABLE, OUT_LC, QUESTIONABLE_LC, INJURY_FLAG, SHORT_LABEL, INJURY_UNAVAILABLE;
+var init_injuryStatus = __esm({
+  "src/utils/injuryStatus.js"() {
+    OUT = /* @__PURE__ */ new Set([
+      "Out",
+      "IR",
+      "PUP",
+      "Sus",
+      "Suspended",
+      "SUSP",
+      "NFI",
+      "NFI-R",
+      "NA",
+      "DNR",
+      "COV"
+    ]);
+    QUESTIONABLE = /* @__PURE__ */ new Set(["Questionable", "Doubtful"]);
+    OUT_LC = new Set([...OUT].map((s) => s.toLowerCase()));
+    QUESTIONABLE_LC = new Set([...QUESTIONABLE].map((s) => s.toLowerCase()));
+    INJURY_FLAG = { out: "red", questionable: "yellow", ok: "green" };
+    SHORT_LABEL = {
+      Questionable: "Q",
+      Doubtful: "D",
+      Suspended: "SUSP",
+      "NFI-R": "NFI"
+    };
+    INJURY_UNAVAILABLE = Object.freeze({
+      injuryFlag: null,
+      injuryKind: null,
+      injuryStatus: null,
+      injuryDetail: null,
+      injuryNotes: null,
+      unavailable: true
+    });
+  }
+});
+
 // src/utils/projections.js
 function getProjPts(sleeperId, projMap) {
   if (!projMap || !sleeperId) return 0;
@@ -86,39 +149,23 @@ function parseLockedTeams(schedule, week) {
 }
 function getAvailability(player, playerStatuses, playingTeams, lockedTeams) {
   const locked = !!(lockedTeams?.size > 0 && player?.team && lockedTeams.has(player.team));
-  const done = (blocked, status2, label) => ({ blocked, status: status2, label, short: label ? SHORT_LABEL[label] ?? label : null, locked });
+  const done = (blocked, status2, label) => ({ blocked, status: status2, label, short: injuryShortLabel(label), locked });
   if (!player) return done(true, "out", "Empty");
   if (player.isIR) return done(true, "ir", "IR");
   if (playingTeams?.size > 0 && player.team && !playingTeams.has(player.team)) {
     return done(true, "bye", "Bye");
   }
   const status = playerStatuses?.[player.sleeperId]?.injury_status;
-  if (status && HARD_BLOCK_STATUSES.has(status)) return done(true, "out", status);
-  if (status && SOFT_FLAG_STATUSES.has(status)) return done(false, "questionable", status);
+  const kind = classifyInjuryStatus(status);
+  if (kind === "out") return done(true, "out", status);
+  if (kind === "questionable") return done(false, "questionable", status);
   return done(false, "ok", null);
 }
-var HARD_BLOCK_STATUSES, SOFT_FLAG_STATUSES, LOCKED_GAME_STATUSES, SHORT_LABEL;
+var LOCKED_GAME_STATUSES;
 var init_projections = __esm({
   "src/utils/projections.js"() {
-    HARD_BLOCK_STATUSES = /* @__PURE__ */ new Set([
-      "Out",
-      "IR",
-      "Suspended",
-      "PUP",
-      "NFI",
-      "NFI-R",
-      "SUSP",
-      "NA"
-    ]);
-    SOFT_FLAG_STATUSES = /* @__PURE__ */ new Set(["Questionable", "Doubtful"]);
+    init_injuryStatus();
     LOCKED_GAME_STATUSES = /* @__PURE__ */ new Set(["in_game", "complete", "post_game", "final"]);
-    SHORT_LABEL = {
-      Questionable: "Q",
-      Doubtful: "D",
-      Suspended: "SUSP",
-      "NFI-R": "NFI",
-      NA: "NA"
-    };
   }
 });
 
@@ -43659,26 +43706,36 @@ function adjustVerdictForInjuries(baseVerdict, liveIntelligence, giveAssets, get
   if (!baseVerdict || !liveIntelligence?.length) return baseVerdict;
   const getNames = new Set(getAssets.filter((a) => a.type === "player").map((a) => a.name));
   const giveNames = new Set(giveAssets.filter((a) => a.type === "player").map((a) => a.name));
+  const inTrade = (i) => getNames.has(i.playerName) || giveNames.has(i.playerName);
   const getOut = liveIntelligence.filter((i) => i.injuryFlag === "red" && getNames.has(i.playerName));
   const giveOut = liveIntelligence.filter((i) => i.injuryFlag === "red" && giveNames.has(i.playerName));
-  if (!getOut.length && !giveOut.length) return baseVerdict;
+  const getDoubt = liveIntelligence.filter((i) => i.injuryFlag === "yellow" && getNames.has(i.playerName));
+  const unknown2 = liveIntelligence.filter((i) => i.unavailable && inTrade(i));
+  if (!getOut.length && !giveOut.length && !getDoubt.length && !unknown2.length) return baseVerdict;
   let { verdict, reasoning } = baseVerdict;
+  const before = verdict;
   const notes = [];
   if (getOut.length > 0 && verdict === "Accept") {
     verdict = VERDICT_DOWNGRADE[verdict];
-    const names = getOut.map((i) => i.playerName).join(" and ");
-    notes.push(`${names} ${getOut.length > 1 ? "are" : "is"} currently out \u2014 verify status before accepting`);
+    const names = getOut.map((i) => i.playerName);
+    notes.push(`${join(names)} ${names.length > 1 ? "are" : "is"} currently out \u2014 verify status before accepting`);
   }
   if (giveOut.length > 0 && verdict !== "Accept") {
     const prev = verdict;
     verdict = VERDICT_UPGRADE[verdict];
     if (verdict !== prev) {
-      const names = giveOut.map((i) => i.playerName).join(" and ");
-      notes.push(`you may be selling high on ${names} who ${giveOut.length > 1 ? "are" : "is"} currently out`);
+      const names = giveOut.map((i) => i.playerName);
+      notes.push(`you may be selling high on ${join(names)} who ${names.length > 1 ? "are" : "is"} currently out`);
     }
   }
+  if (getDoubt.length > 0) {
+    notes.push(`${join(getDoubt.map((i) => `${i.playerName} (${i.injuryStatus})`))} \u2014 a short-term tag; check the latest before accepting`);
+  }
+  if (unknown2.length > 0) {
+    notes.push(`injury status could not be checked for ${join(unknown2.map((i) => i.playerName))}`);
+  }
   const updatedReasoning = notes.length > 0 ? `${reasoning} Note: ${notes.join("; ")}.` : reasoning;
-  return { verdict, reasoning: updatedReasoning, adjustedByIntelligence: notes.length > 0 };
+  return { verdict, reasoning: updatedReasoning, adjustedByIntelligence: verdict !== before };
 }
 function packageRationale(assets, ctx, starterIds) {
   const playerPositions = [...new Set(
@@ -43874,7 +43931,7 @@ function suggestFairPackage(targetPlayer, myRoster, allRosters = null, opponentR
   }
   return null;
 }
-var MY_LINEUP_MATERIAL_PCT, SCARCITY_FLOOR, SCARCITY_GAP, APPEAL_RANK, PICK_SUFFIXES, addAsPlayer, SEAT_VOICE, VERDICT_UPGRADE, VERDICT_DOWNGRADE, ALTERNATIVE_MIN_SAVING, APPEAL_BONUS, PACKAGE_BAND;
+var MY_LINEUP_MATERIAL_PCT, SCARCITY_FLOOR, SCARCITY_GAP, APPEAL_RANK, PICK_SUFFIXES, addAsPlayer, SEAT_VOICE, VERDICT_UPGRADE, VERDICT_DOWNGRADE, join, ALTERNATIVE_MIN_SAVING, APPEAL_BONUS, PACKAGE_BAND;
 var init_tradeAnalysis = __esm({
   "src/utils/tradeAnalysis.js"() {
     init_rosterAnalysis();
@@ -43941,6 +43998,7 @@ var init_tradeAnalysis = __esm({
     };
     VERDICT_UPGRADE = { Decline: "Counter", Counter: "Accept", Accept: "Accept" };
     VERDICT_DOWNGRADE = { Accept: "Counter", Counter: "Decline", Decline: "Decline" };
+    join = (names) => names.join(" and ");
     ALTERNATIVE_MIN_SAVING = 0.25;
     APPEAL_BONUS = { Weak: -1, Fair: 0, Strong: 0.4 };
     PACKAGE_BAND = { floor: 0.9, cap: 1.15 };
@@ -44085,7 +44143,15 @@ function buildTradeAnswer(snapshot, weekly, {
   });
   if (!analysis) throw new Error("Trade analysis unavailable \u2014 roster or league data missing");
   const verdict = getTradeVerdict(analysis);
-  const adjusted = adjustVerdictForInjuries(verdict, null, giveAssets, getAssets);
+  const tradePlayers = [
+    ...giveAssets.filter((a) => a.type === "player"),
+    ...getAssets.filter((a) => a.type === "player")
+  ];
+  const liveIntelligence = tradePlayers.map((a) => ({
+    playerName: a.name,
+    ...snapshot.playerDB ? injuryFromMeta(snapshot.playerDB[String(a.sleeperId)]) : INJURY_UNAVAILABLE
+  }));
+  const adjusted = adjustVerdictForInjuries(verdict, liveIntelligence, giveAssets, getAssets);
   const counter = bothSides && adjusted?.verdict === "Counter" ? getCounterSuggestion(analysis, myRoster, opponentRoster, giveAssets, getAssets) : null;
   const partnerName = getTeamName(opponentRoster.owner);
   const pitch = buildTradePitch(analysis, { partnerName, giveAssets, getAssets });
@@ -44108,9 +44174,7 @@ function buildTradeAnswer(snapshot, weekly, {
     verdict: bothSides ? {
       verdict: adjusted?.verdict ?? null,
       reasoning: adjusted?.reasoning ?? null,
-      // True when adjustVerdictForInjuries moved it. Always false here
-      // (liveIntelligence is null) — stated rather than omitted so the
-      // field means the same thing as it does in the app.
+      // True when the injury layer moved the verdict (an "out" player).
       injuryAdjusted: !!adjusted && adjusted.verdict !== verdict?.verdict
     } : null,
     // Layer 1.
@@ -44355,6 +44419,7 @@ var init_analyzeTrade = __esm({
     init_rosterSpace();
     init_partnerActivity();
     init_teamName();
+    init_injuryStatus();
     init_teams();
     MAX_ASSETS_PER_SIDE = 12;
     PICK_ID_RE = /^(20\d{2})-(\d)-(\d+)$/;

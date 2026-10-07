@@ -1,9 +1,6 @@
-const POSITIONS = ['QB', 'RB', 'WR', 'TE']
+import { classifyInjuryStatus, injuryShortLabel } from './injuryStatus'
 
-const HARD_BLOCK_STATUSES = new Set([
-  'Out', 'IR', 'Suspended', 'PUP', 'NFI', 'NFI-R', 'SUSP', 'NA',
-])
-const SOFT_FLAG_STATUSES = new Set(['Questionable', 'Doubtful'])
+const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 
 export function getProjPts(sleeperId, projMap) {
   if (!projMap || !sleeperId) return 0
@@ -128,10 +125,7 @@ export function getMatchupQuality(playerTeam, playerPosition, currentWeek, sched
 // "Rach…" — and the name is the one thing the row must never lose.
 //
 //   { blocked, status: 'ok'|'bye'|'ir'|'out'|'questionable', label, short }
-const SHORT_LABEL = {
-  Questionable: 'Q', Doubtful: 'D', Suspended: 'SUSP',
-  'NFI-R': 'NFI', NA: 'NA',
-}
+// The short labels and the status rule itself live in utils/injuryStatus.js.
 
 // `locked` is ORTHOGONAL to `blocked`, and conflating the two is the bug this
 // parameter exists to fix. `blocked` is a forward-looking claim — "he will
@@ -144,7 +138,7 @@ const SHORT_LABEL = {
 export function getAvailability(player, playerStatuses, playingTeams, lockedTeams) {
   const locked = !!(lockedTeams?.size > 0 && player?.team && lockedTeams.has(player.team))
   const done = (blocked, status, label) =>
-    ({ blocked, status, label, short: label ? (SHORT_LABEL[label] ?? label) : null, locked })
+    ({ blocked, status, label, short: injuryShortLabel(label), locked })
 
   if (!player) return done(true, 'out', 'Empty')
 
@@ -157,8 +151,9 @@ export function getAvailability(player, playerStatuses, playingTeams, lockedTeam
   }
 
   const status = playerStatuses?.[player.sleeperId]?.injury_status
-  if (status && HARD_BLOCK_STATUSES.has(status)) return done(true, 'out', status)
-  if (status && SOFT_FLAG_STATUSES.has(status)) return done(false, 'questionable', status)
+  const kind = classifyInjuryStatus(status)
+  if (kind === 'out') return done(true, 'out', status)
+  if (kind === 'questionable') return done(false, 'questionable', status)
   return done(false, 'ok', null)
 }
 
@@ -173,7 +168,7 @@ export function getPlayerFlag(player, projMap, playerStatuses, playingTeams, ben
   if (isHardBlocked(player, playerStatuses, playingTeams)) return 'red'
 
   const status = playerStatuses?.[player.sleeperId]?.injury_status
-  if (status && SOFT_FLAG_STATUSES.has(status)) return 'yellow'
+  if (classifyInjuryStatus(status) === 'questionable') return 'yellow'
 
   const starterPts = getProjPts(player.sleeperId, projMap)
   const hasBenchUpgrade = (benchPlayers ?? []).some(p =>

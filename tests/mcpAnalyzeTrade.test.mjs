@@ -409,3 +409,35 @@ test('the text rendering of a rejection explains the fix', () => {
   const txt = renderTradeText(grade({ ...FAIR, give: ['Second Quarterback'] }))
   assert.match(txt, /resolve_assets/)
 })
+
+// ── The injury layer — the same rule the app applies (code-review-2026-10 #1) ──
+// Until 2026-10-07 this tool passed no injury data and skipped the layer, so
+// the server and the app could grade one trade differently.
+
+test('injury layer: the player you GET being out moves the verdict, as in the app', () => {
+  const healthy = grade(FAIR)
+  const hurt = grade(FAIR, makeWeekly(), {
+    playerDB: { ...LEAGUE.playerDB, 21: { name: 'Good Wideout', position: 'WR', injury_status: 'Out' } },
+  })
+  assert.equal(hurt.ok, true)
+  assert.equal(healthy.verdict.verdict, 'Accept', 'fixture: the healthy swap grades Accept')
+  assert.equal(hurt.verdict.verdict, 'Counter')
+  assert.equal(hurt.verdict.injuryAdjusted, true)
+  assert.match(hurt.verdict.reasoning, /currently out/)
+})
+
+test('injury layer: Doubtful is a note, never a verdict change', () => {
+  const healthy = grade(FAIR)
+  const doubt = grade(FAIR, makeWeekly(), {
+    playerDB: { ...LEAGUE.playerDB, 21: { name: 'Good Wideout', position: 'WR', injury_status: 'Doubtful' } },
+  })
+  assert.equal(doubt.verdict.verdict, healthy.verdict.verdict)
+  assert.equal(doubt.verdict.injuryAdjusted, false)
+  assert.match(doubt.verdict.reasoning, /Doubtful/)
+})
+
+test('injury layer: no player DB says the check could not be made — never "healthy"', () => {
+  const a = grade(FAIR, makeWeekly(), { playerDB: null })
+  assert.equal(a.ok, true)
+  assert.match(a.verdict.reasoning, /could not be checked/)
+})
