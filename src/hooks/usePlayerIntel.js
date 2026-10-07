@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { SLEEPER_BASE, ESPN_BASE, NEWS_FEED_URL } from '../constants'
 import { fetchJSON } from '../utils/fetchJSON'
+import { normalizeName, buildNewsIndex, resolveItemPlayer, feedItemView } from '../utils/newsMatch'
 import { loadPlayerDB } from './usePlayerDB'
 
 // Per-player intelligence: recent fantasy production (Sleeper stats), depth
@@ -127,33 +128,16 @@ export function getNewsFeedCoverage() {
   return newsFeedCoverage
 }
 
-export function normalizeName(s) {
-  return (s ?? '').toLowerCase().replace(/[.'’-]/g, '').replace(/\s+/g, ' ').trim()
-}
+// The matcher is THE shared one (utils/newsMatch.js). normalizeName is
+// re-exported for existing importers.
+export { normalizeName }
 
 function matchFeedItems(items, sleeperId, name, espnId) {
-  const id = espnId != null ? Number(espnId) : null
-  const sid = sleeperId != null ? String(sleeperId) : null
-  const n = normalizeName(name)
-  const usable = n.length >= 6 && n.includes(' ')  // full names only — avoid false hits
+  const index = buildNewsIndex([{ sleeperId, name, espnId }])
   return items
-    .filter(item =>
-      // `playerIds` is the feed's own server-side resolution (see
-      // scripts/fetch-news.mjs) and the only join that works for the majority
-      // of rostered players, who carry no espn_id in Sleeper's player DB.
-      (sid != null && item.playerIds?.includes(sid)) ||
-      (id != null && item.athleteIds?.includes(id)) ||
-      (usable && normalizeName(item.headline).includes(n))
-    )
+    .filter(item => resolveItemPlayer(item, index) != null)
     .slice(0, 3)
-    .map(item => ({
-      headline: item.headline,
-      story: item.story ?? '',
-      published: item.published ?? null,
-      source: item.source ?? null,
-      link: item.link ?? null,
-      athleteIds: item.athleteIds ?? [],
-    }))
+    .map(feedItemView)
 }
 
 // Handles both ESPN response shapes: fantasy v2 ({feed}) and common v3 ({articles})

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { loadNewsFeed, normalizeName } from './usePlayerIntel'
+import { loadNewsFeed } from './usePlayerIntel'
+import { buildNewsIndex, resolveItemPlayer, feedItemView, byNewestFirst } from '../utils/newsMatch'
 import { usePlayerDB } from './usePlayerDB'
 
 // News relevant to a set of players (The Edge passes my roster + watchlist).
@@ -23,46 +24,19 @@ export function useLeagueNews(players) {
   return useMemo(() => {
     if (!items?.length || !players.length) return []
 
-    const matchers = players.map(p => {
-      const n = normalizeName(p.name)
-      return {
-        player: p,
-        sleeperId: String(p.sleeperId),
-        espnId: playerDB?.[p.sleeperId]?.espn_id != null
-          ? Number(playerDB[p.sleeperId].espn_id)
-          : null,
-        // Full names only — short fragments produce false headline hits
-        name: n.length >= 6 && n.includes(' ') ? n : null,
-      }
-    })
-
+    // THE shared matcher (utils/newsMatch.js): feed ids, then ESPN ids, then
+    // the longest full name in the headline.
+    const index = buildNewsIndex(players, playerDB)
     const seen = new Set()
     const matched = []
     items.forEach(item => {
-      const headline = normalizeName(item.headline)
-      const hit = matchers.find(({ sleeperId, espnId, name }) =>
-        // Feed-resolved Sleeper ids first — most rostered players carry no
-        // espn_id in Sleeper's player DB, so the id join below can't reach
-        // them (see scripts/fetch-news.mjs).
-        item.playerIds?.includes(sleeperId) ||
-        (espnId != null && item.athleteIds?.includes(espnId)) ||
-        (name && headline.includes(name))
-      )
-      if (!hit || seen.has(item.headline)) return
+      const player = resolveItemPlayer(item, index)
+      if (!player || seen.has(item.headline)) return
       seen.add(item.headline)
-      matched.push({
-        headline: item.headline,
-        story: item.story ?? '',
-        published: item.published ?? null,
-        source: item.source ?? null,
-        link: item.link ?? null,
-        athleteIds: item.athleteIds ?? [],
-        playerIds: item.playerIds ?? [],
-        player: hit.player,
-      })
+      matched.push({ ...feedItemView(item), player })
     })
 
-    matched.sort((a, b) => new Date(b.published ?? 0) - new Date(a.published ?? 0))
+    matched.sort(byNewestFirst)
     return matched
     // playersKey stands in for the players array identity
     // eslint-disable-next-line react-hooks/exhaustive-deps
