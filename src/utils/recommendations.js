@@ -189,11 +189,6 @@ export function assetKeepScore(asset, ctx) {
 // package — they're core/irreplaceable. The user can still add them manually.
 export const PROTECT_THRESHOLD = 0.9
 
-// Inverse of keep — higher = more willing to include in a package / move on from.
-export function assetGivability(asset, ctx) {
-  return 1 - assetKeepScore(asset, ctx)
-}
-
 // A team's deficit positions (where they're below league average) — the assets
 // that make a package they'd actually accept.
 export function getDeficitPositions(roster, allRosters) {

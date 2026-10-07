@@ -48,10 +48,6 @@ const keyFor = (leagueId, week) => `live:${leagueId}_${week}`
 
 const defaultStore = memoryStore()
 
-export function resetLiveScoresCache() {
-  return defaultStore.clear()
-}
-
 // Returns { available, week, pointsByRoster, source, notes }.
 //
 // `pointsByRoster` is rosterId → { sleeperId: points }. Sleeper reports it for

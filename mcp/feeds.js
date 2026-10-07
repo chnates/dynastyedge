@@ -57,10 +57,6 @@ export const DEFAULT_VALUE_HISTORY_TTL_MS = 6 * 60 * 60 * 1000
 
 const defaultStore = memoryStore()
 
-export function resetFeedsCache() {
-  return defaultStore.clear()
-}
-
 async function loadFeed({ key, url, label, valid, ttlMs, force, fetcher, concurrency, store }) {
   const get = fetcher ?? createFetcher({ concurrency })
   const loaded = await loadSource(store, key, force ? -1 : ttlMs, async () => {
