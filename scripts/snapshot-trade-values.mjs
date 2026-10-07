@@ -102,9 +102,17 @@ if (!pickEntries.length) {
 
 // Recent completed trades from the current league
 const weeks = Array.from({ length: TX_WEEKS }, (_, i) => i + 1)
+// A failed bucket is LOGGED, never silent (CODE-REVIEW-1 #16): the 8-day
+// look-back retries tomorrow, but a week-long outage would lose trades from a
+// permanent archive, so the log must say which weeks went unread.
+const failedWeeks = []
 const perWeek = await Promise.all(
-  weeks.map(w => getJSON(`${SLEEPER_BASE}/league/${LEAGUE_ID}/transactions/${w}`).catch(() => []))
+  weeks.map(w => getJSON(`${SLEEPER_BASE}/league/${LEAGUE_ID}/transactions/${w}`)
+    .catch(err => { failedWeeks.push(w); console.warn(`WARNING: transactions week ${w} unread (${err.message})`); return [] }))
 )
+if (failedWeeks.length === weeks.length) {
+  console.error('WARNING: every transaction bucket failed — no new trade can be archived this run')
+}
 const cutoff = Date.now() - RECENT_DAYS * 24 * 3600 * 1000
 const recentTrades = perWeek.flat().filter(tx =>
   tx?.type === 'trade' &&

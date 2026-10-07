@@ -40,6 +40,7 @@ import { buildRookieMap } from '../../src/utils/rookieAdp.js'
 import { getTeamName } from '../../src/utils/teamName.js'
 import { resolveTeam } from '../teams.js'
 import { normalize } from './resolveAssets.js'
+import { POSITIONS } from '../../src/constants.js'
 
 export const DEFAULT_LIMIT = 12
 export const MAX_LIMIT = 40
@@ -49,7 +50,6 @@ const TARGETS = 4
 const DIVERGENCE_LIMIT = 6
 const DIVERGENCE_MIN_GAP = 5
 
-const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 const SORTS = ['fit', 'score', 'value']
 
 const pct = x => (x == null ? null : Math.round(x * 100))

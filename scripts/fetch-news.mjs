@@ -33,7 +33,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { windowDepthHours } from './newsCoverage.mjs'
 import { retainDiverse } from './newsRetention.mjs'
 import { trackSourceMisses } from './sourceHealth.mjs'
-import { SLEEPER_BASE } from '../src/constants.js'
+import { SLEEPER_BASE, POSITIONS } from '../src/constants.js'
 import { normalizeName } from '../src/utils/newsMatch.js'
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15'
@@ -88,7 +88,7 @@ const PREV_FILE = 'news-prev.json'
 const OUT_FILE = 'news.json'
 
 const SLEEPER_PLAYERS = `${SLEEPER_BASE}/players/nfl`
-const SKILL_POSITIONS = new Set(['QB', 'RB', 'WR', 'TE'])
+const SKILL_POSITIONS = new Set(POSITIONS)
 
 async function fetchOk(url, type) {
   const res = await fetch(url, {

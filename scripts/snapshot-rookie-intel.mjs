@@ -34,13 +34,13 @@
 // src/utils/rookieResearch.js. They are facts on a card, not score inputs.
 
 import { writeFileSync } from 'node:fs'
-import { SLEEPER_BASE } from '../src/constants.js'
+import { SLEEPER_BASE, POSITIONS } from '../src/constants.js'
 
 const NFLVERSE = 'https://github.com/nflverse/nflverse-data/releases/download'
 const SLEEPER_STATE = 'https://api.sleeper.app/v1/state/nfl'
 const SLEEPER_PLAYERS = `${SLEEPER_BASE}/players/nfl`
 
-const SKILL = new Set(['QB', 'RB', 'WR', 'TE'])
+const SKILL = new Set(POSITIONS)
 // 2025+ depth charts split WRs by alignment; rank 1 at any alignment = starter.
 const OFFENSE_SLOTS = new Set(['QB', 'RB', 'TE', 'WR', 'LWR', 'RWR', 'SWR'])
 const MAX_AHEAD = 3      // teammates listed above a rookie at his slot

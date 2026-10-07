@@ -4,6 +4,9 @@
 // --tier-* theme vars (index.css). Shared by WinWindowBadge and the League
 // health banner chips.
 
+// The three win-window tiers, strongest first (rosterAnalysis assigns them).
+export const WIN_WINDOW_TIERS = ['Contending', 'Middle', 'Rebuilding']
+
 export const TIER_BADGE = {
   Contending: 'text-tier-contend bg-tier-contend/10 border-tier-contend/30',
   Middle:     'text-tier-middle bg-tier-middle/10 border-tier-middle/30',

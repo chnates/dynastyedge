@@ -21,8 +21,8 @@ import {
   peakStatusShort,
   TRAJECTORY_HORIZON,
 } from '../../utils/dynastyTrajectory'
+import { POSITIONS } from '../../constants'
 
-const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 
 // The two figures that carry a direction take it from the MODEL, never from a
 // local ±5%: the 3-year-change card from the verdict (team cut-offs −1% / +5%),

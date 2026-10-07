@@ -17,7 +17,7 @@ import {
 } from '../../utils/edgeBriefing'
 import { trendPct } from '../../utils/marketTrend'
 import { POS_BG, POS_TEXT } from '../../utils/positionColors'
-import { TIER_BADGE, TIER_TEXT } from '../../utils/tierColors'
+import { TIER_BADGE, TIER_TEXT, WIN_WINDOW_TIERS } from '../../utils/tierColors'
 import {
   Badge, Lede, Magnitude, MAGNITUDE_TEAM_REFERENCE, Mark, NavRow,
   PositionBand, Row, RuledList, markedHeadline, stagger, Loading,
@@ -71,7 +71,7 @@ const TX_KIND = {
   commissioner: { label: 'CMR', color: 'text-text-tertiary' },
 }
 
-const TIERS = ['Contending', 'Middle', 'Rebuilding']
+const TIERS = WIN_WINDOW_TIERS
 
 function greeting() {
   const h = new Date().getHours()

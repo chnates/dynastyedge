@@ -12,11 +12,12 @@
 
 import { writeFileSync } from 'node:fs'
 import { splitFantasyCalcEntries, FANTASYCALC_VALUES_URL as VALUES_URL } from './fantasyCalcValues.mjs'
+import { VALUE_HISTORY_DAYS } from '../src/constants.js'
 
 const HISTORY_URL =
   'https://raw.githubusercontent.com/chnates/dynastyedge/values-history/values-history.json'
 
-const MAX_DAYS = 90      // rolling window
+const MAX_DAYS = VALUE_HISTORY_DAYS   // rolling window — one home, src/constants.js
 const MAX_PLAYERS = 500  // top players by current value — keeps the file mobile-sized
 
 // Some CDNs reject the default Node fetch UA — present as a browser

@@ -348,6 +348,10 @@ OPEN-3, the FAAB bid recommender (2026-10-07), moved both by the same 20
 imports only `src/utils` and the shared fixture, and the three new
 `mcpRecommendFreeAgents` tests reach neither React nor `zod`.
 
+The small shared lists (2026-10-07, CODE-REVIEW-1 #16) moved both by the same 2
+(900/857 → **902/859**), the gap holding at 43: `sharedConstants.test.mjs`
+imports only `src/constants.js` and `tierColors.js`.
+
 The one news matcher (2026-10-07, CODE-REVIEW-1 #10) moved both by the same 5
 (895/852 → **900/857**), the gap holding at 43: `newsMatch.test.mjs` imports
 only the pure `newsMatch.js`.

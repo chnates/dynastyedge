@@ -34,6 +34,7 @@ import { suggestFairPackage } from '../../src/utils/tradeAnalysis.js'
 import { getDeficitPositions } from '../../src/utils/recommendations.js'
 import { getTeamName } from '../../src/utils/teamName.js'
 import { resolveTeam, describeTeams } from '../teams.js'
+import { POSITIONS } from '../../src/constants.js'
 
 // Bounded output (§7 / non-negotiable 2). Twenty targets each carrying two fit
 // reads, a package and an alternative is a large response for a question whose
@@ -48,7 +49,6 @@ export const MAX_LIMIT = 20
 // builds. Only the returned slice is priced.
 const BOARD_DEPTH = 20
 
-const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 
 function playerRow(p) {
   return {

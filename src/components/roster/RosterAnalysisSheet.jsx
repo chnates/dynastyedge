@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react'
 import { PEAK_WINDOWS } from '../../utils/peakWindows'
 import { Sheet, SheetHeader, Chip, Card } from '../ui'
 import { POS_SVG as POS_COLORS } from '../../utils/positionColors'
+import { POSITIONS } from '../../constants'
 
-const LANE_ORDER = ['QB', 'RB', 'WR', 'TE']
+const LANE_ORDER = POSITIONS
 const POS_FILTERS = ['ALL', ...LANE_ORDER]
 
 const AGE_MIN = 20
