@@ -50,15 +50,20 @@
 // Overridable with DYNASTYEDGE_HISTORY_TTL_MS.
 
 import { SLEEPER_BASE } from '../src/constants.js'
+import {
+  MAX_SEASONS_BACK, LEDGER_MAX_WEEK, playedWeeks,
+  walkLeagueChain, fetchDraftsWithPicks, fetchSeasonLedger,
+} from '../src/utils/leagueHistory.js'
 import { createFetcher } from './limit.js'
 import { stampSource } from './snapshot.js'
 import { memoryStore, loadSource } from './store.js'
 
 export const DEFAULT_HISTORY_TTL_MS = 6 * 60 * 60 * 1000
 
-// The app's own cap on chain length, kept identical so the two walks cover
-// the same seasons.
-export const MAX_SEASONS_BACK = 8
+// The chain cap, the week count and the walk itself live in
+// src/utils/leagueHistory.js, shared with the app's useLeagueHistory
+// (CODE-REVIEW-1 #3) — re-exported so existing imports keep working.
+export { MAX_SEASONS_BACK, LEDGER_MAX_WEEK, playedWeeks }
 
 const historyKeyFor = leagueId => `history:${leagueId}`
 
@@ -77,16 +82,7 @@ export function resetHistoryCache() {
 // league has never drafted", which downstream reads as "you have no rookie
 // record" — an outage rendering as a fact about the owner. The caller turns
 // that throw into `available: false` instead.
-async function fetchDrafts(get, leagueId) {
-  const drafts = await get(`${SLEEPER_BASE}/league/${leagueId}/drafts`, { label: 'Sleeper drafts' })
-  return Promise.all(
-    (drafts ?? []).map(async draft => ({
-      draft,
-      picks: (await get(`${SLEEPER_BASE}/draft/${draft.draft_id}/picks`, { label: 'Draft picks' })
-        .catch(() => [])) ?? [],
-    }))
-  )
-}
+const fetchDrafts = (get, leagueId) => fetchDraftsWithPicks(get, leagueId, { base: SLEEPER_BASE })
 
 // One past season: the roster→owner map and the drafts. No users, no
 // transactions — see the header.
@@ -97,7 +93,7 @@ async function fetchPastSeason(get, leagueInfo) {
     // One bad PAST season degrades the record rather than sinking the walk —
     // the same per-item contract the app keeps. Only losing everything is
     // unavailable, which the caller decides.
-    fetchDrafts(get, id).catch(() => []),
+    fetchDrafts(get, id).then(d => ({ ok: true, d })).catch(() => ({ ok: false, d: [] })),
   ])
   return {
     season: String(leagueInfo.season),
@@ -106,7 +102,8 @@ async function fetchPastSeason(get, leagueInfo) {
     users: [],          // not fetched — normalizeSeasons maps over it
     rosters: rosters ?? [],
     transactions: [],   // not fetched — see the header
-    drafts,
+    drafts: drafts.d,
+    draftsFailed: !drafts.ok,
   }
 }
 
@@ -124,19 +121,14 @@ export async function getLeagueHistory({
   const get = fetcher ?? createFetcher({ concurrency })
   const ttl = force ? -1 : ttlMs
 
-  const loaded = await loadSource(store, historyKeyFor(leagueId), ttl, async () => {
+  let ranLoader = false
+  const load = async () => {
+    ranLoader = true
     // The chain is sequential by nature — each hop names the next — so it is
-    // the one place here that cannot parallelise. `'0'` is Sleeper's
-    // no-previous-league sentinel (rule 8's shape, in a different field).
-    const pastLeagues = []
-    let prevId = leagueInfo?.previous_league_id
-    while (prevId && prevId !== '0' && pastLeagues.length < MAX_SEASONS_BACK) {
-      const info = await get(`${SLEEPER_BASE}/league/${prevId}`, { label: 'Sleeper league' })
-        .catch(() => null)
-      if (!info) break
-      pastLeagues.push(info)
-      prevId = info.previous_league_id
-    }
+    // the one place here that cannot parallelise. A failed hop is NAMED
+    // (`chainBroken`), never a silent end: the seasons behind it are unknown,
+    // not absent.
+    const { pastLeagues, chainBroken } = await walkLeagueChain(get, leagueInfo, { base: SLEEPER_BASE })
 
     let currentDraftsFailed = false
     const [currentDrafts, ...pastSeasons] = await Promise.all([
@@ -156,8 +148,17 @@ export async function getLeagueHistory({
       currentSeason: String(leagueInfo?.season ?? ''),
       currentDrafts,
       pastSeasons,   // newest → oldest
+      chainBroken,
     }
-  }).catch(err => ({ data: null, fetchedAt: null, stale: false, error: err.message }))
+  }
+  let loaded = await loadSource(store, historyKeyFor(leagueId), ttl, load)
+    .catch(err => ({ data: null, fetchedAt: null, stale: false, error: err.message }))
+  // A cached walk that broke mid-chain is retried rather than served for the
+  // whole history TTL — once per call, and never twice in the same call.
+  if (loaded.data?.chainBroken && !ranLoader) {
+    loaded = await loadSource(store, historyKeyFor(leagueId), -1, load)
+      .catch(() => loaded)
+  }
 
   if (!loaded.data) {
     return {
@@ -173,13 +174,26 @@ export async function getLeagueHistory({
     }
   }
 
+  const notes = []
+  const cb = loaded.data.chainBroken
+  if (cb) {
+    notes.push(
+      `The league's history chain could not be followed past ${cb.afterSeason} (${cb.error}), so any older ` +
+      'seasons are UNKNOWN, not absent — records cover only the seasons reached.'
+    )
+  }
+  const draftGaps = (loaded.data.pastSeasons ?? []).filter(ps => ps.draftsFailed).map(ps => ps.season)
+  if (draftGaps.length) {
+    notes.push(`The ${draftGaps.join(', ')} draft list could not be loaded, so those drafts are missing from the record.`)
+  }
   return {
     available: true,
     reason: null,
     history: loaded.data,
     seasonsBack: loaded.data.pastSeasons?.length ?? 0,
+    chainBroken: cb ?? null,
     sources: { history: stampSource(loaded) },
-    notes: [],
+    notes,
   }
 }
 
@@ -222,40 +236,9 @@ export async function getLeagueHistory({
 // window it could not read. One failed bucket inside a season is disclosed the
 // same way, as a partial season.
 
-export const LEDGER_MAX_WEEK = 18
-
 const ledgerSeasonKey = seasonLeagueId => `ledger:${seasonLeagueId}`
 
-export function playedWeeks(leagueInfo) {
-  const last = Number(leagueInfo?.settings?.last_scored_leg)
-  return Number.isFinite(last) && last >= 1 ? Math.min(LEDGER_MAX_WEEK, last) : LEDGER_MAX_WEEK
-}
-
-async function fetchSeasonLedger(get, leagueInfo) {
-  const id = leagueInfo.league_id
-  const weeks = Array.from({ length: playedWeeks(leagueInfo) }, (_, i) => i + 1)
-  const [users, ...buckets] = await Promise.all([
-    get(`${SLEEPER_BASE}/league/${id}/users`, { label: 'Sleeper users' }).catch(() => null),
-    ...weeks.map(w =>
-      get(`${SLEEPER_BASE}/league/${id}/transactions/${w}`, { label: `Sleeper transactions w${w}` })
-        .catch(() => null)),
-  ])
-  const failedWeeks = weeks.filter((_, i) => !Array.isArray(buckets[i]))
-  // Every bucket failed: throw, so nothing is CACHED for this season and the
-  // next call retries it — a cached empty ledger would be "never traded" for
-  // the whole history TTL.
-  if (failedWeeks.length === weeks.length) {
-    throw new Error(`no transaction week of the ${leagueInfo.season} season could be loaded`)
-  }
-  const transactions = []
-  buckets.forEach((txs, i) => {
-    ;(Array.isArray(txs) ? txs : []).forEach(tx => {
-      if (tx?.status === 'complete') transactions.push({ ...tx, week: weeks[i] })
-    })
-  })
-  transactions.sort((a, b) => (b.status_updated ?? 0) - (a.status_updated ?? 0))
-  return { users: Array.isArray(users) ? users : [], usersFailed: !Array.isArray(users), transactions, failedWeeks, weeks: weeks.length }
-}
+const fetchLedger = (get, leagueInfo) => fetchSeasonLedger(get, leagueInfo, { base: SLEEPER_BASE })
 
 export async function getLedgerHistory({
   leagueId, leagueInfo, ttlMs = DEFAULT_HISTORY_TTL_MS, force = false,
@@ -277,7 +260,7 @@ export async function getLedgerHistory({
   const past = base.history.pastSeasons ?? []
 
   const loaded = await Promise.all(past.map(ps =>
-    loadSource(store, ledgerSeasonKey(ps.leagueId), ttl, () => fetchSeasonLedger(get, ps.leagueInfo))
+    loadSource(store, ledgerSeasonKey(ps.leagueId), ttl, () => fetchLedger(get, ps.leagueInfo))
       .catch(err => ({ data: null, fetchedAt: null, stale: false, error: err.message }))))
 
   const failedSeasons = []
@@ -315,6 +298,7 @@ export async function getLedgerHistory({
     seasonsBack: past.length,
     ledgerSeasons: pastSeasons.filter((_, i) => loaded[i].data).map(ps => ps.season),
     failedSeasons,
+    chainBroken: base.chainBroken ?? null,
     partialSeasons,
     sources: {
       history: stampSource({

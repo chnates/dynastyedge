@@ -4,6 +4,7 @@ import { useTransactions } from './useTransactions'
 import { useLeagueHistory } from './useLeagueHistory'
 import { usePlayerDB } from './usePlayerDB'
 import { buildManagerProfiles } from '../utils/managerAnalysis'
+import { ledgerCoverage } from '../utils/leagueHistory'
 import { useIdentity } from './useIdentity'
 
 // Manager scouting profiles: combines current-season league state (context),
@@ -20,7 +21,18 @@ export function useManagerProfiles() {
   const analysis = useMemo(() => {
     if (!league?.allRosters?.length || !values?.playerMap || !transactions || !history) return null
     const myOwnerId = league.allRosters.find(r => r.rosterId === myRosterId)?.owner?.user_id ?? null
-    return buildManagerProfiles({
+    // Which seasons' trades were actually read — the screens say so, and a
+    // manager is never called a non-trader over a season we could not read.
+    const rs = history.readState ?? {}
+    const coverage = ledgerCoverage({
+      currentSeason: String(leagueInfo?.season ?? history.currentSeason),
+      currentRead: true,   // useTransactions rejects (ErrorState) on a total outage
+      historyRead: true,
+      ledgerSeasons: rs.ledgerSeasons ?? (history.pastSeasons ?? []).map(ps => ps.season),
+      failedSeasons: rs.failedSeasons ?? [],
+      chainBroken: rs.chainBroken ?? null,
+    })
+    const analysis = buildManagerProfiles({
       history,
       currentLeague: {
         season: String(leagueInfo?.season ?? history.currentSeason),
@@ -34,7 +46,16 @@ export function useManagerProfiles() {
       pickEntries: values.pickEntries,
       playerDB,
       myOwnerId,
+      coverage,
     })
+    return {
+      ...analysis,
+      readState: {
+        partialSeasons: rs.partialSeasons ?? [],
+        draftGaps: rs.draftGaps ?? [],
+        chainBroken: rs.chainBroken ?? null,
+      },
+    }
   }, [league, values, leagueInfo, transactions, history, playerDB, myRosterId])
 
   const loading = (leagueLoading && !league) || (txLoading && !transactions) || (historyLoading && !history)
@@ -46,5 +67,8 @@ export function useManagerProfiles() {
     if (historyError) historyRetry()
   }
 
-  return { analysis, loading, error, retry }
+  // Re-walk the history (used by the Managers screen's gap notice).
+  function retryHistory() { historyRetry() }
+
+  return { analysis, loading, error, retry, retryHistory }
 }

@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { SLEEPER_BASE, LEAGUE_ID } from '../constants'
 import { fetchJSON } from '../utils/fetchJSON'
+import { walkLeagueChain, fetchDraftsWithPicks, fetchSeasonLedger } from '../utils/leagueHistory'
 
 // League history: walks the previous_league_id chain back through every
 // season this league has existed on Sleeper, and pulls each past season's
 // users, rosters, full transaction log, and drafts (with every pick made).
 // Past seasons are frozen, so everything is fetched once and cached for the
-// session. Lazy — nothing fetches until the first consumer mounts
+// session — except a walk with gaps, which `retry` (and the Managers screen's
+// notice) refetches. Lazy — nothing fetches until the first consumer mounts
 // (Managers view or Trade Partner Finder).
 //
 // Current-season transactions are NOT fetched here — useTransactions already
@@ -14,85 +16,48 @@ import { fetchJSON } from '../utils/fetchJSON'
 // fetched here (with picks) so traded picks from completed rookie drafts can
 // be resolved into the players they became.
 
-const MAX_SEASONS_BACK = 8   // safety cap on chain walking
-const TX_WEEKS = 18
+// The walk itself — the chain, the drafts list, a season's ledger, and the
+// rule for what each failure means — lives in utils/leagueHistory.js, shared
+// with the MCP server (CODE-REVIEW-1 #3). Until 2026-10-07 this hook swallowed
+// all three failures into facts: a season whose trades failed read "nobody
+// traded", a failed drafts list read "never drafted", a failed hop ended the
+// chain as if the league were younger. Each is now reported in `readState`,
+// and Trade › Managers says which seasons it could not read.
 
 let historyCache = null
 let historyPromise = null
 
-async function fetchSeasonTransactions(leagueId) {
-  const weeks = Array.from({ length: TX_WEEKS }, (_, i) => i + 1)
-  const perWeek = await Promise.all(
-    weeks.map(w =>
-      fetchJSON(`${SLEEPER_BASE}/league/${leagueId}/transactions/${w}`, {
-        label: 'Sleeper transactions',
-      }).catch(() => [])
-    )
-  )
-  const all = []
-  perWeek.forEach((txs, i) => {
-    ;(Array.isArray(txs) ? txs : []).forEach(tx => {
-      if (tx?.status === 'complete') all.push({ ...tx, week: i + 1 })
-    })
-  })
-  all.sort((a, b) => (b.status_updated ?? 0) - (a.status_updated ?? 0))
-  return all
-}
-
-// All drafts for a league, each with its full pick list. Best-effort per
-// draft — a draft with no picks yet returns [].
-async function fetchDrafts(leagueId) {
-  const drafts = await fetchJSON(`${SLEEPER_BASE}/league/${leagueId}/drafts`, {
-    label: 'Sleeper drafts',
-  }).catch(() => [])
-  return Promise.all(
-    (drafts ?? []).map(async draft => ({
-      draft,
-      picks: (await fetchJSON(`${SLEEPER_BASE}/draft/${draft.draft_id}/picks`, {
-        label: 'Draft picks',
-      }).catch(() => [])) ?? [],
-    }))
-  )
-}
+const get = (url, { label } = {}) => fetchJSON(url, { label })
 
 async function fetchPastSeason(leagueInfo) {
   const id = leagueInfo.league_id
-  const [users, rosters, transactions, drafts] = await Promise.all([
-    fetchJSON(`${SLEEPER_BASE}/league/${id}/users`, { label: 'Sleeper users' }),
-    fetchJSON(`${SLEEPER_BASE}/league/${id}/rosters`, { label: 'Sleeper rosters' }),
-    fetchSeasonTransactions(id),
-    fetchDrafts(id),
+  const [ledger, rosters, drafts] = await Promise.all([
+    fetchSeasonLedger(get, leagueInfo).then(l => ({ ok: true, ...l })).catch(() => ({ ok: false })),
+    get(`${SLEEPER_BASE}/league/${id}/rosters`, { label: 'Sleeper rosters' }).catch(() => []),
+    fetchDraftsWithPicks(get, id).then(d => ({ ok: true, d })).catch(() => ({ ok: false, d: [] })),
   ])
   return {
     season: String(leagueInfo.season),
     leagueId: id,
     leagueInfo,
-    users: users ?? [],
+    users: ledger.ok ? ledger.users : [],
     rosters: rosters ?? [],
-    transactions,
-    drafts,
+    transactions: ledger.ok ? ledger.transactions : [],
+    drafts: drafts.d,
+    // Read state, per season — what the screens may and may not claim.
+    ledgerRead: ledger.ok,
+    failedWeeks: ledger.ok ? ledger.failedWeeks : [],
+    draftsFailed: !drafts.ok,
   }
 }
 
 async function fetchHistory() {
-  const current = await fetchJSON(`${SLEEPER_BASE}/league/${LEAGUE_ID}`, {
-    label: 'Sleeper league',
-  })
+  const current = await get(`${SLEEPER_BASE}/league/${LEAGUE_ID}`, { label: 'Sleeper league' })
+  const { pastLeagues, chainBroken } = await walkLeagueChain(get, current)
 
-  // Walk the renewal chain — each hop is a prior season of this league
-  const pastLeagues = []
-  let prevId = current?.previous_league_id
-  while (prevId && prevId !== '0' && pastLeagues.length < MAX_SEASONS_BACK) {
-    const info = await fetchJSON(`${SLEEPER_BASE}/league/${prevId}`, {
-      label: 'Sleeper league',
-    }).catch(() => null)
-    if (!info) break
-    pastLeagues.push(info)
-    prevId = info.previous_league_id
-  }
-
+  let currentDraftsFailed = false
   const [currentDrafts, ...pastSeasons] = await Promise.all([
-    fetchDrafts(LEAGUE_ID),
+    fetchDraftsWithPicks(get, LEAGUE_ID).catch(() => { currentDraftsFailed = true; return [] }),
     ...pastLeagues.map(fetchPastSeason),
   ])
 
@@ -100,6 +65,18 @@ async function fetchHistory() {
     currentSeason: String(current?.season ?? ''),
     currentDrafts,
     pastSeasons,   // newest → oldest
+    readState: {
+      ledgerSeasons: pastSeasons.filter(ps => ps.ledgerRead).map(ps => ps.season),
+      failedSeasons: pastSeasons.filter(ps => !ps.ledgerRead).map(ps => ps.season),
+      partialSeasons: pastSeasons
+        .filter(ps => ps.ledgerRead && ps.failedWeeks.length)
+        .map(ps => ({ season: ps.season, failedWeeks: ps.failedWeeks })),
+      draftGaps: [
+        ...(currentDraftsFailed ? [String(current?.season ?? '')] : []),
+        ...pastSeasons.filter(ps => ps.draftsFailed).map(ps => ps.season),
+      ],
+      chainBroken,
+    },
   }
 }
 

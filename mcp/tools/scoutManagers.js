@@ -37,6 +37,7 @@
 // (FAAB, an unpriced player or pick) reports `value: null`, never a raw 0.
 
 import { buildManagerProfiles, tradeTimeTotals } from '../../src/utils/managerAnalysis.js'
+import { ledgerCoverage } from '../../src/utils/leagueHistory.js'
 import { getTeamName } from '../../src/utils/teamName.js'
 import { resolveTeam } from '../teams.js'
 
@@ -78,14 +79,17 @@ export function buildScoutAnswer(snapshot, { history, transactions, tradeValues 
   const currentSeason = String(league.leagueInfo?.season ?? snapshot.nflState?.season ?? '')
   const currentRead = !!transactions?.available
   const historyRead = !!history?.available
-  const pastRead = historyRead ? (history.ledgerSeasons ?? []) : []
-  const seasonsRead = [...(currentRead ? [currentSeason] : []), ...pastRead]
-  const seasonsMissing = [
-    ...(currentRead ? [] : [currentSeason]),
-    ...(historyRead ? (history.failedSeasons ?? []) : ['every past season']),
-  ]
-  const ledgerAvailable = seasonsRead.length > 0
-  const ledgerComplete = ledgerAvailable && seasonsMissing.length === 0
+  // The read-state rule is the app's (src/utils/leagueHistory.js) — the same
+  // statement Trade › Managers prints.
+  const coverage = ledgerCoverage({
+    currentSeason, currentRead, historyRead,
+    ledgerSeasons: history?.ledgerSeasons ?? [],
+    failedSeasons: history?.failedSeasons ?? [],
+    chainBroken: history?.chainBroken ?? null,
+  })
+  const { seasonsRead, seasonsMissing } = coverage
+  const ledgerAvailable = coverage.available
+  const ledgerComplete = coverage.complete
 
   const myOwnerId = league.allRosters.find(r => r.rosterId === myRosterId)?.owner?.user_id ?? null
   const analysis = buildManagerProfiles({
@@ -100,6 +104,7 @@ export function buildScoutAnswer(snapshot, { history, transactions, tradeValues 
     pickEntries: values.pickEntries,
     playerDB: snapshot.playerDB,
     myOwnerId,
+    coverage,
   })
 
   const nameOf = ownerId => {
@@ -109,15 +114,9 @@ export function buildScoutAnswer(snapshot, { history, transactions, tradeValues 
     return u ? getTeamName(u) : 'a former manager'
   }
 
-  // The activity label the app prints is built for a complete ledger. Over a
-  // partial or absent one, "No trades yet" is a claim we cannot make.
-  const activityOf = p => {
-    if (!ledgerAvailable) return null
-    if (p.tradeCount === 0 && !ledgerComplete) {
-      return `No trades in the ${seasonsRead.length} season${seasonsRead.length === 1 ? '' : 's'} we could read`
-    }
-    return p.activity
-  }
+  // buildManagerProfiles already words a zero-trade manager against the
+  // coverage it was given; with nothing read at all there is no activity.
+  const activityOf = p => (ledgerAvailable ? p.activity : null)
 
   const archive = tradeValues?.available ? tradeValues.data : null
   const tradeRow = t => {
@@ -188,12 +187,9 @@ export function buildScoutAnswer(snapshot, { history, transactions, tradeValues 
     you: me ? {
       ...summary(me),
       strengths: ledgerAvailable ? analysis.insights.strengths : [],
-      // buildMyInsights writes "You haven't completed a trade yet" off an empty
-      // ledger. Over seasons we could not read that is the very claim this
-      // tool must not make, so it is dropped rather than reworded.
-      workOn: ledgerAvailable
-        ? analysis.insights.workOn.filter(w => ledgerComplete || !/haven't completed a trade/.test(w))
-        : [],
+      // buildMyInsights already drops "You haven't completed a trade yet"
+      // over a partial read (the coverage it was given).
+      workOn: ledgerAvailable ? analysis.insights.workOn : [],
     } : null,
     // Sorted by trade activity, as Trade › Managers sorts its cards.
     managers: [...profiles]

@@ -1,4 +1,5 @@
 import { findPickValue, buildDraftPickIndex, buildGenericRoundValues } from './pickCapital'
+import { noTradesLabel } from './leagueHistory'
 
 // Manager scouting analysis: turns multi-season league history (trades,
 // waivers, drafts) into per-manager behavioral profiles — trade scorecards,
@@ -477,8 +478,12 @@ function buildTendencies(ledger, faab, leagueAvgBidPct) {
   return { labels: labels.slice(0, 3), picksGot, picksGave, ageGot, ageGave, posGot }
 }
 
-function activityLabel(tradeCount, seasonCount) {
-  if (tradeCount === 0) return 'No trades yet'
+// `coverage` (utils/leagueHistory.js's ledgerCoverage) says which seasons'
+// trades were actually read. "No trades yet" is a claim about every season, so
+// it is only made over a complete read; otherwise the label names how many
+// seasons it covers. Absent coverage means the caller read everything.
+function activityLabel(tradeCount, seasonCount, coverage) {
+  if (tradeCount === 0) return noTradesLabel(coverage)
   const rate = tradeCount / Math.max(1, seasonCount)
   if (rate >= 2.5) return 'Active dealer'
   if (rate >= 1) return 'Occasional dealer'
@@ -497,7 +502,7 @@ function fmtNet(net) {
   return `${net >= 0 ? '+' : '−'}${Math.abs(Math.round(net)).toLocaleString()}`
 }
 
-export function buildMyInsights(profiles, me) {
+export function buildMyInsights(profiles, me, coverage) {
   if (!me) return { strengths: [], workOn: [] }
   const strengths = []
   const workOn = []
@@ -523,7 +528,8 @@ export function buildMyInsights(profiles, me) {
     if (me.biggestWin && me.biggestWin.net > 1000) {
       strengths.push(`Best deal: landed ${me.biggestWin.got.map(a => a.label).join(', ')} (${fmtNet(me.biggestWin.net)}).`)
     }
-  } else {
+  } else if (!coverage || coverage.complete) {
+    // Only over a complete read — over a partial one it may simply be untrue.
     workOn.push(`You haven't completed a trade yet — the most active managers are reshaping their rosters around you.`)
   }
 
@@ -617,7 +623,7 @@ export function buildDraftGrades({ history, currentLeague, playerMap, pickEntrie
 
 // ── Main entry ───────────────────────────────────────────────────────────────
 
-export function buildManagerProfiles({ history, currentLeague, playerMap, pickEntries, playerDB, myOwnerId }) {
+export function buildManagerProfiles({ history, currentLeague, playerMap, pickEntries, playerDB, myOwnerId, coverage = null }) {
   const seasons = normalizeSeasons(history, currentLeague)
   const pickIndex = buildPickIndex(seasons)
   const resolvers = makeResolvers(playerMap, playerDB ?? {}, pickEntries ?? [], pickIndex)
@@ -677,7 +683,7 @@ export function buildManagerProfiles({ history, currentLeague, playerMap, pickEn
         biggestLoss: byNet[byNet.length - 1]?.net < 0 ? byNet[byNet.length - 1] : null,
         tendencies: tendencies.labels,
         tendencyDetail: tendencies,
-        activity: activityLabel(ledger.length, seasonsActive.length),
+        activity: activityLabel(ledger.length, seasonsActive.length, coverage),
         faab,
         draft: draftRecords[ownerId] ?? { picks: [], count: 0, totalValue: 0, hits: 0, avgDelta: 0, best: null },
       }
@@ -710,6 +716,7 @@ export function buildManagerProfiles({ history, currentLeague, playerMap, pickEn
     my,
     seasonList,                     // ['2026', '2025', ...] newest first
     userById: userNameById,
-    insights: buildMyInsights(profiles, my),
+    insights: buildMyInsights(profiles, my, coverage),
+    coverage,                       // which seasons' trades were read (null = all)
   }
 }

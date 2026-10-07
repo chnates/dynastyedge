@@ -1104,6 +1104,9 @@ in `tests/mcpHistory.test.mjs`).
 - **The drafts LIST error is not swallowed; a per-draft picks error is.** A
   failed list returning `[]` would read as "never drafted" — an outage rendering
   as a fact about the owner. Learning nothing returns `available: false`.
+- **The chain, drafts and ledger readers are the app's** (`src/utils/leagueHistory.js`).
+  A failed hop is **`chainBroken`**, carried on the result with a note — and a
+  cached broken walk is retried on the next call, never served for the TTL.
 - **`buildDraftGrades`** (`src/utils/managerAnalysis.js`) calls the **same**
   `buildDraftRecords` as the app; equivalence is test-proved.
 
@@ -1878,10 +1881,22 @@ history**, plus a report card on me.
 > Trade › Partners' footer link.**
 
 **History (`useLeagueHistory`):** walks `previous_league_id` (cap 8 hops); per
-past season fetches users, rosters, all 18 buckets, and every draft with picks;
-also the current league's drafts. Lazy + session-cached (past seasons are
-frozen). If the league was ever recreated instead of renewed, the chain ends
-there.
+past season fetches users, rosters, the played weeks' buckets (1..`last_scored_leg`
+— week 18 is empty, measured), and every draft with picks; also the current
+league's drafts. Lazy + session-cached (past seasons are frozen). If the league
+was ever recreated instead of renewed, the chain ends there.
+- **The walk has ONE home: `src/utils/leagueHistory.js`**, shared with the MCP
+  server (CODE-REVIEW-1 #3, 2026-10-07; `tests/leagueHistory.test.mjs` fails on a
+  second copy). It takes the fetcher as an argument, so it stays a pure util.
+- **"Never traded" is not "we could not read".** A season whose buckets all fail
+  is NAMED (`failedSeasons`), a failed drafts list is a draft gap (never "never
+  drafted"), and a failed chain hop is `chainBroken` (older seasons UNKNOWN, not
+  absent). `ledgerCoverage` turns that into `seasonsRead` / `seasonsMissing`;
+  `buildManagerProfiles({ coverage })` then words a zero-trade manager "No trades
+  in the N seasons we could read" and drops "You haven't completed a trade" —
+  only a complete read says "No trades yet". Trade › Managers prints the gaps
+  with a **Try again**; Partner cards use the same label. Live: one silently
+  dropped season turned the owner's 4W-6L-1E (−5,889) into 1W-1L (+636).
 
 **Analysis (`utils/managerAnalysis.js` via `useManagerProfiles`):**
 - **Managers are keyed by `owner_id`** (stable across seasons); roster ids
@@ -3096,7 +3111,7 @@ dynastyedge/
 │   │   ├── useLeague.js         ← combined league state, player resolution (+ Sleeper-only `signInRosters` for login)
 │   │   ├── useIdentity.js       ← logged-in roster identity (localStorage store); wipes roster-scoped keys on switch
 │   │   ├── useTransactions.js   ← season-wide transaction feed
-│   │   ├── useLeagueHistory.js  ← walks previous_league_id chain: past seasons' tx/drafts
+│   │   ├── useLeagueHistory.js  ← past seasons' tx/drafts via utils/leagueHistory.js; reports `readState` (failed / partial seasons, draft gaps, chainBroken)
 │   │   ├── useManagerProfiles.js← composes history + current season into scouting profiles
 │   │   ├── useTradeTimeValues.js← trade-time value archive for the ledger (best-effort); the completeness rule is utils/managerAnalysis.js's tradeTimeTotals
 │   │   ├── matchupWeeks.js      ← shared /matchups/{week} session cache (playoff odds + lineup history)
@@ -3142,6 +3157,7 @@ dynastyedge/
 │   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation; teamDirection = THE team cut-offs (−1% / +5%)
 │   │   ├── seasonWindow.js      ← THE "has the rookie draft happened yet?" resolver — the live pick window + which draft the Tracker shows (replaced the hand-rolled PICK_YEARS)
 │   │   ├── pickCapital.js       ← pick ownership (year weights relative to the window, never literal years) + THE spent-pick ladder shared by Activity and the ledger (buildDraftPickIndex, buildGenericRoundValues)
+│   │   ├── leagueHistory.js     ← THE history walk (chain, drafts list, season ledger) + ledgerCoverage — shared with mcp/history.js; a failure is named, never read as "never traded"
 │   │   ├── leagueResults.js     ← THE bracket reader: champion = w of the p:1 game, placements carry owner_id; pure, used by get_league_results
 │   │   ├── rookieAdp.js         ← derived rookie-class ADP for the Draft section + buildRookieMap, THE rookie-class rule (moved out of useSleeperRookies)
 │   │   ├── rookieResearch.js    ← rookie opportunity model: depth × capital, within-position divergence; buildRookieBoard is THE board composition
@@ -3181,6 +3197,7 @@ dynastyedge/
 │   ├── pickCapital.test.mjs         ← ownership, round medians, year weights BY DISTANCE (a rolled year never scores 0), the spent-pick ladder
 │   ├── pickTrades.test.mjs          ← slot tiers (as coded), slot pricing fallback, package constraints
 │   ├── faabBid.test.mjs             ← the FAAB bid: budget read (none → no bid), current remainder, same % at $100/$1000, every tier, $2/$1 floor + waiver_bid_min, week scaling, the cap, null for DEF/unpriced, shared pickup context
+│   ├── leagueHistory.test.mjs       ← broken hop named, drafts LIST error propagates, all-buckets-failed throws, coverage complete only when all read, "haven't completed a trade" only over a full read, AND a scan for a second walk
 │   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
 │   ├── appVersion.test.mjs          ← reload URL: ?v= before the hash (HashRouter), encoding, null build id
 │   ├── tradeTargets.test.mjs        ← Targets: deficit gate, scoped mode keeps depth (never empty), movability TILT (nothing hidden), position filter INSIDE the ranking
@@ -3242,8 +3259,8 @@ because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
 **Current counts (verified 2026-10-07 by moving `node_modules` aside):** with
-dependencies **`# tests 862 / # pass 862`**; without them **`# tests 819 / #
-pass 814 / # fail 5`**. **If the test count isn't 862, run `npm ci` before
+dependencies **`# tests 872 / # pass 872`**; without them **`# tests 829 / #
+pass 824 / # fail 5`**. **If the test count isn't 872, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React
