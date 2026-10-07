@@ -1,7 +1,7 @@
 # Proactive delivery — how a brief reaches the phone without the app growing a backend (2026-10)
 
 **Open item:** `docs/open-items.md` §0 #8 · `dynastyedge-research-frontier` Item 5
-**Kind:** a feasibility note. Nothing in the app, the MCP server, a workflow or a CLAUDE.md rule changed in this PR. Building is §0 #9, and only on the owner's yes.
+**Kind:** a feasibility note. **Decided 2026-10-07: option E, see §6.** Nothing in the app, the MCP server, a workflow or a CLAUDE.md rule changed in this PR. Building is §0 #9, and only on the owner's yes.
 **Evidence gathered:** 2026-10-07 (2026 Week 5), from the live league, the live MCP server, the Claude routines documentation, and one dry-run routine created, fired and deleted in the same session (§3.4).
 
 ---
@@ -256,14 +256,17 @@ Why E over B: it is the only option that reaches the phone **on time** for a
 noon-Wednesday waiver run, carries the news, needs no secret, and puts zero
 code in the app. B is the fallback if you decline step 1.
 
-## 6. Decisions I need from you
+## 6. Decisions — answered by the owner, 2026-10-07
 
-1. **The lock (§3.2):** may the MCP server issue 30-day refresh tokens that,
-   like everything it issues, can only be cancelled by rotating the GitHub
-   secret? **Yes → E. No → B.**
-2. **Channel:** push only, or push + email?
-3. **Time:** Tuesday ~7:53 pm ET for the waiver brief — or Wednesday morning?
-4. **Approve §0 #9** on these terms (steps 1–4 above).
+1. **The lock (§3.2): YES.** The MCP server may issue 30-day refresh tokens,
+   re-issued on each use, cancellable only by rotating the GitHub secret.
+   → **Option E.** B is no longer the plan.
+2. **Channel: phone notification** (Claude-app push). Email off.
+3. **Time: Tuesday evening ET** (~7:53 pm). Measured waiver processing is
+   noon ET daily with Wednesday the big run (§2), so the brief lands ~16 hours
+   before it. Claims that clear Thursday–Sunday at noon are not covered by a
+   Tuesday brief; that's accepted for now.
+4. **§0 #9 approved** on the terms in §5.
 
 ---
 
