@@ -577,6 +577,12 @@ cannot be recovered, which is why it shipped before any UI.
   null for it across `INACTIVE_COLUMNS = 120` days (pruning per-source would
   leave the three maps holding different id sets, defeating the comparison).
 - Same-day re-run **replaces** that column (idempotent).
+- **Every daily FantasyCalc value the rolling `values-history.json` ever held
+  lands here** (2026-10-07): `backfillFantasyCalc` runs before each day's merge,
+  adding any day the archive lacks as a FantasyCalc-only column (DP/KTC null,
+  `asOf`/`coverage` null), healing a day whose FantasyCalc read failed, and never
+  overwriting an archived cell. So `dates` starts **2026-07-09**, and DP/KTC are
+  null before 2026-09-22 — not observed, never 0.
 - **A source that could not be read is an all-null column with `asOf: null`
   and `coverage: null` — never a 0.** *"We did not observe"* and *"the source
   priced nobody"* are different statements; a 0 reads to 4d as a real collapse

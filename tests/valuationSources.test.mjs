@@ -17,7 +17,7 @@ import assert from 'node:assert/strict'
 import {
   parseCSV, crosswalkCell, buildCrosswalk,
   readDynastyProcess, extractKtcPlayers, readKeepTradeCut,
-  mergeConsensusColumn, SOURCE_KEYS,
+  mergeConsensusColumn, backfillFantasyCalc, SOURCE_KEYS,
 } from '../scripts/valuationSources.mjs'
 
 // --- the crosswalk ---------------------------------------------------------
@@ -307,4 +307,77 @@ test('quoted CSV fields survive commas and doubled quotes', () => {
   assert.equal(rows[0].player, 'Smith, Jr.')
   assert.equal(rows[0].value_2qb, '900')
   assert.equal(rows[1].player, 'He said "hi"')
+})
+
+// --- carrying the rolling file into the permanent archive (2026-10-07) ------
+// The rolling values-history.json deletes its oldest day every morning; the
+// archive started 2026-09-22. backfillFantasyCalc makes the archive the one
+// permanent home of every day the rolling file ever held.
+
+const ROLLING = {
+  dates: ['2026-09-19', '2026-09-20', '2026-09-21', '2026-09-22'],
+  players: {
+    '1': [95, 96, 98, 100],
+    '2': [190, null, 195, 200],
+    'FP_2027_1': [3000, 3000, 3000, 3000],
+  },
+}
+
+test('a day only the rolling file holds is ADDED, FantasyCalc-only — the others null, never 0', () => {
+  const a = mergeConsensusColumn({ archive: { dates: [], sources: {} }, date: '2026-09-22', readings: ALL_THREE })
+  const { archive: b, added, healed, conflicts } = backfillFantasyCalc(a, ROLLING)
+  assert.deepEqual(b.dates, ['2026-09-19', '2026-09-20', '2026-09-21', '2026-09-22'])
+  assert.deepEqual(added, ['2026-09-19', '2026-09-20', '2026-09-21'])
+  assert.deepEqual(healed, [])
+  assert.equal(conflicts, 0)
+  assert.deepEqual(b.sources.fantasycalc.players['1'], [95, 96, 98, 100])
+  assert.deepEqual(b.sources.fantasycalc.players['2'], [190, null, 195, 200])
+  assert.deepEqual(b.sources.dynastyprocess.players['1'], [null, null, null, 90])
+  assert.deepEqual(b.sources.keeptradecut.coverage, [null, null, null, 2])
+  assert.deepEqual(b.sources.dynastyprocess.asOf, [null, null, null, '2026-09-18'])
+  assert.deepEqual(b.sources.fantasycalc.coverage, [2, 1, 2, 2])
+})
+
+test('draft-pick rows in the rolling file never enter the archive', () => {
+  const { archive } = backfillFantasyCalc({ dates: [], sources: {} }, ROLLING)
+  for (const key of SOURCE_KEYS) assert.equal(archive.sources[key].players['FP_2027_1'], undefined)
+})
+
+test('an archived day is never overwritten — a disagreement keeps the archive and is counted', () => {
+  const a = mergeConsensusColumn({
+    archive: { dates: [], sources: {} }, date: '2026-09-22',
+    readings: { ...ALL_THREE, fantasycalc: reading({ '1': 101, '2': 200 }) },
+  })
+  const { archive: b, conflicts } = backfillFantasyCalc(a, ROLLING)
+  assert.equal(b.sources.fantasycalc.players['1'].at(-1), 101)
+  assert.equal(conflicts, 1)
+})
+
+test('a day whose FantasyCalc read FAILED is healed from the rolling file', () => {
+  const a = mergeConsensusColumn({
+    archive: { dates: [], sources: {} }, date: '2026-09-22',
+    readings: { ...ALL_THREE, fantasycalc: null },
+  })
+  const { archive: b, healed } = backfillFantasyCalc(a, ROLLING)
+  assert.deepEqual(healed, ['2026-09-22'])
+  assert.equal(b.sources.fantasycalc.players['1'].at(-1), 100)
+  assert.equal(b.sources.fantasycalc.coverage.at(-1), 2)
+  assert.equal(b.sources.keeptradecut.players['1'].at(-1), 110, 'the other sources are untouched')
+})
+
+test('it is idempotent — the nightly re-run adds nothing, and the next day still appends', () => {
+  const a = mergeConsensusColumn({ archive: { dates: [], sources: {} }, date: '2026-09-22', readings: ALL_THREE })
+  const once = backfillFantasyCalc(a, ROLLING).archive
+  const twice = backfillFantasyCalc(once, ROLLING)
+  assert.deepEqual(twice.added, [])
+  assert.deepEqual(twice.archive, once)
+  const next = mergeConsensusColumn({ archive: once, date: '2026-09-23', readings: ALL_THREE })
+  assert.deepEqual(next.dates.slice(-2), ['2026-09-22', '2026-09-23'])
+  assert.deepEqual(next.sources.fantasycalc.players['1'], [95, 96, 98, 100, 100])
+})
+
+test('an empty or missing rolling file changes nothing', () => {
+  const a = mergeConsensusColumn({ archive: { dates: [], sources: {} }, date: '2026-09-22', readings: ALL_THREE })
+  assert.equal(backfillFantasyCalc(a, null).archive, a)
+  assert.equal(backfillFantasyCalc(a, { dates: [], players: {} }).archive, a)
 })
