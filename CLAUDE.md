@@ -3,6 +3,8 @@
 > This file is the single source of truth for the DynastyEdge app.
 > Read it entirely at the start of every session before writing any code.
 > Every feature, data source, design decision, and rule is documented here.
+> The dated evidence behind them — measurements, superseded rulings, incident
+> narratives — lives in `docs/history/`, one file per section (CLEANUP-2).
 
 -----
 
@@ -10,32 +12,23 @@
 
 **DynastyEdge** is a personal dynasty fantasy football web app built for one user
 (chnates / Nix Cage) playing in a 10-team Superflex Half PPR dynasty league on Sleeper.
-
-It connects to two free public APIs — Sleeper and FantasyCalc — to deliver
-competitive intelligence that isn’t available in the Sleeper app itself:
-dynasty trade values layered onto live roster data, trade partner recommendations,
-lineup optimization with matchup context, and a full league-wide competitive landscape.
+It layers two free public APIs — Sleeper and FantasyCalc — into intelligence the
+Sleeper app lacks: dynasty values on live rosters, trade partners, lineup
+optimization, and the league-wide competitive picture.
 
 **Target device:** iPhone Safari (390px width — iPhone 15 Pro)
-**Hosting:** GitHub Pages (static site, no backend, no server)
+**Hosting:** GitHub Pages (static site — the APP has no backend)
 **Live URL:** <https://chnates.github.io/dynastyedge/>
 
-> **AMENDMENT (2026-09-19) — "no backend" now means "the APP has no backend".**
-> The repo also contains **`mcp/`**, a Model Context Protocol server that lets
-> the owner ask the same questions from the Claude apps. It is a real server
-> process, so the old blanket phrasing above is no longer literally true and is
-> corrected here rather than quietly contradicted.
->
-> What is unchanged, and what the rule was always protecting:
-> **the web app at the URL above is still a pure static site.** It has no
-> backend, calls no server of ours, and the MCP server is not in its bundle
-> (verified byte-identical, 995,441 bytes, when the SDK was added). Nothing in
-> `src/` imports anything from `mcp/`; the dependency runs one way only.
->
-> The constraint chain that produced the rule — one user, $0, zero ops,
-> therefore static hosting, therefore free unauthenticated APIs and GitHub
-> Actions as the "server" — still governs every decision inside `src/`. A
-> feature may **not** grow a backend. See **The MCP Server** below.
+> **"No backend" means the APP has no backend** (amended 2026-09-19). The repo
+> also holds **`mcp/`**, a Model Context Protocol server (a real server process)
+> for asking the same questions from the Claude apps. The web app is still a
+> pure static site: it calls no server of ours, the MCP server is not in its
+> bundle, and **nothing in `src/` imports from `mcp/`** — the dependency runs one
+> way. The constraint chain (one user, $0, zero ops → static hosting → free
+> unauthenticated APIs + GitHub Actions as the "server") still governs every
+> decision inside `src/`: **a feature may not grow a backend.** See **The MCP
+> Server**. (History: `docs/history/overview.md`.)
 
 -----
 
@@ -45,11 +38,11 @@ lineup optimization with matchup context, and a full league-wide competitive lan
 |----------|----------------|-----------------------------------|
 |Framework |React (via Vite)|Functional components + hooks only |
 |Styling   |Tailwind CSS    |Dark mode default, mobile-first    |
-|Navigation|React Router v7 |Side drawer menu, 6 sections       |
+|Navigation|React Router v7 (HashRouter)|Bottom tab bar + per-section contents rails (see Navigation)|
 |Build tool|Vite            |Outputs to `dist/` for GitHub Pages|
 |Deployment|GitHub Pages    |Auto-deploys via GitHub Actions    |
 |CI/CD     |GitHub Actions  |Every push to `main`: lint + test, then deploy|
-|MCP server|`@modelcontextprotocol/sdk` (Node)|`mcp/`, stdio — **not** part of the web bundle|
+|MCP server|`@modelcontextprotocol/sdk` (Node)|`mcp/`, stdio + HTTP — **not** part of the web bundle|
 
 ### Non-negotiable rules
 
@@ -84,73 +77,59 @@ lineup optimization with matchup context, and a full league-wide competitive lan
 |My roster ID         |**6** — original-owner reference only (see below)|
 |My owner ID          |965787707299430400                             |
 
-**The FAAB budget changed 10× for 2026** ($100 → $1000, from
-`league.settings.waiver_budget`). Always read it from league settings — never
-assume 100. Historical bids are on the old scale, so any cross-season bid
-comparison must normalize to **percent of budget**
-(see `docs/analysis/faab-bid-corpus-2026-08.md`).
+**FAAB — read the budget from `league.settings.waiver_budget`, never assume
+100.** It went $100 → $1000 for 2026, so any cross-season bid comparison
+normalizes to **percent of budget** (`docs/analysis/faab-bid-corpus-2026-08.md`).
 
-**IT ALSO RESETS TWICE A LEAGUE YEAR — offseason, then again at the start of
-the regular season, and anything unspent in the offseason is LOST** (owner,
-2026-09-20). So one Sleeper season carries **two** budgets, and two things
-follow that are easy to get backwards:
+**It also RESETS TWICE a league year** (offseason, then the regular season;
+offseason money unspent is lost — owner, 2026-09-20). Two consequences that are
+easy to get backwards:
 
-- **`roster.settings.waiver_budget_used` tracks only the CURRENT period.** That
-  is why `leagueState.js`'s `faabRemaining` / `faabSpent` are correct as
-  written, and must never be "reconciled" against a transaction-log total.
-  Live 2026-09-20: docj11 had spent **$703** in the offseason and his
-  `waiver_budget_used` read **$0** — both numbers true, answering different
-  questions.
-- **A season's transaction log routinely exceeds one budget**, because it spans
-  both periods. Measured across 2023–26: **six manager-seasons exceed one
-  budget and none has ever exceeded two** — which is the signature of exactly
-  two resets. chnates 2025 spent exactly $100 in the offseason and a fresh $30
-  in-season. Anything that caps a season at one budget is discarding real
-  spend.
+- **`roster.settings.waiver_budget_used` tracks only the CURRENT period**, so
+  `leagueState.js`'s `faabRemaining` / `faabSpent` are correct as written and
+  must **never** be "reconciled" against a transaction-log total.
+- **A season's transaction log routinely exceeds one budget** (it spans both
+  periods; none has ever exceeded two). Anything that caps a season at one
+  budget discards real spend.
 
-A *single bid* needs no period split: both periods carry the same
-`waiver_budget` and Sleeper exposes no separate offseason figure, so
-`bid ÷ waiver_budget` is exact either side of the reset. A *total* is therefore
-a **count of budgets committed**, never a percent of an allocation.
+A *single bid* needs no period split (`bid ÷ waiver_budget` is exact either
+side of the reset). A *total* is a **count of budgets committed**, never a
+percent of an allocation.
 
 **Identity is runtime state, not a constant.** The signed-in roster comes from
-the `useIdentity` store (set on the login screen — see Feature 18), so
-`MY_ROSTER_ID` is no longer the source of truth. Every "is this me?" check
-reads `myRosterId` from `LeagueContext` / `useIdentity`; the constants above
-remain only as this league's original-owner reference.
+`useIdentity` (Feature 18); every "is this me?" check reads `myRosterId` from
+`LeagueContext` / `useIdentity`. `MY_ROSTER_ID` is only the original-owner
+reference.
 
 ### Roster slots
 
 QB · RB · RB · WR · WR · TE · FLEX × 3 (RB/WR/TE) · Superflex (QB/WR/RB/TE) · DEF
 **13 bench** · 5 taxi · 2 IR — **24 active slots** in total.
 
-**Read the cap from `leagueInfo.roster_positions`, never from prose.** This
-line said 12 bench until 2026-09-06, when `getRosterLimits` was written against
-the live payload and found 13. Taxi and IR sit *outside* the 24.
+**Read the cap from `leagueInfo.roster_positions`, never from prose** (this
+line was wrong once). Taxi and IR sit *outside* the 24.
 
 **Taxi rules (Sleeper settings):** only rookies can be *added*, but taxi
 duration is **2 years** — a player may stay through their rookie and 2nd-year
 seasons. Players entering their 3rd NFL season (`years_exp >= 2`) must be
-activated before the regular season starts (taxi deadline: start of regular
-season). Taxi action items flag `years_exp >= 2`, never 2nd-year players.
+activated before the regular season starts. Taxi action items flag
+`years_exp >= 2`, never 2nd-year players.
 
 **No kicker in this league.**
 
-**Exactly one defense is ever rostered.** There is one DEF slot, only one
-defense can start in any week, and a defense carries no dynasty value
-(FantasyCalc ranks zero of them) — so a second one is a wasted bench spot.
-Owner doctrine, 2026-09-04. The app must therefore **never suggest adding a
-defense as a pickup**: defenses appear only against the DEF slot (the
-Optimizer's waiver drawer) or the DEF filter (League › Free Agents), never in
-a general free-agent pool, never in `recommendFreeAgents`, and never with
-dynasty-asset framing (no opportunity grade, no value card, no trade CTA).
-The one question worth answering there is "is there a reason to replace the
-one I have?" — and the measured answer is almost always no (see Feature 4's
-free-agent layer).
+**Exactly one defense is ever rostered** (owner doctrine, 2026-09-04): one DEF
+slot, one starts, and a defense carries no dynasty value (FantasyCalc ranks
+zero), so a second is a wasted bench spot. The app must **never suggest adding
+a defense as a pickup**: defenses appear only against the DEF slot (the
+Optimizer's waiver drawer) or the DEF filter (League › Free Agents) — never in
+a general free-agent pool, never in `recommendFreeAgents`, never with
+dynasty-asset framing (no opportunity grade, no value card, no trade CTA). The
+one question there is "is there a reason to replace the one I have?" — almost
+always no (Feature 4's free-agent layer).
 
-3 FLEX spots means starting 5–6 RBs/WRs is common. RB and WR depth are
-disproportionately valuable. Superflex makes elite QBs the single most
-valuable dynasty asset despite 4-pt passing TDs.
+3 FLEX spots means starting 5–6 RBs/WRs is common, so RB/WR depth is
+disproportionately valuable. Superflex makes elite QBs the most valuable
+dynasty asset despite 4-pt passing TDs. (History: `docs/history/league-context.md`.)
 
 -----
 
