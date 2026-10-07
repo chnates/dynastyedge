@@ -725,8 +725,10 @@ commit shows `target: production`. Fallback: a `gitSource` deployment.
   OAuth gate is the only lock** — any change to it is a change to the only lock.
 
 Run locally with `npm run mcp`; the **`--import ./mcp/register.mjs` hook is
-mandatory** (extensionless imports). The hook is a deliberate copy of the test
-suite's — a runnable server must not depend on `.claude/skills/`.
+mandatory** (extensionless imports). It points at **THE one hook,
+`scripts/loader.mjs`** (registered by `scripts/register.mjs`), which the test
+suite and the diagnostics skill's `reg.mjs` use too — one implementation since
+2026-10-07, kept out of `.claude/` so a runnable server never depends on it.
 
 ### The three non-negotiables for every tool
 
@@ -2960,6 +2962,7 @@ dynastyedge/
 │       ├── values-history.yml  ← daily value snapshot + trade archive + monthly archive + consensus archive → values-history (only main publishes); ends with the source-health alarm (its snapshot steps are continue-on-error)
 │       └── rookie-intel.yml   ← daily rookie depth-chart + draft-capital feed → rookie-intel branch; `mode` also runs the CFBD analyses (publish nothing)
 ├── scripts/
+│   ├── loader.mjs / register.mjs ← THE Node resolver hook for src/utils' extensionless imports — used by npm test, npm run mcp and the skill's reg.mjs shim
 │   ├── fetch-news.mjs          ← multi-source news fetcher (runs in Actions)
 │   ├── newsCoverage.mjs        ← THE feed depth metric (`coverage.depthHours`, p90 age of the player window), pure + tested — `spanHours` is set by stragglers
 │   ├── newsRetention.mjs       ← THE feed retention policy, pure + tested: diversity-aware eviction so the cap never binds before the 7-day window
@@ -3012,8 +3015,7 @@ dynastyedge/
 │   ├── teams.js                ← resolveTeam, shared by three tools. Reads display_name — /users returns NO username
 │   ├── limit.js                ← concurrency gate + backoff, honours Retry-After (capped 4s). NEVER in fetchJSON
 │   ├── config.js               ← league / identity / TTLs, env-first: leagueId and rosterId are parameters, not constants
-│   ├── register.mjs            ← registers loader.mjs (deliberate copy of the test suite's — a runnable server must not depend on .claude/skills/)
-│   ├── loader.mjs              ← the extensionless-import resolver hook
+│   ├── register.mjs            ← registers THE resolver hook (scripts/loader.mjs) for `npm run mcp`
 │   └── tools/                  ← all THIRTEEN are orchestration only, in the shape of TradeAnalyzer.jsx
 │       ├── getRoster.js            ← #1 "what's on my team?"
 │       ├── findSellHigh.js         ← #2 "who's my best sell-high?" — names a CONCRETE partner and return
@@ -3292,8 +3294,8 @@ debugging anything.**
 `node:test` with `node:assert/strict`, **zero new dependencies**. One committed
 fixture, `tests/fixtures/draft-2025.json` (this league's real 2025 draft),
 truncated to synthesize every mid-draft state. The script registers the resolver
-hook at `.claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs`
-(extensionless imports). Scope: **the pure analytical utils plus the
+hook **`scripts/register.mjs` → `scripts/loader.mjs`** (extensionless imports —
+the one copy; the skill's `reg.mjs` is a shim onto it). Scope: **the pure analytical utils plus the
 module-level fetch loaders** (mocked `globalThis.fetch`); components and hook
 rendering stay out. **Every assertion cites the documented behaviour it pins**,
 so a failure is a regression or doc drift, never a mystery. The suite proves

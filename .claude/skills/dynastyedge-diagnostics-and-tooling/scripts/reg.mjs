@@ -1,12 +1,10 @@
-// reg.mjs — registers loader.mjs as a module-resolution hook.
+// reg.mjs — registers THE repo resolver hook (scripts/loader.mjs at the repo
+// root). Kept so every documented command keeps working:
 //
-// USAGE:
-//   node --import /home/user/dynastyedge/.claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs your-script.mjs
+//   node --import ./.claude/skills/dynastyedge-diagnostics-and-tooling/scripts/reg.mjs your-script.mjs
 //
-// After this, `import('/home/user/dynastyedge/src/utils/playoffOdds.js')`
-// (and every other src/utils module, despite their extensionless internal
-// imports) works under plain Node. Requires Node >= 18.19 (module.register).
-// The './loader.mjs' specifier resolves relative to THIS file's location, so
-// the pair can be invoked from any working directory.
+// The hook used to be copied here; since 2026-10-07 (CODE-REVIEW-1 #13) there
+// is one implementation. Prefer `node --import ./scripts/register.mjs` in new
+// docs.
 import { register } from 'node:module'
-register('./loader.mjs', import.meta.url)
+register('../../../../scripts/loader.mjs', import.meta.url)

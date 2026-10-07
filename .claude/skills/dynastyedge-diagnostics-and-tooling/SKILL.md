@@ -76,7 +76,12 @@ owner's physical phone (see `dynastyedge-change-control`).
 
 ---
 
-## Tool 0 — The Node loader hook (`reg.mjs` + `loader.mjs`)
+## Tool 0 — The Node loader hook (`reg.mjs` → the repo's `scripts/loader.mjs`)
+
+**Since 2026-10-07 there is ONE hook, at the repo root: `scripts/loader.mjs`,
+registered by `scripts/register.mjs`** (`npm test` and `npm run mcp` use it).
+`$SKILL/scripts/reg.mjs` is now a one-line shim onto it, so every command below
+still works; `node --import ./scripts/register.mjs …` is the same thing.
 
 **What it solves:** `src/utils/*.js` are pure ESM analysis modules but use
 Vite-style extensionless relative imports (`import x from './lineupHistory'`).
