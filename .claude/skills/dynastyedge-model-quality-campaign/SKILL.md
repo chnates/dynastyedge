@@ -173,6 +173,20 @@ completed scores rebuilt as-of week k) and simulate weeks k+1…W with
 realized playoff field (top `playoff_teams` by wins-then-points-for over the
 full season — the same tiebreaker the sim uses).
 
+> **FIRST REAL RUN — 2026-10-08 (§0 #11).** Sleeper IS reachable from CCR
+> sandboxes now (curl and Node fetch both worked), so the "proxy 403" note
+> below is stale. The real-data replay is the committed
+> `scripts/dev/odds-calibration-backtest.mjs` (drives `buildPlayoffOutlook`
+> itself, truth = the real winners bracket, team-season bootstrap; `--frozen`
+> reproduces). Measured, 2023–25, cutoffs after Week 2…12, flat prior: Brier
+> **0.148** vs climatology 0.240 (Gate 1 passes), record-only sim 0.149 (no
+> gain from score blending), 0–20% bucket avg 6.9% → made 22% (overconfident
+> tail, 3 team-seasons), after-Week-1 Brier 0.256 > 0.240 (the synthetic run's
+> predicted bump reproduced). Memo:
+> `docs/analysis/playoff-odds-calibration-2026-10.md`. Phase 4 item 3 stays
+> BLOCKED in spirit: a flat-prior replay cannot tune shrinkage toward the real
+> prior. Phase 4 item 2 is the lead; test it on 2026 only.
+
 ### Step 1 — RUNBOOK (network): fetch the corpus
 
 From a machine with open egress (NOT a CCR sandbox — Sleeper is proxy-403
@@ -522,9 +536,9 @@ or `managerAnalysis.js` routes through **`dynastyedge-change-control`**:
 - **Measured in-sandbox 2026-07-06:** `phase0-baseline.mjs` (all checks PASS,
   output quoted verbatim above), `phase1-replay.mjs --synthetic` (run twice,
   bit-identical output), and the Phase 2 flat-pool probes. `fetch-season.mjs`
-  is `node --check`-clean but **never executed** (network blocked). No real
-  league data has been fetched or scored by this campaign yet — Phases 1–3
-  real-data runs are open work.
+  is `node --check`-clean but **never executed** (network blocked then).
+  **Phase 1 ran on real data 2026-10-08** (box at Phase 1; fetch-season.mjs
+  also ran and worked). Phases 2–3 real-data runs are open work.
 - **Update this file when:** any constant in the verified-thresholds table
   changes (same commit); a real-data Phase 1/2/3 artifact is produced for the
   first time (replace "open work" with the measured numbers + artifact path);
