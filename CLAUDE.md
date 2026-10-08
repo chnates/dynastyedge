@@ -2180,6 +2180,19 @@ the Playoffs page colours, Layer 3, The Edge and the MCP note all read them
 through `getDeadlineVerdict`, and `tests/deadlineThresholds.test.mjs` fails if a
 copy reappears. A recalibration is one edit.
 
+**Measured accuracy (2026-10-08, §0 #11 —
+`docs/analysis/playoff-odds-calibration-2026-10.md`):** replayed 2023–25 through
+`buildPlayoffOutlook` with a **flat prior** (past roster values don't exist),
+after Week 2 … Week 12: Brier **0.148** vs 0.240 for always-60%, clear of
+chance; **Buyer teams made it 92%**; but the **low end is too gloomy** — under
+20% made it 22%, Seller-labelled 24% (three comebacks in 30 team-seasons, a
+lean not a proof), and after Week 1 the odds are worse than guessing. A
+record-plus-schedule-only sim scored the same (0.149). **No constant was
+changed and none may be tuned on these three seasons**; the spread fix is
+tested against 2026 (§0 #14). Re-run: `scripts/dev/odds-calibration-backtest.mjs
+--frozen`. The lineup `CONFIDENCE_CURVE` held on 2026 Weeks 1–4 within 1 point
+in every judged bin (same script).
+
 -----
 
 ### Feature 15 — News (top-level drawer section)
@@ -3101,6 +3114,7 @@ dynastyedge/
 │       ├── optimizer-signal-backtest.mjs ← analysis-only: is a better weekly projection obtainable (no) and what DEF streaming is worth (docs/analysis/optimizer-data-sources-2026-09.md)
 │       ├── asset-aging-backtest.mjs ← analysis-only: THE keep-score calibration — longitudinal aging + pick realization (docs/analysis/asset-aging-and-pick-value-2026-09.md)
 │       ├── buylow-timing-backtest.mjs ← analysis-only: do trend < −50 dips bounce back? Imports the ±50 from marketTrend.js; reads values-consensus' FantasyCalc column (the one permanent home) cross-checked against values-history; `--frozen` reproduces docs/analysis/buylow-timing-2026-10.md
+│       ├── odds-calibration-backtest.mjs ← analysis-only: §0 #11 — 2023–25 replayed through buildPlayoffOutlook (Brier vs always-60% and record-only, reliability, Buyer/Seller hit rates) + the lineup CONFIDENCE_CURVE on 2026; `--frozen` reproduces docs/analysis/playoff-odds-calibration-2026-10.md
 │       ├── trade-fair-band-sweep.mjs ← analysis-only: THE OPEN-10 sweep — assembly window × APPEAL_BONUS jointly (one measurement), all ten seats, via the shipped suggestFairPackage's hooks
 │       ├── contrast-audit.mjs ← THE accessibility-floor instrument: tokens from src/index.css vs each theme's worst-case ground, plus band/ink reversals; exits non-zero — re-run after ANY ground-colour change
 │       └── news-coverage.mjs ← analysis-only: THE news acceptance metric — how many of my rostered players resolve in the feed (docs/analysis/news-sources-2026-09.md)
