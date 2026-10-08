@@ -229,10 +229,11 @@ the fix tested out of sample, not more replays of these three seasons.
 **App: nothing** (pre-registered). Proposed follow-ups, each needing the
 owner's go:
 
-1. **Say it on the Playoffs page.** One line in "How this works": *tested on
-   2023–25, teams the model put above 70% made it 92% of the time; teams under
-   20% still made it about 1 in 5 times.* This is the campaign's Phase 4 item 1
-   and changes no number.
+1. **Say it on the Playoffs page — DONE 2026-10-08** (owner's go). "How this
+   works" now ends with a "How accurate is it?" paragraph and a small-sample
+   caveat, read from `ODDS_TRACK_RECORD` in `src/utils/playoffOdds.js`;
+   `tests/oddsTrackRecord.test.mjs` re-derives the constant from this memo's
+   frozen inputs. No model number changed (the campaign's Phase 4 item 1).
 2. **Grade the real 2026 odds with the starting guess included (§0 #14).** The
    replay's gap is the roster-value prior. 2026 can be reconstructed rather
    than recorded: Sleeper's weekly matchups carry each roster's players, and

@@ -28,14 +28,15 @@ import fs from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
 import { SLEEPER_BASE, LEAGUE_ID } from '../../src/constants.js'
-import { buildPlayoffOutlook, buildScoringModel, simulatePlayoffs, BUYER_PCT, SELLER_PCT } from '../../src/utils/playoffOdds.js'
+import { BUYER_PCT, SELLER_PCT, ODDS_TRACK_RECORD } from '../../src/utils/playoffOdds.js'
+import { PRIMARY_WINDOW, replaySeasons, standingsAgree, trackRecord } from './oddsReplay.mjs'
 import { CONFIDENCE_CURVE } from '../../src/utils/lineupConfidence.js'
 
 const CACHE = '.cache/odds-calibration'
 const FROZEN_FILE = 'docs/analysis/data/odds-calibration-2026-10.json.gz'
 const FROZEN = process.argv.includes('--frozen')
 const FREEZE = process.argv.includes('--freeze')
-const PRIMARY = [2, 12]           // cutoffs k = 2..12 — the trade-deadline window
+const PRIMARY = PRIMARY_WINDOW    // cutoffs k = 2..12 — the trade-deadline window
 const BOOT = 10000
 const FLEX = new Set(['RB', 'WR', 'TE'])
 const STARTABLE = 5               // same as optimizer-signal-backtest.mjs §3
@@ -151,72 +152,12 @@ function blockBootstrapDiff(preds, keyA, keyB, seed = 0x0dd5) {
 
 // ── A. playoff odds ─────────────────────────────────────────────────────────
 console.log('A. PLAYOFF ODDS — walk-forward replay through buildPlayoffOutlook')
-const preds = []
 for (const s of [...data.seasons].sort((a, b) => a.season - b.season)) {
-  // Truth: the real bracket's round-1 field (6 teams: 4 play, 2 on byes).
-  const field = new Set()
-  s.bracket.filter(g => g.r === 1).forEach(g => { field.add(g.t1); field.add(g.t2) })
-  s.bracket.filter(g => g.r === 2).forEach(g => {
-    if (Number.isInteger(g.t1)) field.add(g.t1)
-    if (Number.isInteger(g.t2)) field.add(g.t2)
-  })
-
-  // Cross-check: final standings rebuilt from matchups (wins, then PF).
-  const done = s.perWeek.filter(w => w.entries.length && w.entries.every(e => (e.points ?? 0) > 0))
-  const tally = cut => {
-    const rec = Object.fromEntries(s.rosterIds.map(id => [id, { wins: 0, losses: 0, ties: 0, pf: 0 }]))
-    for (const { entries } of done.slice(0, cut)) {
-      const g = {}
-      entries.forEach(e => { if (e.matchup_id != null) (g[e.matchup_id] ??= []).push(e) })
-      for (const [a, b] of Object.values(g).filter(x => x.length === 2)) {
-        rec[a.roster_id].pf += a.points; rec[b.roster_id].pf += b.points
-        if (a.points > b.points) { rec[a.roster_id].wins++; rec[b.roster_id].losses++ }
-        else if (b.points > a.points) { rec[b.roster_id].wins++; rec[a.roster_id].losses++ }
-        else { rec[a.roster_id].ties++; rec[b.roster_id].ties++ }
-      }
-    }
-    return rec
-  }
-  const fin = tally(done.length)
-  const order = [...s.rosterIds].sort((x, y) => (fin[y].wins - fin[x].wins) || (fin[y].pf - fin[x].pf))
-  const rebuilt = new Set(order.slice(0, s.playoffTeams))
-  const agree = [...field].every(id => rebuilt.has(id)) && field.size === s.playoffTeams
-  console.log(`  ${s.season}: ${done.length} completed weeks · bracket field [${[...field].sort((a, b) => a - b).join(', ')}]` +
-    ` · rebuilt standings ${agree ? 'AGREE' : `DISAGREE [${[...rebuilt].sort((a, b) => a - b).join(', ')}]`}`)
-
-  for (let k = 0; k < done.length; k++) {
-    const rec = tally(k)
-    // Flat prior: no player values for past rosters (see the memo's §2).
-    const allRosters = s.rosterIds.map(id => ({
-      rosterId: id, players: [],
-      record: { wins: rec[id].wins, losses: rec[id].losses, ties: rec[id].ties },
-      pointsFor: rec[id].pf,
-    }))
-    // Weeks after the cutoff are blanked to "not yet played" — what the app sees.
-    const perWeek = s.perWeek.map((w, i) => (i < k ? w : {
-      week: w.week, entries: w.entries.map(e => ({ ...e, points: 0 })),
-    }))
-    const out = buildPlayoffOutlook({ allRosters, perWeek, playoffTeams: s.playoffTeams })
-    if (out.completedWeeks !== k) throw new Error(`cutoff ${k} read as ${out.completedWeeks} weeks`)
-    // Record-only baseline: the same simulation with every team scoring alike.
-    const flatModel = buildScoringModel(allRosters, {}, allRosters.map(() => 0))
-    const remaining = perWeek.slice(k).map(w => {
-      const g = {}
-      w.entries.forEach(e => { if (e.matchup_id != null) (g[e.matchup_id] ??= []).push(e) })
-      return { week: w.week, matchups: Object.values(g).filter(x => x.length === 2).map(([a, b]) => [a.roster_id, b.roster_id]) }
-    })
-    const flat = simulatePlayoffs({ allRosters, model: flatModel, remainingSchedule: remaining, playoffTeams: s.playoffTeams })
-    const flatBy = Object.fromEntries(flat.map(r => [r.rosterId, r.playoffPct]))
-    for (const r of out.results) {
-      preds.push({
-        season: s.season, k, rosterId: r.rosterId,
-        pred: r.playoffPct, recordOnly: flatBy[r.rosterId],
-        clim: s.playoffTeams / s.rosterIds.length,
-        made: field.has(r.rosterId) ? 1 : 0,
-      })
-    }
-  }
+  const c = standingsAgree(s)
+  console.log(`  ${s.season}: ${c.completedWeeks} completed weeks · bracket field [${c.field.join(', ')}]` +
+    ` · rebuilt standings ${c.agree ? 'AGREE' : `DISAGREE [${c.rebuilt.join(', ')}]`}`)
 }
+const preds = replaySeasons(data.seasons)
 
 const prim = preds.filter(p => p.k >= PRIMARY[0] && p.k <= PRIMARY[1])
 console.log(`\n  primary window (after Week ${PRIMARY[0]} … after Week ${PRIMARY[1]}): ${prim.length} predictions, ` +
@@ -264,6 +205,13 @@ for (const season of [...new Set(prim.map(p => p.season))]) {
   const b = prim.filter(p => p.season === season)
   console.log(`     ${season}: ${brier(b).toFixed(3)} / ${brier(b.map(p => ({ ...p, pred: p.clim }))).toFixed(3)} / ${brier(b.map(p => ({ ...p, pred: p.recordOnly }))).toFixed(3)}`)
 }
+
+// The figures the Playoffs page publishes. ODDS_TRACK_RECORD in
+// src/utils/playoffOdds.js must equal this (tests/oddsTrackRecord.test.mjs).
+const tr = trackRecord(preds)
+console.log('\n  ODDS_TRACK_RECORD (paste into src/utils/playoffOdds.js — never hand-edit):')
+console.log('  ' + JSON.stringify(tr))
+console.log(`  shipped constant ${JSON.stringify(tr) === JSON.stringify(ODDS_TRACK_RECORD) ? 'MATCHES' : 'DIFFERS — regenerate it'}`)
 
 // ── B. lineup confidence ────────────────────────────────────────────────────
 console.log(`\n\nB. LINEUP CONFIDENCE — ${data.lineupSeason} Weeks 1–${data.lineupWeeks} vs the shipped curve (2022–25)`)

@@ -2192,6 +2192,12 @@ changed and none may be tuned on these three seasons**; the spread fix is
 tested against 2026 (§0 #14). Re-run: `scripts/dev/odds-calibration-backtest.mjs
 --frozen`. The lineup `CONFIDENCE_CURVE` held on 2026 Weeks 1–4 within 1 point
 in every judged bin (same script).
+**The Playoffs page says this out loud** — "How this works" ends with a "How
+accurate is it?" paragraph read **only from `ODDS_TRACK_RECORD`**
+(`utils/playoffOdds.js`, beside the model). **Regenerate it from the script,
+never hand-edit**: `tests/oddsTrackRecord.test.mjs` re-derives it from the
+frozen inputs through `scripts/dev/oddsReplay.mjs` (the one replay, shared with
+the analysis script) and fails on drift or on a figure typed into the page.
 
 -----
 
@@ -3114,6 +3120,7 @@ dynastyedge/
 │       ├── optimizer-signal-backtest.mjs ← analysis-only: is a better weekly projection obtainable (no) and what DEF streaming is worth (docs/analysis/optimizer-data-sources-2026-09.md)
 │       ├── asset-aging-backtest.mjs ← analysis-only: THE keep-score calibration — longitudinal aging + pick realization (docs/analysis/asset-aging-and-pick-value-2026-09.md)
 │       ├── buylow-timing-backtest.mjs ← analysis-only: do trend < −50 dips bounce back? Imports the ±50 from marketTrend.js; reads values-consensus' FantasyCalc column (the one permanent home) cross-checked against values-history; `--frozen` reproduces docs/analysis/buylow-timing-2026-10.md
+│       ├── oddsReplay.mjs ← THE playoff-odds replay (pure): past seasons through buildPlayoffOutlook, truth = the real bracket; shared by the backtest and tests/oddsTrackRecord.test.mjs
 │       ├── odds-calibration-backtest.mjs ← analysis-only: §0 #11 — 2023–25 replayed through buildPlayoffOutlook (Brier vs always-60% and record-only, reliability, Buyer/Seller hit rates) + the lineup CONFIDENCE_CURVE on 2026; `--frozen` reproduces docs/analysis/playoff-odds-calibration-2026-10.md
 │       ├── trade-fair-band-sweep.mjs ← analysis-only: THE OPEN-10 sweep — assembly window × APPEAL_BONUS jointly (one measurement), all ten seats, via the shipped suggestFairPackage's hooks
 │       ├── contrast-audit.mjs ← THE accessibility-floor instrument: tokens from src/index.css vs each theme's worst-case ground, plus band/ink reversals; exits non-zero — re-run after ANY ground-colour change
@@ -3318,7 +3325,7 @@ dynastyedge/
 │   │   ├── lineupConfidence.js  ← the MEASURED hit-rate curve behind "61% likely to be the right call" — regenerate, never hand-edit
 │   │   ├── freeAgents.js        ← THE waiver-options list (never gated on FantasyCalc; TEAM_* guard) AND the dynasty FA pool, which can never return a defense
 │   │   ├── lineupHistory.js     ← optimal-lineup POINTS math for efficiency review (delegates to lineupBuild)
-│   │   ├── playoffOdds.js       ← scoring model + Monte Carlo + deadline verdict (THE buyer/seller cut-offs: BUYER_PCT / SELLER_PCT); buildPlayoffOutlook is THE composition (the hook keeps only the memo)
+│   │   ├── playoffOdds.js       ← scoring model + Monte Carlo + deadline verdict (THE buyer/seller cut-offs: BUYER_PCT / SELLER_PCT; ODDS_TRACK_RECORD = the measured accuracy the Playoffs page states); buildPlayoffOutlook is THE composition (the hook keeps only the memo)
 │   │   └── projections.js       ← lineup optimization, matchup quality; THE schedule readers (parseByeTeams, parseLockedTeams) shared with mcp/weekly.js
 │   ├── context/
 │   │   └── LeagueContext.jsx
@@ -3339,6 +3346,7 @@ dynastyedge/
 │   ├── sleeperDraft.test.mjs        ← mocked-fetch: single-draft endpoint merged over the list (slot_to_roster_id), session cache, best-effort sub-fetch degradation
 │   ├── projections.test.mjs         ← lineup engine inputs: defense rankings via player DB + schedule, home/away, Week-1 empty stats, flags; parseByeTeams AND a scan for a second bye reader
 │   ├── deadlineThresholds.test.mjs  ← BUYER_PCT / SELLER_PCT are the shipped 70% / 35%, read at both edges, AND a source scan that fails on a second copy
+│   ├── oddsTrackRecord.test.mjs     ← ODDS_TRACK_RECORD = what the frozen 2023–25 replay measures (regenerate, never hand-edit), AND the Playoffs page types none of its figures
 │   ├── playoffOdds.test.mjs         ← fixed-seed determinism, Σ odds = playoff teams, thresholds; buildPlayoffOutlook's three states (posted-but-unplayed is ACTIVE)
 │   ├── seasonWindow.test.mjs        ← the draft-completion boundary (only `complete` rolls a season; auctions never count); Tracker selection; no NFL state → seed; seedPickYears' September boundary AND a scan for hard-coded seasons
 │   ├── sharedConstants.test.mjs     ← POSITIONS, WIN_WINDOW_TIERS, VALUE_HISTORY_DAYS hold their values AND a scan across src/ mcp/ scripts/ for a retyped copy (freeAgents' VALUED_POSITIONS is deliberately separate)
@@ -3410,9 +3418,9 @@ report that honestly**: it prints failing tests that read like a code regression
 because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
-**Current counts (verified 2026-10-07 by moving `node_modules` aside, after §0 #10's briefing ledger):** with
-dependencies **`# tests 947 / # pass 947`**; without them **`# tests 904 / #
-pass 899 / # fail 5`**. **If the test count isn't 947, run `npm ci` before
+**Current counts (verified 2026-10-08 by moving `node_modules` aside, after §0 #11's odds track record):** with
+dependencies **`# tests 950 / # pass 950`**; without them **`# tests 907 / #
+pass 902 / # fail 5`**. **If the test count isn't 950, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React

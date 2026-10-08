@@ -231,6 +231,29 @@ export function buildStrengthPreview(allRosters, playoffTeams, strengths) {
 export const BUYER_PCT = 0.7
 export const SELLER_PCT = 0.35
 
+// How the odds have actually done in this league — the Playoffs page's
+// "How accurate is it?" paragraph reads this and nothing else.
+//
+// Provenance: docs/analysis/playoff-odds-calibration-2026-10.md (§0 #11).
+// 2023–25 replayed week by week through buildPlayoffOutlook, read after Week 2
+// through after Week 12 (the trade-deadline window), scored against each
+// season's real playoff bracket. Past rosters' dynasty values don't exist, so
+// the replay ran without the roster-strength starting guess. Percentages are
+// whole numbers: predicted = the average odds the model gave, made = how often
+// those teams actually got in.
+//
+// Regenerate — do NOT hand-edit:
+//   node --import ./scripts/register.mjs scripts/dev/odds-calibration-backtest.mjs --frozen
+// and paste its ODDS_TRACK_RECORD line. tests/oddsTrackRecord.test.mjs re-derives
+// it from the frozen data and fails if it drifts.
+export const ODDS_TRACK_RECORD = {
+  seasons: '2023–2025',
+  teamSeasons: 30,
+  buyerPredictedPct: 94, buyerMadePct: 92,   // odds ≥ BUYER_PCT
+  lowPredictedPct: 7, lowMadePct: 22,        // odds under 20%
+  sellerPredictedPct: 12, sellerMadePct: 24, // odds < SELLER_PCT
+}
+
 // Plain-English trade-deadline stance from a team's playoff odds — THE one
 // definition of buyer / seller.
 export function getDeadlineVerdict(playoffPct, tier) {
