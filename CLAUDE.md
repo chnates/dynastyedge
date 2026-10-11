@@ -295,10 +295,12 @@ GitHub Actions** and served as a static file — keeping the app backend-free.
   player an item names, so a roundup carrying one rare player is admitted and
   bills the stars too. A hard ceiling would drop the rare player the rule
   protects. **Do not "fix" the overflow.**
-  **The cap is 1200 (raised from 400 on 2026-09-22, NEWS-4).** Until
-  `depthHours` reaches ~168h, "7 days" is the policy's ceiling, not a measured
-  depth. If the cap pins again below 168h, correct this line to the measured
-  depth rather than raising the cap again on the same argument.
+  **The cap is 1200 (raised from 400 on 2026-09-22, NEWS-4), and the 7-day
+  window is MEASURED, not just policy** (2026-10-11: oldest player item 168h,
+  `depthHours` 148 — about what a full week of steady arrivals gives — at
+  580 / 1200, so time expires items before the cap does). If the cap ever pins
+  again below 168h, correct this line to the measured depth rather than
+  raising the cap again on the same argument.
 - **Watch `depthHours`, never `playerItems`** (a feed pinned at its cap looks
   exactly like a healthy full one) — nor `spanHours` (max − min, set by a few
   stragglers).

@@ -62,7 +62,7 @@ login, a phone or a decision that no sandbox can supply.
 | 9 | **Build the scheduled brief — DONE 2026-10-07.** Live: the MCP server issues 30-day refresh tokens (PR #97), `get_roster` carries the league calendar and room to move, and the owner's routine (Tuesday 7:53 pm ET, push) ran its first brief by hand the same evening. The owner's first read fixed two things in the close-out PR: **one pickup per position** (it had recommended three QBs at $110 each) and **IR capacity** (2 slots, full: IR-eligible players stay on the bench). Prompt of record: `docs/routines/weekly-brief.md` (v2). **One check left: the first unattended run, Tuesday 2026-10-13** — if no brief arrives, reopen | Me + owner | — | — |
 | 10 | **Briefing decision-quality** (frontier Item 1) — **RECORDING SHIPPED 2026-10-07; scoring not built.** `scripts/record-briefing.mjs` runs in `values-history.yml` and appends one day to the permanent `briefing-ledger.json` (app never fetches it): the five checkable claims (buy-low, sell-high, pickup, closing-window, underperformer), each with its numbers and a comparison group, from the app's own `computeEdgeSignals` / `buildBriefing`. An alarm fails the run after 2 days without a readable record. Scoring plan pre-registered in `docs/analysis/briefing-decision-quality-2026-10.md`. **Follow-up: #10b, first scoring pass on or after 2026-12-15** (indicative only; ~75 episodes per item before any verdict) | Me | — | A week not recorded can never be scored |
 | 11 | **OPEN-5: calibration** — **FIRST HALF DONE 2026-10-08.** 2023–25 replayed through `buildPlayoffOutlook` (flat prior — past roster values don't exist): Brier **0.148** vs 0.240 always-60% (clear of chance); Buyer teams made it 92%; **the low end is too gloomy** (under 20% made it 22%, Seller 24% — three comebacks, a lean); after Week 1 worse than guessing; record-plus-schedule alone scores the same. Lineup confidence curve held on 2026 Weeks 1–4 within 1 point. **No app change.** Memo `docs/analysis/playoff-odds-calibration-2026-10.md`; follow-up 1 shipped the same day (Playoffs page "How accurate is it?", read from `ODDS_TRACK_RECORD`, test-pinned); 2 and 3 ride on #14 (the real prior reconstructed; the spread fix tested on 2026 only) | Me | — | — |
-| 12 | **Close NEWS-4**: re-read `depthHours` around 2026-10-10 | Me | 15 min | Live 2026-10-06: 140h of the 168h target, 595 / 1200 player items — the cap no longer binds |
+| 12 | **Close NEWS-4** — **DONE 2026-10-11.** Met: oldest player item 168h, `depthHours` 148, 580 / 1200 (the cap does not bind; time does). Record archived | Me | 15 min | Live 2026-10-06: 140h of the 168h target, 595 / 1200 player items — the cap no longer binds |
 
 ### Season end (Weeks 13–17)
 
@@ -301,86 +301,7 @@ back-test additionally needs ~a year of the monthly values archive
 (`values-archive.json`, started 2026-07). Related open frontier items (briefing
 decision-quality, buy-low timing) are in `dynastyedge-research-frontier`.
 
-### NEWS-4 — the news item cap is binding again, at 78h **CLOSED 2026-09-22 — cap raised 400 → 1200; the 7-day claim is PENDING, not met**
-
-**Re-measured first, as the entry asked.** Live 2026-09-22 22:14Z (run 1230):
-`playerItems 400 / playerCap 400`, `spanHours 56` (was 78 the day before),
-`distinctPlayers 207`, 480 items, **53,957 B on the wire** (211,241 raw —
-~112 B/item gzipped, matching the ~114 recorded 2026-09-12). The log read
-*"dropped 106 redundant player items (over 3/player); 0 cap slots spare"*.
-Still cap-bound, still shrinking, breadth still healthy — so the decision was
-the one the evidence favoured.
-
-**Raised to 1200.** The window held ~7.1 player items/h after diversity
-eviction (400 over 56h); 168h at that rate is ~1200 (the 2026-09-12 memo's
-pre-diversity figure was ~1357). Projected wire size at 1200+80: **~144KB**,
-against ~54KB at 400+80 — a fraction of the 5–8MB player DB the phone
-already pulls once a session. KV entries on the MCP side are gzipped, so it
-costs the same there; tool output is filtered per player, so bounded output
-is unaffected. `newsRetention.mjs` and `PER_PLAYER_MAX` are untouched.
-
-**One consequence the entry did not anticipate, and it is fixed:** Feature
-15's News page rendered *every* item — 480 rows, going to ~1,280. It now pages
-50 at a time with "Show more" (League › Activity's pattern), and each date
-band's count stays the full bucket. Verified at 390px against the live feed:
-50 rows → 150 after two taps, TODAY reading the true 195 throughout, 0 clipped
-elements.
-
-**A second consequence, and it is the finding worth keeping: `spanHours` was
-the wrong number to watch.** The first run at 1200 (run 1234) published
-`spanHours 147` — 54 → 147 in one run with **three** more items. Evicted items
-do not come back, so that is not depth. It was **three week-old The Athletic
-items** from the current pull (it returns 100 per pull, reaching back days),
-which newest-first eviction used to throw away first and could now keep. The
-player window's p90 age went **51h → 52h**. `spanHours` is max − min over every
-item, so a handful of stragglers set it; the pinned cap had been hiding that
-by evicting them. The drawer renders it as "Nd deep", so it would have read
-**"6d deep" on a two-day window** — the 2026-09 collapse's shape (a health
-number reading fine while depth is wrong) from the other direction.
-
-**Fixed with `coverage.depthHours`** — p90 age of the player items, measured
-from the newest one (`scripts/newsCoverage.mjs`, 5 tests). The drawer and
-`news-coverage.mjs` read it; `spanHours` still ships unchanged.
-
-**Before → after on the PUBLISHED feed** (runs 1230 → 1235, read from the
-`news-data` branch):
-
-| | 1230 (before) | 1235 (after) |
-|---|---|---|
-| total | 480 | 484 |
-| playerItems / playerCap | 400 / **400** | 404 / **1200** |
-| spanHours | 56 | 147 (three stragglers) |
-| depthHours | — (p90 51h, computed) | **52** |
-| distinctPlayers | 207 | 216 |
-| wire bytes | 53,957 | ~54,100 |
-| sources | 11 (ESPN RSS 0) | 10, all non-zero |
-| sourceMisses | ESPN RSS 7, rest 0 | all 0 |
-
-**How those runs were made, and why it can't happen again.** Runs 1231–1235
-were `workflow_dispatch`es on the feature branch, and because `news.yml`'s
-publish step had no default-branch guard, **each one force-pushed that
-branch's unreviewed code to the live `news-data` feed.** That was the second
-time (the 2026-09-12 retention fix did the same). Both `news.yml` and
-`values-history.yml` now carry `rookie-intel.yml`'s guard, so a branch dispatch
-is a dry run. **Post-merge check (owed):** dispatch `news.yml` on `main` and
-read the published file; expect `playerCap 1200`, a `depthHours` field, ten
-sources, and no `ESPN RSS` key. Until the PR merges, scheduled runs on `main`
-publish the old code (cap 400, ESPN RSS back in), which is correct: the feed
-is `main`'s.
-
-**What is NOT verified, stated plainly:** that the 7-day window binds. The cap
-fills by accumulation and evicted items don't come back, so depth can only grow
-at the arrival rate: ~7 retained items/h, several days to reach 1200. **Trigger
-to re-measure: 2026-09-29.** Read `depthHours` (not `spanHours`, not
-`playerItems`). If it is near 168h, the claim is met. If the cap has pinned
-again below 168h, correct CLAUDE.md's 7-day line to the measured depth rather
-than raising the cap a third time on the same argument.
-
-**Read 2026-10-06 (a week past the trigger, live feed):** `depthHours` **140**,
-`spanHours` 167, `playerItems` **595 / 1200**, 269 distinct players, all ten
-sources at `sourceMisses: 0`. The cap has **not** pinned again; depth is still
-climbing toward 168h. Close this item with one more read around 2026-10-10
-(§0 #12).
+---
 
 ### NEWS-5 — the news cron is delivered at ~7.4 runs/day, not 48
 
@@ -767,7 +688,7 @@ are as of 2026-07-17.
 | OPEN-3 — the FAAB bid recommender | 2026-10-07 | Shipped as `src/utils/faabBid.js`, one util behind League › Free Agents and `recommend_free_agents` (zod schema extended, verified through a real MCP client). Floor $2 on $1000 (owner's call, dropping the spec's $10); ladder 11/16/23% of the full budget capped at the current period's remainder; no contest prediction, because value barely moves the contest rate. Budget read from settings, never assumed; null for a defense or an unpriced player. Grading bars and protocol pre-registered in the memo's §10 for §0 #13. Detail in the archive |
 | NEWS-7 — ESPN RSS gave Actions nothing | 2026-09-22 | The recorded diagnosis ("catch branch, so it throws — 403 or timeout") was wrong on every count: the log read `0 items` in ~95ms, not `FAILED`. The script was made to print what a zero-item 2xx returned, and the next run read **HTTP 202 · text/html · 0 bytes** — a bot-manager deferral, which `res.ok` accepts. Same URL + UA from outside Actions: 200, 29 items. **Removed** at 8 of 12 consecutive misses; the zero-item diagnostic stays. Detail in the archive |
 | OPS-2 — a branch dispatch could publish production data | 2026-09-22 | Found by the owner's review question. `news.yml` and `values-history.yml` had no default-branch guard on their publish steps (`rookie-intel.yml` did), so NEWS-4/NEWS-7's verification runs, and the 2026-09-12 retention verification before them, force-pushed feature-branch code to the live `news-data` feed. Both now carry `if: github.ref_name == github.event.repository.default_branch`; a branch dispatch is a dry run. **Post-merge check done 2026-09-22:** `news.yml` dispatched on `main` (run 1237) and the PUBLISHED `news.json` read via git off `news-data`: `playerCap` 1200, `depthHours` 53, ten sources, no `ESPN RSS` key, every `sourceMisses` 0. |
-| NEWS-4 — the news cap was binding at 400 | 2026-09-22 | Cap-bound at 56h with breadth healthy (207 players), so raised to **1200** (~7.1 retained/h × 168h; ~144KB wire projected vs 54KB). News page now paged at 50. The raise exposed that **`spanHours` is set by stragglers** (54 → 147h on three items while p90 depth went 51 → 52h), so `coverage.depthHours` was added and the drawer reads it. The 7-day claim is **pending**: re-read `depthHours` 2026-09-29. Detail in §2 |
+| NEWS-4 — the news cap was binding at 400 | 2026-09-22 → 2026-10-11 | Cap-bound at 56h with breadth healthy (207 players), so raised to **1200** (~7.1 retained/h × 168h; ~144KB wire projected vs 54KB). News page now paged at 50. The raise exposed that **`spanHours` is set by stragglers** (54 → 147h on three items while p90 depth went 51 → 52h), so `coverage.depthHours` was added and the drawer reads it. **7-day claim met 2026-10-11:** oldest player item 168h, `depthHours` 148, 580 / 1200 — items now leave by age, not by the cap. Detail in the archive |
 | ROOKIE-1 — the rookie name fallback could borrow a namesake's value | 2026-09-25 | Dropped rather than position-guarded. `playerMap` is keyed by FantasyCalc's own `sleeperId`, so a name hit could only land on an entry attached to a *different* Sleeper player; live, 0 of 444 rookies joined by name and all 395 FantasyCalc ids resolve to the same name in the player DB, while 7 rookies share name *and* position with someone (a guard would have missed them). All four Draft consumers' input `deepStrictEqual` before/after. Detail in the archive |
 | MCP-CARRY: `Retry-After` unreachable from the limiter | 2026-09-25 | `fetchJSON` attaches `status` + `retryAfter` to the error it already threw (message unchanged; 801 pre-existing test results identical); `limit.js` honours both forms, capped at 4s, schedule fallback otherwise, 404 never retried |
 | MCP-CARRY: `values-history.json` unread | 2026-09-25 | `get_value_history`, tool 13 — 1,372ms cold / 26ms cached, 8,100B, 9 upstream cold / 0 cached |
