@@ -1456,3 +1456,17 @@ FantasyCalc values, so the per-player lines are still true there — only
 -----
 
 
+
+## 2026-10-12 — moved out of CLAUDE.md by CLEANUP-3
+
+Dated evidence and build notes that sat in the tool contracts; the rules they
+backed stay in CLAUDE.md (the domain rules now point to their Features).
+
+- **Tool 1 `roomToMove`, live 2026-10-07:** IR 2 of 2 with Legette and Dart
+  waiting, 24 of 24 active.
+- **Tool 10 `research_rookies`:** Prerequisite E moved the composition out of
+  hooks into `utils/rookieResearch.js` + `utils/rookieAdp.js`; equivalence
+  proved on live data; the hooks keep only the memo.
+- **Layer 3 in `analyze_trade`:** the tier tracks the starting lineup at
+  Spearman 0.721, odds at 0.988, and the tier has no `Middle` branch (the same
+  figures Feature 3 carries).

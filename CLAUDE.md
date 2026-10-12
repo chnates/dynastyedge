@@ -885,8 +885,7 @@ tier, record, FAAB. Caps 60 players / 40 picks.
   players on the active roster) and `canMove`; `activeRoster` from the league's
   `roster_positions` (`getRosterLimits`). **When IR is full a note says the
   waiting players must stay on the active roster and must not be suggested for
-  IR**; a full active roster gets "every claim needs a drop". Live: IR 2 of 2
-  with Legette and Dart waiting, 24 of 24 active.
+  IR**; a full active roster gets "every claim needs a drop".
 
 ### Caching the weekly data — a DIFFERENT TTL, deliberately
 
@@ -900,9 +899,8 @@ near kickoff.
 ### Tool 2 — `find_sell_high`
 
 `edgeBriefing.computeEdgeSignals` + `recommendations.suggestSellMove`. **Names a
-CONCRETE partner and a CONCRETE return**, not "shop him" (partners scored on
-need, whether he'd start for them, and whether they own a comparable piece at
-my deficit). Also returns the buy-low target and the underperforming opponent.
+CONCRETE partner and a CONCRETE return**, not "shop him" (the partner rule is
+the recommendation engine's `suggestSellMove`). Also returns the buy-low target and the underperforming opponent.
 `watchlist` is passed empty (a browser concept). **"No sell-high right now" is
 an ANSWER**, with the condition named. Copy states acceptance is **not
 modelled**.
@@ -913,9 +911,9 @@ modelled**.
 - **A DEFENSE IS NEVER A GENERAL PICKUP, by construction** — the tool calls only
   the general pool and has **no `position: 'DEF'` escape hatch**. Asking for DEF
   returns the measured explanation **plus the incumbent and its projection**.
-- **The projection never enters the ranking** (dynasty value ranks; projection
-  rides beside it, r = 0.427). **Offseason: `projectedPoints: null` with a
-  reason — never 0**; a failed fetch reports a different reason.
+- **The projection never enters the ranking** (Feature 1's two axes).
+  **Offseason: `projectedPoints: null` with a reason — never 0**; a failed
+  fetch reports a different reason.
 - **Every row carries `faabBid`** and the answer a `faab` block — orchestration
   only, `recommendFaabBid` with `readFaabPeriod`, so it quotes exactly the app's
   bid. No budget ⇒ `bid: null` (League Context). **Both fields are
@@ -968,28 +966,25 @@ Analyzer: `analyzeTrade` → `getTradeVerdict` → `adjustVerdictForInjuries` �
 - **The schedule traps** (off `/v1`, `home`/`away`) live in `weekly.js` (the base URL) and **`parseByeTeams` in `src/utils/projections.js`** — one bye reader shared with the app's Optimizer, never a copy; pinned
   by `tests/mcpWeekly.test.mjs`. **An empty `playingTeams` means "byes
   unknown", never "everyone on bye".**
-- **A must-fix carries NO confidence** (`null`, passed through).
+- **The engine's rules are Feature 4's and pass through unchanged** — a
+  must-fix's confidence is `null`, a blocked starter scores 0 (`projected` and
+  `effective` both shown), coin-flips carry `meaningful: false`, a locked slot
+  is never a move.
 - **`confidencePct` is a PERCENTAGE (0–100) and the ONLY confidence field** —
   carrying two produced "6530% likely".
-- **A blocked starter contributes 0**; `projected` and `effective` both shown.
-- **Coin-flip moves are demoted, never dropped** (`meaningful: false`).
-- **Game locks:** a sealed slot is never a move (Feature 4); locks come from the
-  schedule, so a missing box score can never restore an impossible move.
 
 ### Tool 7 — `get_playoff_odds`
 
 `playoffOdds.buildPlayoffOutlook` — the League › Playoffs Monte Carlo over
 `mcp/season.js`.
-- **THREE STATES, AND ONLY ONE HAS ODDS.** `active` is real; `complete` is
-  deterministic 100%/0% and says so; **`preseason` returns `playoffPct: null`
-  and a strength-ranked PREVIEW — never 0**, which reads as "eliminated".
-- **A posted-but-unplayed schedule is `active`, not `preseason`** (Week 1 runs
-  off the strength prior). Only no schedule at all is preseason.
-- **A total matchup-fetch failure is NOT a preseason** → `ok: false`, `reason:
+- **Feature 14's three states, and only one has odds.** In the tool's form:
+  **`preseason` returns `playoffPct: null` and a PREVIEW — never 0**, which
+  reads as "eliminated"; **a posted-but-unplayed schedule is `active`**; **a
+  total matchup-fetch failure is NOT a preseason** → `ok: false`, `reason:
   'unavailable'`.
 - **`seedDist` is computed and deliberately not returned** (notes say so).
 - `getDeadlineVerdict` supplies the stance, so it **cannot disagree with
-  `analyze_trade`**. Notes state **60% (6 of 10) is the coin-flip baseline**.
+  `analyze_trade`**; the notes carry Feature 14's 60% baseline caveat.
 
 ### Tool 8 — `get_player_news`
 
@@ -1021,13 +1016,11 @@ functions Trade › Targets runs.
   premium is often the most actionable field**, a property of fair pricing; the
   notes say why most rows read Weak to the partner.
 - **The position filter pushes INTO the ranking, never onto the returned rows**
-  (filtering a pre-sliced list can return empty when the board is full).
-  `position` is an additive `getTopTradeTargets` option; nothing in `src/`
-  passes it.
+  (Feature 3's Targets rule). `position` is an additive `getTopTradeTargets`
+  option; nothing in `src/` passes it.
 - Never guesses `team`; scouting your own roster is refused.
-- **A pick's id is READ OFF THE ASSET** (`season` / `round` / `originalOwner`),
-  never recovered from its label — several picks can share a label. A pick
-  missing the triple reports `id: null` (a guard, not the mechanism).
+- **A pick's id is READ OFF THE ASSET** — the identity triple (Feature 3),
+  never its label. A pick missing the triple reports `id: null`.
 - **Bounded:** default 8, max 20 (the app board's depth), `counts.board`
   beside. Only returned rows are priced.
 - **It does NOT grade** — hand the ids to `analyze_trade`.
@@ -1036,11 +1029,9 @@ functions Trade › Targets runs.
 
 `rookieResearch.buildRookieBoard` — the SAME board Draft › Research reads.
 Optional `player`, `position`, `sort` (`fit` | `score` | `value`), `team`,
-`limit`. (Prerequisite E moved the composition out of hooks into
-`utils/rookieResearch.js` + `utils/rookieAdp.js`; equivalence proved on live
-data; the hooks keep only the memo.)
-- **ONE score** — `dynastyOpportunityScore` (with the age tilt); age and
-  combine ride under `context` and never move it (test-pinned).
+`limit`.
+- **ONE score — Feature 19's**; age and combine ride under `context` and never
+  move it (test-pinned).
 - **Rule 7 for a model:** no feed entry is `score: null` / `fit: null`, never 0;
   unpriced is `value: null` + `unranked`.
 - **Class B, and never "no rookies":** an unreadable feed is `ok: true`,
@@ -1066,19 +1057,15 @@ feed).
 runs, on the WIDE history walk. Omit `team` for the league overview plus my
 report card; pass `team` for one manager's ledger (default 10 / max 40, true
 count beside).
-- **"Never traded" vs "we could not read" is the contract.** The tool tracks
-  `ledger.seasonsRead` / `seasonsMissing`: nothing read ⇒ every trade/FAAB field
-  and `activity` are **null**, never 0 or "No trades yet"; a partial read says
-  *"No trades in the N seasons we could read"* and drops *"You haven't completed
-  a trade yet"*. A complete read of a quiet manager still says "No trades yet".
-  Pinned both ways.
+- **"Never traded" vs "we could not read" is the contract** (Feature 11's
+  wording rules). The tool reports `ledger.seasonsRead` / `seasonsMissing`;
+  nothing read ⇒ every trade/FAAB field and `activity` are **null**, never 0 or
+  "No trades yet". Pinned both ways.
 - **FAAB in BUDGETS, never dollars** (Feature 11) — no raw-dollar field leaves
   the tool (test-pinned).
 - **Rule 7 on a ledger:** a zero-value asset reports `value: null`.
-- **`tradeTimeTotals`** (extracted to `utils/managerAnalysis.js`, shared with
-  `useTradeTimeValues`): an archived **null** hides the whole "at trade time"
-  line rather than under-count.
-- Tendencies **describe**; acceptance modelling was tested and disconfirmed.
+- **`tradeTimeTotals`** — Feature 11's completeness rule, shared with the app.
+- Tendencies **describe** (acceptance modelling: disconfirmed, Feature 3).
 - Adds `tradeValues` to `asOf`. `transactions.js` stamps each transaction's
   **`week`** from its bucket.
 
@@ -1167,9 +1154,7 @@ week.
 ### Layer 3 now scores on LIVE ODDS in `analyze_trade`
 
 `myPlayoffPct` is wired (phase 2a) and is the only signal that moves a
-**score**. The tier is a ranking of accumulated assets and tracks the starting
-lineup at Spearman 0.721; odds track it at **0.988**, and the tier has no
-`Middle` branch.
+**score** — why odds beat the tier: Feature 3, Layer 3.
 - **`windowBasis` names which ran** (`'odds'` in season, `'tier'` offseason or
   when the schedule would not load), and the note says *which reason* — "nothing
   to simulate" and "could not find out" are different answers.
@@ -1219,11 +1204,9 @@ cached** (a cached empty ledger would read "never traded") — and is named in
 
 `myDraftGrade` and `partnerActivity` **never reach a verdict** — the rule is
 *roster facts may score; second opinions describe.*
-- **`partnerActivity`** (`mcp/transactions.js`) — a 21-day window; descriptive
-  only (behaviour modelling was disconfirmed).
-- **`myDraftGrade`** (`mcp/history.js` + `buildDraftGrades`) — adjusts
-  **confidence** in acquired pick capital, never its value; gated at ≥ 5 graded
-  picks; stated as a record, not a skill.
+- **`partnerActivity`** (`mcp/transactions.js`) and **`myDraftGrade`**
+  (`mcp/history.js` + `buildDraftGrades`) — their rules are Feature 3's
+  (21-day window, descriptive; confidence never value, gated at ≥ 5 picks).
 - **A failure of either says "we could not find out", never the absence
   itself** — "they made no moves" is a real answer about a quiet manager.
   Pinned both ways.
