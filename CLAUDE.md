@@ -3075,82 +3075,82 @@ dynastyedge/
 │   └── workflows/
 │       ├── deploy.yml          ← GitHub Actions auto-deploy (lint + test gate before build)
 │       ├── ci.yml              ← lint + test + build on branch pushes / PRs (no deploy)
-│       ├── news.yml            ← news aggregation (cron asks 2×/h; only main publishes) → news-data branch; ends with the source-health alarm
-│       ├── values-history.yml  ← daily value snapshot + trade archive + monthly archive + consensus archive + briefing ledger → values-history (only main publishes); ends with the source-health alarm and the briefing-ledger alarm (its snapshot steps are continue-on-error)
-│       └── rookie-intel.yml   ← daily rookie depth-chart + draft-capital feed → rookie-intel branch; `mode` also runs the CFBD analyses (publish nothing)
+│       ├── news.yml            ← news aggregation → news-data branch, then the source-health alarm (Player news pipeline)
+│       ├── values-history.yml  ← daily value, trade, monthly, consensus and briefing snapshots → values-history branch, then the two alarms (Value history pipeline)
+│       └── rookie-intel.yml   ← daily rookie intel → rookie-intel branch; `mode` runs the CFBD analyses (Rookie intel pipeline)
 ├── scripts/
-│   ├── loader.mjs / register.mjs ← THE Node resolver hook for src/utils' extensionless imports — used by npm test, npm run mcp and the skill's reg.mjs shim
+│   ├── loader.mjs / register.mjs ← THE Node resolver hook for src/utils' extensionless imports (The MCP Server › Deployment, "Run locally")
 │   ├── fetch-news.mjs          ← multi-source news fetcher (runs in Actions)
-│   ├── newsCoverage.mjs        ← THE feed depth metric (`coverage.depthHours`, p90 age of the player window), pure + tested — `spanHours` is set by stragglers
-│   ├── newsRetention.mjs       ← THE feed retention policy, pure + tested: diversity-aware eviction so the cap never binds before the 7-day window
-│   ├── fantasyCalcValues.mjs   ← the pipelines' wrapper over THE FantasyCalc reader (src/utils/fantasyCalcPayload.js): player values + a pick pricer ending in NULL, never 0
-│   ├── sourceHealth.mjs        ← THE source-alarm policy, pure + tested, shared by both pipelines: a persistent gap, never a blip
-│   ├── check-source-health.mjs ← THE alarm: runs AFTER publish (can never cost data) and FAILS the workflow; a missing file is itself an alarm
-│   ├── valuationSources.mjs    ← THE multi-source valuation readers, pure + tested (imports fantasyCalcValues.mjs, never copies it): crosswalk (`"NA"` = null), DynastyProcess, KTC JSON island joined on mfl_id (NOT ktc_id), archive merge
-│   ├── briefingLedger.mjs      ← THE briefing-ledger policy, pure + tested: records computeEdgeSignals / buildBriefing output (never re-derives a pick), null never 0, unreadable days named, never pruned; assessLedger = the alarm rule
-│   ├── record-briefing.mjs     ← daily: what The Edge would name → permanent briefing-ledger.json (app never fetches it); the scoring plan is docs/analysis/briefing-decision-quality-2026-10.md
-│   ├── check-briefing-ledger.mjs ← the ledger's alarm: after publish, fails when the newest readable day is 2+ days old; a missing file is an alarm
-│   ├── snapshot-consensus.mjs  ← phase 4a: permanent DAILY three-source archive (app never fetches it); a failed source is an all-null column, never 0
+│   ├── newsCoverage.mjs        ← THE feed depth metric, `coverage.depthHours`, pure + tested (Player news pipeline)
+│   ├── newsRetention.mjs       ← THE feed retention policy, pure + tested (Player news pipeline)
+│   ├── fantasyCalcValues.mjs   ← the pipelines' wrapper over THE FantasyCalc reader (FantasyCalc API)
+│   ├── sourceHealth.mjs        ← THE source-alarm policy, pure + tested (The source-health alarm)
+│   ├── check-source-health.mjs ← THE alarm, run after publish (The source-health alarm)
+│   ├── valuationSources.mjs    ← THE three-source valuation readers, pure + tested (Value history pipeline › consensus)
+│   ├── briefingLedger.mjs      ← THE briefing-ledger policy, pure + tested (Value history pipeline › briefing ledger)
+│   ├── record-briefing.mjs     ← daily: what The Edge would name → briefing-ledger.json (Value history pipeline)
+│   ├── check-briefing-ledger.mjs ← the ledger's alarm (The source-health alarm)
+│   ├── snapshot-consensus.mjs  ← phase 4a: the daily three-source archive (Value history pipeline)
 │   ├── snapshot-values.mjs     ← daily FantasyCalc snapshot appender (runs in Actions)
-│   ├── snapshot-values-archive.mjs ← permanent MONTHLY values archive for trajectory back-testing (app never fetches it)
+│   ├── snapshot-values-archive.mjs ← the permanent monthly values archive (Value history pipeline)
 │   ├── snapshot-trade-values.mjs ← permanent trade-time value archiver (runs in Actions)
 │   ├── snapshot-rookie-intel.mjs ← daily nflverse → Sleeper rookie intel feed (runs in Actions)
 │   └── dev/
-│       ├── screenshot-app.mjs  ← headless-Chromium screenshotter (390px; --route, --player, --drawer, --seed-session, --click, --text, --overflow — see dynastyedge-visual-capture). `--overflow` is THE truncation instrument; `--text` cannot see a CSS ellipsis
-│       ├── replay-live.mjs     ← drives the running app against a SYNTHETIC draft / regular season, so the two once-a-year surfaces can be rehearsed on demand
-│       ├── faab-corpus.mjs     ← analysis-only: pulls the league's full FAAB bid corpus (see docs/analysis/faab-bid-corpus-2026-08.md); nothing imports it
-│       ├── rookie-signal-backtest.mjs ← analysis-only: grades the SHIPPED rookie model against 2021–2025 (imports src/utils/rookieResearch.js so it cannot drift)
-│       ├── rookie-longterm-backtest.mjs ← analysis-only: Phase 3c two-axis rookie score — REJECTED (docs/analysis/rookie-longterm-signals-2026-09.md)
-│       ├── cfbd-probe.mjs        ← analysis-only, RUNS IN ACTIONS (needs CFBD_API_KEY): proves CFBD's athlete id IS the ESPN athlete id, so college data joins by ID and never by name
-│       ├── rookie-college-backtest.mjs ← analysis-only, RUNS IN ACTIONS: Phase 3b college production — REJECTED (docs/analysis/rookie-college-production-2026-09.md)
-│       ├── trade-structure-backtest.mjs ← analysis-only: the DISCONFIRMED trade-structure profiling test (frontier Item 3); drives the shipped buildManagerProfiles so it cannot drift
-│       ├── optimizer-signal-backtest.mjs ← analysis-only: is a better weekly projection obtainable (no) and what DEF streaming is worth (docs/analysis/optimizer-data-sources-2026-09.md)
-│       ├── asset-aging-backtest.mjs ← analysis-only: THE keep-score calibration — longitudinal aging + pick realization (docs/analysis/asset-aging-and-pick-value-2026-09.md)
-│       ├── buylow-timing-backtest.mjs ← analysis-only: do trend < −50 dips bounce back? Imports the ±50 from marketTrend.js; reads values-consensus' FantasyCalc column (the one permanent home) cross-checked against values-history; `--frozen` reproduces docs/analysis/buylow-timing-2026-10.md
-│       ├── oddsReplay.mjs ← THE playoff-odds replay (pure): past seasons through buildPlayoffOutlook, truth = the real bracket; shared by the backtest and tests/oddsTrackRecord.test.mjs
-│       ├── odds-calibration-backtest.mjs ← analysis-only: §0 #11 — 2023–25 replayed through buildPlayoffOutlook (Brier vs always-60% and record-only, reliability, Buyer/Seller hit rates) + the lineup CONFIDENCE_CURVE on 2026; `--frozen` reproduces docs/analysis/playoff-odds-calibration-2026-10.md
-│       ├── trade-fair-band-sweep.mjs ← analysis-only: THE OPEN-10 sweep — assembly window × APPEAL_BONUS jointly (one measurement), all ten seats, via the shipped suggestFairPackage's hooks
-│       ├── contrast-audit.mjs ← THE accessibility-floor instrument: tokens from src/index.css vs each theme's worst-case ground, plus band/ink reversals; exits non-zero — re-run after ANY ground-colour change
-│       └── news-coverage.mjs ← analysis-only: THE news acceptance metric — how many of my rostered players resolve in the feed (docs/analysis/news-sources-2026-09.md)
+│       ├── screenshot-app.mjs  ← headless-Chromium screenshotter at 390px; `--overflow` is THE truncation instrument (Design System › accessibility floor; dynastyedge-visual-capture)
+│       ├── replay-live.mjs     ← drives the running app through a synthetic draft / season (File Structure › "Live-surface rehearsals")
+│       ├── faab-corpus.mjs     ← analysis-only: the league's FAAB bid corpus (docs/analysis/faab-bid-corpus-2026-08.md)
+│       ├── rookie-signal-backtest.mjs ← analysis-only: grades the shipped rookie model (Feature 19)
+│       ├── rookie-longterm-backtest.mjs ← analysis-only: the rejected two-axis rookie score (Feature 19)
+│       ├── cfbd-probe.mjs        ← analysis-only, runs in Actions (needs `CFBD_API_KEY`): the CFBD ↔ ESPN id proof (docs/analysis/rookie-college-production-2026-09.md)
+│       ├── rookie-college-backtest.mjs ← analysis-only, runs in Actions: the rejected college-production test (Feature 19)
+│       ├── trade-structure-backtest.mjs ← analysis-only: the disconfirmed trade-structure profiling test (Feature 3, Layer 4)
+│       ├── optimizer-signal-backtest.mjs ← analysis-only: projection sources, DEF streaming, the confidence curve (Feature 4)
+│       ├── asset-aging-backtest.mjs ← analysis-only: THE keep-score calibration (the recommendation engine)
+│       ├── buylow-timing-backtest.mjs ← analysis-only: do dips bounce back? `--frozen` reproduces docs/analysis/buylow-timing-2026-10.md
+│       ├── oddsReplay.mjs ← THE playoff-odds replay, pure (Feature 14 › measured accuracy)
+│       ├── odds-calibration-backtest.mjs ← analysis-only: odds and confidence-curve calibration; `--frozen` reproduces docs/analysis/playoff-odds-calibration-2026-10.md
+│       ├── trade-fair-band-sweep.mjs ← analysis-only: THE OPEN-10 sweep (Feature 3 › package search)
+│       ├── contrast-audit.mjs ← THE contrast instrument; re-run after any ground-colour change (Design System › accessibility floor)
+│       └── news-coverage.mjs ← analysis-only: THE news acceptance metric (Player news pipeline)
 ├── api/
-│   └── mcp.js                  ← THE deployed Vercel function — a COMMITTED esbuild bundle (Vercel traces, doesn't bundle); ci.yml rebuilds and diffs it
-├── vercel.json                 ← rewrites every path to the one function + pins an empty static root (without outputDirectory, Vercel can serve the repo root as static files)
-├── mcp/                        ← THE MCP SERVER (see The MCP Server section). Imports src/utils, never copies it; src/ imports nothing from here.
+│   └── mcp.js                  ← THE deployed Vercel function, a committed bundle (The MCP Server › Deployment)
+├── vercel.json                 ← rewrites every path to the one function + pins an empty static root (without `outputDirectory`, Vercel can serve the repo root as static files)
+├── mcp/                        ← THE MCP SERVER (The MCP Server). Imports src/utils; src/ imports nothing from here
 │   ├── README.md               ← how to run it, the three rules a new tool must keep, phase-2 notes
 │   ├── stdio.js                ← entry point (stdio transport). Needs --import ./mcp/register.mjs
 │   ├── server.js               ← the McpServer: tool schemas + wiring, ZERO domain math
-│   ├── snapshot.js             ← league fetch + ~15-min cache + THE as-of stamp (provenance makes a wrong answer LOOK wrong); mergeAsOf RECOMPUTES age over the union
-│   ├── vercelEntry.js          ← the bundle's entry: accepts BOTH calling conventions, imports lazily, reports failures with a message — never a stack
-│   ├── app.js                  ← THE hosted server: OAuth in front of MCP. Refuses to start without GITHUB_CLIENT_SECRET
-│   ├── oauth.js                ← THE auth crypto + policy: HMAC tokens (no JWT lib), HKDF-derived key, PKCE S256-only, audience binding; no revocation (1h access tokens, 30-day refresh tokens capped 180 days after login), codes 60s
-│   ├── oauthRoutes.js          ← the OAuth endpoints. Owns THE load-bearing check: redirect-URI exact-hostname allowlist BEFORE minting, failing to an error page
-│   ├── http.js                 ← THE streamable-HTTP transport: Web-standard (Request) => Response, STATELESS by necessity; owns the auth gate, which fails CLOSED
-│   ├── store.js                ← THE cache backend boundary + the ONE freshness policy (loadSource). memoryStore for stdio AND deployed HTTP (no KV wired). Traps: no store-level TTL; gzip the player DB into KV
-│   ├── transactions.js         ← season transaction feed. A FOURTH, SPLIT TTL: settled weeks frozen, live week on the snapshot's 15 min. Reads weeks 1..current only
-│   ├── history.js              ← the history walk, TWO widths: getLeagueHistory NARROW (no transactions, no users) → buildDraftGrades only; getLedgerHistory WIDE (+ users + buckets), per-season cache, an unread season NAMED, never cached
-│   ├── liveScores.js           ← this week's box score — a FIFTH, SHORT TTL (5 min). NOT season.js's cache
-│   ├── results.js              ← every season's winners bracket for get_league_results, on the NARROW walk (+ bracket + users, no transaction bucket); an unreadable bracket is NAMED, never cached
-│   ├── feeds.js                ← ONE Class B loader for rookie-intel / trade-values / values-history: never throws; a wrong-shape 200 is a miss, never cached; 60 min / 60 min / 6 h
-│   ├── news.js                 ← the news feed + matcher: `playerIds` only, NO headline-name fallback (two DJ Moores); carries its own age
-│   ├── season.js               ← every regular-season week's matchups — a THIRD TTL; a total outage is never reported as a preseason
-│   ├── weekly.js               ← projections + schedule, OWN ~60-min TTL. Owns the silent traps: schedule off /v1, fields home/away
-│   ├── teams.js                ← resolveTeam, shared by three tools. Reads display_name — /users returns NO username
-│   ├── limit.js                ← concurrency gate + backoff, honours Retry-After (capped 4s). NEVER in fetchJSON
-│   ├── config.js               ← league / identity / TTLs, env-first: leagueId and rosterId are parameters, not constants
+│   ├── snapshot.js             ← league fetch, ~15-min cache, THE as-of stamp (The MCP Server › Caching)
+│   ├── vercelEntry.js          ← the bundle's entry (The MCP Server › Deployment)
+│   ├── app.js                  ← THE hosted server: OAuth in front of MCP (The MCP Server › auth model)
+│   ├── oauth.js                ← THE auth crypto + policy (The MCP Server › auth model)
+│   ├── oauthRoutes.js          ← the OAuth endpoints, incl. redirect-URI validation (The MCP Server › auth model)
+│   ├── http.js                 ← THE stateless streamable-HTTP transport + auth gate (The MCP Server › HTTP transport)
+│   ├── store.js                ← THE cache backend boundary + loadSource (The MCP Server › Caching)
+│   ├── transactions.js         ← season transaction feed, split TTL (The MCP Server › transaction feed)
+│   ├── history.js              ← the narrow and wide history walks (The MCP Server › league-history walk)
+│   ├── liveScores.js           ← this week's box score, 5-min TTL (The MCP Server › live box score)
+│   ├── results.js              ← every season's winners bracket (Tool 12)
+│   ├── feeds.js                ← ONE Class B loader for three static feeds (The MCP Server › other static feeds)
+│   ├── news.js                 ← the news feed + matcher (Tool 8; The MCP Server › news feed)
+│   ├── season.js               ← every regular-season week's matchups (The MCP Server › rest of the season)
+│   ├── weekly.js               ← projections + schedule (The MCP Server › weekly data)
+│   ├── teams.js                ← resolveTeam, shared by three tools (Tool 1)
+│   ├── limit.js                ← concurrency gate + backoff (The MCP Server › rate discipline)
+│   ├── config.js               ← league / identity / TTLs, env-first (The MCP Server › three non-negotiables)
 │   ├── register.mjs            ← registers THE resolver hook (scripts/loader.mjs) for `npm run mcp`
 │   └── tools/                  ← all THIRTEEN are orchestration only, in the shape of TradeAnalyzer.jsx
 │       ├── getRoster.js            ← #1 "what's on my team?"
-│       ├── findSellHigh.js         ← #2 "who's my best sell-high?" — names a CONCRETE partner and return
-│       ├── recommendFreeAgents.js  ← #3 "who should I pick up?" — dynasty value AND this week's projection; a defense is never a general pickup
-│       ├── resolveAssets.js        ← #4 (support) "which Bijan?" — an ambiguous name resolves to NOTHING
-│       ├── analyzeTrade.js         ← #5 "grade this trade" — IDS ONLY; a free-text name is rejected, never guessed
-│       ├── lineupAdvice.js         ← #6 "what do I start?" — IN-SEASON ONLY; a must-fix carries no confidence; a LOCKED slot is never a move
-│       ├── playerNews.js           ← #8 "latest on him?" — injury detail + the feed; ambiguous refused; silence is a coverage gap, never good health
-│       ├── valueHistory.js         ← #13 "how has his value moved?" — getValueSeries + buildTeamValueSeries; < 4 snapshots is "not enough history yet", never flat or 0; untracked kept distinct
-│       ├── leagueResults.js        ← #12 "who won in 2023?" — the p:1 winner; titles by OWNER; in-progress/unreadable never "no champion"
-│       ├── scoutManagers.js        ← #11 "how does this manager trade?" — buildManagerProfiles; tracks seasons READ (unread ≠ non-trader); FAAB in budgets; tradeTimeTotals
-│       ├── researchRookies.js      ← #10 "which rookies?" — buildRookieBoard; ONE score; no feed entry is NULL, never 0; unreadable feed = available:false, never "no rookies"
-│       └── findTradeTargets.js     ← #9 "who do I call about?" — no TTL of its own (the snapshot's); a pick's id READ OFF the asset, never a label
+│       ├── findSellHigh.js         ← #2 (Tool 2)
+│       ├── recommendFreeAgents.js  ← #3 (Tool 3)
+│       ├── resolveAssets.js        ← #4, support (Tool 4)
+│       ├── analyzeTrade.js         ← #5 (Tool 5)
+│       ├── lineupAdvice.js         ← #6 (Tool 6)
+│       ├── playerNews.js           ← #8 (Tool 8)
+│       ├── valueHistory.js         ← #13 (Tool 13)
+│       ├── leagueResults.js        ← #12 (Tool 12)
+│       ├── scoutManagers.js        ← #11 (Tool 11)
+│       ├── researchRookies.js      ← #10 (Tool 10)
+│       └── findTradeTargets.js     ← #9 (Tool 9)
 ├── public/
 │   └── favicon.ico
 ├── src/
@@ -3159,23 +3159,23 @@ dynastyedge/
 │   │   │   ├── index.js             ← the single import surface (re-exports every primitive)
 │   │   │   ├── Button.jsx           ← THE button (primary/secondary/tinted/ghost/danger · sm/md/lg)
 │   │   │   ├── IconButton.jsx       ← THE icon-only/close control (pass `label`)
-│   │   │   ├── Card.jsx             ← THE surface container (+ optional `tone` kicker rule; the left accent RAIL is banned)
-│   │   │   ├── Mark.jsx             ← THE editorial highlight — a word reversed out of a block; what REPLACED Card's accent rail. Never a position hue.
+│   │   │   ├── Card.jsx             ← THE surface container (Design System › library)
+│   │   │   ├── Mark.jsx             ← THE editorial highlight (Design System › library)
 │   │   │   ├── PositionBand.jsx     ← THE full-bleed position field + group total — Matchday's signature
-│   │   │   ├── Magnitude.jsx        ← THE value figure: type SIZE is the quantity; reference PINNED to a contract, never per list
-│   │   │   ├── Loading.jsx          ← THE loading indicator — a printing rule under a label. There is NO spinner
-│   │   │   ├── RuledList.jsx        ← THE DENSE register (finding B7): rows on the page's ground, hairline separators, NO box
+│   │   │   ├── Magnitude.jsx        ← THE value figure (Design System › law 2)
+│   │   │   ├── Loading.jsx          ← THE loading indicator (Design System › Motion)
+│   │   │   ├── RuledList.jsx        ← THE dense register (Design System › law 5)
 │   │   │   ├── Row.jsx              ← THE member of a RuledList — always carries .focus-ring
-│   │   │   ├── Lede.jsx             ← THE OPEN register: eyebrow · marked headline · prose · ink CTA. What replaced The Edge's icon+title+one-liner briefing cards.
-│   │   │   ├── NavRow.jsx           ← THE DOOR — a row that takes you somewhere; no icon, no chevron
+│   │   │   ├── Lede.jsx             ← THE open register (Design System › law 5)
+│   │   │   ├── NavRow.jsx           ← THE door (Design System › law 5)
 │   │   │   ├── Sheet.jsx            ← THE bottom sheet + SheetHeader (owns scroll-lock/drag/safe-area)
 │   │   │   ├── Modal.jsx            ← THE centered dialog (confirms / small forms)
 │   │   │   ├── Chip.jsx             ← THE filter chip (toggle pill, position-tinted active)
 │   │   │   ├── Badge.jsx            ← THE small status/label badge (New/You, tone/soft)
 │   │   │   ├── Input.jsx            ← THE text field + SearchInput variant
-│   │   │   ├── Textarea.jsx         ← THE multi-line field — Input's sibling; the scout note was the app's ONE control with no primitive to route through
+│   │   │   ├── Textarea.jsx         ← THE multi-line field (Design System › library)
 │   │   │   ├── Select.jsx           ← THE dropdown field (native select + label/hint)
-│   │   │   ├── motion.js            ← the JS half of the reduced-motion guard (`prefersReducedMotion`, `scrollToTopOf`) + `stagger()`, the jittered press-run delays
+│   │   │   ├── motion.js            ← `prefersReducedMotion`, `scrollToTopOf`, `stagger()` (Design System › Motion)
 │   │   │   └── cn.js                ← tiny className joiner (the one styling primitive)
 │   │   ├── auth/
 │   │   │   └── LoginScreen.jsx      ← Sleeper-username sign-in + team-picker fallback (gates the app)
@@ -3197,13 +3197,13 @@ dynastyedge/
 │   │   │   ├── TradeBuilder.jsx
 │   │   │   ├── TradeVerdict.jsx
 │   │   │   ├── PartnerSelect.jsx    ← THE opponent picker (fit-grouped) — Analyzer + Targets
-│   │   │   ├── TheCall.jsx         ← THE Analyzer hero: verdict + fair band + the three act summaries (FOR YOU / FOR THEM both graded)
+│   │   │   ├── TheCall.jsx         ← THE Analyzer hero (Feature 3 › panel layout)
 │   │   │   ├── PartnerContextStrip.jsx ← THE partner intelligence strip — Analyzer + Targets
 │   │   │   └── WhatsFair.jsx        ← Targets: league-wide board + per-team scouting mode
 │   │   ├── lineup/                  ← rendered as Squad (My Team) views (no own layout)
 │   │   │   ├── LineupOptimizer.jsx  ← Squad › Lineup: the swap sandbox + orchestration
 │   │   │   ├── LineupMovesCard.jsx  ← the start/sit hero + move list ("what do I change?")
-│   │   │   ├── LineupRow.jsx        ← THE lineup row — starters AND bench, so a player reads the same either side of the line
+│   │   │   ├── LineupRow.jsx        ← THE lineup row, starters and bench (Feature 4)
 │   │   │   ├── LineupEfficiency.jsx ← Squad › Season Review: actual vs optimal points
 │   │   │   └── FreeAgentDrawer.jsx  ← per-slot waiver options (an explicit action)
 │   │   ├── league/
@@ -3238,7 +3238,7 @@ dynastyedge/
 │   │       ├── WinWindowBadge.jsx
 │   │       ├── TrendArrow.jsx
 │   │       ├── DynastyEdgeLogo.jsx
-│   │       ├── TeamAvatar.jsx       ← Sleeper avatar + FLAT initial fallback (the gradient went in step 4)
+│   │       ├── TeamAvatar.jsx       ← Sleeper avatar + flat initial fallback (Design System › Team avatars)
 │   │       └── Sparkline.jsx        ← tiny SVG trend line for value history
 │   ├── hooks/
 │   │   ├── useSleeper.js        ← league/rosters/users/picks/state fetch
@@ -3247,9 +3247,9 @@ dynastyedge/
 │   │   ├── useLeague.js         ← combined league state, player resolution (+ Sleeper-only `signInRosters` for login)
 │   │   ├── useIdentity.js       ← logged-in roster identity (localStorage store); wipes roster-scoped keys on switch
 │   │   ├── useTransactions.js   ← season-wide transaction feed
-│   │   ├── useLeagueHistory.js  ← past seasons' tx/drafts via utils/leagueHistory.js; reports `readState` (failed / partial seasons, draft gaps, chainBroken)
+│   │   ├── useLeagueHistory.js  ← past seasons via utils/leagueHistory.js, with `readState` (Feature 11)
 │   │   ├── useManagerProfiles.js← composes history + current season into scouting profiles
-│   │   ├── useTradeTimeValues.js← trade-time value archive for the ledger (best-effort); the completeness rule is utils/managerAnalysis.js's tradeTimeTotals
+│   │   ├── useTradeTimeValues.js← trade-time value archive, best-effort (Feature 11)
 │   │   ├── matchupWeeks.js      ← shared /matchups/{week} session cache (playoff odds + lineup history)
 │   │   ├── useLineupHistory.js  ← my past matchups for efficiency review (reads matchupWeeks)
 │   │   ├── usePlayoffOdds.js    ← regular-season schedule (via matchupWeeks) + Monte Carlo sim
@@ -3259,61 +3259,61 @@ dynastyedge/
 │   │   ├── useLastVisit.js      ← The Edge's "since your last visit" anchor
 │   │   ├── useLeagueNews.js     ← news feed matched to my roster + watchlist
 │   │   ├── useNewsFeed.js       ← full aggregated feed for the News section
-│   │   ├── useValueHistory.js   ← daily value snapshots for sparklines (best-effort); getSeries now delegates to utils/valueHistory.js's getValueSeries
-│   │   ├── useRookieIntel.js    ← rookie depth-chart + draft-capital feed (best-effort; `enabled` keeps it unfetched for a consumer with no rookie to show)
-│   │   ├── useRookieResearch.js ← THE rookie board's memo for Research AND the drawer; the composition is buildRookieBoard (shared with the MCP server)
+│   │   ├── useValueHistory.js   ← daily value snapshots for sparklines, best-effort (Value history pipeline)
+│   │   ├── useRookieIntel.js    ← rookie intel feed, best-effort and lazy (Feature 19)
+│   │   ├── useRookieResearch.js ← THE rookie board's memo (Feature 19)
 │   │   ├── usePlayerIntel.js    ← production stats + depth chart + ESPN news
 │   │   ├── useScrollLock.js     ← freezes <main> while a bottom sheet is open
 │   │   ├── useSheetDrag.js      ← swipe-down-to-dismiss gesture for bottom sheets
 │   │   ├── useTheme.js          ← dark/light toggle
 │   │   ├── useAppVersion.js     ← build-id self-heal: reload off cached HTML (iOS standalone)
-│   │   ├── usePlayerNews.js     ← one player's injury status, read off the shared player DB (no per-player fetch); an unreadable DB is `unavailable`, never "Active"
+│   │   ├── usePlayerNews.js     ← one player's injury status off the shared player DB; an unreadable DB is `unavailable`, never "Active" (Feature 4 › status flags)
 │   │   ├── useSleeperRookies.js ← rookie map derived from usePlayerDB
 │   │   ├── useSleeperDraft.js   ← live rookie draft sync (order, picks, refresh/polling)
 │   │   └── useRookieADP.js
 │   ├── utils/
 │   │   ├── fetchJSON.js         ← shared fetch wrapper with timeout — use everywhere
-│   │   ├── leagueState.js       ← THE five-source join (buildLeagueState) every analysis function eats; useLeague only calls it. faabDisplay = THE FAAB figure ($XXX, or — when the budget is unknown)
-│   │   ├── teamName.js         ← getTeamName — in utils, not hooks, so the analysis layer stays React-free (re-exported from useLeague for the 22 components that import it there)
-│   │   ├── valueHistory.js     ← MIN_SPARKLINE_POINTS + THE per-player series rule (getValueSeries) and its dated/coverage/slice/summary companions
+│   │   ├── leagueState.js       ← THE five-source join (buildLeagueState) + faabDisplay (rule 9)
+│   │   ├── teamName.js         ← getTeamName, React-free (The MCP Server › prerequisite refactors)
+│   │   ├── valueHistory.js     ← MIN_SPARKLINE_POINTS + THE per-player series rule (Value history pipeline)
 │   │   ├── appVersion.js        ← pure reload-URL builder for the version self-heal
 │   │   ├── positionColors.js    ← position identity color class maps — use everywhere
 │   │   ├── roundColors.js       ← pick round color classes (PickBadge, TeamCard)
 │   │   ├── tierColors.js        ← win-window tier colors (badge + banner chips)
 │   │   ├── rankColors.js        ← gold/silver/bronze medal colors for rank ordinals
-│   │   ├── tradeAnalysis.js     ← trade scoring, verdict logic; buildSideFit is ONE fit engine called from BOTH seats (buildPartnerFit = the `them` wrapper, myFit = my seat, display-only)
+│   │   ├── tradeAnalysis.js     ← trade scoring + verdict; buildSideFit, one engine for both seats (Feature 3)
 │   │   ├── edgeBriefing.js      ← The Edge: signals, briefing items, GM line
-│   │   ├── managerAnalysis.js   ← manager scouting: ledgers, tendencies, draft grades; buildDraftGrades (draft record without the ledger, same buildDraftRecords); tradeTimeTotals (shared with scout_managers)
+│   │   ├── managerAnalysis.js   ← manager scouting: ledgers, tendencies, draft grades, tradeTimeTotals (Feature 11)
 │   │   ├── rosterAnalysis.js    ← positional strength, win window tiers, Targets ranking (need × value × movability)
-│   │   ├── recommendations.js   ← THE assistant-GM brain: keep/givability scores (round-priced picks, past-peak age tilt), FA pickups, two-sided sell moves, the cash-out board
-│   │   ├── faabBid.js           ← THE FAAB bid (OPEN-3), shared with recommend_free_agents: CURRENT period's budget from settings (never assumed), 11/16/23% of the FULL budget capped at what is left, $2 floor on $1000, null for DEF/unpriced
-│   │   ├── injuryStatus.js      ← THE injury-status rule (OUT / QUESTIONABLE, IR eligibility from league settings, IR CAPACITY via buildIrCapacity) — one home, read by the Optimizer, player card, trade verdict, IR item and MCP
-│   │   ├── tradeDeadline.js     ← THE trade-deadline arithmetic (weeks left, the 2-week "soon" window) — one home, read by the Trade banner, The Edge and the MCP league calendar
-│   │   ├── marketTrend.js       ← THE market-trend rules (±50, buy-low/sell-high eligibility, % move) — one home, read by every arrow, list and MCP tool
-│   │   ├── fantasyCalcPayload.js ← THE FantasyCalc reader (URL, id-SHAPE classifier, shape guards) — app, MCP server and pipelines all call it
-│   │   ├── fairBand.js          ← THE definition of "fair" (±5%), shared by the Analyzer's verdict and every surface that PREDICTS it; PLUS the separate, symmetric hindsight rule (ledger W-L-E + Activity's bigger haul)
-│   │   ├── dynastyTrajectory.js ← forward value projection: market age curves + pick maturation; teamDirection = THE team cut-offs (−1% / +5%)
-│   │   ├── seasonWindow.js      ← THE "has the rookie draft happened yet?" resolver — the live pick window + which draft the Tracker shows (replaced the hand-rolled PICK_YEARS)
-│   │   ├── playerDB.js          ← THE /players/nfl trim (the kept fields) — shared by usePlayerDB and mcp/snapshot.js
-│   │   ├── newsMatch.js         ← THE news-feed matcher (playerIds › athleteIds › headline name) + normalizeName, shared by the drawer, Headlines, News and fetch-news.mjs
-│   │   ├── pickCapital.js       ← pick ownership (year weights relative to the window, never literal years) + THE spent-pick ladder shared by Activity and the ledger (buildDraftPickIndex, buildGenericRoundValues) + THE round label (roundSuffix, pickRoundLabel)
-│   │   ├── leagueHistory.js     ← THE history walk (chain, drafts list, season ledger) + ledgerCoverage — shared with mcp/history.js; a failure is named, never read as "never traded"
-│   │   ├── leagueResults.js     ← THE bracket reader: champion = w of the p:1 game, placements carry owner_id; pure, used by get_league_results
-│   │   ├── rookieAdp.js         ← derived rookie-class ADP for the Draft section + buildRookieMap, THE rookie-class rule (moved out of useSleeperRookies)
-│   │   ├── rookieResearch.js    ← rookie opportunity model: depth × capital, within-position divergence; buildRookieBoard is THE board composition
-│   │   ├── positionalValue.js   ← scarcity / value over replacement — replacement levels LEARNED from the live league, DISPLAY ONLY
+│   │   ├── recommendations.js   ← THE assistant-GM brain (the recommendation engine)
+│   │   ├── faabBid.js           ← THE FAAB bid (the recommendation engine › FAAB bid)
+│   │   ├── injuryStatus.js      ← THE injury-status rule + IR capacity (Feature 4 › status flags)
+│   │   ├── tradeDeadline.js     ← THE trade-deadline arithmetic (Trade deadline banner)
+│   │   ├── marketTrend.js       ← THE market-trend rules (rule 11)
+│   │   ├── fantasyCalcPayload.js ← THE FantasyCalc reader (FantasyCalc API)
+│   │   ├── fairBand.js          ← THE fair band — the verdict and every surface that predicts it — + the hindsight rule (Feature 3; Feature 11)
+│   │   ├── dynastyTrajectory.js ← forward value projection + teamDirection (Feature 17)
+│   │   ├── seasonWindow.js      ← THE pick-window resolver + Tracker draft selection (Constants File)
+│   │   ├── playerDB.js          ← THE /players/nfl trim (Tool 8)
+│   │   ├── newsMatch.js         ← THE news-feed matcher + normalizeName (Player news pipeline)
+│   │   ├── pickCapital.js       ← pick ownership, the spent-pick ladder, the round label (Features 1, 6; Design System › round colors)
+│   │   ├── leagueHistory.js     ← THE history walk + ledgerCoverage (Feature 11)
+│   │   ├── leagueResults.js     ← THE bracket reader (Tool 12)
+│   │   ├── rookieAdp.js         ← rookie-class ADP + buildRookieMap (FantasyCalc API › rookie ADP)
+│   │   ├── rookieResearch.js    ← rookie opportunity model + buildRookieBoard (Feature 19)
+│   │   ├── positionalValue.js   ← scarcity / value over replacement, display only (Feature 3 › negotiating layer)
 │   │   ├── rosterSpace.js       ← active-slot headroom for a trade; reports owed drops, NEVER calls a trade illegal
 │   │   ├── partnerActivity.js   ← a partner's recent adds from the cached transaction feed (descriptive only)
 │   │   ├── pickTrades.js        ← pick trade calculator: slot pricing + packages
 │   │   ├── peakWindows.js       ← position peak-age windows + status helper
-│   │   ├── draftLive.js         ← THE rookie draft live path (on the clock, countdown, Best Available, capital, recap grades) — pure, extracted from DraftTracker so it is testable
-│   │   ├── lineupBuild.js       ← THE optimal starting-lineup slot-fill (metric-agnostic); fed points (Optimizer) or dynasty value (Trade Analyzer fit sim)
-│   │   ├── lineupMoves.js       ← THE weekly start/sit engine: solves the lineup, diffs it against yours, emits the move list (gains sum to the headline)
-│   │   ├── lineupConfidence.js  ← the MEASURED hit-rate curve behind "61% likely to be the right call" — regenerate, never hand-edit
-│   │   ├── freeAgents.js        ← THE waiver-options list (never gated on FantasyCalc; TEAM_* guard) AND the dynasty FA pool, which can never return a defense
+│   │   ├── draftLive.js         ← THE rookie-draft live path, pure (Feature 10)
+│   │   ├── lineupBuild.js       ← THE optimal-lineup slot-fill, metric-agnostic (Features 3, 4, 9)
+│   │   ├── lineupMoves.js       ← THE weekly start/sit engine (Feature 4)
+│   │   ├── lineupConfidence.js  ← the measured hit-rate curve — regenerate, never hand-edit (Feature 4)
+│   │   ├── freeAgents.js        ← THE waiver-options list + the dynasty FA pool (Feature 4; League Context › one defense)
 │   │   ├── lineupHistory.js     ← optimal-lineup POINTS math for efficiency review (delegates to lineupBuild)
-│   │   ├── playoffOdds.js       ← scoring model + Monte Carlo + deadline verdict (THE buyer/seller cut-offs: BUYER_PCT / SELLER_PCT; ODDS_TRACK_RECORD = the measured accuracy the Playoffs page states); buildPlayoffOutlook is THE composition (the hook keeps only the memo)
-│   │   └── projections.js       ← lineup optimization, matchup quality; THE schedule readers (parseByeTeams, parseLockedTeams) shared with mcp/weekly.js
+│   │   ├── playoffOdds.js       ← scoring model, Monte Carlo, BUYER_PCT / SELLER_PCT, ODDS_TRACK_RECORD, buildPlayoffOutlook (Feature 14)
+│   │   └── projections.js       ← matchup quality + THE schedule readers (Feature 4; Data Sources › schedule)
 │   ├── context/
 │   │   └── LeagueContext.jsx
 │   ├── navigation.js            ← THE navigation map — one tree read by TabBar, SectionContents, IndexView and global search
@@ -3323,74 +3323,74 @@ dynastyedge/
 │   └── main.jsx
 ├── docs/                        ← durable analysis + design records (not shipped)
 │   ├── open-items.md                ← THE living "what's next" backlog — deferred work + trigger conditions
-│   ├── archive/                     ← SPENT docs, kept and never deleted (CLEANUP-1); README.md indexes it (incl. open-items-2026.md, every closed record)
-│   ├── analysis/                    ← model calibration + research notes. `analysis/data/` holds FROZEN inputs a write-up must be reproducible from and that exist nowhere permanent (e.g. the player DB as of a run) (trade-fair-band-2026-09.md supersedes §4 of trade-my-side-read-2026-09.md)
-│   └── design/review-2026-09/       ← THE review that superseded Phase 3: findings · inventory · slop-checklist · directions (Matchday) · unasked · mocks/ (never imported)
+│   ├── archive/                     ← SPENT docs, never deleted; README.md indexes it
+│   ├── analysis/                    ← model calibration + research notes; `analysis/data/` holds FROZEN inputs a write-up must be reproducible from and that exist nowhere permanent (trade-fair-band-2026-09.md supersedes §4 of trade-my-side-read-2026-09.md)
+│   └── design/review-2026-09/       ← THE Matchday review (Design System)
 ├── tests/                       ← plain-Node test suite (node:test + node:assert/strict, zero deps)
 │   ├── fixtures/
-│   │   └── draft-2025.json          ← this league's REAL 2025 rookie draft (board, 40 picks, 24 traded picks) — replayed by truncation to synthesize every mid-draft state
-│   ├── draftLive.test.mjs           ← draft live path on the real 2025 draft: order (both tiers), clock/countdown at every pick, Best Available, capital; recap VOE sums to zero, volume never earns a grade, unpriced class = no grade
-│   ├── sleeperDraft.test.mjs        ← mocked-fetch: single-draft endpoint merged over the list (slot_to_roster_id), session cache, best-effort sub-fetch degradation
-│   ├── projections.test.mjs         ← lineup engine inputs: defense rankings via player DB + schedule, home/away, Week-1 empty stats, flags; parseByeTeams AND a scan for a second bye reader
-│   ├── deadlineThresholds.test.mjs  ← BUYER_PCT / SELLER_PCT are the shipped 70% / 35%, read at both edges, AND a source scan that fails on a second copy
-│   ├── oddsTrackRecord.test.mjs     ← ODDS_TRACK_RECORD = what the frozen 2023–25 replay measures (regenerate, never hand-edit), AND the Playoffs page types none of its figures
-│   ├── playoffOdds.test.mjs         ← fixed-seed determinism, Σ odds = playoff teams, thresholds; buildPlayoffOutlook's three states (posted-but-unplayed is ACTIVE)
-│   ├── seasonWindow.test.mjs        ← the draft-completion boundary (only `complete` rolls a season; auctions never count); Tracker selection; no NFL state → seed; seedPickYears' September boundary AND a scan for hard-coded seasons
-│   ├── sharedConstants.test.mjs     ← POSITIONS, WIN_WINDOW_TIERS, VALUE_HISTORY_DAYS hold their values AND a scan across src/ mcp/ scripts/ for a retyped copy (freeAgents' VALUED_POSITIONS is deliberately separate)
-│   ├── pickCapital.test.mjs         ← ownership, round medians, year weights BY DISTANCE (a rolled year never scores 0), the spent-pick ladder, the round label AND a scan for a copy
+│   │   └── draft-2025.json          ← this league's real 2025 rookie draft, replayed by truncation
+│   ├── draftLive.test.mjs           ← Feature 10's live path and recap, on the real 2025 draft
+│   ├── sleeperDraft.test.mjs        ← mocked fetch: single-draft merge, cache, degradation (Feature 10)
+│   ├── projections.test.mjs         ← defense rankings, schedule fields, flags, ONE bye reader (Feature 4)
+│   ├── deadlineThresholds.test.mjs  ← BUYER_PCT / SELLER_PCT + a scan for a copy (Feature 14)
+│   ├── oddsTrackRecord.test.mjs     ← ODDS_TRACK_RECORD = the frozen replay (Feature 14)
+│   ├── playoffOdds.test.mjs         ← determinism, Σ odds, thresholds, the three states (Feature 14)
+│   ├── seasonWindow.test.mjs        ← the pick-window roll + a scan for hard-coded seasons (Constants File)
+│   ├── sharedConstants.test.mjs     ← shared constants + a scan for retyped copies (Constants File; freeAgents' `VALUED_POSITIONS` is deliberately separate)
+│   ├── pickCapital.test.mjs         ← ownership, year weights, spent-pick ladder, round label + a scan (Features 1, 6)
 │   ├── pickTrades.test.mjs          ← slot tiers (as coded), slot pricing fallback, package constraints
-│   ├── fairBand.test.mjs            ← the two "even" rules: hindsight ±5% of the larger side, symmetric from both seats (and the fair band shown NOT to be), Activity = ledger, AND a scan for a copy
-│   ├── faabBid.test.mjs             ← the FAAB bid: budget read (none → no bid), current remainder, same % at $100/$1000, every tier, $2/$1 floor + waiver_bid_min, week scaling, the cap, null for DEF/unpriced, shared pickup context
-│   ├── leagueHistory.test.mjs       ← broken hop named, drafts LIST error propagates, all-buckets-failed throws, coverage complete only when all read, "haven't completed a trade" only over a full read, AND a scan for a second walk
+│   ├── fairBand.test.mjs            ← the two "even" rules + a scan for a copy (Features 3, 11)
+│   ├── faabBid.test.mjs             ← the FAAB bid (the recommendation engine)
+│   ├── leagueHistory.test.mjs       ← the history walk's failure naming + a scan (Feature 11)
 │   ├── managerAnalysis.test.mjs     ← past-pick ≈ round-median fallback, ±5% win/loss banding
 │   ├── appVersion.test.mjs          ← reload URL: ?v= before the hash (HashRouter), encoding, null build id
-│   ├── tradeTargets.test.mjs        ← Targets: deficit gate, scoped mode keeps depth (never empty), movability TILT (nothing hidden), position filter INSIDE the ranking
-│   ├── tradeAnalysis.test.mjs       ← the trade engine: suggestion inside buildFairBand (asked, never a literal; old search kept as an executable bug statement), Layer 3 odds/tier basis, alternative, phase-2 trade-off, fills scored once, my-lineup gate (only downgrades), verdict ladder, counter, lineup-sim fit, myFit can NEVER move a verdict, depth charts (post-trade getContext), two-phase builder, pick identity triple
+│   ├── tradeTargets.test.mjs        ← the Targets ranking (Feature 3)
+│   ├── tradeAnalysis.test.mjs       ← the trade engine: verdict, layers, gates, package search (Feature 3)
 │   ├── tradeContext.test.mjs        ← the five negotiating signals — NONE may move the verdict
-│   ├── dynastyTrajectory.test.mjs   ← per-year clamps, hold-flat contract, pick maturation; teamDirection / seriesDirection cut-offs AND a scan that fails if a screen re-derives a direction
-│   ├── lineupBuild.test.mjs         ← slot-fill order (singles → FLEX → SFLX), IR/taxi excluded, who-starts identity
-│   ├── lineupMoves.test.mjs         ← start/sit engine: GAME LOCKS (no move from a sealed slot; played score is fact; no live score → projection, NEVER 0; empty set = unknown), Σ gains = headline, both old per-slot bugs, empty DEF, confidence + coin-flip demotion
-│   ├── freeAgents.test.mjs          ← waiver options: FantasyCalc must not gate the list, TEAM_* guard, `—` for unranked, one-defense rule
+│   ├── dynastyTrajectory.test.mjs   ← trajectory model + a scan for a re-derived direction (Feature 17)
+│   ├── lineupBuild.test.mjs         ← slot-fill order and exclusions (Feature 9)
+│   ├── lineupMoves.test.mjs         ← the start/sit engine and game locks (Feature 4)
+│   ├── freeAgents.test.mjs          ← waiver options + the one-defense rule (Feature 4)
 │   ├── lineupHistory.test.mjs       ← optimal-lineup slot-fill order (singles → FLEX → SFLX)
 │   ├── matchupWeeks.test.mjs        ← mocked-fetch: one fetch/week across both consumers, all-fail rejection
-│   ├── rookieAdp.test.mjs           ← ROOKIE-1: rookie→FantasyCalc join by sleeperId only (the two Jaylen Smiths; a same-name-same-position veteran)
-│   ├── valueHistory.test.mjs        ← the sparkline rule: 4-point threshold, dated series = getValueSeries, tracked-short vs untracked, slicing never widens
-│   ├── rookieResearch.test.mjs      ← opportunity blend, one points scale, within-position divergence, fit re-ranking (score untouched), measurables can never move a score
-│   ├── injuryStatus.test.mjs        ← the owner's OUT / QUESTIONABLE grouping for every live Sleeper status, unknown = flagged never healthy, IR eligibility from league settings, trade verdict (Doubtful a note, unreadable said out loud), AND a source scan that fails on a second list
-│   ├── tradeDeadline.test.mjs       ← the deadline window (urgent from 2 weeks out), equivalence with the two expressions it replaced, The Edge's item, AND a scan for a second copy
-│   ├── marketTrend.test.mjs         ← the ±50 boundary (exactly 50 is flat), predicates = the literals they replaced, AND a source scan that fails on a second copy
-│   ├── recommendations.test.mjs     ← suggestSellMove two-sided; pick keep by round; past-peak tilt (decline-only, never protects); cash-out gap = buildFairBand's
-│   ├── fantasyCalcValues.test.mjs   ← the FantasyCalc reader: non-numeric id is a PICK, NULL not 0, old presence classifier as a regression statement; URL = the old literal, app price = pipeline price, AND a scan for a second reader/URL
-│   ├── sourceHealth.test.mjs        ← the alarm AND its restraint: 3-day gap fires, 1-day blip doesn't, fresh archive never alarms, one dark source implicates no other
-│   ├── briefingLedger.test.mjs      ← the briefing ledger: records EXACTLY computeEdgeSignals' picks and buildBriefing's slots, pick = pool head, pools bounded with true count, null never 0, unreadable day written and never overwrites, never pruned, the 2-day alarm, AND a scan that fails if a selection rule appears in the recorder
-│   ├── valuationSources.test.mjs    ← three-source readers: "NA" null, KTC on mfl_id (Gore Jr./Sr.), superflexValues only; a failed source all-null, never 0, never prunes
-│   ├── newsMatch.test.mjs           ← the matcher order (playerIds › athleteIds › longest full name), short names never match, AND a scan for a second matcher/normaliser
+│   ├── rookieAdp.test.mjs           ← ROOKIE-1: the sleeperId-only join (FantasyCalc API)
+│   ├── valueHistory.test.mjs        ← the sparkline rule (Value history pipeline)
+│   ├── rookieResearch.test.mjs      ← the rookie model (Feature 19)
+│   ├── injuryStatus.test.mjs        ← the injury-status rule + a scan for a second list (Feature 4)
+│   ├── tradeDeadline.test.mjs       ← the deadline window + a scan (Trade deadline banner)
+│   ├── marketTrend.test.mjs         ← the ±50 rules + a scan (rule 11)
+│   ├── recommendations.test.mjs     ← keep scores, sell moves, cash-out board (the recommendation engine)
+│   ├── fantasyCalcValues.test.mjs   ← THE FantasyCalc reader + a scan (FantasyCalc API)
+│   ├── sourceHealth.test.mjs        ← the alarm and its restraint (The source-health alarm)
+│   ├── briefingLedger.test.mjs      ← the briefing ledger + a scan for a selection rule (Value history pipeline)
+│   ├── valuationSources.test.mjs    ← the three-source readers (Value history pipeline › consensus)
+│   ├── newsMatch.test.mjs           ← the matcher order + a scan (Player news pipeline)
 │   ├── newsCoverage.test.mjs        ← the depth metric: stragglers cannot set it; general items excluded
-│   ├── newsRetention.test.mjs       ← retention: newest-N-per-player, breadth preserved, roundups charge every player, id-less items never dropped by quota
+│   ├── newsRetention.test.mjs       ← the retention policy (Player news pipeline)
 │   ├── transactions.test.mjs        ← mocked-fetch: all-18-buckets-failed rejection, per-bucket degradation
-│   ├── leagueState.test.mjs         ← buildLeagueState: string ids + '0' sentinel (rule 8), unranked kept (rule 7), ORIGINAL owner's slot, FAAB from settings, immutability
-│   ├── mcpOauth.test.mjs            ← auth as ATTACKS: foreign/lookalike redirect refused without redirect, PKCE plain refused, wrong audience refused, allowlist per request AND per renewal, token kinds distinct, refresh chain capped at 180 days, audience never widened on refresh
-│   ├── mcpHttp.test.mjs             ← HTTP gate: throwing authenticator never authorized, EVERY post authenticated, RFC 9728 401, no session id, GET leaks nothing, same tools as stdio BY NAME
-│   ├── mcpStore.test.mjs            ← store: fetchedAt round-trips, gzip, stale fallback vs cold throw, THE evicting-store trap, broken store = slower never broken
+│   ├── leagueState.test.mjs         ← buildLeagueState (rules 7, 8; Feature 1)
+│   ├── mcpOauth.test.mjs            ← auth as attacks (The MCP Server › auth model)
+│   ├── mcpHttp.test.mjs             ← the HTTP gate + same tools as stdio (The MCP Server › HTTP transport)
+│   ├── mcpStore.test.mjs            ← the store and loadSource traps (The MCP Server › Caching)
 │   ├── mcpLimit.test.mjs            ← limiter: concurrency cap, bounded backoff on 429/503, a 404 never retried
-│   ├── mcpSnapshot.test.mjs         ← snapshot: 15-min TTL, values + player DB cached ACROSS leagues, oldestSourceAt = stalest, serve-stale vs cold throw, shape guards
-│   ├── mcpGetRoster.test.mjs        ← get_roster: never guesses a team, value:null + unranked:true, taxi/IR slots, bounded output
-│   ├── mcpWeekly.test.mjs           ← weekly layer: offseason ZERO requests, schedule off /v1, home/away (wrong names = empty set), empty playingTeams = byes unknown, TTL > snapshot's, mergeAsOf
-│   ├── mcpFindSellHigh.test.mjs     ← find_sell_high: a CONCRETE partner and return; "no sell-high" stated as the answer
-│   ├── mcpRecommendFreeAgents.test.mjs ← recommend_free_agents: never a defense in the general list; DEF refusal names the incumbent; offseason projectedPoints null, never 0
-│   ├── mcpResolveAssets.test.mjs    ← resolve_assets: ambiguous resolves to NOTHING; pick ids round-trip; unranked findable
-│   ├── mcpAnalyzeTrade.test.mjs     ← analyze_trade: free text REJECTED even if unambiguous; owning-roster price; both seats; concerns ⊂ reasons
-│   ├── mcpTransactions.test.mjs     ← transactions: weeks 1..current, SPLIT TTL (one request on refresh), outage ≠ "no moves" and a quiet partner still is
-│   ├── mcpLeagueResults.test.mjs    ← get_league_results: p:1 winner, in-progress never "nobody won", titles by owner, no transaction bucket, unreadable named and not cached
-│   ├── mcpScoutManagers.test.mjs    ← scout_managers + wide walk: never-traded vs couldn't-read both ways, FAAB in budgets, null for zero value, unread season NOT cached
-│   ├── mcpHistory.test.mjs          ← narrow walk: zero transaction and user URLs, '0' sentinel, a failed drafts LIST is unavailable not "never drafted"
-│   ├── mcpSeason.test.mjs           ← season layer: total failure never a preseason, one bad week alone, range from settings, its OWN TTL literal
-│   ├── mcpPlayoffOdds.test.mjs      ← get_playoff_odds: preseason null + PREVIEW (never 0), posted-but-unplayed ACTIVE, unavailable ≠ preseason, Σ odds = field
-│   ├── mcpNews.test.mjs             ← news: playerIds THE join, NO headline fallback (two DJ Moores), roundups flagged, Class B degradation, stale-feed warning
-│   ├── mcpLineupAdvice.test.mjs     ← lineup_advice: offseason no zeros, Σ gains = headline, must-fix no confidence, confidencePct a percentage
-│   ├── mcpValueHistory.test.mjs     ← get_value_history + loader: not-enough-history null (never flat/0), untracked distinct, team line = buildTeamValueSeries, Class B
-│   ├── mcpResearchRookies.test.mjs ← research_rookies + feeds.js: score IS the util's, combine moves nothing, null never 0, unreadable feed = whole class in value order
-│   ├── mcpFindTradeTargets.test.mjs ← find_trade_targets: position filter INSIDE the ranking, cap disclosed, twin picks resolve to the RIGHT one
+│   ├── mcpSnapshot.test.mjs         ← snapshot TTL, cross-league cache, as-of stamp (The MCP Server › Caching)
+│   ├── mcpGetRoster.test.mjs        ← Tool 1
+│   ├── mcpWeekly.test.mjs           ← the weekly layer and schedule traps (The MCP Server › weekly data)
+│   ├── mcpFindSellHigh.test.mjs     ← Tool 2
+│   ├── mcpRecommendFreeAgents.test.mjs ← Tool 3
+│   ├── mcpResolveAssets.test.mjs    ← Tool 4
+│   ├── mcpAnalyzeTrade.test.mjs     ← Tool 5
+│   ├── mcpTransactions.test.mjs     ← the transaction layer (The MCP Server › transaction feed)
+│   ├── mcpLeagueResults.test.mjs    ← Tool 12
+│   ├── mcpScoutManagers.test.mjs    ← Tool 11 + the wide walk
+│   ├── mcpHistory.test.mjs          ← the narrow walk (The MCP Server › league-history walk)
+│   ├── mcpSeason.test.mjs           ← the season layer (The MCP Server › rest of the season)
+│   ├── mcpPlayoffOdds.test.mjs      ← Tool 7
+│   ├── mcpNews.test.mjs             ← Tool 8 + the news layer
+│   ├── mcpLineupAdvice.test.mjs     ← Tool 6
+│   ├── mcpValueHistory.test.mjs     ← Tool 13 + its loader
+│   ├── mcpResearchRookies.test.mjs ← Tool 10 + feeds.js
+│   ├── mcpFindTradeTargets.test.mjs ← Tool 9
 │   └── helpers/mcpFixtures.mjs      ← ONE synthetic league shared by the MCP suites — never divergent copies
 ├── index.html
 ├── eslint.config.js             ← ESLint 9 flat config (recommended + react-hooks, src/ + scripts/)
