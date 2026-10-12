@@ -3336,7 +3336,7 @@ dynastyedge/
 │   ├── oddsTrackRecord.test.mjs     ← ODDS_TRACK_RECORD = the frozen replay (Feature 14)
 │   ├── playoffOdds.test.mjs         ← determinism, Σ odds, thresholds, the three states (Feature 14)
 │   ├── seasonWindow.test.mjs        ← the pick-window roll + a scan for hard-coded seasons (Constants File)
-│   ├── sharedConstants.test.mjs     ← shared constants + a scan for retyped copies (Constants File; freeAgents' `VALUED_POSITIONS` is deliberately separate)
+│   ├── sharedConstants.test.mjs     ← `POSITIONS`, `WIN_WINDOW_TIERS`, `VALUE_HISTORY_DAYS` + a scan for retyped copies (Constants File; freeAgents' `VALUED_POSITIONS` is deliberately separate)
 │   ├── pickCapital.test.mjs         ← ownership, year weights, spent-pick ladder, round label + a scan (Features 1, 6)
 │   ├── pickTrades.test.mjs          ← slot tiers (as coded), slot pricing fallback, package constraints
 │   ├── fairBand.test.mjs            ← the two "even" rules + a scan for a copy (Features 3, 11)

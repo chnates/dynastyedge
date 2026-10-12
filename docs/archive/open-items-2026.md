@@ -125,6 +125,99 @@ deleted. The active work queue remains `docs/build-plan-2026-09.md`).
 
 ## Closed and shipped items formerly in §1 (Active)
 
+### CLEANUP-3 — dedupe CLAUDE.md (one home per rule) **CLOSED 2026-10-12 — EXECUTED; size target MISSED (239KB vs ~185KB)**
+
+**Why.** CLEANUP-2 cut CLAUDE.md to 3,586 lines / 229KB and missed its line
+target: what remains is mostly contract. But some contracts live in **two to
+five places**, and this repo's most repeated lesson is that two copies of a
+rule drift (the pick classifier, the FAAB scale, "protects your starters").
+One home per rule is a correctness gain as well as a size gain.
+
+**Scope (and only this):**
+1. **MCP tool sections** — keep what is server-specific (ids only, as-of stamp,
+   bounded output, closed zod schema, Class B degradation, TTLs); replace each
+   restated domain rule (one defense, the three odds states, FAAB in budgets,
+   the fair band…) with a pointer to its Feature. ~150–250 lines.
+2. **File Structure annotations** — the file's role plus a pointer; drop
+   restated contracts. The tree stays one line per file. ~15–20KB.
+3. **The FAAB budget rules** (League Context, Feature 11, the recommendation
+   engine, two MCP tools) and **the pick window** (Feature 1, Feature 2,
+   Constants) — one home each, pointers elsewhere. ~50 lines.
+
+**Out of scope:** Features and the Design System — what is left there is
+contract, not repetition, and it is where a session lands.
+
+**Measure in bytes, not lines** — bytes are what every session pays. Target
+**~185KB** (from 229KB). Report the real number even if it misses.
+
+**Done when:** each deduped rule exists in exactly one section, every pointer
+resolves, and the CLEANUP-2 rule audit (every never/always/must/do-not/trap
+sentence of the pre-change file still present in CLAUDE.md) passes.
+
+**Kickoff prompt** (dated 2026-10-07 — re-measure its numbers):
+
+```
+Do CLEANUP-3 in docs/open-items.md §2: dedupe CLAUDE.md so each rule has one
+home. Read CLAUDE.md, the CLEANUP-3 entry, and load dynastyedge-change-control
+and dynastyedge-docs-and-writing first.
+
+Scope is exactly the entry's three items: MCP tool sections point to Features
+for domain rules; File Structure annotations become role + pointer; the FAAB
+budget rules and the pick window get one home each. Do not touch the Features
+or the Design System beyond adding pointers.
+
+Step 0: list every rule you plan to collapse, its current homes, the home it
+keeps, and the expected byte saving. Show me and wait for my OK.
+
+Rules: a pointer replaces a restatement only when the target section states the
+rule fully. Move nothing to docs/history unless it is dated evidence. Re-run the
+CLEANUP-2 rule audit (every never/always/must/do-not/trap sentence) against the
+result. One docs: commit per area. Gates: npm ci, lint + test + build, test
+count unchanged. Report bytes before/after. Open a PR, watch it, do not merge.
+Close CLEANUP-3 in open-items as part of the PR.
+```
+
+**Executed 2026-10-12.** The owner approved the Step 0 cut list (all four
+rows) the same day.
+
+- **Result:** CLAUDE.md **253,292 → 239,320 bytes (−14.0KB, −5.5%)**, 3,838 →
+  3,827 lines, in four `docs:` commits plus one fix. **The ~185KB target was
+  missed by ~54KB, and it was never reachable in this scope.** The file had
+  grown 229 → 253KB between the entry being written and the work starting,
+  and the three areas held far less repetition than estimated: CLEANUP-2 had
+  already trimmed most of it.
+- **Per area:** FAAB budget + pick window ≈ 0 net (the two new "one home"
+  lines cost what the cuts saved; the gain is one place to change each rule);
+  MCP tool sections −1.2KB (estimate 12–16KB: the tools mostly carry
+  server-specific contracts, not restated domain rules); File Structure
+  −13.3KB (estimate 15–18KB).
+- **Homes:** FAAB budget → League Context (Feature 11, the recommendation
+  engine, rule 9 and two tools point there). Pick window → Constants File
+  (Features 1, 2 point there; it points to Features 10 and 13). MCP domain
+  rules → their Features (4, 14, 3, 11, 19, 1). Tree lines → role + the owning
+  section.
+- **Verification:** the CLEANUP-2 rule audit (every never / always / must /
+  do-not / trap sentence of the pre-change file, 355) — 323 survive verbatim;
+  the 32 that changed were read by hand, and each is either restated at its
+  pointer target or kept in shortened form. A distinctive-token sweep of every
+  removed line found five facts that lived ONLY in the tree (the
+  `vercel.json` `outputDirectory` trap, `CFBD_API_KEY`, usePlayerNews'
+  "unavailable, never Active", `VALUED_POSITIONS`, the `analysis/data`
+  reproducibility rule) — all restored. A sweep of phrases that tests, `mcp/`,
+  skills and docs quote from CLAUDE.md found one real loss — the `'0'`
+  empty-slot sentinel the tests cite as rule 8, stated only in tree
+  annotations — now written into rule 8. Every pointer was checked to name a
+  section that exists. Lint, 950 / 950 tests, build: green.
+- **What would actually reach ~185KB** (not done, owner's call): Features are
+  71KB and the Design System 28KB, both out of this scope; the MCP section's
+  non-tool parts (auth, caching layers) are ~22KB of mostly unique contract.
+  A further cut means moving contract text, not deduplicating it.
+- Dated evidence moved: two lines to `docs/history/mcp-server.md` (a live IR
+  reading, a build note).
+
+
+---
+
 ### NEWS-4 — the news item cap is binding again, at 78h **CLOSED 2026-10-11 — cap raised 400 → 1200 (2026-09-22); the 7-day claim MET**
 
 **Re-measured first, as the entry asked.** Live 2026-09-22 22:14Z (run 1230):

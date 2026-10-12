@@ -5,8 +5,9 @@ description: How to write and maintain DynastyEdge documentation at the house st
 
 # DynastyEdge Docs & Writing
 
-**The premise:** CLAUDE.md (repo root, ~230 KB / ~3,600 lines after CLEANUP-2 slimmed it from
-~480 KB / ~7,100 on 2026-10-07 — verify: `wc -lc CLAUDE.md`) is
+**The premise:** CLAUDE.md (repo root, ~240 KB / ~3,800 lines after CLEANUP-2 slimmed it from
+~480 KB / ~7,100 on 2026-10-07 and CLEANUP-3 gave each rule one home on
+2026-10-12 — verify: `wc -lc CLAUDE.md`) is
 the **doc of record**. Every future session reads it before writing code; it
 is the *only* onboarding this one-person project has. A stale sentence in it
 doesn't mislead one reader — it poisons every session from then on. This skill
