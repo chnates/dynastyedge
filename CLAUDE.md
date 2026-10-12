@@ -97,6 +97,10 @@ A *single bid* needs no period split (`bid ÷ waiver_budget` is exact either
 side of the reset). A *total* is a **count of budgets committed**, never a
 percent of an allocation.
 
+**This is the one home of the budget rules.** Where they are applied: the bid
+(the recommendation engine), the scouting stats in budgets (Feature 11), the
+display and its `—` (rule 9), and the MCP tools that quote them.
+
 **Identity is runtime state, not a constant.** The signed-in roster comes from
 `useIdentity` (Feature 18); every "is this me?" check reads `myRosterId` from
 `LeagueContext` / `useIdentity`. `MY_ROSTER_ID` is only the original-owner
@@ -914,7 +918,7 @@ modelled**.
   reason — never 0**; a failed fetch reports a different reason.
 - **Every row carries `faabBid`** and the answer a `faab` block — orchestration
   only, `recommendFaabBid` with `readFaabPeriod`, so it quotes exactly the app's
-  bid. No budget ⇒ `bid: null`, never an assumed scale. **Both fields are
+  bid. No budget ⇒ `bid: null` (League Context). **Both fields are
   declared in the zod output schema** (the closed-object trap).
 - **One row per position** (the engine's rule); each row's `alternatives` are
   the same-position runners-up **with no `faabBid`**, and a note says to claim
@@ -1068,8 +1072,8 @@ count beside).
   *"No trades in the N seasons we could read"* and drops *"You haven't completed
   a trade yet"*. A complete read of a quiet manager still says "No trades yet".
   Pinned both ways.
-- **FAAB in BUDGETS, never dollars** — no `dollars` / `avgBid` / `valuePer100`
-  field leaves the tool (test-pinned).
+- **FAAB in BUDGETS, never dollars** (Feature 11) — no raw-dollar field leaves
+  the tool (test-pinned).
 - **Rule 7 on a ledger:** a zero-value asset reports `value: null`.
 - **`tradeTimeTotals`** (extracted to `utils/managerAnalysis.js`, shared with
   `useTradeTimeValues`): an archived **null** hides the whole "at trade time"
@@ -1359,10 +1363,9 @@ position's strength.
 
 #### Pick capital rules
 
-- **Show the live three-season window** — `pickYears` on `LeagueContext` (the
-  upcoming rookie draft plus the next two). It rolls itself when a rookie draft
-  completes. **Never hardcode a season list, and never take `PICK_YEARS` as the
-  truth.**
+- **Show the live three-season window — `pickYears` on `LeagueContext`**
+  (how it rolls: Constants File). **Never hardcode a season list, and never
+  take `PICK_YEARS` as the truth.**
 - Fetch `/traded_picks`. **A pick NOT in it is still owned by its original
   team; a pick in it belongs to `owner_id`.**
 - **Exact slot resolution:** `useSleeper` also fetches `/league/{id}/drafts`
@@ -1386,9 +1389,9 @@ by overall fit.
 
 **Per opponent:** positional strength (summed top players), my and their
 surpluses/deficits vs league average, a **match score** (their surplus covers my
-deficit and vice versa), a **pick capital score** (nearest draft 3×, next 2×,
-third 1× — **weighted by distance from the upcoming draft, never by literal
-year**), and the win-window tier.
+deficit and vice versa), a **pick capital score** (3× / 2× / 1× — **weighted by
+distance from the upcoming draft, never by literal year**; Constants File), and
+the win-window tier.
 
 **Win window tier:** score = total value × 0.5 + pick capital × 0.3 + youth
 (inverted avg starter age) × 0.2. **Top 3 Contending, bottom 3 Rebuilding,
@@ -2018,10 +2021,9 @@ was ever recreated instead of renewed, the chain ends there.
   `budgetsCommitted` is a **multiple** (1.73×); `valuePerBudget` is value per
   **full budget** committed; `avgBidPct` is a **percent** (a single bid is
   exact either side of a reset).
-  - **The total is a COUNT, not a percent**, because the budget resets twice a
-    year — "173%" invites "of what?".
-  - **A cross-season dollar total is a number in no unit** ($100 → $1000);
-    summing dollars inverted real tendency chips.
+  - **Why budgets, and a count not a percent:** League Context (scale change,
+    twice-yearly reset). Summing dollars inverted real tendency chips; "173%"
+    invites "of what?".
   - `valuePerBudget` equals the old "value per $100" on a $100 budget, so **no
     pre-2026 history is restated.**
   - **No raw-dollar field leaves `buildFaabStats`** (`dollars`, `avgBid`,
@@ -2030,8 +2032,8 @@ was ever recreated instead of renewed, the chain ends there.
   - The **`budgetsCommitted >= 0.2`** coaching gate means "committed ≥ 20% of a
     budget" (on raw dollars it tripped at 2% of 2026's $1000).
   - A PAST season with no `waiver_budget` falls back to **100** — history only,
-    the value those seasons had, used only to turn bids into percentages. The
-    **current** remainder never assumes one (`leagueState.js` → `null`, `—`).
+    the value those seasons had, used only to turn bids into percentages (the
+    current remainder never assumes one — League Context).
     UI: **"Budgets Used · 1.7×"**, **"Value / Full Budget"**.
 - **Rookie draft grades:** slot vs current-value rank within the class (Δ ≥ +5
   Steal, ≤ −5 Reach; ≥ 1000 = hit). Startup drafts (> 6 rounds) excluded.
@@ -2453,9 +2455,9 @@ player's depth rank):
   - **Priced against the FULL budget, capped at what is left** — never "% of
     remaining". Week scaling **0.8×** weeks 1–4, **1.0×** 5–14, **0.3×** from 15;
     offseason 1.0×; **the floor never scales.**
-  - **The budget is READ, never assumed:** `readFaabPeriod` takes
-    `waiver_budget` and the roster's `waiver_budget_used` (current period).
-    **No budget ⇒ no bid**, not a 100 or a 1000.
+  - **The budget is READ, never assumed** (League Context): `readFaabPeriod`
+    takes `waiver_budget` and the roster's current-period `waiver_budget_used`.
+    **No budget ⇒ no bid.**
   - **Rule 7 and one-defense:** a defense or an unpriced player gets `bid:
     null`.
   - **Graded at Weeks 13–15 against the pre-registered bars** (wins ≥ 75% of
@@ -3635,11 +3637,12 @@ so a stale window manufactures picks priced at 0 and hides the newest season.
 Two things the roll must not break, both test-pinned:
 - **Year weights follow the WINDOW, not the calendar** (nearest draft 3×, next
   2×, third 1×). Keyed by literal year, a newly surfaced season scores 0.
-- **The Draft Tracker keeps its recap** — `selectTrackedDraft` follows the
-  upcoming draft whenever Sleeper has one, else the most recent completed one.
-  `useSleeperDraft` exports `FALLBACK_DRAFT_SEASON` (a seed), and the Tracker
-  reads its season off the draft it shows. **Trade › Pick Trades reads
-  `pickYears[0]`** and refuses to borrow another season's draft board.
+- **The Draft Tracker keeps its recap** — `selectTrackedDraft` (Feature 10);
+  `useSleeperDraft`'s `FALLBACK_DRAFT_SEASON` is a seed. **Trade › Pick Trades
+  reads `pickYears[0]`** and never borrows another season's board (Feature 13).
+
+**This is the one home of the pick-window rule**; Features 1, 2, 10 and 13
+point here.
 
 -----
 
@@ -3680,8 +3683,8 @@ Two things the roll must not break, both test-pinned:
    joins use string IDs.
 1. **FAAB display:** always `$XXX` (`$142`, not `142`) — via **`faabDisplay`**
    (`utils/leagueState.js`), which prints **`—`** when the league's budget is
-   unknown. `faabBudget` / `faabRemaining` are **null** then, never a figure off
-   an assumed $100 (owner, 2026-10-07; the MCP schemas declare them nullable).
+   unknown (League Context). `faabBudget` / `faabRemaining` are then **null**,
+   never a figure off an assumed $100 (the MCP schemas declare them nullable).
 1. **Dynasty values display:** whole numbers only, 0–10000 scale. **Never
    decimals.**
 1. **Trend arrows:** `trend30Day > 50` → ↑ green · `< -50` → ↓ red · between →
