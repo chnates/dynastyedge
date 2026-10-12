@@ -125,6 +125,61 @@ deleted. The active work queue remains `docs/build-plan-2026-09.md`).
 
 ## Closed and shipped items formerly in §1 (Active)
 
+### DESIGN-4 — ~~finish the Matchday cleanup~~ **CLOSED 2026-09-21 (code); device checks PASSED 2026-10-12**
+
+**Closed on paper by an audit, not by new work — every code item had already
+shipped 2026-09-13 while this file still called three of them "pending".**
+Verified in the tree 2026-09-21: `MarketMovers` renders the split row (no
+nested `<button>`), `SectionContents` carries `railLabel` and stays
+`flex-wrap`, `src/components/ui/Textarea.jsx` exists, and a static probe over
+every `<button>`/`<input>`/`<select>`/`<textarea>` in `src` finds **no control
+missing `.focus-ring`** (item 5's 46 are all fixed). That drift is the lesson
+worth keeping: **this file is only as good as its last review, and a "pending"
+that shipped a week ago costs the next session a wasted investigation.**
+
+**What genuinely remains, and it is the owner's to run — neither is checkable
+in any sandbox:**
+
+1. **Verify the PWA metas and the app icon on device.** Carried since step 4.
+   A meta or icon change is **silent** until the home-screen app is removed
+   and re-added (failure-archaeology §1). `index.html`'s icon `?v=` is at 4.
+   Note the Matchday repaint moved both `theme-color` metas (light `#E8E5DC`,
+   dark `#141413`), so this is checking a real change, not a no-op.
+2. **Bricolage Grotesque on glass.** Step 3 measured that the spec's
+   `wdth 125` is not executable (the axis tops out at 100), so the face has
+   never been seen doing what the brief asked. If it doesn't earn its keep on
+   a real phone, the recorded swap candidate is **Big Shoulders Display**.
+
+The original entry is kept below as the record.
+
+**Status (original):** in progress. **Trigger: fired** — the owner asked for
+it directly after the post-merge review. Four items, landing as separate PRs
+so the two carrying a layout decision stay reviewable.
+
+1. **The hand-rolled panels — DONE 2026-09-13.** 27 converted (the handoff said
+   21; the sweep found six more the note never named). Detail in §3.
+2. **`MarketMovers`' nested `<button>`** — pending; needs a layout call at
+   390px, because the Partners-card precedent (a sibling *below*) costs a row
+   of height and Movers is a dense list of up to ~30 rows across six sections.
+3. **The contents rail wrapping to two lines** — pending; one deliberate
+   decision rather than an inherited default, measured at 390px in both themes.
+4. **A `Textarea` primitive** — pending; only if it stays genuinely small.
+
+**Found while doing (1), and worth more than (1):** see §3's record — three more
+`<lowercase.Uppercase />` lucide leftovers, one of them a live white screen on
+`main`, plus a seventh truncation of a load-bearing value that the crash had
+been hiding.
+
+**Device checks passed 2026-10-12 (owner, §0 #4).** The home-screen app was
+removed and re-added from Safari: the Crown Crest icon renders full-bleed with
+no border or doubled rounding, and the status bar matches the header in both
+system appearances (the two static `theme-color` metas). Bricolage Grotesque
+reads as intended on the phone, so the Big Shoulders Display fallback is not
+needed.
+
+
+---
+
 ### CLEANUP-3 — dedupe CLAUDE.md (one home per rule) **CLOSED 2026-10-12 — EXECUTED; size target MISSED (239KB vs ~185KB)**
 
 **Why.** CLEANUP-2 cut CLAUDE.md to 3,586 lines / 229KB and missed its line

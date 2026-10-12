@@ -4,7 +4,7 @@
 dated snapshot: unlike the old dated status snapshots (now in `docs/archive/`), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-10-12 (**§0 #3, §0 #12 and CLEANUP-3 done** — the connector re-check passed on the phone, the news feed's 7-day window measured, CLAUDE.md deduped to 239KB (target missed, see §3). Before that, **§0 #11 first half done** — playoff odds replayed on 2023–25 and the lineup curve checked on 2026; no app change, follow-ups in the memo's §6. Before that, **AGENT-1 added** — owner asked for a feasibility study of an AI agent for league tasks and research; recorded in §0's trigger table and §2, nothing built. Before that, **§0 #10 recording shipped** — the briefing ledger records The Edge's five checkable claims daily; scoring pre-registered, first pass #10b on or after 2026-12-15; tests 947 / 904, gap 43. Before that, **§0 #9 done** — the weekly brief is live; close-out added one-pickup-per-position and IR capacity. Before that, **§0 #8 done** — proactive delivery note; owner chose option E (a scheduled Claude routine, phone push, Tuesday evening ET); #9 approved and next. Earlier: **CODE-REVIEW-1 DONE** — 16 fixes, PRs #79–#94, tests 902 / 859, gap 43; **§0 #7 first pass done** — buy-low timing measured, no app change, re-run #7b from 2026-11-06; the ±50 trend rule given one home in `src/utils/marketTrend.js` (#75); `values-consensus.json` made the one permanent home of daily values, unbroken from 2026-07-09 (#77); **CODE-REVIEW-1 added as #7c, next in line**. Tests 841 / 798, gap 43. Earlier: **CLEANUP-3 added** — owner-approved dedupe of CLAUDE.md, triggered after §0 #12; spec + kickoff prompt in §2. **CLEANUP-2 done** — CLAUDE.md slimmed 7,123 → 3,586 lines, 482KB → 229KB, every rule kept and the dated evidence moved verbatim to `docs/history/`; on the owner's review before merge. It missed its ~2,000-line target — see §3. Previously the same day: CLEANUP-1 executed and OPEN-3 shipped. Tests 828 / 785 with no `node_modules`, gap 43.)
+**Last reviewed:** 2026-10-12 (**§0 #3, #4, #12 and CLEANUP-3 done** — the connector re-check and both device checks passed on the phone, the news feed's 7-day window measured, CLAUDE.md deduped to 239KB (target missed, see §3). Before that, **§0 #11 first half done** — playoff odds replayed on 2023–25 and the lineup curve checked on 2026; no app change, follow-ups in the memo's §6. Before that, **AGENT-1 added** — owner asked for a feasibility study of an AI agent for league tasks and research; recorded in §0's trigger table and §2, nothing built. Before that, **§0 #10 recording shipped** — the briefing ledger records The Edge's five checkable claims daily; scoring pre-registered, first pass #10b on or after 2026-12-15; tests 947 / 904, gap 43. Before that, **§0 #9 done** — the weekly brief is live; close-out added one-pickup-per-position and IR capacity. Before that, **§0 #8 done** — proactive delivery note; owner chose option E (a scheduled Claude routine, phone push, Tuesday evening ET); #9 approved and next. Earlier: **CODE-REVIEW-1 DONE** — 16 fixes, PRs #79–#94, tests 902 / 859, gap 43; **§0 #7 first pass done** — buy-low timing measured, no app change, re-run #7b from 2026-11-06; the ±50 trend rule given one home in `src/utils/marketTrend.js` (#75); `values-consensus.json` made the one permanent home of daily values, unbroken from 2026-07-09 (#77); **CODE-REVIEW-1 added as #7c, next in line**. Tests 841 / 798, gap 43. Earlier: **CLEANUP-3 added** — owner-approved dedupe of CLAUDE.md, triggered after §0 #12; spec + kickoff prompt in §2. **CLEANUP-2 done** — CLAUDE.md slimmed 7,123 → 3,586 lines, 482KB → 229KB, every rule kept and the dated evidence moved verbatim to `docs/history/`; on the owner's review before merge. It missed its ~2,000-line target — see §3. Previously the same day: CLEANUP-1 executed and OPEN-3 shipped. Tests 828 / 785 with no `node_modules`, gap 43.)
 
 **How to use it:**
 - Each item states its **trigger** — the condition that makes it ready. An item
@@ -47,7 +47,7 @@ login, a phone or a decision that no sandbox can supply.
 | 1 | **This roadmap + the repo-cleanup scan** (CLEANUP-1's inventory) — **DONE by the PR that wrote this table** | Me | <1 | Every later session starts from this file, and it was 11 days stale |
 | 2 | **OPEN-3: FAAB bid recommender** — **DONE 2026-10-07.** `src/utils/faabBid.js` feeds League › Free Agents and `recommend_free_agents`; floor dropped to $2 on the owner's call; grading bars pre-registered in the memo's §10 | Me | 1–2 | Owner-asked 2026-09-25. Its live grading (#13) started the day it shipped |
 | 3 | **MCP connector re-check on the phone** — **DONE 2026-10-12 (owner).** All 13 tools listed in the connector; one question each to the five added since 2026-09-20 (`find_trade_targets`, `research_rookies`, `scout_managers`, `get_league_results`, `get_value_history`) — all five passed, no schema errors | Owner | 15 min | No sandbox can do it |
-| 4 | **The two DESIGN-4 device checks** — re-add the home-screen app (icon + both `theme-color` metas), and Bricolage Grotesque on glass | Owner | 15 min | Same reason; do it alongside #3 |
+| 4 | **The two DESIGN-4 device checks** — **DONE 2026-10-12 (owner).** Home-screen app re-added: icon full-bleed, status bar matches the header in light and dark; Bricolage Grotesque earns its keep on glass (no swap) | Owner | 15 min | Same reason; do it alongside #3 |
 | 5 | **CLEANUP-1: mechanical cleanup** — **DONE 2026-10-07.** 113 branches deleted (9 unmerged tips tagged `archive/*` first), spent docs in `docs/archive/`, this file cut to the live items, five dead exports removed, skill drift fixed | Me | 1 | Right after the FAAB build: cleanup does not decay, FAAB does. It goes before the research queue, because every session after it reads less stale material. **Branch deletion needs the owner's yes first** |
 | 6 | **CLEANUP-2: slim CLAUDE.md** — **DONE 2026-10-07** (owner reviews before merge). 7,123 → 3,586 lines, 482KB → 229KB; every rule, contract and trap kept, the dated evidence moved verbatim to `docs/history/` (one file per section). Missed the ~2,000-line target — see §3 | Me | 1–2 | The largest cleanup lever, and the riskiest (it is the doc of record). After CLEANUP-1, so the archive layout it moves material into already exists |
 
@@ -516,51 +516,6 @@ connector's list; one question each to the five — all passed, no
   assumed. **Tightening `news.yml`'s cron is NOT the fix** — the requested
   cadence is already 6× what is delivered.
 
-### DESIGN-4 — ~~finish the Matchday cleanup~~ **CLOSED 2026-09-21 (code); two DEVICE checks remain**
-
-**Closed on paper by an audit, not by new work — every code item had already
-shipped 2026-09-13 while this file still called three of them "pending".**
-Verified in the tree 2026-09-21: `MarketMovers` renders the split row (no
-nested `<button>`), `SectionContents` carries `railLabel` and stays
-`flex-wrap`, `src/components/ui/Textarea.jsx` exists, and a static probe over
-every `<button>`/`<input>`/`<select>`/`<textarea>` in `src` finds **no control
-missing `.focus-ring`** (item 5's 46 are all fixed). That drift is the lesson
-worth keeping: **this file is only as good as its last review, and a "pending"
-that shipped a week ago costs the next session a wasted investigation.**
-
-**What genuinely remains, and it is the owner's to run — neither is checkable
-in any sandbox:**
-
-1. **Verify the PWA metas and the app icon on device.** Carried since step 4.
-   A meta or icon change is **silent** until the home-screen app is removed
-   and re-added (failure-archaeology §1). `index.html`'s icon `?v=` is at 4.
-   Note the Matchday repaint moved both `theme-color` metas (light `#E8E5DC`,
-   dark `#141413`), so this is checking a real change, not a no-op.
-2. **Bricolage Grotesque on glass.** Step 3 measured that the spec's
-   `wdth 125` is not executable (the axis tops out at 100), so the face has
-   never been seen doing what the brief asked. If it doesn't earn its keep on
-   a real phone, the recorded swap candidate is **Big Shoulders Display**.
-
-The original entry is kept below as the record.
-
-**Status (original):** in progress. **Trigger: fired** — the owner asked for
-it directly after the post-merge review. Four items, landing as separate PRs
-so the two carrying a layout decision stay reviewable.
-
-1. **The hand-rolled panels — DONE 2026-09-13.** 27 converted (the handoff said
-   21; the sweep found six more the note never named). Detail in §3.
-2. **`MarketMovers`' nested `<button>`** — pending; needs a layout call at
-   390px, because the Partners-card precedent (a sibling *below*) costs a row
-   of height and Movers is a dense list of up to ~30 rows across six sections.
-3. **The contents rail wrapping to two lines** — pending; one deliberate
-   decision rather than an inherited default, measured at 390px in both themes.
-4. **A `Textarea` primitive** — pending; only if it stays genuinely small.
-
-**Found while doing (1), and worth more than (1):** see §3's record — three more
-`<lowercase.Uppercase />` lucide leftovers, one of them a live white screen on
-`main`, plus a seventh truncation of a load-bearing value that the crash had
-been hiding.
-
 ### OPEN-8 — Re-derive `PICK_ROUND_KEEP` once the 2027 class resolves
 
 **Status:** deferred. **Trigger:** the 2027 rookie draft has happened *and* that
@@ -650,7 +605,7 @@ are as of 2026-07-17.
 | PIPE-1 — the trade-value archive priced every pick at 0 | 2026-09-21 | The snapshot scripts kept the `if (sid)` classifier the app fixed in 2026-07, so `pickEntries` was empty and every pick archived as 0 into a **permanent** file. One shared `scripts/fantasyCalcValues.mjs` (pure, 10 tests), a ladder ending in **null not 0**, and a self-heal that rewrites the archived zeros through the normal publish path. Found by reading the published feed, not the code. Detail in the archive |
 | OPS-1 — Vercel built every data-branch push | 2026-09-21 | MCP-2b's integration fix started ~9 junk preview builds a day (first drafted as ~48 from the cron line — corrected by NEWS-5). Fixed with a project-level Ignored Build Step; `git.deploymentEnabled` in `vercel.json` was written and **reverted** as a dead no-op (Vercel reads that file from the pushed branch, and the data branches carry only JSON). Detail in the archive |
 | NEWS-3 — re-measure coverage at a 7-day window | 2026-09-21 | **PASS, 18 of 31** against a ≥12 target and a 9–11 prediction. Matching still saturated (achieved == ceiling); volume was the lever, as NEWS-1 ruled. Surfaced NEWS-4. Detail in the archive |
-| DESIGN-4 — finish the Matchday cleanup | 2026-09-21 | Closed by audit: all four code items (plus item 5's 46 focus rings) had shipped 2026-09-13 while this file still said "pending". Two owner-only device checks remain. Detail in §2 |
+| DESIGN-4 — finish the Matchday cleanup | 2026-09-21 → 2026-10-12 | Closed by audit: all four code items (plus item 5's 46 focus rings) had shipped 2026-09-13 while this file still said "pending". Both owner device checks passed 2026-10-12 (icon + status bar on a re-added home-screen app; Bricolage on glass). Detail in the archive |
 | NEWS-1 — re-measure news coverage after accumulation | 2026-09-12 | **Measured, and it was a REGRESSION: 6 of 30, worse than the 10 of 26 it was opened on, with span collapsed 159h → 27.5h.** Cause was retention, not coverage: eviction was recency-only, so the 240-item cap bound at ~30h and the 7-day window had never once bound; the cap was also spent on redundancy (240 items → just 97 distinct players, one carrying 23). Fixed with diversity-aware eviction (≤3 per player, soft) + cap 240 → 400, sized off **wire** bytes (37KB gzipped, not the 141KB raw the docs assumed). One published run: span **112h**, cap unpinned **186/400**, distinct players **97 → 119**, feed *smaller* on the wire, acceptance **6 → 8 of 30**. Still a MISS; matching is saturated (achieved = ceiling) and the residual is source-*kind*, not source-count. Re-measure at 7 days = **NEWS-3**. Detail in the archive |
 | DESIGN-1 — build the "Matchday" visual direction | 2026-09-12 | All five steps shipped. Step 5 (motion) landed the GLOBAL `prefers-reduced-motion` guard first, one easing token (`--ez`) emitted as Tailwind's DEFAULT so all 69 transitions moved at once, a duration ladder scaled to element size, the press run replacing `.edge-rise`'s fade-up and linear stagger, `.press` as the third control-level contract (one definition replacing 41 `active:` states at three values across 20 files), `Loading` replacing every spinner, the sheet entrance, and a written four-moment budget. **0 of 12 slop markers**, re-scored from scratch. Detail in the archive |
 | DESIGN-3 — the navigation rebuild | 2026-09-11 | Primary navigation is a bottom tab bar (Today · Squad · Trade · League · Index); the drawer keeps its utilities and carries zero destinations. `SubTabBar` → `SectionContents`, which wraps instead of scrolling, so "Pick Trades" no longer clips. New `/index` route is the complete map and holds the four consulted views. All three copies of the nav payload collapsed into `src/navigation.js`. Draft and News lost top-level rank, not reachability. The four orphans each got a content-level inbound link, and Rookie Research entered global search. No path moved, so no redirect was needed. Detail in the archive |
