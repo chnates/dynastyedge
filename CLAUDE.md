@@ -3663,7 +3663,8 @@ point here.
    roster view.**
 1. **Sleeper ID normalization:** IDs arrive as strings or numbers by endpoint.
    **Normalize to `String(id)` at ingestion** (`useLeague` does); all lookups and
-   joins use string IDs.
+   joins use string IDs. **`'0'` in a starters array is Sleeper's empty-slot
+   sentinel, never a player** (`leagueState.js`'s `EMPTY_SLOT`; test-pinned).
 1. **FAAB display:** always `$XXX` (`$142`, not `142`) — via **`faabDisplay`**
    (`utils/leagueState.js`), which prints **`—`** when the league's budget is
    unknown (League Context). `faabBudget` / `faabRemaining` are then **null**,
