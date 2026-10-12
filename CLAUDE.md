@@ -2930,8 +2930,8 @@ the most generic sports face).
 **Measured correction to the spec:** Google Fonts' Bricolage `wdth` axis runs
 **75–100 with default 100** (`wdth@75..125` returns HTTP 400), so the spec's
 `wdth 125` was a no-op. **`font-stretch` is NOT set** (it would clamp silently);
-the work is in `opsz` and `wght`. **If Bricolage doesn't earn its keep on
-device, the recorded swap candidate is Big Shoulders Display.**
+the work is in `opsz` and `wght`. **It earned its keep on device (owner,
+2026-10-12)**; Big Shoulders Display stays the recorded fallback only.
 
 **The type scale** — a custom ladder on a **1.25 ratio** in
 `tailwind.config.js` (Tailwind's default is not a ratio), anchored at **`sm` =
