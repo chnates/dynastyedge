@@ -125,6 +125,102 @@ deleted. The active work queue remains `docs/build-plan-2026-09.md`).
 
 ## Closed and shipped items formerly in §1 (Active)
 
+### NEWS-4 — the news item cap is binding again, at 78h **CLOSED 2026-10-11 — cap raised 400 → 1200 (2026-09-22); the 7-day claim MET**
+
+**Re-measured first, as the entry asked.** Live 2026-09-22 22:14Z (run 1230):
+`playerItems 400 / playerCap 400`, `spanHours 56` (was 78 the day before),
+`distinctPlayers 207`, 480 items, **53,957 B on the wire** (211,241 raw —
+~112 B/item gzipped, matching the ~114 recorded 2026-09-12). The log read
+*"dropped 106 redundant player items (over 3/player); 0 cap slots spare"*.
+Still cap-bound, still shrinking, breadth still healthy — so the decision was
+the one the evidence favoured.
+
+**Raised to 1200.** The window held ~7.1 player items/h after diversity
+eviction (400 over 56h); 168h at that rate is ~1200 (the 2026-09-12 memo's
+pre-diversity figure was ~1357). Projected wire size at 1200+80: **~144KB**,
+against ~54KB at 400+80 — a fraction of the 5–8MB player DB the phone
+already pulls once a session. KV entries on the MCP side are gzipped, so it
+costs the same there; tool output is filtered per player, so bounded output
+is unaffected. `newsRetention.mjs` and `PER_PLAYER_MAX` are untouched.
+
+**One consequence the entry did not anticipate, and it is fixed:** Feature
+15's News page rendered *every* item — 480 rows, going to ~1,280. It now pages
+50 at a time with "Show more" (League › Activity's pattern), and each date
+band's count stays the full bucket. Verified at 390px against the live feed:
+50 rows → 150 after two taps, TODAY reading the true 195 throughout, 0 clipped
+elements.
+
+**A second consequence, and it is the finding worth keeping: `spanHours` was
+the wrong number to watch.** The first run at 1200 (run 1234) published
+`spanHours 147` — 54 → 147 in one run with **three** more items. Evicted items
+do not come back, so that is not depth. It was **three week-old The Athletic
+items** from the current pull (it returns 100 per pull, reaching back days),
+which newest-first eviction used to throw away first and could now keep. The
+player window's p90 age went **51h → 52h**. `spanHours` is max − min over every
+item, so a handful of stragglers set it; the pinned cap had been hiding that
+by evicting them. The drawer renders it as "Nd deep", so it would have read
+**"6d deep" on a two-day window** — the 2026-09 collapse's shape (a health
+number reading fine while depth is wrong) from the other direction.
+
+**Fixed with `coverage.depthHours`** — p90 age of the player items, measured
+from the newest one (`scripts/newsCoverage.mjs`, 5 tests). The drawer and
+`news-coverage.mjs` read it; `spanHours` still ships unchanged.
+
+**Before → after on the PUBLISHED feed** (runs 1230 → 1235, read from the
+`news-data` branch):
+
+| | 1230 (before) | 1235 (after) |
+|---|---|---|
+| total | 480 | 484 |
+| playerItems / playerCap | 400 / **400** | 404 / **1200** |
+| spanHours | 56 | 147 (three stragglers) |
+| depthHours | — (p90 51h, computed) | **52** |
+| distinctPlayers | 207 | 216 |
+| wire bytes | 53,957 | ~54,100 |
+| sources | 11 (ESPN RSS 0) | 10, all non-zero |
+| sourceMisses | ESPN RSS 7, rest 0 | all 0 |
+
+**How those runs were made, and why it can't happen again.** Runs 1231–1235
+were `workflow_dispatch`es on the feature branch, and because `news.yml`'s
+publish step had no default-branch guard, **each one force-pushed that
+branch's unreviewed code to the live `news-data` feed.** That was the second
+time (the 2026-09-12 retention fix did the same). Both `news.yml` and
+`values-history.yml` now carry `rookie-intel.yml`'s guard, so a branch dispatch
+is a dry run. **Post-merge check (owed):** dispatch `news.yml` on `main` and
+read the published file; expect `playerCap 1200`, a `depthHours` field, ten
+sources, and no `ESPN RSS` key. Until the PR merges, scheduled runs on `main`
+publish the old code (cap 400, ESPN RSS back in), which is correct: the feed
+is `main`'s.
+
+**What is NOT verified, stated plainly:** that the 7-day window binds. The cap
+fills by accumulation and evicted items don't come back, so depth can only grow
+at the arrival rate: ~7 retained items/h, several days to reach 1200. **Trigger
+to re-measure: 2026-09-29.** Read `depthHours` (not `spanHours`, not
+`playerItems`). If it is near 168h, the claim is met. If the cap has pinned
+again below 168h, correct CLAUDE.md's 7-day line to the measured depth rather
+than raising the cap a third time on the same argument.
+
+**Read 2026-10-06 (a week past the trigger, live feed):** `depthHours` **140**,
+`spanHours` 167, `playerItems` **595 / 1200**, 269 distinct players, all ten
+sources at `sourceMisses: 0`. The cap has **not** pinned again; depth is still
+climbing toward 168h. Close this item with one more read around 2026-10-10
+(§0 #12).
+
+**Closing read 2026-10-11 (§0 #12, live feed published 22:57Z):** the 7-day
+claim is **met**. Player items **580 / 1200** — the cap is not binding;
+`depthHours` **148**, `spanHours` 168, and the oldest player item is
+**168h** old, so items now leave by age, not by the cap. For comparison, a
+steady flow over exactly 168h puts the p90 at ~151h. Every one of the seven
+days holds items (175 · 51 · 118 · 62 · 69 · 36 · 69, newest day first) —
+real depth, not a few stragglers. 267 distinct players, all ten sources at
+`sourceMisses: 0`. Wire size **74,167 B** for 660 items (~112 B/item,
+unchanged), well under the ~144KB projected at the full cap. Volume, not
+retention, now limits the window. CLAUDE.md's "policy's ceiling, not a
+measured depth" line was corrected in the same PR.
+
+
+---
+
 ### CODE-REVIEW-1 — find what was done for convenience instead of properly **CLOSED 2026-10-07 — all 16 findings fixed (PRs #79–#94)**
 
 **Why.** On 2026-10-07 the owner set a new working rule (CLAUDE.md Rules: *the
