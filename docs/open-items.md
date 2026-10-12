@@ -4,7 +4,7 @@
 dated snapshot: unlike the old dated status snapshots (now in `docs/archive/`), this one is edited in place forever. Anything deferred
 with a reason belongs here, or it will be forgotten.
 
-**Last reviewed:** 2026-10-08 (**§0 #11 first half done** — playoff odds replayed on 2023–25 and the lineup curve checked on 2026; no app change, follow-ups in the memo's §6. Before that, **AGENT-1 added** — owner asked for a feasibility study of an AI agent for league tasks and research; recorded in §0's trigger table and §2, nothing built. Before that, **§0 #10 recording shipped** — the briefing ledger records The Edge's five checkable claims daily; scoring pre-registered, first pass #10b on or after 2026-12-15; tests 947 / 904, gap 43. Before that, **§0 #9 done** — the weekly brief is live; close-out added one-pickup-per-position and IR capacity. Before that, **§0 #8 done** — proactive delivery note; owner chose option E (a scheduled Claude routine, phone push, Tuesday evening ET); #9 approved and next. Earlier: **CODE-REVIEW-1 DONE** — 16 fixes, PRs #79–#94, tests 902 / 859, gap 43; **§0 #7 first pass done** — buy-low timing measured, no app change, re-run #7b from 2026-11-06; the ±50 trend rule given one home in `src/utils/marketTrend.js` (#75); `values-consensus.json` made the one permanent home of daily values, unbroken from 2026-07-09 (#77); **CODE-REVIEW-1 added as #7c, next in line**. Tests 841 / 798, gap 43. Earlier: **CLEANUP-3 added** — owner-approved dedupe of CLAUDE.md, triggered after §0 #12; spec + kickoff prompt in §2. **CLEANUP-2 done** — CLAUDE.md slimmed 7,123 → 3,586 lines, 482KB → 229KB, every rule kept and the dated evidence moved verbatim to `docs/history/`; on the owner's review before merge. It missed its ~2,000-line target — see §3. Previously the same day: CLEANUP-1 executed and OPEN-3 shipped. Tests 828 / 785 with no `node_modules`, gap 43.)
+**Last reviewed:** 2026-10-12 (**§0 #12 and CLEANUP-3 done** — the news feed's 7-day window measured, CLAUDE.md deduped to 239KB (target missed, see §3). Before that, **§0 #11 first half done** — playoff odds replayed on 2023–25 and the lineup curve checked on 2026; no app change, follow-ups in the memo's §6. Before that, **AGENT-1 added** — owner asked for a feasibility study of an AI agent for league tasks and research; recorded in §0's trigger table and §2, nothing built. Before that, **§0 #10 recording shipped** — the briefing ledger records The Edge's five checkable claims daily; scoring pre-registered, first pass #10b on or after 2026-12-15; tests 947 / 904, gap 43. Before that, **§0 #9 done** — the weekly brief is live; close-out added one-pickup-per-position and IR capacity. Before that, **§0 #8 done** — proactive delivery note; owner chose option E (a scheduled Claude routine, phone push, Tuesday evening ET); #9 approved and next. Earlier: **CODE-REVIEW-1 DONE** — 16 fixes, PRs #79–#94, tests 902 / 859, gap 43; **§0 #7 first pass done** — buy-low timing measured, no app change, re-run #7b from 2026-11-06; the ±50 trend rule given one home in `src/utils/marketTrend.js` (#75); `values-consensus.json` made the one permanent home of daily values, unbroken from 2026-07-09 (#77); **CODE-REVIEW-1 added as #7c, next in line**. Tests 841 / 798, gap 43. Earlier: **CLEANUP-3 added** — owner-approved dedupe of CLAUDE.md, triggered after §0 #12; spec + kickoff prompt in §2. **CLEANUP-2 done** — CLAUDE.md slimmed 7,123 → 3,586 lines, 482KB → 229KB, every rule kept and the dated evidence moved verbatim to `docs/history/`; on the owner's review before merge. It missed its ~2,000-line target — see §3. Previously the same day: CLEANUP-1 executed and OPEN-3 shipped. Tests 828 / 785 with no `node_modules`, gap 43.)
 
 **How to use it:**
 - Each item states its **trigger** — the condition that makes it ready. An item
@@ -93,7 +93,6 @@ login, a phone or a decision that no sandbox can supply.
 | Retune `DARK_AFTER.feed` | Only if delivered news cadence settles below ~4 runs/day |
 | MCP connector re-check | After any new MCP tool deploys |
 | Replace `public/FantasyPros_2026_Rookies_OP_Rankings.csv` | When a 2027 rookie ranking exists (CLEANUP-1 §F, archived) |
-| **CLEANUP-3** — dedupe CLAUDE.md (one home per rule; target ~185KB) | After §0 #12, in a quiet week. Spec + kickoff prompt: §2 CLEANUP-3 |
 | **AGENT-1** — feasibility study: an AI agent that automates DynastyEdge tasks and research **[owner ask required]** | The owner says go. Study only — no build. Scope + questions: §2 AGENT-1 |
 
 ### Deliberately NOT doing (settled — do not reopen)
@@ -149,60 +148,6 @@ Nothing is active. #10's recording shipped 2026-10-07 (first `main` run of `valu
 ---
 
 ## 2. Deferred — waiting on a trigger
-
-### CLEANUP-3 — dedupe CLAUDE.md (one home per rule) **[owner-approved 2026-10-07; trigger: after §0 #12]**
-
-**Why.** CLEANUP-2 cut CLAUDE.md to 3,586 lines / 229KB and missed its line
-target: what remains is mostly contract. But some contracts live in **two to
-five places**, and this repo's most repeated lesson is that two copies of a
-rule drift (the pick classifier, the FAAB scale, "protects your starters").
-One home per rule is a correctness gain as well as a size gain.
-
-**Scope (and only this):**
-1. **MCP tool sections** — keep what is server-specific (ids only, as-of stamp,
-   bounded output, closed zod schema, Class B degradation, TTLs); replace each
-   restated domain rule (one defense, the three odds states, FAAB in budgets,
-   the fair band…) with a pointer to its Feature. ~150–250 lines.
-2. **File Structure annotations** — the file's role plus a pointer; drop
-   restated contracts. The tree stays one line per file. ~15–20KB.
-3. **The FAAB budget rules** (League Context, Feature 11, the recommendation
-   engine, two MCP tools) and **the pick window** (Feature 1, Feature 2,
-   Constants) — one home each, pointers elsewhere. ~50 lines.
-
-**Out of scope:** Features and the Design System — what is left there is
-contract, not repetition, and it is where a session lands.
-
-**Measure in bytes, not lines** — bytes are what every session pays. Target
-**~185KB** (from 229KB). Report the real number even if it misses.
-
-**Done when:** each deduped rule exists in exactly one section, every pointer
-resolves, and the CLEANUP-2 rule audit (every never/always/must/do-not/trap
-sentence of the pre-change file still present in CLAUDE.md) passes.
-
-**Kickoff prompt** (dated 2026-10-07 — re-measure its numbers):
-
-```
-Do CLEANUP-3 in docs/open-items.md §2: dedupe CLAUDE.md so each rule has one
-home. Read CLAUDE.md, the CLEANUP-3 entry, and load dynastyedge-change-control
-and dynastyedge-docs-and-writing first.
-
-Scope is exactly the entry's three items: MCP tool sections point to Features
-for domain rules; File Structure annotations become role + pointer; the FAAB
-budget rules and the pick window get one home each. Do not touch the Features
-or the Design System beyond adding pointers.
-
-Step 0: list every rule you plan to collapse, its current homes, the home it
-keeps, and the expected byte saving. Show me and wait for my OK.
-
-Rules: a pointer replaces a restatement only when the target section states the
-rule fully. Move nothing to docs/history unless it is dated evidence. Re-run the
-CLEANUP-2 rule audit (every never/always/must/do-not/trap sentence) against the
-result. One docs: commit per area. Gates: npm ci, lint + test + build, test
-count unchanged. Report bytes before/after. Open a PR, watch it, do not merge.
-Close CLEANUP-3 in open-items as part of the PR.
-```
-
----
 
 ### AGENT-1 — feasibility study: an AI agent for league tasks and research **[owner ask required; added 2026-10-07]**
 
@@ -681,6 +626,7 @@ are as of 2026-07-17.
 
 | Item | Closed | How |
 |---|---|---|
+| CLEANUP-3 — dedupe CLAUDE.md (one home per rule) | 2026-10-12 | **253,292 → 239,320 bytes (−5.5%); the ~185KB target missed** — the file had grown 24KB since the target was set, and the scope held little repetition (CLEANUP-2 took most). FAAB budget → League Context, pick window → Constants File, MCP tools point to their Features, tree lines are role + pointer. Rule audit: 355 rule sentences, 32 changed, all read; six facts that lived only in the tree restored (one, the `'0'` sentinel, into rule 8). Detail in the archive |
 | §0 #9 — the scheduled weekly brief | 2026-10-07 | Option E from the #8 note. MCP server: refresh tokens (30-day, re-issued on use, capped 180 days after login, allowlist re-checked; tested as attacks). `get_roster`: league calendar (deadline through the new one-home `utils/tradeDeadline.js`) and `roomToMove` (IR via the new one-home `buildIrCapacity`, open active spots). The recommender now returns **one pickup per position** with bid-less alternatives (owner: "I would only go for one"). Routine created by the owner from `docs/routines/weekly-brief.md`; first brief read live. Final check: the unattended run on 2026-10-13 |
 | CODE-REVIEW-1 — the "proper over convenient" review | 2026-10-07 | Review (`docs/analysis/code-review-2026-10.md`) ranked 16 shortcuts by risk to the owner's decisions; the owner answered three questions (Doubtful = a note in trades; two "even" rules on purpose; unknown FAAB budget = `—`) and set the order. All 16 fixed in PRs #79–#94, each with a guard test; tests 841 → 902, gap 43. Found along the way: the MCP trade grader skipped injuries, the IR suggestion ignored full slots. Pipelines now import `src/utils` via the resolver hook (outputs byte-identical, verified on `main`). Phone check owed: ESPN per-player news (#89). Detail in the archive |
 | CLEANUP-2 — slim CLAUDE.md | 2026-10-07 | **7,123 → 3,586 lines, 482KB → 229KB (−52%)**, in one `docs:` commit per section. Every rule, contract, invariant and trap stays with its one-line WHY; each section's pre-slim text is preserved **verbatim** in `docs/history/<section>.md` with a pointer at the cut. **Missed the ≤ ~2,000-line target** (and the ~2,250 revised in-session): the contracts alone carry ~3,500 lines once their measurements are gone, and the rule was "when in doubt, it stays". A mechanical audit of all 376 rule-bearing sentences found four dropped clauses, restored. Counts re-verified 828 / 785. Navigation Refactor heading renamed "(complete — history)". Detail in the archive |
