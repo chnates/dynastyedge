@@ -43113,7 +43113,7 @@ function buildFreeAgentAnswer(snapshot, weekly, { position, limit, poolLimit, my
     recommendations,
     pool: poolRows,
     valueSwaps,
-    notes: buildNotes3({ snapshot, weekly, projMap, recommendations, wanted, filtered, cap, league })
+    notes: buildNotes3({ snapshot, weekly, projMap, recommendations, wanted, filtered, cap, league, valueSwapCount: valueSwaps.count })
   };
 }
 function describeIncumbentDefense(league, weekly) {
@@ -43143,7 +43143,7 @@ function clampLimit(limit) {
   if (!Number.isFinite(n) || n < 1) return DEFAULT_LIMIT;
   return Math.min(Math.floor(n), MAX_LIMIT);
 }
-function buildNotes3({ snapshot, weekly, projMap, recommendations, wanted, filtered, cap, league }) {
+function buildNotes3({ snapshot, weekly, projMap, recommendations, wanted, filtered, cap, league, valueSwapCount = 0 }) {
   const notes = [];
   if (snapshot.asOf.stale) {
     notes.push("At least one source failed to refresh, so this is cached data \u2014 see asOf.sources.");
@@ -43158,7 +43158,7 @@ function buildNotes3({ snapshot, weekly, projMap, recommendations, wanted, filte
   }
   if (!recommendations.length) {
     notes.push(
-      filtered.length ? `None of the ${filtered.length} available ${wanted ?? ""} players would fill a need, beat your depth, or is trending up. That is the answer \u2014 there is nothing on the wire worth adding, not a failure to find anything.` : `No available players${wanted ? ` at ${wanted}` : ""} carry a FantasyCalc value.`
+      filtered.length ? `None of the ${filtered.length} available ${wanted ?? ""} players would fill a need or beat your depth, so there is no lineup pickup to bid on. ` + (valueSwapCount ? `That is the answer, not a failure to find anything \u2014 but ${valueSwapCount === 1 ? "one value swap" : `${valueSwapCount} value swaps`} would still raise your team's dynasty value (see valueSwaps).` : "That is the answer \u2014 there is nothing on the wire worth adding, not a failure to find anything.") : `No available players${wanted ? ` at ${wanted}` : ""} carry a FantasyCalc value.`
     );
   }
   notes.push(

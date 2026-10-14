@@ -256,7 +256,7 @@ export function buildFreeAgentAnswer(snapshot, weekly, { position, limit, poolLi
     recommendations,
     pool: poolRows,
     valueSwaps,
-    notes: buildNotes({ snapshot, weekly, projMap, recommendations, wanted, filtered, cap, league }),
+    notes: buildNotes({ snapshot, weekly, projMap, recommendations, wanted, filtered, cap, league, valueSwapCount: valueSwaps.count }),
   }
 }
 
@@ -300,7 +300,7 @@ function clampLimit(limit) {
   return Math.min(Math.floor(n), MAX_LIMIT)
 }
 
-function buildNotes({ snapshot, weekly, projMap, recommendations, wanted, filtered, cap, league }) {
+function buildNotes({ snapshot, weekly, projMap, recommendations, wanted, filtered, cap, league, valueSwapCount = 0 }) {
   const notes = []
   if (snapshot.asOf.stale) {
     notes.push('At least one source failed to refresh, so this is cached data — see asOf.sources.')
@@ -317,8 +317,10 @@ function buildNotes({ snapshot, weekly, projMap, recommendations, wanted, filter
   if (!recommendations.length) {
     notes.push(
       filtered.length
-        ? `None of the ${filtered.length} available ${wanted ?? ''} players would fill a need, beat your depth, or is trending up. ` +
-          'That is the answer — there is nothing on the wire worth adding, not a failure to find anything.'
+        ? `None of the ${filtered.length} available ${wanted ?? ''} players would fill a need or beat your depth, so there is no lineup pickup to bid on. ` +
+          (valueSwapCount
+            ? `That is the answer, not a failure to find anything — but ${valueSwapCount === 1 ? 'one value swap' : `${valueSwapCount} value swaps`} would still raise your team's dynasty value (see valueSwaps).`
+            : 'That is the answer — there is nothing on the wire worth adding, not a failure to find anything.')
         : `No available players${wanted ? ` at ${wanted}` : ''} carry a FantasyCalc value.`
     )
   }
