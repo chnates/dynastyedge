@@ -17,7 +17,7 @@
 //   must-win   fills a need AND starts in my best lineup     23% of budget
 //   default    starts, or fills a need AND beats my depth    16%
 //   value play beats my depth, or sits at a need — not both   11%
-//   floor      anything else worth claiming (a riser)        ~0.2%
+//   floor      anything else worth claiming                  ~0.2%
 //
 // The ladder is the memo's §6 Part B (2023–25 contested clearing prices:
 // p50 11%, ~p65 16%, p80 23%). The floor is what this league ACTUALLY pays

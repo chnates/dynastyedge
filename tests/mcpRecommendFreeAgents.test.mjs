@@ -305,3 +305,16 @@ test('the text names the value swaps when there are any', () => {
   if (a.valueSwaps.count) assert.match(t, /Value swaps — \d+/)
   assert.ok(a.notes.some(n => n.includes('valueSwaps')), 'the note explains what a swap is')
 })
+
+// A rise no longer qualifies a pickup (owner, 2026-10-14), so the empty-list
+// note must not say a riser would have — and when swaps exist, "nothing worth
+// adding" would contradict them.
+test('the no-pickup note never cites a trend, and points at value swaps when there are any', () => {
+  const a = build({ position: 'QB' })               // the fixture has no QB pickup and no QB swap
+  assert.equal(a.recommendations.length, 0)
+  const note = a.notes.find(n => n.startsWith('None of the'))
+  assert.ok(note, 'an empty list explains itself')
+  assert.doesNotMatch(note, /trending/i)
+  assert.equal(a.valueSwaps.count, 0)
+  assert.match(note, /nothing on the wire worth adding/)
+})

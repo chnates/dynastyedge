@@ -670,3 +670,8 @@ one drop-candidate test in `mcpGetRoster.test.mjs`. Gap still **43**.
 test in `recommendations.test.mjs` (the two trend tests rewritten in place),
 four value-swap tests in `freeAgents.test.mjs`, two in
 `mcpRecommendFreeAgents.test.mjs`. Gap still **43**.
+
+## 2026-10-14 — test counts after the no-pickup note fix
+
+967 → **968** with dependencies (925 / 920 / 5 without): one note test in
+`mcpRecommendFreeAgents.test.mjs`. Gap still **43**.
