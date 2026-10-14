@@ -41656,7 +41656,7 @@ function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 5, minV
       reasons.push("Win-now depth");
     }
     return { player: p, score, reasons, isNeed, isUpgrade, upgradeMargin, trend };
-  }).filter((r) => r.isNeed || r.isUpgrade || isRising(r.trend)).sort((a, b) => b.score - a.score);
+  }).filter((r) => r.isNeed || r.isUpgrade).sort((a, b) => b.score - a.score);
   const leaders = [];
   const byPosition = /* @__PURE__ */ new Map();
   for (const r of scored) {
