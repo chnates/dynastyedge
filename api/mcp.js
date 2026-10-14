@@ -41656,7 +41656,7 @@ function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 5, minV
       reasons.push("Win-now depth");
     }
     return { player: p, score, reasons, isNeed, isUpgrade, upgradeMargin, trend };
-  }).filter((r) => r.isNeed || r.isUpgrade || isRising(r.trend)).sort((a, b) => b.score - a.score);
+  }).filter((r) => r.isNeed || r.isUpgrade).sort((a, b) => b.score - a.score);
   const leaders = [];
   const byPosition = /* @__PURE__ */ new Map();
   for (const r of scored) {
@@ -42434,6 +42434,20 @@ function rankFreeAgentPool(pool, { limit = 15 } = {}) {
   const ranked = [...pool ?? []].sort((a, b) => (b.value ?? 0) - (a.value ?? 0) || (a.overallRank ?? Infinity) - (b.overallRank ?? Infinity) || String(a.name).localeCompare(String(b.name)));
   return { rows: ranked.slice(0, Math.max(0, limit)), total: ranked.length };
 }
+function buildValueSwaps(pool, myRoster) {
+  const swaps = [];
+  if (!myRoster?.players?.length || !pool?.length) return { swaps, count: 0, totalGain: 0 };
+  for (const pos of VALUED_POSITIONS) {
+    const drops = myRoster.players.filter((p) => p.position === pos && !p.isTaxi && !p.isIR && !p.isStarter).sort((a, b) => (a.value ?? 0) - (b.value ?? 0) || String(a.name).localeCompare(String(b.name)));
+    const adds = pool.filter((p) => p.position === pos).sort((a, b) => (b.value ?? 0) - (a.value ?? 0) || (a.overallRank ?? Infinity) - (b.overallRank ?? Infinity) || String(a.name).localeCompare(String(b.name)));
+    for (let i = 0; i < Math.min(drops.length, adds.length); i++) {
+      const gain = (adds[i].value ?? 0) - (drops[i].value ?? 0);
+      if (gain <= 0) break;
+      swaps.push({ position: pos, add: adds[i], drop: drops[i], gain });
+    }
+  }
+  return { swaps, count: swaps.length, totalGain: swaps.reduce((t, s) => t + s.gain, 0) };
+}
 function buildAvailableDefenses({ playerDB, allRosters, rosteredIds } = {}) {
   if (!playerDB) return [];
   const owned = rosteredIds ?? buildRosteredIdSet(allRosters);
@@ -43044,6 +43058,18 @@ function buildFreeAgentAnswer(snapshot, weekly, { position, limit, poolLimit, my
     projectedPoints: projMap ? round2(getProjPts(p.sleeperId, projMap)) : null,
     role: pickIds.has(String(p.sleeperId)) ? "pick" : altIds.has(String(p.sleeperId)) ? "alternative" : "available"
   }));
+  const swapAll = buildValueSwaps(filtered, league.myRoster);
+  const valueSwaps = {
+    count: swapAll.count,
+    totalGain: swapAll.totalGain,
+    rows: swapAll.swaps.slice(0, MAX_VALUE_SWAPS).map((sw) => ({
+      position: sw.position,
+      add: { sleeperId: String(sw.add.sleeperId), name: sw.add.name, nflTeam: sw.add.team || null, age: sw.add.age ?? null, value: sw.add.value ?? null },
+      // Rule 7: an unranked drop is `value: null`, never 0.
+      drop: { sleeperId: String(sw.drop.sleeperId), name: sw.drop.name, value: sw.drop.unranked ? null : sw.drop.value ?? null },
+      gain: sw.gain
+    }))
+  };
   return {
     ok: true,
     asOf: snapshot.asOf,
@@ -43086,6 +43112,7 @@ function buildFreeAgentAnswer(snapshot, weekly, { position, limit, poolLimit, my
     },
     recommendations,
     pool: poolRows,
+    valueSwaps,
     notes: buildNotes3({ snapshot, weekly, projMap, recommendations, wanted, filtered, cap, league })
   };
 }
@@ -43147,7 +43174,10 @@ function buildNotes3({ snapshot, weekly, projMap, recommendations, wanted, filte
     "ONE pickup per position: each row is the best available at its position, and the others at that position are listed under `alternatives` with no bid. Claim the row, not the alternatives \u2014 they are who is next if he goes elsewhere."
   );
   notes.push(
-    '`pool` is every available player ranked by dynasty value alone (capped; counts.poolSize is the true total) \u2014 use it to answer "who else is out there?". role "pick" is the row to claim, "alternative" is next in line at a picked position, "available" is not recommended (no need, no upgrade, not rising). Pool rows carry no bid.'
+    '`pool` is every available player ranked by dynasty value alone (capped; counts.poolSize is the true total) \u2014 use it to answer "who else is out there?". role "pick" is the row to claim, "alternative" is next in line at a picked position, "available" is not recommended (no need, no upgrade). Pool rows carry no bid.'
+  );
+  notes.push(
+    '`valueSwaps` answers "how many pickups would make my team worth more?": each free agent paired with my cheapest player at the SAME position who is not a starter, on taxi or on IR, kept only when the free agent is worth more. Dynasty value only, so no bid \u2014 the pickups above are the lineup moves; swaps are value moves. Each swap needs that drop.'
   );
   notes.push(FAAB_BATCH_WARNING);
   notes.push(
@@ -43200,6 +43230,13 @@ function renderFreeAgentText(a) {
       L.push(`${String(i + 1).padStart(2)}. ${p.position.padEnd(3)} ${p.name}${p.nflTeam ? ` (${p.nflTeam})` : ""} \u2014 ${num2(p.value)}${p.age != null ? ` \xB7 age ${Math.floor(p.age)}` : ""}${tag}`);
     });
   }
+  if (a.valueSwaps?.count) {
+    L.push("");
+    L.push(`Value swaps \u2014 ${a.valueSwaps.count}, +${num2(a.valueSwaps.totalGain)} dynasty value (same position; no bids):`);
+    a.valueSwaps.rows.forEach((sw) => {
+      L.push(`  ${sw.position.padEnd(3)} add ${sw.add.name} ${num2(sw.add.value)} \xB7 drop ${sw.drop.name} ${num2(sw.drop.value)} \xB7 +${num2(sw.gain)}`);
+    });
+  }
   L.push("");
   if (!a.projections.available) {
     L.push(`No weekly projection column: ${a.projections.reason}.`);
@@ -43207,7 +43244,7 @@ function renderFreeAgentText(a) {
   a.notes.forEach((n) => L.push(`Note: ${n}`));
   return L.join("\n").trimEnd();
 }
-var DEFAULT_LIMIT, MAX_LIMIT, DEFAULT_POOL_LIMIT, MAX_POOL_LIMIT, PROJECTION_CAVEAT, round2, num2;
+var DEFAULT_LIMIT, MAX_LIMIT, DEFAULT_POOL_LIMIT, MAX_POOL_LIMIT, PROJECTION_CAVEAT, MAX_VALUE_SWAPS, round2, num2;
 var init_recommendFreeAgents = __esm({
   "mcp/tools/recommendFreeAgents.js"() {
     init_freeAgents();
@@ -43223,6 +43260,7 @@ var init_recommendFreeAgents = __esm({
     DEFAULT_POOL_LIMIT = 15;
     MAX_POOL_LIMIT = 25;
     PROJECTION_CAVEAT = "Among waiver-tier players a 0-2 point projection means roughly a 0.9% chance of a 15+ point game, and 6-8 means 10.6% \u2014 so treat the projection as a coarse tier, not a precise forecast.";
+    MAX_VALUE_SWAPS = 20;
     round2 = (n) => Math.round((n ?? 0) * 100) / 100;
     num2 = (n) => n == null ? "\u2014" : n.toLocaleString("en-US");
   }
@@ -47709,7 +47747,7 @@ function createServer({ env = process.env, fetcher, store } = {}) {
     "recommend_free_agents",
     {
       title: "Recommend free agents",
-      description: "Ranks available players by what they would actually do for YOUR roster \u2014 fill a positional deficit or beat your current depth at the spot \u2014 in DYNASTY VALUE, each with plain-English reasons (a rising 30-day trend is named as a reason but never moves the ranking). ONE pick per position, with the next in line as alternatives. Also returns `pool`: every available player ranked by dynasty value (capped, true total in counts.poolSize) \u2014 use it to answer \"who else is out there?\" without asking the user for names. Carries BOTH dynasty value and this week's Sleeper projection, which are different axes (they correlate at only r = 0.427). IN-SEASON ONLY for the projection column: in the offseason `projectedPoints` is null and the response says why, never zero. Each pick carries a suggested FAAB bid (`faabBid`) read off the CURRENT period's budget, sized by how much the player matters to your roster on a ladder calibrated on 2023-25 (n = 3 contested auctions on the $1000 scale) \u2014 the same bid the app shows. Defenses are excluded by design \u2014 you roster exactly one, ever.",
+      description: 'Ranks available players by what they would actually do for YOUR roster \u2014 fill a positional deficit or beat your current depth at the spot \u2014 in DYNASTY VALUE, each with plain-English reasons (a rising 30-day trend is named as a reason but never moves the ranking). ONE pick per position, with the next in line as alternatives. Also returns `pool`: every available player ranked by dynasty value (capped, true total in counts.poolSize) \u2014 use it to answer "who else is out there?" without asking the user for names \u2014 and `valueSwaps`: every free agent worth more than one of your cheapest bench players at the SAME position (never a starter, taxi or IR), with the drop and the gain, to answer "how many pickups would make my team worth more?". Carries BOTH dynasty value and this week\'s Sleeper projection, which are different axes (they correlate at only r = 0.427). IN-SEASON ONLY for the projection column: in the offseason `projectedPoints` is null and the response says why, never zero. Each pick carries a suggested FAAB bid (`faabBid`) read off the CURRENT period\'s budget, sized by how much the player matters to your roster on a ladder calibrated on 2023-25 (n = 3 contested auctions on the $1000 scale) \u2014 the same bid the app shows. Defenses are excluded by design \u2014 you roster exactly one, ever.',
       inputSchema: {
         position: external_exports.string().optional().describe("Limit to QB, RB, WR or TE. Omit for all. DEF is not a general pickup and is rejected with an explanation."),
         limit: external_exports.number().int().optional().describe(`How many to return (default 8, max ${MAX_LIMIT}).`),
@@ -47776,6 +47814,23 @@ function createServer({ env = process.env, fetcher, store } = {}) {
           projectedPoints: external_exports.number().nullable(),
           role: external_exports.enum(["pick", "alternative", "available"])
         })).optional(),
+        // Same-position value swaps (utils/freeAgents.js buildValueSwaps) — no bids.
+        valueSwaps: external_exports.object({
+          count: external_exports.number(),
+          totalGain: external_exports.number(),
+          rows: external_exports.array(external_exports.object({
+            position: external_exports.string(),
+            add: external_exports.object({
+              sleeperId: external_exports.string(),
+              name: external_exports.string(),
+              nflTeam: external_exports.string().nullable(),
+              age: external_exports.number().nullable(),
+              value: external_exports.number().nullable()
+            }),
+            drop: external_exports.object({ sleeperId: external_exports.string(), name: external_exports.string(), value: external_exports.number().nullable() }),
+            gain: external_exports.number()
+          }))
+        }).optional(),
         recommendations: external_exports.array(external_exports.object({
           sleeperId: external_exports.string(),
           name: external_exports.string(),

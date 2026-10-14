@@ -237,7 +237,7 @@ export function getDeficitPositions(roster, allRosters) {
 // Proactive free-agent pickups — not a filter, an actual recommendation. Ranks
 // available players by what they'd do for MY roster: fill a deficit position,
 // upgrade my depth at a position, and fit my win window — in dynasty value; a
-// rising trend qualifies a player and is named as a reason, but never scores
+// rising trend is named as a reason, but never scores and never qualifies
 // (a rebuilder values young stashes; a contender values win-now depth). Returns
 // only players that genuinely move the needle, each with plain-English reasons.
 // What a pickup would do for MY roster, as roster facts: my positional deltas
@@ -294,8 +294,9 @@ export function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 
       // value spiked +914 outranked a 27-year-old worth 340 more. The buy-low
       // study found 30-day risers do not keep rising (they trailed matched
       // non-movers by −2.3% over the next 30 days — docs/analysis/
-      // buylow-timing-2026-10.md), so the bonus paid for nothing measured. A
-      // riser still qualifies for the list below; it no longer jumps the queue.
+      // buylow-timing-2026-10.md), so the bonus paid for nothing measured. Nor
+      // does a rise QUALIFY a player (owner, 2026-10-14): one who neither fills
+      // a need nor beats my depth is a backup, however he trended.
       if (isRising(trend)) reasons.push('Trending up the last 30 days')
       if (myTier === 'Rebuilding' && age != null && age <= 24) {
         score += 1
@@ -307,9 +308,9 @@ export function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 
 
       return { player: p, score, reasons, isNeed, isUpgrade, upgradeMargin, trend }
     })
-    // Only surface players that actually do something — a need, an upgrade, or a
-    // genuine riser. Everything else is just available value, not a recommendation.
-    .filter(r => r.isNeed || r.isUpgrade || isRising(r.trend))
+    // Only surface players that actually do something — a need or an upgrade.
+    // Everything else is available value (the pool lists it), not a recommendation.
+    .filter(r => r.isNeed || r.isUpgrade)
     .sort((a, b) => b.score - a.score)
 
   // ONE PICKUP PER POSITION (owner, 2026-10-07): "I would never pick up all

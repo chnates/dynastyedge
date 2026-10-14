@@ -13,7 +13,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { buildWaiverOptions, isTeamTotalsKey, rankFreeAgentPool } from '../src/utils/freeAgents.js'
+import { buildWaiverOptions, isTeamTotalsKey, rankFreeAgentPool, buildValueSwaps } from '../src/utils/freeAgents.js'
 
 const projMap = {
   '100': { pts_half_ppr: 12.5 },   // WR, FantasyCalc-ranked
@@ -195,4 +195,48 @@ test('rankFreeAgentPool: value desc, overall rank breaks ties, capped with the t
   assert.equal(total, 4)
   assert.equal(pool[0].sleeperId, 'a', 'the input is not reordered')
   assert.deepEqual(rankFreeAgentPool(null), { rows: [], total: 0 })
+})
+
+// ── Value swaps (owner, 2026-10-14) ──────────────────────────────────────────
+// Position by position, the best free agents against my cheapest players
+// there, kept while the free agent is worth more. Live Week 6: Daniels for
+// Tua, Cooper for Legette, Flournoy for Thomas, Freiermuth for Helm.
+const mine = (id, position, value, extra = {}) => ({ sleeperId: id, name: `M${id}`, position, value, ...extra })
+const fa = (id, position, value) => ({ sleeperId: id, name: `F${id}`, position, value })
+
+test('value swaps pair the best free agents with my cheapest players, one for one', () => {
+  const roster = { players: [
+    mine('w1', 'WR', 246), mine('w2', 'WR', 364), mine('w3', 'WR', 1114), mine('w4', 'WR', 5000, { isStarter: true }),
+  ] }
+  const pool = [fa('a', 'WR', 866), fa('b', 'WR', 834), fa('c', 'WR', 700)]
+  const { swaps, count, totalGain } = buildValueSwaps(pool, roster)
+  assert.deepEqual(swaps.map(s => [s.add.sleeperId, s.drop.sleeperId, s.gain]),
+    [['a', 'w1', 620], ['b', 'w2', 470]], 'the third FA (700) does not beat my 1,114 — the walk stops')
+  assert.equal(count, 2)
+  assert.equal(totalGain, 1090)
+})
+
+test('value swaps never drop a taxi, IR or starting player', () => {
+  const roster = { players: [
+    mine('t', 'RB', 10, { isTaxi: true }),
+    mine('i', 'RB', 20, { isIR: true }),
+    mine('s', 'RB', 30, { isStarter: true }),
+  ] }
+  const { swaps } = buildValueSwaps([fa('x', 'RB', 3000)], roster)
+  assert.deepEqual(swaps, [], 'a taxi or IR release frees no active spot; a starter is a lineup decision')
+})
+
+test('value swaps stay within a position and never touch the defense', () => {
+  const roster = { players: [mine('q', 'QB', 9000), mine('d', 'DEF', null), mine('t', 'TE', 100)] }
+  const pool = [fa('w', 'WR', 4000), fa('dd', 'DEF', 500), fa('te', 'TE', 90)]
+  const { swaps } = buildValueSwaps(pool, roster)
+  assert.deepEqual(swaps, [], 'a WR never replaces a QB, defenses are out, and a cheaper TE is no swap')
+})
+
+test('an unranked bench player counts as zero and can be swapped out', () => {
+  const roster = { players: [mine('u', 'TE', null)] }
+  const { swaps } = buildValueSwaps([fa('x', 'TE', 400)], roster)
+  assert.equal(swaps.length, 1)
+  assert.equal(swaps[0].gain, 400)
+  assert.equal(swaps[0].drop.value, null, 'rule 7 — the drop still reads as unranked, never 0')
 })

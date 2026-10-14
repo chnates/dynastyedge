@@ -937,6 +937,11 @@ modelled**.
   and asked the owner to open Sleeper and read names; the first live run showed
   Michael Mayer (TE, 1,230) free and never mentioned. Declared in the zod
   schema; verified over the real transport.
+- **`valueSwaps`** (owner, 2026-10-14): `buildValueSwaps` — the app's Value
+  Swaps list (Feature 1), `{ count, totalGain, rows }`, each row `add` / `drop`
+  / `gain`, capped at `MAX_VALUE_SWAPS` (20) with the true count beside, **no
+  bid**, an unranked drop `value: null`. Follows `position`. Declared in the
+  zod schema; verified over the real transport (live: 4, +2,133).
 
 ### Tool 4 — `resolve_assets`
 
@@ -1293,7 +1298,7 @@ different. Total roster value (players + picks) at top.
 
 **Action Items** (`RosterActionItems`, shared with The Edge) under an **"Action
 Items"** band — deliberately *not* "On your desk", which The Edge's GM line uses
-for a different count. Each is a **`Lede`** with a real CTA. Four types, all
+for a different count. Each is a **`Lede`** with a real CTA. Five types, all
 from live data:
 1. **Taxi deadline** — a taxi player with `years_exp >= 2`.
 2. **Bloated QB room** — 4+ QBs; names the most expendable and, via
@@ -1311,8 +1316,12 @@ from live data:
    have to stay on the bench injured").
 4. **Missing future 1st** — no 1st in a `pickYears` season after the current
    one; deep-links to Trade Partners.
+5. **Value swaps** (owner, 2026-10-14) — free agents worth more than my
+   cheapest bench player at their position (`buildValueSwaps`, below); names
+   every pair and the total gain, deep-links to League › Free Agents. The
+   snapshot is the set of add→drop pairs.
 
-**Types 1, 3 and 4 aggregate — one item per type, never one per player**; an
+**Types 1, 3, 4 and 5 aggregate — one item per type, never one per player**; an
 enumeration of identical `Lede`s is the slop pattern in editorial clothes. The
 aggregated item names every player in its prose. Items are **dismissible**
 (`dynastyedge_action_dismissals`) against a `conditionSnapshot`, so a dismissal
@@ -1340,6 +1349,18 @@ the position filter, hidden while searching.
   A caption states the calibration honestly, that the bid is sized by what the
   player does for this roster (not by who else bids), and the batch trap (order
   your claims). Only those four rows carry a bid.
+- **Value Swaps** (owner, 2026-10-14 — his own method, made a rule): under
+  Recommended Pickups, every free agent worth more than one of my cheapest
+  players **at the same position**, paired one for one (best free agent with
+  cheapest player, kept while the gain is positive — the optimum, not an
+  approximation), headed with the count and total gain. **The drop is never a
+  starter, a taxi player or anyone on IR** — a taxi or IR release frees no
+  active spot, and a starter is a lineup call; defenses are never swapped. An
+  unranked drop counts 0 and shows `—` (rule 7). **No bid on a swap** — the
+  pickups are lineup moves sized by `faabBid.js` (graded against fixed bars);
+  swaps are value moves. Follows the position filter, hidden while searching
+  and under DEF. **ONE rule, `buildValueSwaps` (`utils/freeAgents.js`)** — this
+  list, Action Item 5 and `recommend_free_agents.valueSwaps` all read it.
 - **Two axes, not one.** Dynasty value and this week's projection correlate at
   only r = 0.427, so each row carries **this week's Sleeper projection** beside
   the value, with a **Proj** sort (`useWeeklyProjections`, shared with the
@@ -2427,12 +2448,15 @@ player's depth rank):
   beats a needier one without**; it falls back to the neediest. Returns
   nav-ready `preloadTrade` plus `startsForThem`.
 - **Free Agents + The Edge's `pickup` item — `recommendFreeAgents`:** fills a
-  deficit, beats my replacement level (`CORE_DEPTH`-th best), fits my window —
+  deficit or beats my replacement level (`CORE_DEPTH`-th best), fits my window —
   **only players that move the needle**, with reasons, scored in dynasty value.
-  **A rising 30-day trend qualifies a player and is named as a reason, but
-  NEVER scores** (owner, 2026-10-14): the bonus let Higbee (TE, 897, age 33.7,
-  +914) outrank Freiermuth (1,237, age 27.9), and the buy-low study found
-  30-day risers do not keep rising (`docs/analysis/buylow-timing-2026-10.md`).
+  **A rising 30-day trend is named as a reason, but NEVER scores and NEVER
+  qualifies a player** (owner, 2026-10-14): the bonus let Higbee (TE, 897, age
+  33.7, +914) outrank Freiermuth (1,237, age 27.9); then Freiermuth himself was
+  on the list only for rising, while Mayer (1,230) was not — a backup either
+  way. The buy-low study found 30-day risers do not keep rising
+  (`docs/analysis/buylow-timing-2026-10.md`). A position with no need and no
+  upgrade gets no pickup; the `pool` still lists everyone.
   `tests/recommendations.test.mjs` pins it.
   Its roster facts are **`buildPickupContext`**, exported so the FAAB bid reads
   the same "fills your need".
@@ -3426,9 +3450,9 @@ report that honestly**: it prints failing tests that read like a code regression
 because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
-**Current counts (verified 2026-10-14 by moving `node_modules` aside, after the weekly-brief fixes):** with
-dependencies **`# tests 960 / # pass 960`**; without them **`# tests 917 / #
-pass 912 / # fail 5`**. **If the test count isn't 960, run `npm ci` before
+**Current counts (verified 2026-10-14 by moving `node_modules` aside, after value swaps):** with
+dependencies **`# tests 967 / # pass 967`**; without them **`# tests 924 / #
+pass 919 / # fail 5`**. **If the test count isn't 967, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React
