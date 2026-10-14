@@ -440,3 +440,30 @@ test('the limit counts positions, not players — and a single-position pool yie
   assert.equal(qbOnly.length, 1, 'filtered to QB, there is still exactly one QB to claim')
   assert.equal(qbOnly[0].alternatives.length, MAX_PICKUP_ALTERNATIVES)
 })
+
+// ── The 30-day trend is a REASON, never a score (owner, 2026-10-14) ─────────
+// Live Week 6: Tyler Higbee (TE, 897, age 33.7, +914 over 30 days) outranked
+// Pat Freiermuth (TE, 1237, age 27.9, +318) because the trend bonus was worth
+// up to 1,500 value. The buy-low study found 30-day risers do not keep rising
+// (docs/analysis/buylow-timing-2026-10.md), so a riser may qualify for the list
+// but must never jump a more valuable player at the same position.
+test('a bigger 30-day riser never outranks a more valuable player at the same position', () => {
+  const strong = team(6, 2)                     // deep everywhere → no needs, no upgrades
+  const tes = [
+    pl('hig', 'TE', 897, { age: 33.7, trend30Day: 914 }),
+    pl('fre', 'TE', 1237, { age: 27.9, trend30Day: 318 }),
+  ]
+  const recs = recommendFreeAgents(tes, strong, [strong, team(1, 1), team(2, 1)], { limit: 4 })
+  const te = recs.find(r => r.player.position === 'TE')
+  assert.equal(te.player.sleeperId, 'fre', 'the more valuable TE is the pick')
+  assert.deepEqual(te.alternatives.map(a => a.player.sleeperId), ['hig'])
+  assert.ok(te.alternatives[0].reasons.includes('Trending up the last 30 days'),
+    'the trend still reads as a reason — it just does not score')
+})
+
+test('the trend never moves a score: same player, any trend, same score', () => {
+  const strong = team(6, 2)
+  const at = t => recommendFreeAgents([pl('x', 'WR', 1500, { trend30Day: t })], strong,
+    [strong, team(1, 1)], { limit: 1 })[0]
+  assert.equal(at(60).score, at(900).score, 'a riser scores the same however far it rose')
+})

@@ -42260,12 +42260,7 @@ function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 5, minV
       score += Math.min(2, upgradeMargin / 600);
       reasons.push(`+${Math.round(upgradeMargin).toLocaleString()} over your ${pos} depth`);
     }
-    if (isRising(trend)) {
-      score += Math.min(1.5, trend / 400);
-      reasons.push("Trending up the last 30 days");
-    } else if (isFalling(trend)) {
-      score -= 0.5;
-    }
+    if (isRising(trend)) reasons.push("Trending up the last 30 days");
     if (myTier === "Rebuilding" && age != null && age <= 24) {
       score += 1;
       reasons.push(`Young stash (age ${Math.floor(age)})`);

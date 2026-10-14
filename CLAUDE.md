@@ -2411,8 +2411,13 @@ player's depth rank):
   beats a needier one without**; it falls back to the neediest. Returns
   nav-ready `preloadTrade` plus `startsForThem`.
 - **Free Agents + The Edge's `pickup` item — `recommendFreeAgents`:** fills a
-  deficit, beats my replacement level (`CORE_DEPTH`-th best), rides a rising
-  trend, fits my window — **only players that move the needle**, with reasons.
+  deficit, beats my replacement level (`CORE_DEPTH`-th best), fits my window —
+  **only players that move the needle**, with reasons, scored in dynasty value.
+  **A rising 30-day trend qualifies a player and is named as a reason, but
+  NEVER scores** (owner, 2026-10-14): the bonus let Higbee (TE, 897, age 33.7,
+  +914) outrank Freiermuth (1,237, age 27.9), and the buy-low study found
+  30-day risers do not keep rising (`docs/analysis/buylow-timing-2026-10.md`).
+  `tests/recommendations.test.mjs` pins it.
   Its roster facts are **`buildPickupContext`**, exported so the FAAB bid reads
   the same "fills your need".
   - **ONE PICKUP PER POSITION (owner, 2026-10-07: "in what scenario would I
