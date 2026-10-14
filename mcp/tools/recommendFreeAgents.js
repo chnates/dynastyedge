@@ -35,6 +35,7 @@ import {
   buildRosteredIdSet,
   buildAvailableDefenses,
   rankFreeAgentPool,
+  buildValueSwaps,
 } from '../../src/utils/freeAgents.js'
 import { recommendFreeAgents, buildPickupContext } from '../../src/utils/recommendations.js'
 import {
@@ -62,6 +63,10 @@ export const MAX_POOL_LIMIT = 25
 const PROJECTION_CAVEAT =
   'Among waiver-tier players a 0-2 point projection means roughly a 0.9% chance of a 15+ point game, ' +
   'and 6-8 means 10.6% — so treat the projection as a coarse tier, not a precise forecast.'
+
+// Value swaps are bounded by my bench, but the cap still holds (§7); the true
+// count rides beside it in valueSwaps.count.
+export const MAX_VALUE_SWAPS = 20
 
 export function buildFreeAgentAnswer(snapshot, weekly, { position, limit, poolLimit, myRosterId } = {}) {
   const { league, values } = snapshot
@@ -112,8 +117,8 @@ export function buildFreeAgentAnswer(snapshot, weekly, { position, limit, poolLi
   const filtered = wanted ? pool.filter(p => p.position === wanted) : pool
 
   // The app's own engine, unchanged. It scores in DYNASTY VALUE and returns
-  // only players that genuinely move the roster — a need, an upgrade over my
-  // depth, or a real riser. "Available value" is not a recommendation.
+  // only players that genuinely move the roster — a need or an upgrade over my
+  // depth (a 30-day rise never qualifies). "Available value" is not a recommendation.
   const ranked = recommendFreeAgents(filtered, league.myRoster, league.allRosters, { limit: cap })
   const allPicks = recommendFreeAgents(filtered, league.myRoster, league.allRosters, { limit: Infinity })
 
@@ -187,6 +192,23 @@ export function buildFreeAgentAnswer(snapshot, weekly, { position, limit, poolLi
     role: pickIds.has(String(p.sleeperId)) ? 'pick' : altIds.has(String(p.sleeperId)) ? 'alternative' : 'available',
   }))
 
+  // Value swaps (owner, 2026-10-14): the whole-roster value test, same
+  // position only — every free agent worth more than one of my cheapest bench
+  // players (never a starter, taxi or IR). utils/freeAgents.js's rule, the
+  // same list League › Free Agents shows. No bid on any swap.
+  const swapAll = buildValueSwaps(filtered, league.myRoster)
+  const valueSwaps = {
+    count: swapAll.count,
+    totalGain: swapAll.totalGain,
+    rows: swapAll.swaps.slice(0, MAX_VALUE_SWAPS).map(sw => ({
+      position: sw.position,
+      add: { sleeperId: String(sw.add.sleeperId), name: sw.add.name, nflTeam: sw.add.team || null, age: sw.add.age ?? null, value: sw.add.value ?? null },
+      // Rule 7: an unranked drop is `value: null`, never 0.
+      drop: { sleeperId: String(sw.drop.sleeperId), name: sw.drop.name, value: sw.drop.unranked ? null : (sw.drop.value ?? null) },
+      gain: sw.gain,
+    })),
+  }
+
   return {
     ok: true,
     asOf: snapshot.asOf,
@@ -233,6 +255,7 @@ export function buildFreeAgentAnswer(snapshot, weekly, { position, limit, poolLi
     },
     recommendations,
     pool: poolRows,
+    valueSwaps,
     notes: buildNotes({ snapshot, weekly, projMap, recommendations, wanted, filtered, cap, league }),
   }
 }
@@ -318,7 +341,12 @@ function buildNotes({ snapshot, weekly, projMap, recommendations, wanted, filter
   notes.push(
     '`pool` is every available player ranked by dynasty value alone (capped; counts.poolSize is the true total) — ' +
     'use it to answer "who else is out there?". role "pick" is the row to claim, "alternative" is next in line at a ' +
-    'picked position, "available" is not recommended (no need, no upgrade, not rising). Pool rows carry no bid.'
+    'picked position, "available" is not recommended (no need, no upgrade). Pool rows carry no bid.'
+  )
+  notes.push(
+    '`valueSwaps` answers "how many pickups would make my team worth more?": each free agent paired with my cheapest ' +
+    'player at the SAME position who is not a starter, on taxi or on IR, kept only when the free agent is worth more. ' +
+    'Dynasty value only, so no bid — the pickups above are the lineup moves; swaps are value moves. Each swap needs that drop.'
   )
   notes.push(FAAB_BATCH_WARNING)
   notes.push(
@@ -379,6 +407,13 @@ export function renderFreeAgentText(a) {
     a.pool.forEach((p, i) => {
       const tag = p.role === 'pick' ? ' ← pick' : p.role === 'alternative' ? ' · next in line' : ''
       L.push(`${String(i + 1).padStart(2)}. ${p.position.padEnd(3)} ${p.name}${p.nflTeam ? ` (${p.nflTeam})` : ''} — ${num(p.value)}${p.age != null ? ` · age ${Math.floor(p.age)}` : ''}${tag}`)
+    })
+  }
+  if (a.valueSwaps?.count) {
+    L.push('')
+    L.push(`Value swaps — ${a.valueSwaps.count}, +${num(a.valueSwaps.totalGain)} dynasty value (same position; no bids):`)
+    a.valueSwaps.rows.forEach(sw => {
+      L.push(`  ${sw.position.padEnd(3)} add ${sw.add.name} ${num(sw.add.value)} · drop ${sw.drop.name} ${num(sw.drop.value)} · +${num(sw.gain)}`)
     })
   }
   L.push('')

@@ -123,6 +123,49 @@ export function rankFreeAgentPool(pool, { limit = 15 } = {}) {
   return { rows: ranked.slice(0, Math.max(0, limit)), total: ranked.length }
 }
 
+// VALUE SWAPS (owner, 2026-10-14) — "how many people could I pick up to make
+// my team worth more?" The owner's own method, made a rule: position by
+// position, the best free agents against my CHEAPEST players there, one for
+// one, kept only while the free agent is worth more. Pairing the k-th best
+// free agent with my k-th cheapest player is the most value any k swaps can
+// add, so the greedy walk is the optimum, not an approximation.
+//
+// Who can be the drop is the whole contract:
+//   • never a TAXI player — releasing one frees a taxi spot, not the active
+//     spot the pickup needs, and a free agent cannot be stashed in his place;
+//   • never an IR player — same reason, he holds no active spot;
+//   • never a STARTER — a swap is a bench move, not a lineup decision;
+//   • never the defense — swaps stay within the four valued positions, so a
+//     defense is never added or dropped (League Context › one defense).
+// An unranked bench player counts as 0 (rule 7: he contributes 0 to totals)
+// (leagueState gives him value 0 + `unranked: true`; a renderer shows `—`).
+// Same position only (owner): a swap never trades
+// depth at one position for value at another.
+//
+// Unlike `recommendFreeAgents` this asks about TOTAL VALUE, not the lineup, so
+// it carries no FAAB bid — the bid is sized for players who change the lineup,
+// and is graded against pre-registered bars (faabBid.js).
+export function buildValueSwaps(pool, myRoster) {
+  const swaps = []
+  if (!myRoster?.players?.length || !pool?.length) return { swaps, count: 0, totalGain: 0 }
+  for (const pos of VALUED_POSITIONS) {
+    const drops = myRoster.players
+      .filter(p => p.position === pos && !p.isTaxi && !p.isIR && !p.isStarter)
+      .sort((a, b) => (a.value ?? 0) - (b.value ?? 0) || String(a.name).localeCompare(String(b.name)))
+    const adds = pool
+      .filter(p => p.position === pos)
+      .sort((a, b) => (b.value ?? 0) - (a.value ?? 0) ||
+        (a.overallRank ?? Infinity) - (b.overallRank ?? Infinity) ||
+        String(a.name).localeCompare(String(b.name)))
+    for (let i = 0; i < Math.min(drops.length, adds.length); i++) {
+      const gain = (adds[i].value ?? 0) - (drops[i].value ?? 0)
+      if (gain <= 0) break
+      swaps.push({ position: pos, add: adds[i], drop: drops[i], gain })
+    }
+  }
+  return { swaps, count: swaps.length, totalGain: swaps.reduce((t, s) => t + s.gain, 0) }
+}
+
 // Available defenses, resolved from the shared player DB — FantasyCalc ranks
 // none, so they carry no dynasty value and show `—` (rule 7). Kept a separate
 // call, never merged into the pool above: see the standing rule.

@@ -16,8 +16,10 @@ import assert from 'node:assert/strict'
 
 import {
   buildFreeAgentAnswer, renderFreeAgentText, MAX_LIMIT, DEFAULT_LIMIT, DEFAULT_POOL_LIMIT, MAX_POOL_LIMIT,
+  MAX_VALUE_SWAPS,
 } from '../mcp/tools/recommendFreeAgents.js'
 import { makeSnapshot, makeWeekly, makeOffseasonWeekly, LEAGUE } from './helpers/mcpFixtures.mjs'
+import { buildValueSwaps, buildFreeAgentPool } from '../src/utils/freeAgents.js'
 
 const build = (args = {}, weekly = makeWeekly(), snapOver = {}) =>
   buildFreeAgentAnswer(makeSnapshot(snapOver), weekly, { myRosterId: 6, ...args })
@@ -271,4 +273,35 @@ test('poolLimit defaults and clamps', () => {
 test('the position filter narrows the pool too', () => {
   const a = build({ position: 'WR', poolLimit: MAX_POOL_LIMIT })
   assert.ok(a.pool.every(p => p.position === 'WR'))
+})
+
+// ── Value swaps (owner, 2026-10-14) ─────────────────────────────────────────
+// The SAME list League › Free Agents shows — utils/freeAgents.js's rule, never
+// a copy — bounded, with no bid, and never dropping a starter, taxi or IR player.
+test('valueSwaps is the app\'s buildValueSwaps over the same pool, bounded and bid-less', () => {
+  const snap = makeSnapshot()
+  const a = buildFreeAgentAnswer(snap, makeWeekly(), { myRosterId: 6 })
+  const pool = buildFreeAgentPool({ fcPlayerMap: snap.values.playerMap, allRosters: snap.league.allRosters })
+  const app = buildValueSwaps(pool, snap.league.myRoster)
+  assert.equal(a.valueSwaps.count, app.count)
+  assert.equal(a.valueSwaps.totalGain, app.totalGain)
+  assert.deepEqual(a.valueSwaps.rows.map(r => [r.add.sleeperId, r.drop.sleeperId, r.gain]),
+    app.swaps.slice(0, MAX_VALUE_SWAPS).map(s => [String(s.add.sleeperId), String(s.drop.sleeperId), s.gain]))
+  assert.ok(a.valueSwaps.rows.length <= MAX_VALUE_SWAPS)
+  assert.ok(a.valueSwaps.rows.every(r => !('faabBid' in r)), 'a swap is a value move — no bid')
+  const mine = new Map(snap.league.myRoster.players.map(p => [String(p.sleeperId), p]))
+  a.valueSwaps.rows.forEach(r => {
+    const d = mine.get(r.drop.sleeperId)
+    assert.ok(d && !d.isTaxi && !d.isIR && !d.isStarter, 'the drop frees an active bench spot')
+    assert.equal(d.position, r.position)
+    assert.ok(r.gain > 0)
+    if (d.unranked) assert.equal(r.drop.value, null, 'rule 7 — an unranked drop is null, never 0')
+  })
+})
+
+test('the text names the value swaps when there are any', () => {
+  const a = build()
+  const t = renderFreeAgentText(a)
+  if (a.valueSwaps.count) assert.match(t, /Value swaps — \d+/)
+  assert.ok(a.notes.some(n => n.includes('valueSwaps')), 'the note explains what a swap is')
 })

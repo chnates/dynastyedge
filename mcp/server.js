@@ -620,7 +620,9 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
         'reasons (a rising 30-day trend is named as a reason but never moves the ranking). ONE pick per ' +
         'position, with the next in line as alternatives. Also returns `pool`: every available player ' +
         'ranked by dynasty value (capped, true total in counts.poolSize) — use it to answer "who else is ' +
-        'out there?" without asking the user for names. Carries BOTH dynasty value and this week\'s Sleeper projection, ' +
+        'out there?" without asking the user for names — and `valueSwaps`: every free agent worth more than ' +
+        'one of your cheapest bench players at the SAME position (never a starter, taxi or IR), with the drop ' +
+        'and the gain, to answer "how many pickups would make my team worth more?". Carries BOTH dynasty value and this week\'s Sleeper projection, ' +
         'which are different axes (they correlate at only r = 0.427). IN-SEASON ONLY for the ' +
         'projection column: in the offseason `projectedPoints` is null and the response says why, ' +
         'never zero. Each pick carries a suggested FAAB bid (`faabBid`) read off the CURRENT period\'s ' +
@@ -679,6 +681,19 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
           trend30Day: z.number(), projectedPoints: z.number().nullable(),
           role: z.enum(['pick', 'alternative', 'available']),
         })).optional(),
+        // Same-position value swaps (utils/freeAgents.js buildValueSwaps) — no bids.
+        valueSwaps: z.object({
+          count: z.number(), totalGain: z.number(),
+          rows: z.array(z.object({
+            position: z.string(),
+            add: z.object({
+              sleeperId: z.string(), name: z.string(), nflTeam: z.string().nullable(),
+              age: z.number().nullable(), value: z.number().nullable(),
+            }),
+            drop: z.object({ sleeperId: z.string(), name: z.string(), value: z.number().nullable() }),
+            gain: z.number(),
+          })),
+        }).optional(),
         recommendations: z.array(z.object({
           sleeperId: z.string(), name: z.string(), position: z.string(),
           nflTeam: z.string().nullable(), age: z.number().nullable(),

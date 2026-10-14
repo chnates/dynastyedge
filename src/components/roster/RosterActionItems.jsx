@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useSleeperRookies, getPlayerMetaMap } from '../../hooks/useSleeperRookies'
 import { suggestSellMove } from '../../utils/recommendations'
 import { buildIrCapacity } from '../../utils/injuryStatus'
+import { buildFreeAgentPool, buildValueSwaps } from '../../utils/freeAgents'
+import { useLeagueContext } from '../../context/LeagueContext'
 import { Button, Lede, Mark, PositionBand, RuledList } from '../ui'
 import { PICK_YEARS } from '../../constants'
 import { STORAGE_KEYS } from '../../storageKeys'
@@ -68,6 +70,9 @@ export default function RosterActionItems({ myRoster, nflState, allRosters, pick
   // Trigger the /players/nfl fetch so meta is available (module-level cached)
   useSleeperRookies()
   const navigate = useNavigate()
+  // FantasyCalc values for the value-swaps item — already loaded app-wide
+  // (rule 4), so this costs no request.
+  const { values } = useLeagueContext()
 
   const [dismissals, setDismissals] = useState(loadDismissals)
 
@@ -183,8 +188,32 @@ export default function RosterActionItems({ myRoster, nflState, allRosters, pick
       })
     }
 
+    // 5. Value swaps (owner, 2026-10-14) — free agents worth more than my
+    //    cheapest bench player at their position. One aggregated item; the
+    //    list itself lives on League › Free Agents, and the rule in
+    //    utils/freeAgents.js (`buildValueSwaps`), shared with that screen and
+    //    the MCP server so the count here can never disagree with the list.
+    const pool = values?.playerMap && allRosters?.length
+      ? buildFreeAgentPool({ fcPlayerMap: values.playerMap, allRosters })
+      : []
+    const { swaps, count, totalGain } = buildValueSwaps(pool, myRoster)
+    if (count) {
+      result.push({
+        key: 'value_swaps',
+        // The SET of swaps, not the count: a different pair at the same count
+        // must re-surface a dismissed item (the taxi item's rule).
+        conditionSnapshot: swaps.map(sw => `${sw.add.sleeperId}>${sw.drop.sleeperId}`).sort().join(','),
+        eyebrow: 'Free agents',
+        headline: count === 1
+          ? <>{swaps[0].add.name} is worth <Mark tone="alt">+{totalGain.toLocaleString()}</Mark> over {swaps[0].drop.name}</>
+          : <><Mark tone="alt">{count} value swaps</Mark> are sitting on waivers</>,
+        message: `${listNames(swaps.map(sw => `${sw.add.name} for ${sw.drop.name} (+${sw.gain.toLocaleString()})`))} — ${count === 1 ? 'a' : 'together'} +${totalGain.toLocaleString()} in dynasty value, same position, never a starter, taxi or IR player.`,
+        action: { label: count === 1 ? 'See the swap' : 'See value swaps', to: '/league/free-agents' },
+      })
+    }
+
     return result
-  }, [myRoster, nflState, allRosters, pickYears, leagueInfo, dismissals]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [myRoster, nflState, allRosters, pickYears, leagueInfo, values, dismissals]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filter out dismissed items whose condition snapshot still matches
   const visible = items.filter(item => {

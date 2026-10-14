@@ -6,8 +6,8 @@ import { useWeeklyProjections } from '../../hooks/weeklyProjections'
 import { getPositionalDeltas, computeLeagueAverages } from '../../utils/rosterAnalysis'
 import { recommendFreeAgents, buildPickupContext } from '../../utils/recommendations'
 import { recommendFaabBid, readFaabPeriod, FAAB_CALIBRATION, FAAB_BATCH_WARNING } from '../../utils/faabBid'
-import { buildFreeAgentPool, buildAvailableDefenses, buildRosteredIdSet, VALUED_POSITIONS } from '../../utils/freeAgents'
-import { Card, Chip, RuledList, SearchInput, Loading } from '../ui'
+import { buildFreeAgentPool, buildAvailableDefenses, buildRosteredIdSet, buildValueSwaps, VALUED_POSITIONS } from '../../utils/freeAgents'
+import { Card, Chip, RuledList, Row, SearchInput, Loading } from '../ui'
 import ErrorState from '../shared/ErrorState'
 import SectionHeader from '../shared/SectionHeader'
 import TrendArrow from '../shared/TrendArrow'
@@ -110,6 +110,56 @@ function RecommendedPickups({ recs, bids, onSelect }) {
   )
 }
 
+
+// The owner's own method, as a list (2026-10-14): position by position, every
+// free agent worth more than one of my cheapest bench players — so "how many
+// pickups would make my team worth more, and by how much?" has one answer.
+// The rule lives in utils/freeAgents.js (`buildValueSwaps`), shared with the
+// Action Item and the MCP server. Many things you scan → a ruled list (law 5).
+// Two names per row, both tappable, so the row is a <div> holding two sibling
+// buttons — never a button inside a button (Market Movers' split row).
+function ValueSwaps({ swaps, totalGain, onSelect }) {
+  if (!swaps.length) return null
+  return (
+    <div>
+      <SectionHeader label="Value Swaps" count={`${swaps.length} · +${totalGain.toLocaleString()}`} />
+      <RuledList>
+        {swaps.map(s => (
+          <Row key={`${s.add.sleeperId}-${s.drop.sleeperId}`} padding="sm">
+            <div className="flex items-center gap-2">
+              <span className={`font-body text-[10px] font-semibold uppercase tracking-wide w-6 flex-shrink-0 ${POS_TEXT[s.position] ?? 'text-text-tertiary'}`}>
+                {s.position}
+              </span>
+              <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                <button type="button" onClick={() => onSelect(s.add)}
+                  className="focus-ring press text-left font-body text-sm text-text-primary leading-tight text-balance">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-success inline-block w-10">Add</span>
+                  {s.add.name}{' '}
+                  <span className="font-mono text-xs tabular-nums text-text-secondary">{(s.add.value ?? 0).toLocaleString()}</span>
+                </button>
+                <button type="button" onClick={() => onSelect(s.drop)}
+                  className="focus-ring press text-left font-body text-sm text-text-secondary leading-tight text-balance">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-danger inline-block w-10">Drop</span>
+                  {s.drop.name}{' '}
+                  <span className="font-mono text-xs tabular-nums text-text-tertiary">
+                    {s.drop.unranked || s.drop.value == null ? '—' : s.drop.value.toLocaleString()}
+                  </span>
+                </button>
+              </div>
+              <span className="font-mono text-sm font-medium tabular-nums text-success flex-shrink-0">
+                +{s.gain.toLocaleString()}
+              </span>
+            </div>
+          </Row>
+        ))}
+      </RuledList>
+      <p className="aside font-body text-[11px] text-text-tertiary leading-snug mt-1.5 text-balance">
+        Each free agent against your cheapest player at the same position — never a starter, a taxi
+        player or anyone on IR. Dynasty value only, so no bid: claim the ones you want.
+      </p>
+    </div>
+  )
+}
 
 // ── The defense you already roster ───────────────────────────────────────────
 // You start exactly one defense a week, so the honest question here is never
@@ -271,6 +321,15 @@ export default function FreeAgentsView() {
 
   // A FAAB bid per recommended pickup, against the CURRENT period's budget
   // read from settings (the budget resets twice a league year).
+  // Value swaps — the whole-roster value test, same position only. Follows the
+  // position filter; never under DEF (a defense is never swapped).
+  const valueSwaps = useMemo(() => {
+    const all = buildValueSwaps(freeAgents, league?.myRoster)
+    if (posFilter === 'ALL') return all
+    const swaps = all.swaps.filter(sw => sw.position === posFilter)
+    return { swaps, count: swaps.length, totalGain: swaps.reduce((t, sw) => t + sw.gain, 0) }
+  }, [freeAgents, league, posFilter])
+
   const faabBids = useMemo(() => {
     if (!league?.myRoster || !recommendations.length) return {}
     const period = readFaabPeriod(league.leagueInfo, league.myRoster)
@@ -373,6 +432,12 @@ export default function FreeAgentsView() {
         {!search.trim() && recommendations.length > 0 && (
           <div className="mb-3">
             <RecommendedPickups recs={recommendations.slice(0, 4)} bids={faabBids} onSelect={setSelected} />
+          </div>
+        )}
+
+        {!search.trim() && posFilter !== 'DEF' && valueSwaps.count > 0 && (
+          <div className="mb-3">
+            <ValueSwaps swaps={valueSwaps.swaps} totalGain={valueSwaps.totalGain} onSelect={setSelected} />
           </div>
         )}
 
