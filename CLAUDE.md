@@ -921,6 +921,14 @@ modelled**.
 - **One row per position** (the engine's rule); each row's `alternatives` are
   the same-position runners-up **with no `faabBid`**, and a note says to claim
   the row, not the alternatives. Declared in the zod schema.
+- **`pool` — every available player by dynasty value** (owner, 2026-10-14):
+  `rankFreeAgentPool` (`utils/freeAgents.js`), default 15 / max 25
+  (`poolLimit`), true total in `counts.poolSize`, each row's `role` `pick` /
+  `alternative` / `available`, **no bid on any pool row**. It exists because a
+  brief asked to look "across the board" could see only one pick per position
+  and asked the owner to open Sleeper and read names; the first live run showed
+  Michael Mayer (TE, 1,230) free and never mentioned. Declared in the zod
+  schema; verified over the real transport.
 
 ### Tool 4 — `resolve_assets`
 

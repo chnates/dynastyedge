@@ -13,7 +13,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { buildWaiverOptions, isTeamTotalsKey } from '../src/utils/freeAgents.js'
+import { buildWaiverOptions, isTeamTotalsKey, rankFreeAgentPool } from '../src/utils/freeAgents.js'
 
 const projMap = {
   '100': { pts_half_ppr: 12.5 },   // WR, FantasyCalc-ranked
@@ -180,4 +180,19 @@ test('defenses are reachable only by their own named call, and show no value (ru
   assert.ok(defs.every(d => d.value === null), '`—`, never a fabricated 0')
   assert.ok(defs.every(d => typeof d.sleeperId === 'string'))
   assert.deepEqual(buildAvailableDefenses(), [], 'no player DB ⇒ empty, never an error')
+})
+
+// rankFreeAgentPool (owner, 2026-10-14): the value-only "who is out there?" list.
+test('rankFreeAgentPool: value desc, overall rank breaks ties, capped with the true total', () => {
+  const pool = [
+    { sleeperId: 'a', name: 'A', value: 500, overallRank: 300 },
+    { sleeperId: 'b', name: 'B', value: 900, overallRank: 200 },
+    { sleeperId: 'c', name: 'C', value: 900, overallRank: 150 },
+    { sleeperId: 'd', name: 'D', value: 700, overallRank: 250 },
+  ]
+  const { rows, total } = rankFreeAgentPool(pool, { limit: 3 })
+  assert.deepEqual(rows.map(p => p.sleeperId), ['c', 'b', 'd'])
+  assert.equal(total, 4)
+  assert.equal(pool[0].sleeperId, 'a', 'the input is not reordered')
+  assert.deepEqual(rankFreeAgentPool(null), { rows: [], total: 0 })
 })

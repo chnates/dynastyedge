@@ -15,7 +15,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
-  buildFreeAgentAnswer, renderFreeAgentText, MAX_LIMIT, DEFAULT_LIMIT,
+  buildFreeAgentAnswer, renderFreeAgentText, MAX_LIMIT, DEFAULT_LIMIT, DEFAULT_POOL_LIMIT, MAX_POOL_LIMIT,
 } from '../mcp/tools/recommendFreeAgents.js'
 import { makeSnapshot, makeWeekly, makeOffseasonWeekly, LEAGUE } from './helpers/mcpFixtures.mjs'
 
@@ -236,4 +236,39 @@ test('no position repeats; same-position runners-up are alternatives with NO bid
     for (const alt of r.alternatives) assert.equal('faabBid' in alt, false, 'an alternative never carries a bid')
   }
   assert.ok(a.notes.some(n => /ONE pickup per position/.test(n)))
+})
+
+// ── THE POOL (owner, 2026-10-14): "across the board" without asking for names ─
+// The weekly brief could see one pick per position and asked the owner to open
+// Sleeper and read names. `pool` is every available player by dynasty value,
+// bounded with the true total, and it never carries a bid.
+
+test('pool: every available player, ranked by dynasty value, bounded with the true count', () => {
+  const a = build({ poolLimit: 3 })
+  assert.ok(a.ok)
+  assert.ok(a.pool.length <= 3)
+  assert.equal(a.counts.poolShown, a.pool.length)
+  assert.ok(a.counts.poolSize >= a.pool.length, 'the true pool size sits beside the capped list')
+  const values = a.pool.map(p => p.value)
+  assert.deepEqual(values, [...values].sort((x, y) => y - x), 'value, descending')
+  assert.ok(a.pool.every(p => p.position !== 'DEF'), 'the pool is the general pool — never a defense')
+})
+
+test('pool rows carry no bid, and every pick appears with role "pick"', () => {
+  const a = build({ poolLimit: MAX_POOL_LIMIT })
+  assert.ok(a.pool.every(p => !('faabBid' in p)), 'a bid on every row invites claiming two')
+  const picks = new Set(a.recommendations.map(r => r.sleeperId))
+  a.pool.filter(p => picks.has(p.sleeperId)).forEach(p => assert.equal(p.role, 'pick'))
+  assert.ok(a.pool.every(p => ['pick', 'alternative', 'available'].includes(p.role)))
+})
+
+test('poolLimit defaults and clamps', () => {
+  assert.ok(build().pool.length <= DEFAULT_POOL_LIMIT)
+  assert.ok(build({ poolLimit: 999 }).pool.length <= MAX_POOL_LIMIT)
+  assert.ok(build({ poolLimit: -4 }).pool.length <= DEFAULT_POOL_LIMIT)
+})
+
+test('the position filter narrows the pool too', () => {
+  const a = build({ position: 'WR', poolLimit: MAX_POOL_LIMIT })
+  assert.ok(a.pool.every(p => p.position === 'WR'))
 })

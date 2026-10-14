@@ -42389,6 +42389,10 @@ function buildFreeAgentPool({ fcPlayerMap, allRosters, rosteredIds } = {}) {
     (p) => !owned.has(String(p.sleeperId)) && VALUED_POSITIONS.includes(p.position) && (p.value ?? 0) > 0
   );
 }
+function rankFreeAgentPool(pool, { limit = 15 } = {}) {
+  const ranked = [...pool ?? []].sort((a, b) => (b.value ?? 0) - (a.value ?? 0) || (a.overallRank ?? Infinity) - (b.overallRank ?? Infinity) || String(a.name).localeCompare(String(b.name)));
+  return { rows: ranked.slice(0, Math.max(0, limit)), total: ranked.length };
+}
 function buildAvailableDefenses({ playerDB, allRosters, rosteredIds } = {}) {
   if (!playerDB) return [];
   const owned = rosteredIds ?? buildRosteredIdSet(allRosters);
@@ -42897,7 +42901,7 @@ var init_faabBid = __esm({
 });
 
 // mcp/tools/recommendFreeAgents.js
-function buildFreeAgentAnswer(snapshot, weekly, { position, limit, myRosterId } = {}) {
+function buildFreeAgentAnswer(snapshot, weekly, { position, limit, poolLimit, myRosterId } = {}) {
   const { league, values } = snapshot;
   if (!league) throw new Error("League state unavailable");
   if (!league.myRoster) {
@@ -42930,6 +42934,7 @@ function buildFreeAgentAnswer(snapshot, weekly, { position, limit, myRosterId } 
   const pool = buildFreeAgentPool({ fcPlayerMap: values.playerMap, allRosters: league.allRosters, rosteredIds });
   const filtered = wanted ? pool.filter((p) => p.position === wanted) : pool;
   const ranked = recommendFreeAgents(filtered, league.myRoster, league.allRosters, { limit: cap });
+  const allPicks = recommendFreeAgents(filtered, league.myRoster, league.allRosters, { limit: Infinity });
   const inSeason = weekly?.available && !weekly.isOffseason;
   const projMap = inSeason ? weekly.projMap : null;
   const period = readFaabPeriod(league.leagueInfo, league.myRoster);
@@ -42984,6 +42989,20 @@ function buildFreeAgentAnswer(snapshot, weekly, { position, limit, myRosterId } 
       reason: a.primaryReason
     }))
   }));
+  const pickIds = new Set(allPicks.map((r) => String(r.player.sleeperId)));
+  const altIds = new Set(allPicks.flatMap((r) => (r.alternatives ?? []).map((a) => String(a.player.sleeperId))));
+  const poolRanked = rankFreeAgentPool(filtered, { limit: clampPoolLimit(poolLimit) });
+  const poolRows = poolRanked.rows.map((p) => ({
+    sleeperId: String(p.sleeperId),
+    name: p.name,
+    position: p.position,
+    nflTeam: p.team || null,
+    age: p.age ?? null,
+    value: p.value ?? null,
+    trend30Day: p.trend30Day ?? 0,
+    projectedPoints: projMap ? round2(getProjPts(p.sleeperId, projMap)) : null,
+    role: pickIds.has(String(p.sleeperId)) ? "pick" : altIds.has(String(p.sleeperId)) ? "alternative" : "available"
+  }));
   return {
     ok: true,
     asOf: snapshot.asOf,
@@ -43021,9 +43040,11 @@ function buildFreeAgentAnswer(snapshot, weekly, { position, limit, myRosterId } 
       poolSize: filtered.length,
       returned: recommendations.length,
       // The true count beside the capped one (§7).
-      recommendedTotal: recommendFreeAgents(filtered, league.myRoster, league.allRosters, { limit: Infinity }).length
+      recommendedTotal: allPicks.length,
+      poolShown: poolRows.length
     },
     recommendations,
+    pool: poolRows,
     notes: buildNotes3({ snapshot, weekly, projMap, recommendations, wanted, filtered, cap, league })
   };
 }
@@ -43043,6 +43064,11 @@ function describeIncumbentDefense(league, weekly) {
     note: mine ? "This is the defense you roster. Replacing it is only worth doing if it is on bye or you have none." : "You have NO defense rostered \u2014 that is the one case worth acting on, and it costs you points every week it lasts.",
     availableCount: available
   };
+}
+function clampPoolLimit(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v) || v < 1) return DEFAULT_POOL_LIMIT;
+  return Math.min(Math.floor(v), MAX_POOL_LIMIT);
 }
 function clampLimit(limit) {
   const n = Number(limit);
@@ -43078,6 +43104,9 @@ function buildNotes3({ snapshot, weekly, projMap, recommendations, wanted, filte
   );
   notes.push(
     "ONE pickup per position: each row is the best available at its position, and the others at that position are listed under `alternatives` with no bid. Claim the row, not the alternatives \u2014 they are who is next if he goes elsewhere."
+  );
+  notes.push(
+    '`pool` is every available player ranked by dynasty value alone (capped; counts.poolSize is the true total) \u2014 use it to answer "who else is out there?". role "pick" is the row to claim, "alternative" is next in line at a picked position, "available" is not recommended (no need, no upgrade, not rising). Pool rows carry no bid.'
   );
   notes.push(FAAB_BATCH_WARNING);
   notes.push(
@@ -43122,6 +43151,14 @@ function renderFreeAgentText(a) {
       }
     });
   }
+  if (a.pool?.length) {
+    L.push("");
+    L.push(`Available by dynasty value \u2014 top ${a.pool.length} of ${a.counts.poolSize} (no bids; one claim per position):`);
+    a.pool.forEach((p, i) => {
+      const tag = p.role === "pick" ? " \u2190 pick" : p.role === "alternative" ? " \xB7 next in line" : "";
+      L.push(`${String(i + 1).padStart(2)}. ${p.position.padEnd(3)} ${p.name}${p.nflTeam ? ` (${p.nflTeam})` : ""} \u2014 ${num2(p.value)}${p.age != null ? ` \xB7 age ${Math.floor(p.age)}` : ""}${tag}`);
+    });
+  }
   L.push("");
   if (!a.projections.available) {
     L.push(`No weekly projection column: ${a.projections.reason}.`);
@@ -43129,7 +43166,7 @@ function renderFreeAgentText(a) {
   a.notes.forEach((n) => L.push(`Note: ${n}`));
   return L.join("\n").trimEnd();
 }
-var DEFAULT_LIMIT, MAX_LIMIT, PROJECTION_CAVEAT, round2, num2;
+var DEFAULT_LIMIT, MAX_LIMIT, DEFAULT_POOL_LIMIT, MAX_POOL_LIMIT, PROJECTION_CAVEAT, round2, num2;
 var init_recommendFreeAgents = __esm({
   "mcp/tools/recommendFreeAgents.js"() {
     init_freeAgents();
@@ -43142,6 +43179,8 @@ var init_recommendFreeAgents = __esm({
     init_constants();
     DEFAULT_LIMIT = 8;
     MAX_LIMIT = 25;
+    DEFAULT_POOL_LIMIT = 15;
+    MAX_POOL_LIMIT = 25;
     PROJECTION_CAVEAT = "Among waiver-tier players a 0-2 point projection means roughly a 0.9% chance of a 15+ point game, and 6-8 means 10.6% \u2014 so treat the projection as a coarse tier, not a precise forecast.";
     round2 = (n) => Math.round((n ?? 0) * 100) / 100;
     num2 = (n) => n == null ? "\u2014" : n.toLocaleString("en-US");
@@ -47617,10 +47656,11 @@ function createServer({ env = process.env, fetcher, store } = {}) {
     "recommend_free_agents",
     {
       title: "Recommend free agents",
-      description: "Ranks available players by what they would actually do for YOUR roster \u2014 fill a positional deficit, beat your current depth at the spot, or ride a rising 30-day trend \u2014 each with plain-English reasons. Carries BOTH dynasty value and this week's Sleeper projection, which are different axes (they correlate at only r = 0.427). IN-SEASON ONLY for the projection column: in the offseason `projectedPoints` is null and the response says why, never zero. Each pick carries a suggested FAAB bid (`faabBid`) read off the CURRENT period's budget, sized by how much the player matters to your roster on a ladder calibrated on 2023-25 (n = 3 contested auctions on the $1000 scale) \u2014 the same bid the app shows. Defenses are excluded by design \u2014 you roster exactly one, ever.",
+      description: "Ranks available players by what they would actually do for YOUR roster \u2014 fill a positional deficit or beat your current depth at the spot \u2014 in DYNASTY VALUE, each with plain-English reasons (a rising 30-day trend is named as a reason but never moves the ranking). ONE pick per position, with the next in line as alternatives. Also returns `pool`: every available player ranked by dynasty value (capped, true total in counts.poolSize) \u2014 use it to answer \"who else is out there?\" without asking the user for names. Carries BOTH dynasty value and this week's Sleeper projection, which are different axes (they correlate at only r = 0.427). IN-SEASON ONLY for the projection column: in the offseason `projectedPoints` is null and the response says why, never zero. Each pick carries a suggested FAAB bid (`faabBid`) read off the CURRENT period's budget, sized by how much the player matters to your roster on a ladder calibrated on 2023-25 (n = 3 contested auctions on the $1000 scale) \u2014 the same bid the app shows. Defenses are excluded by design \u2014 you roster exactly one, ever.",
       inputSchema: {
         position: external_exports.string().optional().describe("Limit to QB, RB, WR or TE. Omit for all. DEF is not a general pickup and is rejected with an explanation."),
         limit: external_exports.number().int().optional().describe(`How many to return (default 8, max ${MAX_LIMIT}).`),
+        poolLimit: external_exports.number().int().optional().describe(`How many of the value-ranked pool to return (default ${DEFAULT_POOL_LIMIT}, max ${MAX_POOL_LIMIT}).`),
         leagueId: external_exports.string().optional().describe("Sleeper league id. Omit for the configured league."),
         week: external_exports.number().int().optional().describe("Projection week. Omit for the current week."),
         refresh: external_exports.boolean().optional().describe("Bypass the caches and refetch. Use near kickoff, when a late inactive can move a projection faster than its ~60 minute TTL.")
@@ -47668,8 +47708,21 @@ function createServer({ env = process.env, fetcher, store } = {}) {
         counts: external_exports.object({
           poolSize: external_exports.number(),
           returned: external_exports.number(),
-          recommendedTotal: external_exports.number()
+          recommendedTotal: external_exports.number(),
+          poolShown: external_exports.number()
         }).optional(),
+        // Every available player by dynasty value — no bids (one claim per position).
+        pool: external_exports.array(external_exports.object({
+          sleeperId: external_exports.string(),
+          name: external_exports.string(),
+          position: external_exports.string(),
+          nflTeam: external_exports.string().nullable(),
+          age: external_exports.number().nullable(),
+          value: external_exports.number().nullable(),
+          trend30Day: external_exports.number(),
+          projectedPoints: external_exports.number().nullable(),
+          role: external_exports.enum(["pick", "alternative", "available"])
+        })).optional(),
         recommendations: external_exports.array(external_exports.object({
           sleeperId: external_exports.string(),
           name: external_exports.string(),
@@ -47718,12 +47771,13 @@ function createServer({ env = process.env, fetcher, store } = {}) {
         notes: external_exports.array(external_exports.string()).optional()
       }
     },
-    async ({ position, limit, leagueId, week, refresh }) => {
+    async ({ position, limit, poolLimit, leagueId, week, refresh }) => {
       const snapshot = await snapshotFor(leagueId, refresh);
       const weekly = await weeklyFor(snapshot, week, refresh);
       const answer = buildFreeAgentAnswer(snapshot, weekly, {
         position,
         limit,
+        poolLimit,
         myRosterId: config2.defaultRosterId
       });
       if (answer.ok) answer.asOf = mergeAsOf(answer.asOf, weekly.sources);

@@ -107,6 +107,22 @@ export function buildFreeAgentPool({ fcPlayerMap, allRosters, rosteredIds } = {}
   )
 }
 
+// The free-agent pool ranked by DYNASTY VALUE alone — the "who is out there?"
+// list, as opposed to `recommendFreeAgents`' "who should I claim?" (owner,
+// 2026-10-14: a brief asked to look "across the board" could only see the one
+// pickup per position, and asked the owner to open Sleeper and read names).
+// Value desc, then overall rank, then name — deterministic. Returns the capped
+// rows AND the true pool size, so a caller can say "top 25 of 118" (bounded
+// output). It never carries a bid: one claim per position is
+// `recommendFreeAgents`' job, and a bid on every row invites claiming two.
+export function rankFreeAgentPool(pool, { limit = 15 } = {}) {
+  const ranked = [...(pool ?? [])].sort((a, b) =>
+    (b.value ?? 0) - (a.value ?? 0) ||
+    (a.overallRank ?? Infinity) - (b.overallRank ?? Infinity) ||
+    String(a.name).localeCompare(String(b.name)))
+  return { rows: ranked.slice(0, Math.max(0, limit)), total: ranked.length }
+}
+
 // Available defenses, resolved from the shared player DB — FantasyCalc ranks
 // none, so they carry no dynasty value and show `—` (rule 7). Kept a separate
 // call, never merged into the pool above: see the standing rule.
