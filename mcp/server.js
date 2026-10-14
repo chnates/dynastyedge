@@ -21,7 +21,7 @@ import { buildPlayoffOutlook } from '../src/utils/playoffOdds.js'
 import { mergeAsOf } from './snapshot.js'
 import { buildRosterAnswer, renderRosterText } from './tools/getRoster.js'
 import { buildSellHighAnswer, renderSellHighText } from './tools/findSellHigh.js'
-import { buildFreeAgentAnswer, renderFreeAgentText, MAX_LIMIT } from './tools/recommendFreeAgents.js'
+import { buildFreeAgentAnswer, renderFreeAgentText, MAX_LIMIT, DEFAULT_POOL_LIMIT, MAX_POOL_LIMIT } from './tools/recommendFreeAgents.js'
 import { buildResolveAnswer, renderResolveText, MAX_QUERIES } from './tools/resolveAssets.js'
 import { buildTradeAnswer, renderTradeText, isPickId } from './tools/analyzeTrade.js'
 import { buildLineupAnswer, renderLineupText } from './tools/lineupAdvice.js'
@@ -301,7 +301,10 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
         'owned, with its exact slot label where the draft order is known; plus total value ' +
         'and league value rank, win-window tier, record and FAAB; room to move (IR slots used ' +
         'and open — when IR is full an injured player must stay on the active roster — and open ' +
-        'active roster spots, so whether a claim needs a drop); and the league calendar ' +
+        'active roster spots, so whether a claim needs a drop — plus dropCandidates, the players ' +
+        'whose release frees an active spot, cheapest dynasty value first: never taxi, IR, a ' +
+        'starter or the defense; suggest drops from this list, not your own); ' +
+        'and the league calendar ' +
         '(trade deadline week, weeks left and whether it is deadline time, read from league ' +
         'settings; Sleeper\'s waiver settings passed through undecoded). Defaults to the ' +
         'configured team when `team` is omitted. Accepts a team name, a manager username, ' +
@@ -370,6 +373,14 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
             statusesKnown: z.boolean(),
           }),
           activeRoster: z.object({ slots: z.number(), used: z.number(), open: z.number() }).nullable(),
+          // Who to release when a claim needs a spot (owner, 2026-10-14).
+          dropCandidates: z.object({
+            total: z.number(),
+            rows: z.array(z.object({
+              sleeperId: z.string(), name: z.string(), position: z.string(),
+              value: z.number().nullable(), keepScore: z.number(), reason: z.string(),
+            })),
+          }),
         }).optional(),
         winWindow: z.string().optional(),
         totals: z.object({
@@ -605,8 +616,11 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
       title: 'Recommend free agents',
       description:
         'Ranks available players by what they would actually do for YOUR roster — fill a positional ' +
-        'deficit, beat your current depth at the spot, or ride a rising 30-day trend — each with ' +
-        'plain-English reasons. Carries BOTH dynasty value and this week\'s Sleeper projection, ' +
+        'deficit or beat your current depth at the spot — in DYNASTY VALUE, each with plain-English ' +
+        'reasons (a rising 30-day trend is named as a reason but never moves the ranking). ONE pick per ' +
+        'position, with the next in line as alternatives. Also returns `pool`: every available player ' +
+        'ranked by dynasty value (capped, true total in counts.poolSize) — use it to answer "who else is ' +
+        'out there?" without asking the user for names. Carries BOTH dynasty value and this week\'s Sleeper projection, ' +
         'which are different axes (they correlate at only r = 0.427). IN-SEASON ONLY for the ' +
         'projection column: in the offseason `projectedPoints` is null and the response says why, ' +
         'never zero. Each pick carries a suggested FAAB bid (`faabBid`) read off the CURRENT period\'s ' +
@@ -618,6 +632,8 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
           .describe('Limit to QB, RB, WR or TE. Omit for all. DEF is not a general pickup and is rejected with an explanation.'),
         limit: z.number().int().optional()
           .describe(`How many to return (default 8, max ${MAX_LIMIT}).`),
+        poolLimit: z.number().int().optional()
+          .describe(`How many of the value-ranked pool to return (default ${DEFAULT_POOL_LIMIT}, max ${MAX_POOL_LIMIT}).`),
         leagueId: z.string().optional()
           .describe('Sleeper league id. Omit for the configured league.'),
         week: z.number().int().optional()
@@ -654,8 +670,15 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
           available: z.boolean(), week: z.number().nullable(), reason: z.string().nullable(),
         }).optional(),
         counts: z.object({
-          poolSize: z.number(), returned: z.number(), recommendedTotal: z.number(),
+          poolSize: z.number(), returned: z.number(), recommendedTotal: z.number(), poolShown: z.number(),
         }).optional(),
+        // Every available player by dynasty value — no bids (one claim per position).
+        pool: z.array(z.object({
+          sleeperId: z.string(), name: z.string(), position: z.string(),
+          nflTeam: z.string().nullable(), age: z.number().nullable(), value: z.number().nullable(),
+          trend30Day: z.number(), projectedPoints: z.number().nullable(),
+          role: z.enum(['pick', 'alternative', 'available']),
+        })).optional(),
         recommendations: z.array(z.object({
           sleeperId: z.string(), name: z.string(), position: z.string(),
           nflTeam: z.string().nullable(), age: z.number().nullable(),
@@ -688,11 +711,11 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
         notes: z.array(z.string()).optional(),
       },
     },
-    async ({ position, limit, leagueId, week, refresh }) => {
+    async ({ position, limit, poolLimit, leagueId, week, refresh }) => {
       const snapshot = await snapshotFor(leagueId, refresh)
       const weekly = await weeklyFor(snapshot, week, refresh)
       const answer = buildFreeAgentAnswer(snapshot, weekly, {
-        position, limit, myRosterId: config.defaultRosterId,
+        position, limit, poolLimit, myRosterId: config.defaultRosterId,
       })
       // The weekly sources join the stamp, and mergeAsOf recomputes the
       // overall age over the union — a stale projection must not hide behind

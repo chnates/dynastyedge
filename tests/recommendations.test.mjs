@@ -440,3 +440,64 @@ test('the limit counts positions, not players — and a single-position pool yie
   assert.equal(qbOnly.length, 1, 'filtered to QB, there is still exactly one QB to claim')
   assert.equal(qbOnly[0].alternatives.length, MAX_PICKUP_ALTERNATIVES)
 })
+
+// ── The 30-day trend is a REASON, never a score (owner, 2026-10-14) ─────────
+// Live Week 6: Tyler Higbee (TE, 897, age 33.7, +914 over 30 days) outranked
+// Pat Freiermuth (TE, 1237, age 27.9, +318) because the trend bonus was worth
+// up to 1,500 value. The buy-low study found 30-day risers do not keep rising
+// (docs/analysis/buylow-timing-2026-10.md), so a riser may qualify for the list
+// but must never jump a more valuable player at the same position.
+test('a bigger 30-day riser never outranks a more valuable player at the same position', () => {
+  const strong = team(6, 2)                     // deep everywhere → no needs, no upgrades
+  const tes = [
+    pl('hig', 'TE', 897, { age: 33.7, trend30Day: 914 }),
+    pl('fre', 'TE', 1237, { age: 27.9, trend30Day: 318 }),
+  ]
+  const recs = recommendFreeAgents(tes, strong, [strong, team(1, 1), team(2, 1)], { limit: 4 })
+  const te = recs.find(r => r.player.position === 'TE')
+  assert.equal(te.player.sleeperId, 'fre', 'the more valuable TE is the pick')
+  assert.deepEqual(te.alternatives.map(a => a.player.sleeperId), ['hig'])
+  assert.ok(te.alternatives[0].reasons.includes('Trending up the last 30 days'),
+    'the trend still reads as a reason — it just does not score')
+})
+
+test('the trend never moves a score: same player, any trend, same score', () => {
+  const strong = team(6, 2)
+  const at = t => recommendFreeAgents([pl('x', 'WR', 1500, { trend30Day: t })], strong,
+    [strong, team(1, 1)], { limit: 1 })[0]
+  assert.equal(at(60).score, at(900).score, 'a riser scores the same however far it rose')
+})
+
+// ── WHO TO DROP (owner, 2026-10-14) ─────────────────────────────────────────
+// The Week 6 brief invented its own drops with a full active roster. A drop
+// must free an ACTIVE spot (never taxi, IR, a starter or the one defense) and
+// costs the asset, so the cheapest dynasty value goes first; protected players
+// never appear.
+import { rankDropCandidates } from '../src/utils/recommendations.js'
+
+test('drop candidates: only players whose release frees an active spot, cheapest first', () => {
+  const me = team(6, 1)
+  me.players.push(
+    pl('cheap', 'WR', 120), pl('mid', 'RB', 400),
+    pl('taxi', 'WR', 50, { isTaxi: true }), pl('ir', 'RB', 60, { isIR: true }),
+    pl('starter', 'WR', 90, { isStarter: true }), pl('def', 'DEF', 0),
+    pl('stash', 'TE', 0, { unranked: true }),
+  )
+  const { rows, total } = rankDropCandidates(me, [me, team(1, 1), team(2, 1)], { limit: 3 })
+  const ids = rows.map(r => r.player.sleeperId)
+  assert.deepEqual(ids, ['stash', 'cheap', 'mid'], 'unranked first, then value ascending')
+  for (const bad of ['taxi', 'ir', 'starter', 'def']) {
+    assert.ok(!ids.includes(bad), `${bad} frees no active spot or is the one defense`)
+  }
+  assert.equal(rows[0].value, null, 'unranked reads null, never 0 (rule 7)')
+  assert.ok(total >= rows.length, 'the true count beside the capped list')
+})
+
+test('an unranked bench stash is a drop candidate even at a thin position', () => {
+  // The trade keep-score protects a WR2 on a thin depth chart; as a drop gate it
+  // shielded an unranked stash worth nothing. It is a tiebreak, never a gate.
+  const me = team(6, 0.2)                       // thin everywhere → every position a deficit
+  me.players.push(pl('stash', 'WR', 0, { unranked: true }))
+  const { rows } = rankDropCandidates(me, [me, team(1, 1), team(2, 1)], { limit: 1 })
+  assert.equal(rows[0].player.sleeperId, 'stash')
+})

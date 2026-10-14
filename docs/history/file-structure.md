@@ -656,3 +656,10 @@ action and has no Node runtime at all. Re-check both when GitHub ships a node24
 -----
 
 
+
+## 2026-10-14 — test counts after the weekly-brief fixes
+
+950 → **960** with dependencies (917 / 912 / 5 without): two trend tests and
+two drop-candidate tests in `recommendations.test.mjs`, one pool-ranking test
+in `freeAgents.test.mjs`, four pool tests in `mcpRecommendFreeAgents.test.mjs`,
+one drop-candidate test in `mcpGetRoster.test.mjs`. Gap still **43**.

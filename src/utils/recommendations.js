@@ -14,7 +14,7 @@ import { buildValueLineup } from './lineupBuild'
 import { PEAK_WINDOWS } from './peakWindows'
 import { buildFairBand, FAIR_BAND_PCT } from './fairBand'
 import { getTeamName } from './teamName'
-import { isRising, isFalling } from './marketTrend'
+import { isRising } from './marketTrend'
 
 // The starters we protect hardest at each position in this 10-team Superflex
 // Half-PPR league (QB doubles up via the Superflex slot; 3 FLEX spots make RB/WR
@@ -190,6 +190,41 @@ export function assetKeepScore(asset, ctx) {
 // package — they're core/irreplaceable. The user can still add them manually.
 export const PROTECT_THRESHOLD = 0.9
 
+// WHO TO DROP when a claim needs a roster spot (owner, 2026-10-14). The Week 6
+// brief had a full active roster and invented its own drops — one of them a
+// player on IR, whose release frees no active spot. A drop gives the asset
+// away for nothing, so the order is by what you LOSE: dynasty value ascending
+// (an unranked player loses nothing FantasyCalc can see), keep-score breaking
+// ties. Only players whose release actually frees an active spot qualify:
+//   - not on taxi or IR (they sit outside the active cap),
+//   - not in this week's starting lineup,
+//   - not the defense (exactly one is ever rostered — League Context).
+// The trade keep-score is a TIEBREAK here, never a gate: it protects anyone
+// high on a thin depth chart, so as a gate it shielded an unranked stash worth
+// nothing. Value-first ordering already puts the players that matter last.
+// Returns the capped rows and the true count of eligible players.
+export function rankDropCandidates(myRoster, allRosters, { limit = 5 } = {}) {
+  if (!myRoster?.players?.length) return { rows: [], total: 0 }
+  const ctx = buildGivabilityContext(myRoster, allRosters)
+  const eligible = myRoster.players
+    .filter(p => !p.isTaxi && !p.isIR && !p.isStarter && POSITIONS.includes(p.position))
+    .map(p => {
+      const keepScore = assetKeepScore({ ...p, type: 'player' }, ctx)
+      const rank = ctx.posRank.get(String(p.sleeperId))
+      const depth = rank != null ? `${p.position}${rank + 1} on your depth chart` : `${p.position} depth`
+      return {
+        player: p,
+        value: p.unranked ? null : (p.value ?? null),
+        keepScore,
+        reason: p.unranked || !p.value
+          ? `No FantasyCalc value · ${depth}`
+          : `${Math.round(p.value).toLocaleString('en-US')} value · ${depth}`,
+      }
+    })
+    .sort((a, b) => (a.value ?? 0) - (b.value ?? 0) || a.keepScore - b.keepScore)
+  return { rows: eligible.slice(0, Math.max(0, limit)), total: eligible.length }
+}
+
 // A team's deficit positions (where they're below league average) — the assets
 // that make a package they'd actually accept.
 export function getDeficitPositions(roster, allRosters) {
@@ -201,7 +236,8 @@ export function getDeficitPositions(roster, allRosters) {
 
 // Proactive free-agent pickups — not a filter, an actual recommendation. Ranks
 // available players by what they'd do for MY roster: fill a deficit position,
-// upgrade my depth at a position, ride a rising trend, and fit my win window
+// upgrade my depth at a position, and fit my win window — in dynasty value; a
+// rising trend qualifies a player and is named as a reason, but never scores
 // (a rebuilder values young stashes; a contender values win-now depth). Returns
 // only players that genuinely move the needle, each with plain-English reasons.
 // What a pickup would do for MY roster, as roster facts: my positional deltas
@@ -253,12 +289,14 @@ export function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 
         score += Math.min(2, upgradeMargin / 600)
         reasons.push(`+${Math.round(upgradeMargin).toLocaleString()} over your ${pos} depth`)
       }
-      if (isRising(trend)) {
-        score += Math.min(1.5, trend / 400)
-        reasons.push('Trending up the last 30 days')
-      } else if (isFalling(trend)) {
-        score -= 0.5
-      }
+      // The 30-day trend is a REASON, never a score (owner, 2026-10-14). It used
+      // to add up to +1.5 — the weight of 1,500 value — so a 33-year-old TE whose
+      // value spiked +914 outranked a 27-year-old worth 340 more. The buy-low
+      // study found 30-day risers do not keep rising (they trailed matched
+      // non-movers by −2.3% over the next 30 days — docs/analysis/
+      // buylow-timing-2026-10.md), so the bonus paid for nothing measured. A
+      // riser still qualifies for the list below; it no longer jumps the queue.
+      if (isRising(trend)) reasons.push('Trending up the last 30 days')
       if (myTier === 'Rebuilding' && age != null && age <= 24) {
         score += 1
         reasons.push(`Young stash (age ${Math.floor(age)})`)

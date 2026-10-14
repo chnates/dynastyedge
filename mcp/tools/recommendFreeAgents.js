@@ -34,6 +34,7 @@ import {
   buildFreeAgentPool,
   buildRosteredIdSet,
   buildAvailableDefenses,
+  rankFreeAgentPool,
 } from '../../src/utils/freeAgents.js'
 import { recommendFreeAgents, buildPickupContext } from '../../src/utils/recommendations.js'
 import {
@@ -50,6 +51,9 @@ import { POSITIONS } from '../../src/constants.js'
 // recommendation, not a database export.
 export const DEFAULT_LIMIT = 8
 export const MAX_LIMIT = 25
+// The value-ranked pool (owner, 2026-10-14): the "across the board" answer.
+export const DEFAULT_POOL_LIMIT = 15
+export const MAX_POOL_LIMIT = 25
 
 // What a projection is actually worth knowing, measured among waiver-tier
 // players: a 0-2 projection means a 0.9% chance of a 15+ point game, 6-8 means
@@ -59,7 +63,7 @@ const PROJECTION_CAVEAT =
   'Among waiver-tier players a 0-2 point projection means roughly a 0.9% chance of a 15+ point game, ' +
   'and 6-8 means 10.6% — so treat the projection as a coarse tier, not a precise forecast.'
 
-export function buildFreeAgentAnswer(snapshot, weekly, { position, limit, myRosterId } = {}) {
+export function buildFreeAgentAnswer(snapshot, weekly, { position, limit, poolLimit, myRosterId } = {}) {
   const { league, values } = snapshot
   if (!league) throw new Error('League state unavailable')
 
@@ -111,6 +115,7 @@ export function buildFreeAgentAnswer(snapshot, weekly, { position, limit, myRost
   // only players that genuinely move the roster — a need, an upgrade over my
   // depth, or a real riser. "Available value" is not a recommendation.
   const ranked = recommendFreeAgents(filtered, league.myRoster, league.allRosters, { limit: cap })
+  const allPicks = recommendFreeAgents(filtered, league.myRoster, league.allRosters, { limit: Infinity })
 
   const inSeason = weekly?.available && !weekly.isOffseason
   const projMap = inSeason ? weekly.projMap : null
@@ -164,6 +169,24 @@ export function buildFreeAgentAnswer(snapshot, weekly, { position, limit, myRost
     })),
   }))
 
+  // The whole free-agent pool by dynasty value — the "who else is out there?"
+  // list. Rows say whether each one is a pick (the row to claim) or a runner-up
+  // at a picked position; NO row here carries a bid (one claim per position).
+  const pickIds = new Set(allPicks.map(r => String(r.player.sleeperId)))
+  const altIds = new Set(allPicks.flatMap(r => (r.alternatives ?? []).map(a => String(a.player.sleeperId))))
+  const poolRanked = rankFreeAgentPool(filtered, { limit: clampPoolLimit(poolLimit) })
+  const poolRows = poolRanked.rows.map(p => ({
+    sleeperId: String(p.sleeperId),
+    name: p.name,
+    position: p.position,
+    nflTeam: p.team || null,
+    age: p.age ?? null,
+    value: p.value ?? null,
+    trend30Day: p.trend30Day ?? 0,
+    projectedPoints: projMap ? round2(getProjPts(p.sleeperId, projMap)) : null,
+    role: pickIds.has(String(p.sleeperId)) ? 'pick' : altIds.has(String(p.sleeperId)) ? 'alternative' : 'available',
+  }))
+
   return {
     ok: true,
     asOf: snapshot.asOf,
@@ -205,9 +228,11 @@ export function buildFreeAgentAnswer(snapshot, weekly, { position, limit, myRost
       poolSize: filtered.length,
       returned: recommendations.length,
       // The true count beside the capped one (§7).
-      recommendedTotal: recommendFreeAgents(filtered, league.myRoster, league.allRosters, { limit: Infinity }).length,
+      recommendedTotal: allPicks.length,
+      poolShown: poolRows.length,
     },
     recommendations,
+    pool: poolRows,
     notes: buildNotes({ snapshot, weekly, projMap, recommendations, wanted, filtered, cap, league }),
   }
 }
@@ -238,6 +263,12 @@ function describeIncumbentDefense(league, weekly) {
       : 'You have NO defense rostered — that is the one case worth acting on, and it costs you points every week it lasts.',
     availableCount: available,
   }
+}
+
+function clampPoolLimit(n) {
+  const v = Number(n)
+  if (!Number.isFinite(v) || v < 1) return DEFAULT_POOL_LIMIT
+  return Math.min(Math.floor(v), MAX_POOL_LIMIT)
 }
 
 function clampLimit(limit) {
@@ -283,6 +314,11 @@ function buildNotes({ snapshot, weekly, projMap, recommendations, wanted, filter
   notes.push(
     'ONE pickup per position: each row is the best available at its position, and the others at that position are ' +
     'listed under `alternatives` with no bid. Claim the row, not the alternatives — they are who is next if he goes elsewhere.'
+  )
+  notes.push(
+    '`pool` is every available player ranked by dynasty value alone (capped; counts.poolSize is the true total) — ' +
+    'use it to answer "who else is out there?". role "pick" is the row to claim, "alternative" is next in line at a ' +
+    'picked position, "available" is not recommended (no need, no upgrade, not rising). Pool rows carry no bid.'
   )
   notes.push(FAAB_BATCH_WARNING)
   notes.push(
@@ -335,6 +371,14 @@ export function renderFreeAgentText(a) {
       if (p.alternatives?.length) {
         L.push(`      Next at ${p.position} (no bid — claim one per position): ${p.alternatives.map(x => x.name).join(', ')}`)
       }
+    })
+  }
+  if (a.pool?.length) {
+    L.push('')
+    L.push(`Available by dynasty value — top ${a.pool.length} of ${a.counts.poolSize} (no bids; one claim per position):`)
+    a.pool.forEach((p, i) => {
+      const tag = p.role === 'pick' ? ' ← pick' : p.role === 'alternative' ? ' · next in line' : ''
+      L.push(`${String(i + 1).padStart(2)}. ${p.position.padEnd(3)} ${p.name}${p.nflTeam ? ` (${p.nflTeam})` : ''} — ${num(p.value)}${p.age != null ? ` · age ${Math.floor(p.age)}` : ''}${tag}`)
     })
   }
   L.push('')

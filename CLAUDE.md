@@ -886,6 +886,14 @@ tier, record, FAAB. Caps 60 players / 40 picks.
   `roster_positions` (`getRosterLimits`). **When IR is full a note says the
   waiting players must stay on the active roster and must not be suggested for
   IR**; a full active roster gets "every claim needs a drop".
+- **`roomToMove.dropCandidates`** (owner, 2026-10-14): **`rankDropCandidates`**
+  (`utils/recommendations.js`) — only players whose release frees an ACTIVE spot
+  (never taxi, IR, a starter or the one defense), **cheapest dynasty value
+  first**, unranked `value: null` (rule 7), the trade keep-score a tiebreak and
+  **never a gate** (as a gate it shielded an unranked stash on a thin depth
+  chart). Max 5, true count beside. It exists because the Week 6 brief invented
+  its own drops with a full roster. Declared in the zod schema; verified over
+  the real transport.
 
 ### Caching the weekly data — a DIFFERENT TTL, deliberately
 
@@ -921,6 +929,14 @@ modelled**.
 - **One row per position** (the engine's rule); each row's `alternatives` are
   the same-position runners-up **with no `faabBid`**, and a note says to claim
   the row, not the alternatives. Declared in the zod schema.
+- **`pool` — every available player by dynasty value** (owner, 2026-10-14):
+  `rankFreeAgentPool` (`utils/freeAgents.js`), default 15 / max 25
+  (`poolLimit`), true total in `counts.poolSize`, each row's `role` `pick` /
+  `alternative` / `available`, **no bid on any pool row**. It exists because a
+  brief asked to look "across the board" could see only one pick per position
+  and asked the owner to open Sleeper and read names; the first live run showed
+  Michael Mayer (TE, 1,230) free and never mentioned. Declared in the zod
+  schema; verified over the real transport.
 
 ### Tool 4 — `resolve_assets`
 
@@ -2411,8 +2427,13 @@ player's depth rank):
   beats a needier one without**; it falls back to the neediest. Returns
   nav-ready `preloadTrade` plus `startsForThem`.
 - **Free Agents + The Edge's `pickup` item — `recommendFreeAgents`:** fills a
-  deficit, beats my replacement level (`CORE_DEPTH`-th best), rides a rising
-  trend, fits my window — **only players that move the needle**, with reasons.
+  deficit, beats my replacement level (`CORE_DEPTH`-th best), fits my window —
+  **only players that move the needle**, with reasons, scored in dynasty value.
+  **A rising 30-day trend qualifies a player and is named as a reason, but
+  NEVER scores** (owner, 2026-10-14): the bonus let Higbee (TE, 897, age 33.7,
+  +914) outrank Freiermuth (1,237, age 27.9), and the buy-low study found
+  30-day risers do not keep rising (`docs/analysis/buylow-timing-2026-10.md`).
+  `tests/recommendations.test.mjs` pins it.
   Its roster facts are **`buildPickupContext`**, exported so the FAAB bid reads
   the same "fills your need".
   - **ONE PICKUP PER POSITION (owner, 2026-10-07: "in what scenario would I
@@ -3405,9 +3426,9 @@ report that honestly**: it prints failing tests that read like a code regression
 because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
-**Current counts (verified 2026-10-08 by moving `node_modules` aside, after §0 #11's odds track record):** with
-dependencies **`# tests 950 / # pass 950`**; without them **`# tests 907 / #
-pass 902 / # fail 5`**. **If the test count isn't 950, run `npm ci` before
+**Current counts (verified 2026-10-14 by moving `node_modules` aside, after the weekly-brief fixes):** with
+dependencies **`# tests 960 / # pass 960`**; without them **`# tests 917 / #
+pass 912 / # fail 5`**. **If the test count isn't 960, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React
