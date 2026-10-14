@@ -7,7 +7,10 @@ Decided in `docs/analysis/proactive-delivery-2026-10.md` §6; built as
 this repo. This file is the copy of record: **if you change the routine's
 prompt, change it here too.**
 
-**Last changed 2026-10-14 (v3):** after the first unattended run (owner's
+**Last changed 2026-10-14 (v4):** value swaps — every free agent worth more
+than my cheapest bench player at his position, with the drop and the gain
+(the owner's own method; the same list as League › Free Agents). **v3, the
+same day:** after the first unattended run (owner's
 review of the Week 6 thread). The push goes first and the brief is the final
 message (v2's order let the run end on "brief above" with no brief); every
 player is judged on dynasty value, not projections; "also out there" names
@@ -49,9 +52,9 @@ STEP 0: Check the connector. If no DynastyEdge tools are available, or the first
 
 STEP 1: Call get_roster with no arguments. Note the week, my record, my FAAB remaining, calendar.tradeDeadline, and roomToMove: IR room, open active roster spots, and dropCandidates. If league.isOffseason is true, send "DynastyEdge: offseason, no brief this week" and stop.
 
-STEP 2 (waivers, every week): Call recommend_free_agents with no arguments. Each recommendations row is the ONE pickup at its position, with its faabBid. Never recommend claiming more than one player at a position; a row's alternatives are only "who's next if he goes elsewhere" and get no bid. The response's pool lists every free agent by dynasty value; use it to name notable players the rows don't cover. Waivers process at noon Eastern every day, and Wednesday noon is the big run, so say the bids must be in Sleeper before Wednesday 12:00 pm ET.
+STEP 2 (waivers, every week): Call recommend_free_agents with no arguments. Each recommendations row is the ONE pickup at its position, with its faabBid. Never recommend claiming more than one player at a position; a row's alternatives are only "who's next if he goes elsewhere" and get no bid. The response's pool lists every free agent by dynasty value; use it to name notable players the rows don't cover. The response's valueSwaps lists every same-position swap that raises my team's dynasty value: add, drop (never a starter, taxi or IR player) and gain, with the count and total. Waivers process at noon Eastern every day, and Wednesday noon is the big run, so say the bids must be in Sleeper before Wednesday 12:00 pm ET.
 
-DROPS: if roomToMove.activeRoster.open is 0, every claim needs a drop. Take drops ONLY from roomToMove.dropCandidates, in its order, one per claim. Never invent a drop, and never name a taxi or IR player (releasing them frees no active spot). Tell me to order claims in Sleeper so the most important one is first.
+DROPS: if roomToMove.activeRoster.open is 0, every claim needs a drop. When a pickup also appears in valueSwaps, use that swap's drop. Otherwise take drops ONLY from roomToMove.dropCandidates, in its order, one per claim. Never invent a drop, and never name a taxi or IR player (releasing them frees no active spot). Tell me to order claims in Sleeper so the most important one is first.
 
 STEP 3: Call find_sell_high. Call get_playoff_odds. Call get_player_news for my roster and keep only my starters with an injury status.
 
@@ -61,7 +64,8 @@ STEP 5: Send exactly ONE push notification, under 200 characters, leading with t
 
 STEP 6, LAST: write the full brief as your final message, AFTER the push. The brief IS your final message: never reply with a pointer to it ("brief above"), and add nothing after it. Plain English, short:
 - Waivers: at most one pickup per position, as "Player (POS, team, age): value V, bid $X - one-line dynasty reason", then "next at POS: names". Then "Also out there:" with up to 3 pool players (role "available") worth knowing, by value, no bid. Skip floor bids ($2-ish) unless the player's value makes him worth a roster spot. If none are worth a bid, say so.
-- Drops: one per claim, from dropCandidates, with its value.
+- Value swaps: "N swaps, +total" then one line each, "add A (POS, value) for B (value): +gain", no bid. If valueSwaps.count is 0, say "no value swaps".
+- Drops: one per claim, from the swap or dropCandidates, with its value. Never use the same drop twice.
 - Sell-high: the move and the partner, or "nothing to sell this week".
 - Playoff odds: my % and stance in one line.
 - Injuries: my hurt starters, one line each, or "none". IR is limited (roomToMove.ir): only suggest moving a player to IR when roomToMove.ir.open is above 0. When IR is full, injured players stay on the active roster; say so in one line if roomToMove.ir.eligibleWaiting is not empty.
