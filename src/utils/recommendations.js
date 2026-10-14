@@ -190,6 +190,41 @@ export function assetKeepScore(asset, ctx) {
 // package — they're core/irreplaceable. The user can still add them manually.
 export const PROTECT_THRESHOLD = 0.9
 
+// WHO TO DROP when a claim needs a roster spot (owner, 2026-10-14). The Week 6
+// brief had a full active roster and invented its own drops — one of them a
+// player on IR, whose release frees no active spot. A drop gives the asset
+// away for nothing, so the order is by what you LOSE: dynasty value ascending
+// (an unranked player loses nothing FantasyCalc can see), keep-score breaking
+// ties. Only players whose release actually frees an active spot qualify:
+//   - not on taxi or IR (they sit outside the active cap),
+//   - not in this week's starting lineup,
+//   - not the defense (exactly one is ever rostered — League Context).
+// The trade keep-score is a TIEBREAK here, never a gate: it protects anyone
+// high on a thin depth chart, so as a gate it shielded an unranked stash worth
+// nothing. Value-first ordering already puts the players that matter last.
+// Returns the capped rows and the true count of eligible players.
+export function rankDropCandidates(myRoster, allRosters, { limit = 5 } = {}) {
+  if (!myRoster?.players?.length) return { rows: [], total: 0 }
+  const ctx = buildGivabilityContext(myRoster, allRosters)
+  const eligible = myRoster.players
+    .filter(p => !p.isTaxi && !p.isIR && !p.isStarter && POSITIONS.includes(p.position))
+    .map(p => {
+      const keepScore = assetKeepScore({ ...p, type: 'player' }, ctx)
+      const rank = ctx.posRank.get(String(p.sleeperId))
+      const depth = rank != null ? `${p.position}${rank + 1} on your depth chart` : `${p.position} depth`
+      return {
+        player: p,
+        value: p.unranked ? null : (p.value ?? null),
+        keepScore,
+        reason: p.unranked || !p.value
+          ? `No FantasyCalc value · ${depth}`
+          : `${Math.round(p.value).toLocaleString('en-US')} value · ${depth}`,
+      }
+    })
+    .sort((a, b) => (a.value ?? 0) - (b.value ?? 0) || a.keepScore - b.keepScore)
+  return { rows: eligible.slice(0, Math.max(0, limit)), total: eligible.length }
+}
+
 // A team's deficit positions (where they're below league average) — the assets
 // that make a package they'd actually accept.
 export function getDeficitPositions(roster, allRosters) {

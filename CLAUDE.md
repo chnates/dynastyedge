@@ -886,6 +886,14 @@ tier, record, FAAB. Caps 60 players / 40 picks.
   `roster_positions` (`getRosterLimits`). **When IR is full a note says the
   waiting players must stay on the active roster and must not be suggested for
   IR**; a full active roster gets "every claim needs a drop".
+- **`roomToMove.dropCandidates`** (owner, 2026-10-14): **`rankDropCandidates`**
+  (`utils/recommendations.js`) — only players whose release frees an ACTIVE spot
+  (never taxi, IR, a starter or the one defense), **cheapest dynasty value
+  first**, unranked `value: null` (rule 7), the trade keep-score a tiebreak and
+  **never a gate** (as a gate it shielded an unranked stash on a thin depth
+  chart). Max 5, true count beside. It exists because the Week 6 brief invented
+  its own drops with a full roster. Declared in the zod schema; verified over
+  the real transport.
 
 ### Caching the weekly data — a DIFFERENT TTL, deliberately
 

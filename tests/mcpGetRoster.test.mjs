@@ -329,3 +329,20 @@ test('a full active roster says every claim needs a drop', () => {
   assert.ok(a.notes.some(n => /All 3 active roster spots are filled/.test(n)))
   assert.equal(a.roomToMove.ir.full, false, 'one of two IR slots is open')
 })
+
+// Who to drop (owner, 2026-10-14): the brief invented drops; the tool now names
+// them from rankDropCandidates — only players whose release frees an ACTIVE
+// spot, so never taxi, IR, a starter or the defense.
+test('roomToMove.dropCandidates: bounded, and never a taxi, IR, starter or defense', () => {
+  const a = buildRosterAnswer(roomSnap({ waiver_budget: 1000, reserve_slots: 2 }, ['QB', 'RB', 'BN']),
+    { defaultRosterId: 6, myRosterId: 6 })
+  const d = a.roomToMove.dropCandidates
+  assert.ok(Array.isArray(d.rows) && d.rows.length <= 5 && d.total >= d.rows.length)
+  const byId = new Map(a.players.map(p => [p.sleeperId, p]))
+  d.rows.forEach(r => {
+    const p = byId.get(r.sleeperId)
+    assert.ok(p, `${r.name} is on the roster`)
+    assert.equal(p.slot, 'BENCH', `${r.name} must be a bench player to free an active spot`)
+    assert.notEqual(r.position, 'DEF')
+  })
+})

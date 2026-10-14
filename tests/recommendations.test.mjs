@@ -467,3 +467,37 @@ test('the trend never moves a score: same player, any trend, same score', () => 
     [strong, team(1, 1)], { limit: 1 })[0]
   assert.equal(at(60).score, at(900).score, 'a riser scores the same however far it rose')
 })
+
+// ── WHO TO DROP (owner, 2026-10-14) ─────────────────────────────────────────
+// The Week 6 brief invented its own drops with a full active roster. A drop
+// must free an ACTIVE spot (never taxi, IR, a starter or the one defense) and
+// costs the asset, so the cheapest dynasty value goes first; protected players
+// never appear.
+import { rankDropCandidates } from '../src/utils/recommendations.js'
+
+test('drop candidates: only players whose release frees an active spot, cheapest first', () => {
+  const me = team(6, 1)
+  me.players.push(
+    pl('cheap', 'WR', 120), pl('mid', 'RB', 400),
+    pl('taxi', 'WR', 50, { isTaxi: true }), pl('ir', 'RB', 60, { isIR: true }),
+    pl('starter', 'WR', 90, { isStarter: true }), pl('def', 'DEF', 0),
+    pl('stash', 'TE', 0, { unranked: true }),
+  )
+  const { rows, total } = rankDropCandidates(me, [me, team(1, 1), team(2, 1)], { limit: 3 })
+  const ids = rows.map(r => r.player.sleeperId)
+  assert.deepEqual(ids, ['stash', 'cheap', 'mid'], 'unranked first, then value ascending')
+  for (const bad of ['taxi', 'ir', 'starter', 'def']) {
+    assert.ok(!ids.includes(bad), `${bad} frees no active spot or is the one defense`)
+  }
+  assert.equal(rows[0].value, null, 'unranked reads null, never 0 (rule 7)')
+  assert.ok(total >= rows.length, 'the true count beside the capped list')
+})
+
+test('an unranked bench stash is a drop candidate even at a thin position', () => {
+  // The trade keep-score protects a WR2 on a thin depth chart; as a drop gate it
+  // shielded an unranked stash worth nothing. It is a tiebreak, never a gate.
+  const me = team(6, 0.2)                       // thin everywhere → every position a deficit
+  me.players.push(pl('stash', 'WR', 0, { unranked: true }))
+  const { rows } = rankDropCandidates(me, [me, team(1, 1), team(2, 1)], { limit: 1 })
+  assert.equal(rows[0].player.sleeperId, 'stash')
+})

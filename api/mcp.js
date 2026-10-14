@@ -41522,6 +41522,245 @@ var init_rosterSpace = __esm({
   }
 });
 
+// src/utils/peakWindows.js
+var PEAK_WINDOWS;
+var init_peakWindows = __esm({
+  "src/utils/peakWindows.js"() {
+    PEAK_WINDOWS = {
+      QB: [26, 33],
+      RB: [23, 26],
+      WR: [24, 28],
+      TE: [25, 29]
+    };
+  }
+});
+
+// src/utils/recommendations.js
+function pastPeakTilt(asset, myTier) {
+  const window = PEAK_WINDOWS[asset?.position];
+  const age = asset?.age;
+  if (!window || age == null || age <= 0) return 0;
+  const past = age - window[1];
+  if (past <= 0) return 0;
+  const magnitude = (AGE_TILT_BY_TIER[myTier] ?? AGE_TILT_BY_TIER.Middle) * (AGE_TILT_BY_POSITION[asset.position] ?? 0);
+  return -Math.min(1, past / AGE_TILT_SPAN) * magnitude;
+}
+function joinAnd(parts) {
+  if (parts.length <= 1) return parts[0] ?? "";
+  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
+  return `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`;
+}
+function buildGivabilityContext(myRoster, allRosters) {
+  const hasLeague = !!allRosters?.length;
+  const leagueAverages = hasLeague ? computeLeagueAverages(allRosters) : null;
+  const myDeltas = leagueAverages ? getPositionalDeltas(myRoster, leagueAverages) : {};
+  const myTier = hasLeague ? assignWinWindowTiers(allRosters)[myRoster.rosterId] ?? "Middle" : "Middle";
+  const posRank = /* @__PURE__ */ new Map();
+  const posValues = {};
+  POSITIONS.forEach((pos) => {
+    const mine = myRoster.players.filter((p) => p.position === pos && !p.isIR).sort((a, b) => (b.value || 0) - (a.value || 0));
+    mine.forEach((p, i) => posRank.set(String(p.sleeperId), i));
+    posValues[pos] = mine.map((p) => p.value || 0);
+  });
+  return { myDeltas, myTier, posRank, posValues, leagueAverages };
+}
+function assetKeepScore(asset, ctx) {
+  const { myDeltas, myTier, posRank, posValues } = ctx;
+  if (asset.type === "pick") {
+    let keep2 = PICK_ROUND_KEEP[asset.round] ?? PICK_KEEP_DEFAULT;
+    if (myTier === "Rebuilding") keep2 += 0.3;
+    else if (myTier === "Contending") keep2 -= 0.3;
+    return clamp(keep2, 0.05, PICK_KEEP_CAP);
+  }
+  const pos = asset.position;
+  const rank = posRank?.get(String(asset.sleeperId)) ?? 99;
+  const coreN = CORE_DEPTH[pos] ?? 2;
+  let keep = rank < coreN ? 0.85 : Math.max(0.2, 0.55 - (rank - coreN) * 0.12);
+  const delta = myDeltas?.[pos] ?? 0;
+  if (delta < 0) keep += 0.22;
+  else if (delta > 0 && rank >= coreN) keep -= 0.18;
+  if (rank === 0) {
+    const vals = posValues?.[pos] ?? [];
+    const top = vals[0] ?? 0;
+    const next = vals[1] ?? 0;
+    if (top > 0 && next / top < 0.5) keep = Math.max(keep, 0.95);
+  }
+  const age = asset.age ?? null;
+  if (myTier === "Contending") {
+    if (age != null && age <= 24 && (asset.value || 0) < 1500) keep -= 0.15;
+  } else if (myTier === "Rebuilding") {
+    if (age != null && age <= 24) keep += 0.2;
+  }
+  keep += pastPeakTilt(asset, myTier);
+  return clamp(keep);
+}
+function rankDropCandidates(myRoster, allRosters, { limit = 5 } = {}) {
+  if (!myRoster?.players?.length) return { rows: [], total: 0 };
+  const ctx = buildGivabilityContext(myRoster, allRosters);
+  const eligible = myRoster.players.filter((p) => !p.isTaxi && !p.isIR && !p.isStarter && POSITIONS.includes(p.position)).map((p) => {
+    const keepScore = assetKeepScore({ ...p, type: "player" }, ctx);
+    const rank = ctx.posRank.get(String(p.sleeperId));
+    const depth = rank != null ? `${p.position}${rank + 1} on your depth chart` : `${p.position} depth`;
+    return {
+      player: p,
+      value: p.unranked ? null : p.value ?? null,
+      keepScore,
+      reason: p.unranked || !p.value ? `No FantasyCalc value \xB7 ${depth}` : `${Math.round(p.value).toLocaleString("en-US")} value \xB7 ${depth}`
+    };
+  }).sort((a, b) => (a.value ?? 0) - (b.value ?? 0) || a.keepScore - b.keepScore);
+  return { rows: eligible.slice(0, Math.max(0, limit)), total: eligible.length };
+}
+function getDeficitPositions(roster, allRosters) {
+  if (!roster || !allRosters?.length) return /* @__PURE__ */ new Set();
+  const leagueAverages = computeLeagueAverages(allRosters);
+  const deltas = getPositionalDeltas(roster, leagueAverages);
+  return new Set(POSITIONS.filter((pos) => deltas[pos] < 0));
+}
+function buildPickupContext(myRoster, allRosters) {
+  const { myDeltas, myTier } = buildGivabilityContext(myRoster, allRosters);
+  const replacement = {};
+  POSITIONS.forEach((pos) => {
+    const mine = myRoster.players.filter((p) => p.position === pos && !p.isIR).map((p) => p.value || 0).sort((a, b) => b - a);
+    const depth = CORE_DEPTH[pos] ?? 2;
+    replacement[pos] = mine.length >= depth ? mine[depth - 1] : mine[mine.length - 1] ?? 0;
+  });
+  return { myDeltas, myTier, replacement };
+}
+function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 5, minValue = 600 } = {}) {
+  if (!freeAgents?.length || !myRoster) return [];
+  const { myDeltas, myTier, replacement } = buildPickupContext(myRoster, allRosters);
+  const scored = freeAgents.filter((p) => (p.value ?? 0) >= minValue && POSITIONS.includes(p.position)).map((p) => {
+    const value = p.value ?? 0;
+    const pos = p.position;
+    const isNeed = (myDeltas[pos] ?? 0) < 0;
+    const upgradeMargin = value - (replacement[pos] ?? 0);
+    const isUpgrade = upgradeMargin > 0;
+    const trend = p.trend30Day ?? 0;
+    const age = p.age ?? null;
+    let score = value / 1e3;
+    const reasons = [];
+    if (isNeed) {
+      score += 2.5;
+      reasons.push(`Fills your ${pos} need`);
+    }
+    if (isUpgrade) {
+      score += Math.min(2, upgradeMargin / 600);
+      reasons.push(`+${Math.round(upgradeMargin).toLocaleString()} over your ${pos} depth`);
+    }
+    if (isRising(trend)) reasons.push("Trending up the last 30 days");
+    if (myTier === "Rebuilding" && age != null && age <= 24) {
+      score += 1;
+      reasons.push(`Young stash (age ${Math.floor(age)})`);
+    } else if (myTier === "Contending" && age != null && age >= 26 && isUpgrade) {
+      score += 0.5;
+      reasons.push("Win-now depth");
+    }
+    return { player: p, score, reasons, isNeed, isUpgrade, upgradeMargin, trend };
+  }).filter((r) => r.isNeed || r.isUpgrade || isRising(r.trend)).sort((a, b) => b.score - a.score);
+  const leaders = [];
+  const byPosition = /* @__PURE__ */ new Map();
+  for (const r of scored) {
+    const pos = r.player.position;
+    const leader = byPosition.get(pos);
+    if (!leader) {
+      const entry = { ...r, primaryReason: r.reasons[0] ?? "Available value", alternatives: [] };
+      byPosition.set(pos, entry);
+      leaders.push(entry);
+    } else if (leader.alternatives.length < MAX_PICKUP_ALTERNATIVES) {
+      leader.alternatives.push({ ...r, primaryReason: r.reasons[0] ?? "Available value" });
+    }
+  }
+  return leaders.slice(0, limit);
+}
+function suggestSellMove(player, myRoster, allRosters) {
+  if (!player || !myRoster || !allRosters?.length) return null;
+  const pos = player.position;
+  const targetVal = player.value || 0;
+  const leagueAverages = computeLeagueAverages(allRosters);
+  const myDeltas = getPositionalDeltas(myRoster, leagueAverages);
+  const myDeficits = POSITIONS.filter((p) => (myDeltas[p] ?? 0) < 0).sort((a, b) => myDeltas[a] - myDeltas[b]);
+  const opponents = allRosters.filter((r) => r.rosterId !== myRoster.rosterId);
+  if (!opponents.length) return null;
+  const findReturn = (opp) => {
+    for (const dPos of myDeficits) {
+      const cand = opp.players.filter(
+        (p) => p.position === dPos && !p.isIR && (p.value ?? 0) >= targetVal * 0.8 && (p.value ?? 0) <= targetVal * 1.25
+      ).sort((a, b) => (b.value ?? 0) - (a.value ?? 0))[0];
+      if (cand) return { returnPlayer: cand, deficitPos: dPos };
+    }
+    return null;
+  };
+  const scored = opponents.map((opp) => {
+    const theirDelta = getPositionalDeltas(opp, leagueAverages)[pos] ?? 0;
+    const ret = findReturn(opp);
+    const starts = buildValueLineup([
+      ...opp.players,
+      {
+        sleeperId: String(player.sleeperId),
+        name: player.name,
+        position: pos,
+        value: targetVal,
+        isIR: false,
+        isTaxi: false
+      }
+    ]).starterIds.has(String(player.sleeperId));
+    let score = -theirDelta / Math.max(1, leagueAverages[pos] ?? 1);
+    if (starts) score += 1.2;
+    if (ret) score += 1.5;
+    return { opp, theirDelta, ret, starts, score };
+  }).sort((a, b) => b.score - a.score);
+  const pick2 = scored[0];
+  if (!pick2) return null;
+  const partnerName = getTeamName(pick2.opp.owner);
+  const give = [{ ...player, type: "player" }];
+  if (pick2.ret) {
+    const { returnPlayer, deficitPos } = pick2.ret;
+    return {
+      opponentRosterId: pick2.opp.rosterId,
+      partnerName,
+      give,
+      get: [{ ...returnPlayer, type: "player" }],
+      deficitPos,
+      startsForThem: pick2.starts,
+      ctaLabel: "Build this trade",
+      summary: `Flip ${player.name} to ${partnerName} for ${returnPlayer.name} \u2014 fills your ${deficitPos}.`
+    };
+  }
+  return {
+    opponentRosterId: pick2.opp.rosterId,
+    partnerName,
+    give,
+    get: null,
+    deficitPos: myDeficits[0] ?? null,
+    startsForThem: pick2.starts,
+    ctaLabel: `Shop to ${partnerName}`,
+    summary: pick2.starts ? `Shop ${player.name} to ${partnerName} \u2014 he'd start for them.` : `Shop ${player.name} to ${partnerName} \u2014 they're thin at ${pos}.`
+  };
+}
+var CORE_DEPTH, PICK_ROUND_KEEP, PICK_KEEP_DEFAULT, PICK_KEEP_CAP, AGE_TILT_BY_POSITION, AGE_TILT_BY_TIER, AGE_TILT_SPAN, clamp, PROTECT_THRESHOLD, MAX_PICKUP_ALTERNATIVES, CASH_OUT_BAND;
+var init_recommendations = __esm({
+  "src/utils/recommendations.js"() {
+    init_constants();
+    init_rosterAnalysis();
+    init_lineupBuild();
+    init_peakWindows();
+    init_fairBand();
+    init_teamName();
+    init_marketTrend();
+    CORE_DEPTH = { QB: 2, RB: 3, WR: 3, TE: 1 };
+    PICK_ROUND_KEEP = { 1: 0.65, 2: 0.5, 3: 0.4, 4: 0.3 };
+    PICK_KEEP_DEFAULT = 0.5;
+    PICK_KEEP_CAP = 0.85;
+    AGE_TILT_BY_POSITION = { RB: 1, WR: 0.65, QB: 0.4, TE: 0.15 };
+    AGE_TILT_BY_TIER = { Contending: 0.04, Middle: 0.1, Rebuilding: 0.16 };
+    AGE_TILT_SPAN = 3;
+    clamp = (v, lo = 0.05, hi = 1) => Math.max(lo, Math.min(hi, v));
+    PROTECT_THRESHOLD = 0.9;
+    MAX_PICKUP_ALTERNATIVES = 3;
+    CASH_OUT_BAND = [1 / (1 + FAIR_BAND_PCT), 1 / (1 - FAIR_BAND_PCT)];
+  }
+});
+
 // mcp/teams.js
 function describeTeams(rosters) {
   return (rosters ?? []).map((r) => ({
@@ -41739,7 +41978,7 @@ function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId, news }
   const playerValue = roster.players.reduce((s, p) => s + (p.value ?? 0), 0);
   const pickValue = roster.picks.reduce((s, p) => s + (p.value ?? 0), 0);
   const valueRank = [...allRosters].sort((a, b) => b.totalValue - a.totalValue).findIndex((r) => r.rosterId === roster.rosterId) + 1;
-  const room = buildRoom(snapshot, league.leagueInfo, roster);
+  const room = buildRoom(snapshot, league.leagueInfo, roster, allRosters);
   const counts = players.reduce((acc, p) => {
     acc[p.slot] = (acc[p.slot] ?? 0) + 1;
     return acc;
@@ -41815,7 +42054,7 @@ function buildCalendar(snapshot, leagueInfo) {
     }
   };
 }
-function buildRoom(snapshot, leagueInfo, roster) {
+function buildRoom(snapshot, leagueInfo, roster, allRosters) {
   const settings = leagueInfo?.settings ?? {};
   const statusOf = (p) => snapshot.playerDB?.[String(p.sleeperId)]?.injury_status ?? null;
   const ir = buildIrCapacity(roster.players, settings, statusOf);
@@ -41839,7 +42078,26 @@ function buildRoom(snapshot, leagueInfo, roster) {
       // would be a guess — say it could not be checked instead.
       statusesKnown: !!snapshot.counts?.playerDBEntries
     },
-    activeRoster: limits ? { slots: limits.activeSlots, used: activeUsed, open: Math.max(0, limits.activeSlots - activeUsed) } : null
+    activeRoster: limits ? { slots: limits.activeSlots, used: activeUsed, open: Math.max(0, limits.activeSlots - activeUsed) } : null,
+    // Who to release when a claim needs a spot — rankDropCandidates
+    // (src/utils/recommendations.js). Only players whose release frees an
+    // ACTIVE spot (never taxi, IR, a starter or the defense), cheapest dynasty
+    // value first. Unranked is value null, never 0.
+    dropCandidates: dropCandidatesFor(roster, allRosters)
+  };
+}
+function dropCandidatesFor(roster, allRosters) {
+  const { rows, total } = rankDropCandidates(roster, allRosters, { limit: MAX_DROP_CANDIDATES });
+  return {
+    total,
+    rows: rows.map((r) => ({
+      sleeperId: String(r.player.sleeperId),
+      name: r.player.name,
+      position: r.player.position,
+      value: r.value,
+      keepScore: Math.round(r.keepScore * 100) / 100,
+      reason: r.reason
+    }))
   };
 }
 function injuryFields(snapshot, news, sleeperId) {
@@ -41915,6 +42173,10 @@ function renderRosterText(a) {
   }
   const act = a.roomToMove?.activeRoster;
   if (act) L.push(`Active roster ${act.used} of ${act.slots}${act.open === 0 ? " \u2014 full, a claim needs a drop" : ` \xB7 ${act.open} open`}`);
+  const drops = a.roomToMove?.dropCandidates;
+  if (drops?.rows?.length) {
+    L.push(`Cheapest to drop (frees an active spot): ${drops.rows.map((d) => `${d.name} (${d.position}, ${d.value == null ? "no value" : d.value.toLocaleString("en-US")})`).join(", ")}`);
+  }
   const dl = a.calendar?.tradeDeadline;
   if (dl) {
     L.push(dl.status === "passed" ? `Trade deadline passed (Week ${dl.week})` : dl.status === "this-week" ? `Trade deadline is THIS WEEK (Week ${dl.week})` : `Trade deadline: Week ${dl.week} \xB7 ${dl.weeksLeft} week${dl.weeksLeft === 1 ? "" : "s"} away`);
@@ -41942,7 +42204,7 @@ function renderRosterText(a) {
   a.notes.forEach((n) => L.push(`Note: ${n}`));
   return L.join("\n").trimEnd();
 }
-var MAX_PLAYERS, MAX_PICKS, POS_ORDER, round1;
+var MAX_PLAYERS, MAX_PICKS, POS_ORDER, MAX_DROP_CANDIDATES, round1;
 var init_getRoster = __esm({
   "mcp/tools/getRoster.js"() {
     init_rosterAnalysis();
@@ -41952,25 +42214,14 @@ var init_getRoster = __esm({
     init_tradeDeadline();
     init_injuryStatus();
     init_rosterSpace();
+    init_recommendations();
     init_teams();
     init_news();
     MAX_PLAYERS = 60;
     MAX_PICKS = 40;
     POS_ORDER = { QB: 0, RB: 1, WR: 2, TE: 3, DEF: 4 };
+    MAX_DROP_CANDIDATES = 5;
     round1 = (n) => Math.round(n * 10) / 10;
-  }
-});
-
-// src/utils/peakWindows.js
-var PEAK_WINDOWS;
-var init_peakWindows = __esm({
-  "src/utils/peakWindows.js"() {
-    PEAK_WINDOWS = {
-      QB: [26, 33],
-      RB: [23, 26],
-      WR: [24, 28],
-      TE: [25, 29]
-    };
   }
 });
 
@@ -41994,14 +42245,14 @@ function weightedMedian(items) {
 function priorShape(position, age) {
   const [s, e] = PEAK_WINDOWS[position];
   if (age <= s) {
-    const t2 = clamp((age - (s - 6)) / 6, 0, 1);
+    const t2 = clamp2((age - (s - 6)) / 6, 0, 1);
     return 0.72 + 0.28 * t2;
   }
   if (age <= e) {
     const t2 = (age - s) / Math.max(1, e - s);
     return 1 - 0.12 * t2;
   }
-  const t = clamp((age - e) / 7, 0, 1);
+  const t = clamp2((age - e) / 7, 0, 1);
   return 0.88 - 0.66 * t;
 }
 function buildPositionCurve(samples, position) {
@@ -42044,7 +42295,7 @@ function buildGenericCurve(curves) {
 }
 function curveAt(curve, age) {
   if (!curve) return null;
-  const a = clamp(age, AGE_MIN, AGE_MAX);
+  const a = clamp2(age, AGE_MIN, AGE_MAX);
   const lo = Math.floor(a);
   const hi = Math.ceil(a);
   if (lo === hi) return curve[lo];
@@ -42074,7 +42325,7 @@ function projectPlayer(player, n, curves) {
   const base = curveAt(curve, player.age);
   const future = curveAt(curve, player.age + n);
   if (!base) return value;
-  const ratio = clamp(future / base, YEAR_RATIO_FLOOR ** n, YEAR_RATIO_CEIL ** n);
+  const ratio = clamp2(future / base, YEAR_RATIO_FLOOR ** n, YEAR_RATIO_CEIL ** n);
   return Math.round(value * ratio);
 }
 function projectPlayerSeries(player, curves) {
@@ -42092,7 +42343,7 @@ function projectPick(pick2, targetSeasonYear, genericCurve) {
   const base = curveAt(genericCurve, ROOKIE_ENTRY_AGE);
   const future = curveAt(genericCurve, ROOKIE_ENTRY_AGE + yearsIn);
   if (!base) return v;
-  const ratio = clamp(future / base, YEAR_RATIO_FLOOR ** yearsIn, YEAR_RATIO_CEIL ** yearsIn);
+  const ratio = clamp2(future / base, YEAR_RATIO_FLOOR ** yearsIn, YEAR_RATIO_CEIL ** yearsIn);
   return Math.round(v * ratio);
 }
 function buildRosterTrajectory(roster, currentSeasonYear, curves, genericCurve) {
@@ -42145,7 +42396,7 @@ function getTrajectoryRead(trajectory) {
   }
   return { direction: "stable", pct: endPct, peakSeason, lastSeason, label: `Value holds near ${peakSeason} \u2014 balanced window` };
 }
-var TRAJECTORY_HORIZON, AGE_MIN, AGE_MAX, KERNEL_BW, PRIOR_WEIGHT, ROOKIE_ENTRY_AGE, YEAR_RATIO_FLOOR, YEAR_RATIO_CEIL, TEAM_DECLINE_CUT, TEAM_ASCEND_CUT, clamp;
+var TRAJECTORY_HORIZON, AGE_MIN, AGE_MAX, KERNEL_BW, PRIOR_WEIGHT, ROOKIE_ENTRY_AGE, YEAR_RATIO_FLOOR, YEAR_RATIO_CEIL, TEAM_DECLINE_CUT, TEAM_ASCEND_CUT, clamp2;
 var init_dynastyTrajectory = __esm({
   "src/utils/dynastyTrajectory.js"() {
     init_peakWindows();
@@ -42160,217 +42411,7 @@ var init_dynastyTrajectory = __esm({
     YEAR_RATIO_CEIL = 1.18;
     TEAM_DECLINE_CUT = -0.01;
     TEAM_ASCEND_CUT = 0.05;
-    clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-  }
-});
-
-// src/utils/recommendations.js
-function pastPeakTilt(asset, myTier) {
-  const window = PEAK_WINDOWS[asset?.position];
-  const age = asset?.age;
-  if (!window || age == null || age <= 0) return 0;
-  const past = age - window[1];
-  if (past <= 0) return 0;
-  const magnitude = (AGE_TILT_BY_TIER[myTier] ?? AGE_TILT_BY_TIER.Middle) * (AGE_TILT_BY_POSITION[asset.position] ?? 0);
-  return -Math.min(1, past / AGE_TILT_SPAN) * magnitude;
-}
-function joinAnd(parts) {
-  if (parts.length <= 1) return parts[0] ?? "";
-  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
-  return `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`;
-}
-function buildGivabilityContext(myRoster, allRosters) {
-  const hasLeague = !!allRosters?.length;
-  const leagueAverages = hasLeague ? computeLeagueAverages(allRosters) : null;
-  const myDeltas = leagueAverages ? getPositionalDeltas(myRoster, leagueAverages) : {};
-  const myTier = hasLeague ? assignWinWindowTiers(allRosters)[myRoster.rosterId] ?? "Middle" : "Middle";
-  const posRank = /* @__PURE__ */ new Map();
-  const posValues = {};
-  POSITIONS.forEach((pos) => {
-    const mine = myRoster.players.filter((p) => p.position === pos && !p.isIR).sort((a, b) => (b.value || 0) - (a.value || 0));
-    mine.forEach((p, i) => posRank.set(String(p.sleeperId), i));
-    posValues[pos] = mine.map((p) => p.value || 0);
-  });
-  return { myDeltas, myTier, posRank, posValues, leagueAverages };
-}
-function assetKeepScore(asset, ctx) {
-  const { myDeltas, myTier, posRank, posValues } = ctx;
-  if (asset.type === "pick") {
-    let keep2 = PICK_ROUND_KEEP[asset.round] ?? PICK_KEEP_DEFAULT;
-    if (myTier === "Rebuilding") keep2 += 0.3;
-    else if (myTier === "Contending") keep2 -= 0.3;
-    return clamp2(keep2, 0.05, PICK_KEEP_CAP);
-  }
-  const pos = asset.position;
-  const rank = posRank?.get(String(asset.sleeperId)) ?? 99;
-  const coreN = CORE_DEPTH[pos] ?? 2;
-  let keep = rank < coreN ? 0.85 : Math.max(0.2, 0.55 - (rank - coreN) * 0.12);
-  const delta = myDeltas?.[pos] ?? 0;
-  if (delta < 0) keep += 0.22;
-  else if (delta > 0 && rank >= coreN) keep -= 0.18;
-  if (rank === 0) {
-    const vals = posValues?.[pos] ?? [];
-    const top = vals[0] ?? 0;
-    const next = vals[1] ?? 0;
-    if (top > 0 && next / top < 0.5) keep = Math.max(keep, 0.95);
-  }
-  const age = asset.age ?? null;
-  if (myTier === "Contending") {
-    if (age != null && age <= 24 && (asset.value || 0) < 1500) keep -= 0.15;
-  } else if (myTier === "Rebuilding") {
-    if (age != null && age <= 24) keep += 0.2;
-  }
-  keep += pastPeakTilt(asset, myTier);
-  return clamp2(keep);
-}
-function getDeficitPositions(roster, allRosters) {
-  if (!roster || !allRosters?.length) return /* @__PURE__ */ new Set();
-  const leagueAverages = computeLeagueAverages(allRosters);
-  const deltas = getPositionalDeltas(roster, leagueAverages);
-  return new Set(POSITIONS.filter((pos) => deltas[pos] < 0));
-}
-function buildPickupContext(myRoster, allRosters) {
-  const { myDeltas, myTier } = buildGivabilityContext(myRoster, allRosters);
-  const replacement = {};
-  POSITIONS.forEach((pos) => {
-    const mine = myRoster.players.filter((p) => p.position === pos && !p.isIR).map((p) => p.value || 0).sort((a, b) => b - a);
-    const depth = CORE_DEPTH[pos] ?? 2;
-    replacement[pos] = mine.length >= depth ? mine[depth - 1] : mine[mine.length - 1] ?? 0;
-  });
-  return { myDeltas, myTier, replacement };
-}
-function recommendFreeAgents(freeAgents, myRoster, allRosters, { limit = 5, minValue = 600 } = {}) {
-  if (!freeAgents?.length || !myRoster) return [];
-  const { myDeltas, myTier, replacement } = buildPickupContext(myRoster, allRosters);
-  const scored = freeAgents.filter((p) => (p.value ?? 0) >= minValue && POSITIONS.includes(p.position)).map((p) => {
-    const value = p.value ?? 0;
-    const pos = p.position;
-    const isNeed = (myDeltas[pos] ?? 0) < 0;
-    const upgradeMargin = value - (replacement[pos] ?? 0);
-    const isUpgrade = upgradeMargin > 0;
-    const trend = p.trend30Day ?? 0;
-    const age = p.age ?? null;
-    let score = value / 1e3;
-    const reasons = [];
-    if (isNeed) {
-      score += 2.5;
-      reasons.push(`Fills your ${pos} need`);
-    }
-    if (isUpgrade) {
-      score += Math.min(2, upgradeMargin / 600);
-      reasons.push(`+${Math.round(upgradeMargin).toLocaleString()} over your ${pos} depth`);
-    }
-    if (isRising(trend)) reasons.push("Trending up the last 30 days");
-    if (myTier === "Rebuilding" && age != null && age <= 24) {
-      score += 1;
-      reasons.push(`Young stash (age ${Math.floor(age)})`);
-    } else if (myTier === "Contending" && age != null && age >= 26 && isUpgrade) {
-      score += 0.5;
-      reasons.push("Win-now depth");
-    }
-    return { player: p, score, reasons, isNeed, isUpgrade, upgradeMargin, trend };
-  }).filter((r) => r.isNeed || r.isUpgrade || isRising(r.trend)).sort((a, b) => b.score - a.score);
-  const leaders = [];
-  const byPosition = /* @__PURE__ */ new Map();
-  for (const r of scored) {
-    const pos = r.player.position;
-    const leader = byPosition.get(pos);
-    if (!leader) {
-      const entry = { ...r, primaryReason: r.reasons[0] ?? "Available value", alternatives: [] };
-      byPosition.set(pos, entry);
-      leaders.push(entry);
-    } else if (leader.alternatives.length < MAX_PICKUP_ALTERNATIVES) {
-      leader.alternatives.push({ ...r, primaryReason: r.reasons[0] ?? "Available value" });
-    }
-  }
-  return leaders.slice(0, limit);
-}
-function suggestSellMove(player, myRoster, allRosters) {
-  if (!player || !myRoster || !allRosters?.length) return null;
-  const pos = player.position;
-  const targetVal = player.value || 0;
-  const leagueAverages = computeLeagueAverages(allRosters);
-  const myDeltas = getPositionalDeltas(myRoster, leagueAverages);
-  const myDeficits = POSITIONS.filter((p) => (myDeltas[p] ?? 0) < 0).sort((a, b) => myDeltas[a] - myDeltas[b]);
-  const opponents = allRosters.filter((r) => r.rosterId !== myRoster.rosterId);
-  if (!opponents.length) return null;
-  const findReturn = (opp) => {
-    for (const dPos of myDeficits) {
-      const cand = opp.players.filter(
-        (p) => p.position === dPos && !p.isIR && (p.value ?? 0) >= targetVal * 0.8 && (p.value ?? 0) <= targetVal * 1.25
-      ).sort((a, b) => (b.value ?? 0) - (a.value ?? 0))[0];
-      if (cand) return { returnPlayer: cand, deficitPos: dPos };
-    }
-    return null;
-  };
-  const scored = opponents.map((opp) => {
-    const theirDelta = getPositionalDeltas(opp, leagueAverages)[pos] ?? 0;
-    const ret = findReturn(opp);
-    const starts = buildValueLineup([
-      ...opp.players,
-      {
-        sleeperId: String(player.sleeperId),
-        name: player.name,
-        position: pos,
-        value: targetVal,
-        isIR: false,
-        isTaxi: false
-      }
-    ]).starterIds.has(String(player.sleeperId));
-    let score = -theirDelta / Math.max(1, leagueAverages[pos] ?? 1);
-    if (starts) score += 1.2;
-    if (ret) score += 1.5;
-    return { opp, theirDelta, ret, starts, score };
-  }).sort((a, b) => b.score - a.score);
-  const pick2 = scored[0];
-  if (!pick2) return null;
-  const partnerName = getTeamName(pick2.opp.owner);
-  const give = [{ ...player, type: "player" }];
-  if (pick2.ret) {
-    const { returnPlayer, deficitPos } = pick2.ret;
-    return {
-      opponentRosterId: pick2.opp.rosterId,
-      partnerName,
-      give,
-      get: [{ ...returnPlayer, type: "player" }],
-      deficitPos,
-      startsForThem: pick2.starts,
-      ctaLabel: "Build this trade",
-      summary: `Flip ${player.name} to ${partnerName} for ${returnPlayer.name} \u2014 fills your ${deficitPos}.`
-    };
-  }
-  return {
-    opponentRosterId: pick2.opp.rosterId,
-    partnerName,
-    give,
-    get: null,
-    deficitPos: myDeficits[0] ?? null,
-    startsForThem: pick2.starts,
-    ctaLabel: `Shop to ${partnerName}`,
-    summary: pick2.starts ? `Shop ${player.name} to ${partnerName} \u2014 he'd start for them.` : `Shop ${player.name} to ${partnerName} \u2014 they're thin at ${pos}.`
-  };
-}
-var CORE_DEPTH, PICK_ROUND_KEEP, PICK_KEEP_DEFAULT, PICK_KEEP_CAP, AGE_TILT_BY_POSITION, AGE_TILT_BY_TIER, AGE_TILT_SPAN, clamp2, PROTECT_THRESHOLD, MAX_PICKUP_ALTERNATIVES, CASH_OUT_BAND;
-var init_recommendations = __esm({
-  "src/utils/recommendations.js"() {
-    init_constants();
-    init_rosterAnalysis();
-    init_lineupBuild();
-    init_peakWindows();
-    init_fairBand();
-    init_teamName();
-    init_marketTrend();
-    CORE_DEPTH = { QB: 2, RB: 3, WR: 3, TE: 1 };
-    PICK_ROUND_KEEP = { 1: 0.65, 2: 0.5, 3: 0.4, 4: 0.3 };
-    PICK_KEEP_DEFAULT = 0.5;
-    PICK_KEEP_CAP = 0.85;
-    AGE_TILT_BY_POSITION = { RB: 1, WR: 0.65, QB: 0.4, TE: 0.15 };
-    AGE_TILT_BY_TIER = { Contending: 0.04, Middle: 0.1, Rebuilding: 0.16 };
-    AGE_TILT_SPAN = 3;
-    clamp2 = (v, lo = 0.05, hi = 1) => Math.max(lo, Math.min(hi, v));
-    PROTECT_THRESHOLD = 0.9;
-    MAX_PICKUP_ALTERNATIVES = 3;
-    CASH_OUT_BAND = [1 / (1 + FAIR_BAND_PCT), 1 / (1 - FAIR_BAND_PCT)];
+    clamp2 = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   }
 });
 
@@ -47376,7 +47417,7 @@ function createServer({ env = process.env, fetcher, store } = {}) {
     "get_roster",
     {
       title: "Get a team roster",
-      description: "Full dynasty roster for one team in the league: every player with value, overall and positional rank, 30-day trend and starter/bench/taxi/IR slot; every draft pick owned, with its exact slot label where the draft order is known; plus total value and league value rank, win-window tier, record and FAAB; room to move (IR slots used and open \u2014 when IR is full an injured player must stay on the active roster \u2014 and open active roster spots, so whether a claim needs a drop); and the league calendar (trade deadline week, weeks left and whether it is deadline time, read from league settings; Sleeper's waiver settings passed through undecoded). Defaults to the configured team when `team` is omitted. Accepts a team name, a manager username, or a roster id \u2014 an ambiguous name returns the candidates rather than guessing.",
+      description: "Full dynasty roster for one team in the league: every player with value, overall and positional rank, 30-day trend and starter/bench/taxi/IR slot; every draft pick owned, with its exact slot label where the draft order is known; plus total value and league value rank, win-window tier, record and FAAB; room to move (IR slots used and open \u2014 when IR is full an injured player must stay on the active roster \u2014 and open active roster spots, so whether a claim needs a drop \u2014 plus dropCandidates, the players whose release frees an active spot, cheapest dynasty value first: never taxi, IR, a starter or the defense; suggest drops from this list, not your own); and the league calendar (trade deadline week, weeks left and whether it is deadline time, read from league settings; Sleeper's waiver settings passed through undecoded). Defaults to the configured team when `team` is omitted. Accepts a team name, a manager username, or a roster id \u2014 an ambiguous name returns the candidates rather than guessing.",
       inputSchema: {
         team: external_exports.string().optional().describe("Team name, manager username, or roster id. Omit for your own team."),
         leagueId: external_exports.string().optional().describe("Sleeper league id. Omit for the configured league."),
@@ -47449,7 +47490,19 @@ function createServer({ env = process.env, fetcher, store } = {}) {
             canMove: external_exports.number(),
             statusesKnown: external_exports.boolean()
           }),
-          activeRoster: external_exports.object({ slots: external_exports.number(), used: external_exports.number(), open: external_exports.number() }).nullable()
+          activeRoster: external_exports.object({ slots: external_exports.number(), used: external_exports.number(), open: external_exports.number() }).nullable(),
+          // Who to release when a claim needs a spot (owner, 2026-10-14).
+          dropCandidates: external_exports.object({
+            total: external_exports.number(),
+            rows: external_exports.array(external_exports.object({
+              sleeperId: external_exports.string(),
+              name: external_exports.string(),
+              position: external_exports.string(),
+              value: external_exports.number().nullable(),
+              keepScore: external_exports.number(),
+              reason: external_exports.string()
+            }))
+          })
         }).optional(),
         winWindow: external_exports.string().optional(),
         totals: external_exports.object({

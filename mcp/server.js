@@ -301,7 +301,10 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
         'owned, with its exact slot label where the draft order is known; plus total value ' +
         'and league value rank, win-window tier, record and FAAB; room to move (IR slots used ' +
         'and open — when IR is full an injured player must stay on the active roster — and open ' +
-        'active roster spots, so whether a claim needs a drop); and the league calendar ' +
+        'active roster spots, so whether a claim needs a drop — plus dropCandidates, the players ' +
+        'whose release frees an active spot, cheapest dynasty value first: never taxi, IR, a ' +
+        'starter or the defense; suggest drops from this list, not your own); ' +
+        'and the league calendar ' +
         '(trade deadline week, weeks left and whether it is deadline time, read from league ' +
         'settings; Sleeper\'s waiver settings passed through undecoded). Defaults to the ' +
         'configured team when `team` is omitted. Accepts a team name, a manager username, ' +
@@ -370,6 +373,14 @@ export function createServer({ env = process.env, fetcher, store } = {}) {
             statusesKnown: z.boolean(),
           }),
           activeRoster: z.object({ slots: z.number(), used: z.number(), open: z.number() }).nullable(),
+          // Who to release when a claim needs a spot (owner, 2026-10-14).
+          dropCandidates: z.object({
+            total: z.number(),
+            rows: z.array(z.object({
+              sleeperId: z.string(), name: z.string(), position: z.string(),
+              value: z.number().nullable(), keepScore: z.number(), reason: z.string(),
+            })),
+          }),
         }).optional(),
         winWindow: z.string().optional(),
         totals: z.object({

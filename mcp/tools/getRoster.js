@@ -13,6 +13,7 @@ import { trendTag } from '../../src/utils/marketTrend.js'
 import { readTradeDeadline, isDeadlineWindow } from '../../src/utils/tradeDeadline.js'
 import { buildIrCapacity } from '../../src/utils/injuryStatus.js'
 import { getRosterLimits } from '../../src/utils/rosterSpace.js'
+import { rankDropCandidates } from '../../src/utils/recommendations.js'
 // Team resolution moved to mcp/teams.js in phase 1b so analyze_trade's
 // `partner` argument resolves through the SAME code. Re-exported here because
 // this module's existing tests (and its contract) name it.
@@ -111,7 +112,7 @@ export function buildRosterAnswer(snapshot, { team, defaultRosterId, myRosterId,
     .sort((a, b) => b.totalValue - a.totalValue)
     .findIndex(r => r.rosterId === roster.rosterId) + 1
 
-  const room = buildRoom(snapshot, league.leagueInfo, roster)
+  const room = buildRoom(snapshot, league.leagueInfo, roster, allRosters)
 
   const counts = players.reduce((acc, p) => {
     acc[p.slot] = (acc[p.slot] ?? 0) + 1
@@ -206,7 +207,7 @@ function buildCalendar(snapshot, leagueInfo) {
 // IR capacity through THE rule (src/utils/injuryStatus.js, shared with the
 // app's IR action item) and active-roster headroom through the league's own
 // roster_positions (src/utils/rosterSpace.js). Orchestration only.
-function buildRoom(snapshot, leagueInfo, roster) {
+function buildRoom(snapshot, leagueInfo, roster, allRosters) {
   const settings = leagueInfo?.settings ?? {}
   const statusOf = p => snapshot.playerDB?.[String(p.sleeperId)]?.injury_status ?? null
   const ir = buildIrCapacity(roster.players, settings, statusOf)
@@ -231,6 +232,28 @@ function buildRoom(snapshot, leagueInfo, roster) {
     activeRoster: limits
       ? { slots: limits.activeSlots, used: activeUsed, open: Math.max(0, limits.activeSlots - activeUsed) }
       : null,
+    // Who to release when a claim needs a spot — rankDropCandidates
+    // (src/utils/recommendations.js). Only players whose release frees an
+    // ACTIVE spot (never taxi, IR, a starter or the defense), cheapest dynasty
+    // value first. Unranked is value null, never 0.
+    dropCandidates: dropCandidatesFor(roster, allRosters),
+  }
+}
+
+export const MAX_DROP_CANDIDATES = 5
+
+function dropCandidatesFor(roster, allRosters) {
+  const { rows, total } = rankDropCandidates(roster, allRosters, { limit: MAX_DROP_CANDIDATES })
+  return {
+    total,
+    rows: rows.map(r => ({
+      sleeperId: String(r.player.sleeperId),
+      name: r.player.name,
+      position: r.player.position,
+      value: r.value,
+      keepScore: Math.round(r.keepScore * 100) / 100,
+      reason: r.reason,
+    })),
   }
 }
 
@@ -319,6 +342,10 @@ export function renderRosterText(a) {
   }
   const act = a.roomToMove?.activeRoster
   if (act) L.push(`Active roster ${act.used} of ${act.slots}${act.open === 0 ? ' — full, a claim needs a drop' : ` · ${act.open} open`}`)
+  const drops = a.roomToMove?.dropCandidates
+  if (drops?.rows?.length) {
+    L.push(`Cheapest to drop (frees an active spot): ${drops.rows.map(d => `${d.name} (${d.position}, ${d.value == null ? 'no value' : d.value.toLocaleString('en-US')})`).join(', ')}`)
+  }
   const dl = a.calendar?.tradeDeadline
   if (dl) {
     L.push(dl.status === 'passed'
