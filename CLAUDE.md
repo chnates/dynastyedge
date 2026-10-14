@@ -3426,9 +3426,9 @@ report that honestly**: it prints failing tests that read like a code regression
 because a file that cannot load never runs its tests. `npm run build` in the
 same state fails with `sh: 1: vite: not found`.
 
-**Current counts (verified 2026-10-08 by moving `node_modules` aside, after §0 #11's odds track record):** with
-dependencies **`# tests 950 / # pass 950`**; without them **`# tests 907 / #
-pass 902 / # fail 5`**. **If the test count isn't 950, run `npm ci` before
+**Current counts (verified 2026-10-14 by moving `node_modules` aside, after the weekly-brief fixes):** with
+dependencies **`# tests 960 / # pass 960`**; without them **`# tests 917 / #
+pass 912 / # fail 5`**. **If the test count isn't 960, run `npm ci` before
 debugging anything.**
 - **Check the GAP, not the totals: it is 43 and has never moved** — the tests in
   the five files that cannot load without `node_modules`. Four reach React
