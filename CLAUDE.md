@@ -3549,8 +3549,11 @@ clone makes it 1 for every build.
 
 ### Vite config
 
-`vite.config.js` sets **`base: '/dynastyedge/'`** (must match the repo name
-exactly) and stamps one build id into **both** the bundle (`__BUILD_ID__`, via
+`vite.config.js` sets **`base: './'`** — RELATIVE, a deliberate interim for
+the move to `dynasty.casanicoara.com` (2026-10-16): one build loads at both
+`chnates.github.io/dynastyedge/` and the new root, so flipping the Pages domain
+has no broken window (both proved in headless Chromium). It settles on `'/'`
+once the domain is live. It stamps one build id into **both** the bundle (`__BUILD_ID__`, via
 `define`) and an emitted `version.json` (an inline plugin).
 - **The build id is a BUILD NUMBER**: `git rev-list --count --first-parent
   HEAD`, +1 per merge to `main`. Not the PR number (pushes to `main`, including
