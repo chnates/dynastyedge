@@ -901,6 +901,20 @@ MCP-2c, `tests/lineupMoves.test.mjs` + `tests/projections.test.mjs`.
    divergences were found** in this pass — but the doc-of-record contract
    ("CLAUDE.md updated same commit as behavior changes") means any future
    divergence you find should be treated as a bug and added here.
+6. **Home-screen icon shows a letter "D" — OPEN, parked by the owner
+   (2026-10-16).** Straight after the move to `dynasty.casanicoara.com`, iOS
+   Add to Home Screen drew a generated "D" instead of the crown. Two site
+   changes went out first and neither moved it: PR #111 (`?v=4` → `?v=5`
+   cache-bust) and PR #112 (PNG-only icons, `sizes="180x180"`, an
+   `apple-touch-icon-precomposed.png`, no SVG icon link, manifest `id`). Only
+   THEN did the discriminating test run: **github.com, Cloudflare and
+   Supabase also showed letters** on the same iPhone (Private mode off, no
+   content blockers). So it is device-side. The site setup from #112 is kept
+   (harmless, and the documented recent-iOS pattern). **Lesson: on any
+   "letter icon" report, ask "do other sites show a letter too?" BEFORE
+   shipping an icon change** — one 30-second test would have saved two
+   deploys. If revisited: restart the phone, update iOS; do not touch icon
+   code again unless other sites show real icons and ours does not.
 
 ---
 
