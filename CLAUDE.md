@@ -3795,8 +3795,12 @@ point here.
    no translucency or backdrop-blur) and fills the inset via `paddingTop:
    env(safe-area-inset-top)`. Caveat: the bar follows the system appearance,
    not the in-app toggle. **Meta changes take effect only after the user removes
-   and re-adds the home-screen app.** Icon links carry `?v=N` — **bump it when
-   the logo changes.** App *code* updates no longer need a re-add (App version
+   and re-adds the home-screen app.** Icon links **and the manifest's icon
+   `src`s** carry `?v=N` (5 since 2026-10-16) — **bump it when the logo changes
+   or the phone shows a grey letter placeholder instead of the icon**: iOS
+   remembers a failed icon fetch per site, and a new URL is the only reliable
+   way to make it fetch again (clearing Safari's website data did not, after
+   the move to `dynasty.casanicoara.com`). App *code* updates no longer need a re-add (App version
    self-heal).
 1. **Bottom sheets:** `<main>` is the scroll container — the body never scrolls.
    **Every bottom sheet must:** call `useScrollLock()` while mounted, set
