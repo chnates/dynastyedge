@@ -3799,11 +3799,16 @@ point here.
    plain file names, NO query string** (2026-10-16): `apple-touch-icon.png`
    with `sizes="180x180"`, a byte-identical `apple-touch-icon-precomposed.png`
    at the root, no SVG icon link, and manifest icons (180/192/512) with no
-   query. After the domain move iOS drew a letter "D" instead of the icon, and
-   a `?v=` bump (PR #111) did NOT fix it — a query-string icon URL, an SVG icon
-   link and a 404 on the -precomposed name are the known triggers. **When the
-   logo changes, regenerate (`scripts/generate-icons.mjs`) and have the owner
-   delete + re-add the icon; do not reintroduce `?v=`.** App *code* updates no longer need a re-add (App version
+   query (PR #112 — the pattern other sites used to fix a letter icon on
+   recent iOS). **But the letter "D" the owner saw after the domain move was
+   NOT our site:** on his iPhone (2026-10-16) GitHub, Cloudflare and Supabase
+   ALSO showed letters in Add to Home Screen, with Private mode off and no
+   content blockers, and neither the `?v=5` bump (#111) nor #112 changed it.
+   It is an iOS-side fault on that device — **OPEN, parked by the owner**;
+   next steps if revisited are a restart and an iOS update, not more site
+   changes. **Before touching icon code for a "letter icon" report, ask
+   whether other sites show letters too.** When the logo changes, regenerate
+   (`scripts/generate-icons.mjs`) and have the owner delete + re-add the icon. App *code* updates no longer need a re-add (App version
    self-heal).
 1. **Bottom sheets:** `<main>` is the scroll container — the body never scrolls.
    **Every bottom sheet must:** call `useScrollLock()` while mounted, set
