@@ -2,7 +2,7 @@
 name: dynastyedge-run-and-operate
 description: >
   DynastyEdge operations runbook: run the app locally (npm run dev / preview,
-  the /dynastyedge/ base path), deploy to GitHub Pages (deploy.yml anatomy,
+  served at the root since the 2026-10-16 move to dynasty.casanicoara.com), deploy to GitHub Pages (deploy.yml anatomy,
   status checks, rollback = revert on main), and operate the three data
   pipelines (news.yml → news-data branch, rookie-intel.yml → rookie-intel
   branch, values-history.yml →
@@ -47,16 +47,16 @@ back to 20; the news/values pipelines (no tests) still run Node 20.
 
 | Command | What happens (verified) |
 |---|---|
-| `npm run dev` | Vite dev server on port **5173** (auto-increments to 5174 etc. if busy). Serves at the **base path**: `http://localhost:5173/dynastyedge/`. Ready in <1s. |
+| `npm run dev` | Vite dev server on port **5173** (auto-increments to 5174 etc. if busy). Serves at the root: `http://localhost:5173/`. Ready in <1s. |
 | `npm run build` | Production build to `dist/` (~3s locally). |
-| `npm run preview` | Serves the built `dist/` on port **4173**, also at `http://localhost:4173/dynastyedge/`. Run `npm run build` first. |
+| `npm run preview` | Serves the built `dist/` on port **4173**, also at the root, `http://localhost:4173/`. Run `npm run build` first. |
 
-The `/dynastyedge/` base (from `vite.config.js` `base: '/dynastyedge/'`,
-matching the GitHub Pages repo path) applies **in dev too** — hitting `/`
-returns a **302 redirect** to `/dynastyedge/`. Quick smoke test:
+`vite.config.js` sets `base: '/'` (the app lives at the root of
+`dynasty.casanicoara.com` since 2026-10-16; before that it was `/dynastyedge/`).
+Quick smoke test:
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5173/dynastyedge/   # expect 200
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5173/   # expect 200
 ```
 
 Kill servers with `pkill -f vite` when done (verify with `pgrep -f vite` —
@@ -94,7 +94,7 @@ Steps, in order (as of 2026-07-19):
 6. `npm run build` → `dist/`
 7. `actions/configure-pages@v4`
 8. `actions/upload-pages-artifact@v3` with `path: dist`
-9. `actions/deploy-pages@v4` → publishes to <https://chnates.github.io/dynastyedge/>
+9. `actions/deploy-pages@v4` → publishes to <https://dynasty.casanicoara.com/> (custom domain; the old chnates.github.io/dynastyedge/ redirects)
 
 (Branch pushes and PRs get the same lint + test + build gate via `ci.yml`,
 which never touches Pages — `deploy.yml` remains the only deploying workflow.)
@@ -423,7 +423,7 @@ your machine (not in this sandbox).
 | Trade archive intact | `curl -s .../values-history/trade-values.json` → `trades` present | File exists, trade count never decreases |
 | Actions green | <https://github.com/chnates/dynastyedge/actions> or `gh run list --repo chnates/dynastyedge --limit 10` | Recent runs of all 3 workflows succeeded |
 | Crons still enabled | Actions tab → each scheduled workflow, look for a "disabled" banner | No banner; recent scheduled (not just manual) runs exist |
-| Pages serving latest | Load <https://chnates.github.io/dynastyedge/>, compare bundle hash in view-source (`assets/index-*.js`) against latest `dist/` build of `main` | Hash matches the latest deploy run |
+| Pages serving latest | Load <https://dynasty.casanicoara.com/> (or `curl …/version.json` for the build id), compare bundle hash in view-source (`assets/index-*.js`) against latest `dist/` build of `main` | Hash matches the latest deploy run |
 
 ## 6. Incident playbook stubs
 
@@ -478,7 +478,7 @@ not executable here). Re-verify before trusting:
 - Deploy steps/trigger: `cat .github/workflows/deploy.yml`
 - News schedule + publish: `cat .github/workflows/news.yml` and read `scripts/fetch-news.mjs`
 - Values schedule + fallback publish: `cat .github/workflows/values-history.yml`, `scripts/snapshot-values.mjs`, `scripts/snapshot-trade-values.mjs`
-- Dev/preview ports + base path: `npm run dev` / `npm run build && npm run preview`, then `curl -s -o /dev/null -w "%{http_code}" http://localhost:<5173|4173>/dynastyedge/`
-- Base path config: `cat vite.config.js` (`base: '/dynastyedge/'`)
+- Dev/preview ports + base path: `npm run dev` / `npm run build && npm run preview`, then `curl -s -o /dev/null -w "%{http_code}" http://localhost:<5173|4173>/`
+- Base path config: `cat vite.config.js` (`base: '/'`)
 - Feed URLs/consumers: grep `NEWS_FEED_URL` / `VALUES_HISTORY_URL` in `src/`
 - If any of these drift from this file, update this skill and CLAUDE.md in the same commit as the change.

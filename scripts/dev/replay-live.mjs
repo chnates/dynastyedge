@@ -64,7 +64,7 @@ if (scenario !== 'draft' && scenario !== 'week1') {
 const stageArg = arg('stage')
 const week     = Number(arg('week', 1))
 const theme    = arg('theme', 'dark')
-const base     = arg('url', 'http://localhost:5173/dynastyedge/')
+const base     = arg('url', 'http://localhost:5173/')
 const width    = Number(arg('width', 390))
 const settle   = Number(arg('wait', 1400))
 let outdir     = arg('outdir', join(REPO, '.screenshots', `replay-${scenario}`))

@@ -18,7 +18,10 @@ optimization, and the league-wide competitive picture.
 
 **Target device:** iPhone Safari (390px width — iPhone 15 Pro)
 **Hosting:** GitHub Pages (static site — the APP has no backend)
-**Live URL:** <https://chnates.github.io/dynastyedge/>
+**Live URL:** <https://dynasty.casanicoara.com/> — the owner's own domain
+(registered at Cloudflare; moved here 2026-10-16). GitHub Pages still hosts it;
+the old <https://chnates.github.io/dynastyedge/> redirects. See **GitHub Pages
+Deployment › Custom domain**.
 
 > **"No backend" means the APP has no backend** (amended 2026-09-19). The repo
 > also holds **`mcp/`**, a Model Context Protocol server (a real server process)
@@ -3549,11 +3552,8 @@ clone makes it 1 for every build.
 
 ### Vite config
 
-`vite.config.js` sets **`base: './'`** — RELATIVE, a deliberate interim for
-the move to `dynasty.casanicoara.com` (2026-10-16): one build loads at both
-`chnates.github.io/dynastyedge/` and the new root, so flipping the Pages domain
-has no broken window (both proved in headless Chromium). It settles on `'/'`
-once the domain is live. It stamps one build id into **both** the bundle (`__BUILD_ID__`, via
+`vite.config.js` sets **`base: '/'`** — the app is served from the root of
+its own subdomain (Custom domain, below). It stamps one build id into **both** the bundle (`__BUILD_ID__`, via
 `define`) and an emitted `version.json` (an inline plugin).
 - **The build id is a BUILD NUMBER**: `git rev-list --count --first-parent
   HEAD`, +1 per merge to `main`. Not the PR number (pushes to `main`, including
@@ -3596,6 +3596,43 @@ entry.
 ### GitHub Pages setting (one-time, done manually)
 
 Repo → Settings → Pages → Source: **GitHub Actions**. Set once.
+
+### Custom domain — `dynasty.casanicoara.com` (2026-10-16)
+
+The address is the owner's; **the host is still GitHub Pages.** Moving hosts
+later is one DNS edit, not a new address. (Plan of record for the domain:
+the private `chnates/nicoara-home` repo.)
+
+- **DNS lives at Cloudflare** (the registrar). Two records, both **DNS only —
+  grey cloud, NEVER proxied**: an orange-cloud proxy stops GitHub issuing the
+  certificate and adds nothing for a static site. Cloudflare's dashboard nags
+  to turn proxying on; ignore it.
+  - `CNAME dynasty → chnates.github.io`
+  - `TXT _github-pages-challenge-chnates` — GitHub's **domain verification**
+    (account Settings → Pages → Verified domains). It stops anyone else's
+    Pages site claiming a `*.casanicoara.com` name. **Never delete it** —
+    GitHub re-checks it.
+- **Repo → Settings → Pages → Custom domain** holds `dynasty.casanicoara.com`
+  with **Enforce HTTPS** on. With an Actions-based deploy **no `CNAME` file is
+  committed** — the setting is the source of truth.
+- **The old address redirects** (301, path preserved) — GitHub does it for
+  every project site once a custom domain is set.
+- **The move was staged so no build was ever broken:** PR #109 shipped a
+  relative `base: './'` that loaded at both addresses (proved in headless
+  Chromium at each), then the domain was flipped, then `base` settled on `'/'`.
+  Reuse that order for any future address change.
+- **Browser storage is per address**, so the move left watchlist, board order,
+  notes, uploaded CSVs and identity behind at the old origin (owner chose not
+  to carry it over — nothing was stored). An iOS home-screen app must be
+  deleted and re-added from the new address.
+- **Verifying from a Claude sandbox:** the agent proxy re-signs TLS, so a
+  `curl` 200 over HTTPS does NOT prove GitHub's certificate exists. Check the
+  public certificate log instead — `crt.sh/?q=dynasty.casanicoara.com` — and
+  GitHub's own Pages settings page. DNS is checkable directly
+  (`dns.google/resolve?name=…`).
+- **Unaffected:** the MCP server stays on `dynastyedge-mcp.vercel.app`; the
+  data feeds stay on `raw.githubusercontent.com` (CORS `*`, checked against the
+  new origin before the move).
 
 -----
 

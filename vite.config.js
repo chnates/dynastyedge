@@ -68,11 +68,10 @@ function buildVersionPlugin() {
 
 export default defineConfig({
   plugins: [react(), buildVersionPlugin()],
-  // RELATIVE on purpose for the custom-domain move (2026-10-16): the same
-  // build must load at chnates.github.io/dynastyedge/ AND at
-  // dynasty.casanicoara.com/, so flipping the Pages domain has no broken
-  // window. HashRouter keeps the document at the app root, so './' resolves
-  // correctly at either address.
-  base: './',
+  // The app is served from the ROOT of its own subdomain,
+  // https://dynasty.casanicoara.com/ (moved off chnates.github.io/dynastyedge/
+  // on 2026-10-16; GitHub redirects the old address). A relative './' carried
+  // the flip itself so no build was broken at either address.
+  base: '/',
   define: { __BUILD_ID__: JSON.stringify(BUILD_ID) },
 })

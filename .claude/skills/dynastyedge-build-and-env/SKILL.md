@@ -37,9 +37,9 @@ local machine and keeping its assets/dependencies sane.
 git clone https://github.com/chnates/dynastyedge.git
 cd dynastyedge
 npm ci          # NOT npm install — respects package-lock.json exactly
-npm run dev     # Vite dev server → http://localhost:5173/dynastyedge/
+npm run dev     # Vite dev server → http://localhost:5173/
 npm run build   # production build → dist/
-npm run preview # serves dist/ → http://localhost:4173/dynastyedge/
+npm run preview # serves dist/ → http://localhost:4173/
 ```
 
 **Node version** (as of 2026-07-05):
@@ -86,18 +86,20 @@ build time; fonts and all data load at runtime (see §6).
 ```js
 export default defineConfig({
   plugins: [react()],
-  base: '/dynastyedge/',   // must match the GitHub repo name exactly
+  base: '/',   // served from the root of dynasty.casanicoara.com
 })
 ```
 
-- **`base: '/dynastyedge/'` is non-negotiable.** GitHub Pages serves the site
-  at `https://chnates.github.io/dynastyedge/`; every asset URL in
-  `dist/index.html` is prefixed `/dynastyedge/assets/...`. Change or remove
-  `base` and the deployed app is a blank page with 404s on every asset.
-- **Local consequence:** dev and preview both serve under the base path.
-  Verified: `http://localhost:4173/dynastyedge/` → 200; bare
-  `http://localhost:4173/` → **302 redirect** to `/dynastyedge/`. If a page
-  "won't load" locally, check you included the `/dynastyedge/` path first.
+- **`base` must match where the site is served.** Since 2026-10-16 that is
+  the root of the custom domain `https://dynasty.casanicoara.com/` (GitHub
+  Pages still hosts it; the old `chnates.github.io/dynastyedge/` redirects —
+  CLAUDE.md › Custom domain). Every asset URL in `dist/index.html` is
+  `/assets/...`. A wrong `base` is a blank page with 404s on every asset.
+  **Changing the address again? Ship `base: './'` first** (loads at both
+  addresses), flip the domain, then settle `base` — the order PR #109 used.
+- **Local consequence:** dev and preview serve at the root —
+  `http://localhost:5173/` and `http://localhost:4173/`. (Before 2026-10-16
+  everything was under `/dynastyedge/`; older notes may still say so.)
 - **Runtime asset fetches must use `import.meta.env.BASE_URL`** — the only two
   call sites are in `src/components/draft/DraftBoard.jsx` (fetching
   `rankings.json` and the FantasyPros CSV from `public/`). Follow that pattern
@@ -265,7 +267,7 @@ Barlow Condensed 600/700/800, IBM Plex Mono 400/500, IBM Plex Sans
 | Case-sensitivity | CI builds on Linux (case-sensitive). An import like `./playerCard` for `PlayerCard.jsx` can work on macOS and fail only in the deploy build. Match file-name case exactly in every import. |
 | `sharp` is a native binary | Platform-specific prebuilds land in `node_modules`. After switching OS/arch (e.g. copying `node_modules` between machines — don't), icon generation fails until `npm ci` on the target platform. Irrelevant to `npm run build` (sharp is script-only). |
 | Node skew vs CI | App workflows (`ci.yml`/`deploy.yml`) pin Node 22, data pipelines pin Node 20; local Node 22 verified fine. If a build passes locally but fails in Actions (or vice versa), reproduce with the workflow's pinned Node before digging deeper. |
-| Preview URL confusion | Everything is under `/dynastyedge/` locally (dev and preview). `curl localhost:4173/` returns 302, not the app. |
+| Preview URL confusion | Since 2026-10-16 the app is at the root locally (`localhost:5173/`, `localhost:4173/`); `/dynastyedge/` is the OLD base path. |
 | "Styles fine in dev, gone in prod" | Almost always the literal-class trap (§3). Grep the built CSS before suspecting anything else. |
 
 ## Provenance and maintenance

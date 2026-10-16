@@ -22,7 +22,7 @@ this skill (see Provenance at the bottom).
 (React 19 + Vite 6 + Tailwind 3 + React Router 7) for one Sleeper league
 (`1313933520715907072`, 10-team Superflex (QB-eligible flex slot — see
 dynasty-fantasy-reference) Half-PPR). Static site on GitHub
-Pages, live at https://chnates.github.io/dynastyedge/. `CLAUDE.md` at the repo
+Pages, live at https://dynasty.casanicoara.com/ (custom domain since 2026-10-16). `CLAUDE.md` at the repo
 root is the doc of record for features; this skill is the doc of record for
 *why the structure is what it is and what you must not break*.
 

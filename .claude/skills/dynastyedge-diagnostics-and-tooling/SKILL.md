@@ -38,7 +38,7 @@ each step exists for a reason:
 
 1. `npm run build && npm run preview -- --port 4173` — serve `dist/` on
    localhost. Localhost is on the proxy's no-proxy list, so the browser
-   reaches it directly. App URL: `http://127.0.0.1:4173/dynastyedge/`.
+   reaches it directly. App URL: `http://127.0.0.1:4173/` (root since 2026-10-16).
 2. Install `playwright-core` in the session **scratchpad, never the repo**
    (the no-new-deps law governs `package.json`, not throwaway tooling), and
    launch with `executablePath` pointing at the pre-installed Chromium.
