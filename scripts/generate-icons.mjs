@@ -1,7 +1,7 @@
 // Generates all app icons from the Crown Crest mark (see CLAUDE.md → Logo).
 // Run after any logo change:  node scripts/generate-icons.mjs
 //
-// Outputs (public/): apple-touch-icon.png (180, full-bleed — iOS masks its
+// Outputs (public/): apple-touch-icon.png + apple-touch-icon-precomposed.png (180, full-bleed — iOS masks its
 // own corners), favicon-32x32.png, favicon-16x16.png, favicon.ico, logo.svg.
 // The in-app drawer lockup lives in src/components/shared/DynastyEdgeLogo.jsx
 // and shares this geometry.
@@ -61,6 +61,9 @@ const fav32 = await png(faviconSvg, 32)
 const fav16 = await png(faviconSvg, 16)
 
 await writeFile(path.join(PUBLIC, 'apple-touch-icon.png'), appleTouch)
+// Some iOS versions ask for the -precomposed name at the site root; a 404 there
+// is one of the ways iOS ends up drawing a letter instead of our icon.
+await writeFile(path.join(PUBLIC, 'apple-touch-icon-precomposed.png'), appleTouch)
 await writeFile(path.join(PUBLIC, 'icon-192.png'), await png(iconSvg, 192))
 await writeFile(path.join(PUBLIC, 'icon-512.png'), await png(iconSvg, 512))
 await writeFile(path.join(PUBLIC, 'favicon-32x32.png'), fav32)

@@ -30,10 +30,15 @@
     <meta name="apple-mobile-web-app-title" content="DynastyEdge" />
     <link rel="manifest" href="manifest.webmanifest" />
     <title>DynastyEdge</title>
-    <!-- ?v=5 busts Safari's stubborn per-site icon cache (Favorites grid) -->
-    <link rel="icon" href="favicon.ico?v=5" sizes="any" />
-    <link rel="icon" type="image/svg+xml" href="logo.svg?v=5" />
-    <link rel="apple-touch-icon" href="apple-touch-icon.png?v=5" />
+    <!-- Home-screen icon: PNG only, an explicit 180x180, a plain file name with
+         NO query string, and a -precomposed twin at the root. Recent iOS draws
+         a generated letter ("D") instead of the icon when it won't use what
+         the page offers; an SVG icon link, a query-string icon URL and a 404
+         on the -precomposed name are the known triggers (2026-10-16). No SVG
+         icon here for the same reason — the PNG favicons cover browser tabs. -->
+    <link rel="icon" href="favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
     <!-- Data-API origins gate first data paint on cellular; crossorigin
          because they're hit via fetch() (CORS mode). -->
     <link rel="preconnect" href="https://api.sleeper.app" crossorigin />

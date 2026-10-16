@@ -3795,12 +3795,15 @@ point here.
    no translucency or backdrop-blur) and fills the inset via `paddingTop:
    env(safe-area-inset-top)`. Caveat: the bar follows the system appearance,
    not the in-app toggle. **Meta changes take effect only after the user removes
-   and re-adds the home-screen app.** Icon links **and the manifest's icon
-   `src`s** carry `?v=N` (5 since 2026-10-16) — **bump it when the logo changes
-   or the phone shows a grey letter placeholder instead of the icon**: iOS
-   remembers a failed icon fetch per site, and a new URL is the only reliable
-   way to make it fetch again (clearing Safari's website data did not, after
-   the move to `dynasty.casanicoara.com`). App *code* updates no longer need a re-add (App version
+   and re-adds the home-screen app.** **The home-screen icon is PNG-only,
+   plain file names, NO query string** (2026-10-16): `apple-touch-icon.png`
+   with `sizes="180x180"`, a byte-identical `apple-touch-icon-precomposed.png`
+   at the root, no SVG icon link, and manifest icons (180/192/512) with no
+   query. After the domain move iOS drew a letter "D" instead of the icon, and
+   a `?v=` bump (PR #111) did NOT fix it — a query-string icon URL, an SVG icon
+   link and a 404 on the -precomposed name are the known triggers. **When the
+   logo changes, regenerate (`scripts/generate-icons.mjs`) and have the owner
+   delete + re-add the icon; do not reintroduce `?v=`.** App *code* updates no longer need a re-add (App version
    self-heal).
 1. **Bottom sheets:** `<main>` is the scroll container — the body never scrolls.
    **Every bottom sheet must:** call `useScrollLock()` while mounted, set
