@@ -11,7 +11,7 @@
 // ── The two gotchas this script already solves (do NOT rediscover them) ───────
 //
 // 1. THE APP IS LOCAL, NOT PUBLIC. There is no public URL that serves your
-//    feature branch. The live site (chnates.github.io/dynastyedge) only ever
+//    feature branch. The live site (dynasty.casanicoara.com) only ever
 //    serves `main`, so it can't show unmerged work. To screenshot a branch you
 //    must run `npm run dev` and point this script at localhost. "Just browse to
 //    the address" screenshots the app shell fine — but see gotcha 2 for why the
@@ -82,7 +82,7 @@ const width  = Number(arg('width', 390))
 const height = Number(arg('height', 1600))
 const theme  = arg('theme', 'dark')
 const full   = Boolean(arg('full', false))
-const base   = arg('url', 'http://localhost:5173/dynastyedge/')
+const base   = arg('url', 'http://localhost:5173/')
 const settle = Number(arg('wait', 2500))
 // --stub SUBSTRING=FILE serves a local file for any external URL containing
 // SUBSTRING. Needed to see a feature whose Actions-published feed branch does

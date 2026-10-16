@@ -17,8 +17,8 @@ import assert from 'node:assert/strict'
 import { buildReloadUrl, formatBuildId } from '../src/utils/appVersion.js'
 
 const LOC = {
-  origin: 'https://chnates.github.io',
-  pathname: '/dynastyedge/',
+  origin: 'https://dynasty.casanicoara.com',
+  pathname: '/',
   hash: '#/trade/whats-fair',
 }
 
@@ -26,7 +26,7 @@ test('the cache-buster goes BEFORE the hash, so the HashRouter route survives', 
   const url = buildReloadUrl(LOC, '2026-09-04T03:06:21.467Z')
   assert.equal(
     url,
-    'https://chnates.github.io/dynastyedge/?v=2026-09-04T03%3A06%3A21.467Z#/trade/whats-fair',
+    'https://dynasty.casanicoara.com/?v=2026-09-04T03%3A06%3A21.467Z#/trade/whats-fair',
   )
   // The route is intact and the query is not inside it.
   assert.ok(url.endsWith('#/trade/whats-fair'))
@@ -49,7 +49,7 @@ test('build ids are URL-encoded — an ISO timestamp carries colons', () => {
 test('no hash (a bare landing) still builds a valid URL', () => {
   assert.equal(
     buildReloadUrl({ ...LOC, hash: '' }, 'b1'),
-    'https://chnates.github.io/dynastyedge/?v=b1',
+    'https://dynasty.casanicoara.com/?v=b1',
   )
   assert.equal(
     buildReloadUrl({ origin: 'http://x', pathname: '/', hash: undefined }, 'b1'),

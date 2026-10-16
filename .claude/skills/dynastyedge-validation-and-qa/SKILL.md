@@ -486,7 +486,7 @@ for: they arbitrate between the doc and the code with a number.
 As of 2026-07-06:
 
 - **The live site as deployed from `main`**
-  (https://chnates.github.io/dynastyedge/) — the owner uses it daily; it is
+  (https://dynasty.casanicoara.com/) — the owner uses it daily; it is
   the behavioral reference. If your change makes a number differ from what
   the live site shows for the same input data, you must explain why.
 - **The green-build baseline:** `npm run build` on current `main`

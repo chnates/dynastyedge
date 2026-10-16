@@ -123,8 +123,8 @@ before filing a pipeline bug off a capture.
 ### 1. The app is LOCAL. There is no public URL for your branch.
 
 "Can't you just put the address in the browser?" — the app is a static site
-served by a **local** Vite dev server (`http://localhost:5173/dynastyedge/`).
-The only public URL, `https://chnates.github.io/dynastyedge/`, serves **`main`**
+served by a **local** Vite dev server (`http://localhost:5173/`).
+The only public URL, `https://dynasty.casanicoara.com/`, serves **`main`**
 — it never has your unmerged feature branch. So:
 
 - To verify a **branch** change → you MUST `npm run dev` and screenshot
